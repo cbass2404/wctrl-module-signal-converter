@@ -1,0 +1,248 @@
+{
+  "_comment": "Device and LED inventory. Indices and names come from SimAppPro's www/js/DeviceConfig.js; part ids come from a broadcast ONLINE_HEARTBEAT. See docs/PROTOCOL.md.",
+  "_status": "PTO2 fully verified 2026-09-16. Indices 0/1/2 are dimmers taking 0-255. Indices 4-17 are indicators taking 0 or 1 only; a value of 255 is out of range and is silently ignored (it acks, and nothing lights).",
+  "_evidence": {
+    "dimmer": "Indices 0, 1 and 2 observed taking 1, 2, 11, 13, 20, 22, 111, 137, 200, 222 and 255 from SimAppPro's sliders.",
+    "indicator": "SimAppPro only ever sends 0 or 1 to indices 4..17. Confirmed on hardware: 1 lights, 0 clears, 255 does nothing.",
+    "hook_dimness": "Index 17 (HOOK) is a physically dim lamp - visibly weaker than its neighbours even at full brightness. It is not a protocol difference."
+  },
+  "_open_questions": [
+    "Does index 2 (SL) govern indicator brightness? Stated from SimAppPro's UI behaviour and consistent with observation, but never isolated in a controlled test.",
+    "Orion II indices and part ids come from DeviceConfig.js and a heartbeat broadcast; no LED on it has been driven."
+  ],
+  "devices": [
+    {
+      "key": "TAKEOFF_PLANEL_2",
+      "display_name": "PTO2",
+      "product_name": "WINCTRL CarrierAce PTO 2",
+      "usb_pid": 48901,
+      "parts": [
+        {
+          "part_id": 48901,
+          "name": "PTO2",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Panel backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true
+            },
+            {
+              "index": 1,
+              "name": "Landing_gear_lights",
+              "label": "Landing gear",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true
+            },
+            {
+              "index": 2,
+              "name": "SL",
+              "label": "SL",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true
+            },
+            {
+              "index": 4,
+              "name": "Master_Caution",
+              "label": "CAUTION",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 5,
+              "name": "JETT",
+              "label": "JETT",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 6,
+              "name": "CTR",
+              "label": "CTR",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 7,
+              "name": "LI",
+              "label": "LI",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 8,
+              "name": "LO",
+              "label": "LO",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 9,
+              "name": "RO",
+              "label": "RO",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 10,
+              "name": "RI",
+              "label": "RI",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 11,
+              "name": "FLAPS",
+              "label": "FLAPS",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 12,
+              "name": "NOSE",
+              "label": "NOSE",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 13,
+              "name": "FULL",
+              "label": "FULL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 14,
+              "name": "RIGHT",
+              "label": "RIGHT",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 15,
+              "name": "LEFT",
+              "label": "LEFT",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 16,
+              "name": "HALF",
+              "label": "HALF",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 17,
+              "name": "HOOK",
+              "label": "HOOK",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true,
+              "note": "Physically dim lamp; hard to see at distance. Not a protocol quirk."
+            }
+          ]
+        }
+      ],
+      "_notes": [
+        "Index 3 is absent from the vendor's own table. Not an omission here.",
+        "Indicators take 0 or 1. Writing 255 acks and does nothing - it is out of range, not truthy.",
+        "The 14 indicators match SimAppPro's UI list read top to bottom, which is how the index order was corroborated."
+      ]
+    },
+    {
+      "key": "Orion_Throttle_Base_II",
+      "display_name": "Orion Throttle Base II",
+      "product_name": "WINCTRL Orion Throttle Base II",
+      "usb_pid": 48484,
+      "parts": [
+        {
+          "part_id": 48736,
+          "name": "Orion Throttle Base II",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Panel backlight",
+              "kind": "dimmer",
+              "max": 255
+            },
+            {
+              "index": 1,
+              "name": "A/A",
+              "label": "A/A",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1
+            },
+            {
+              "index": 2,
+              "name": "A/G",
+              "label": "A/G",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1
+            }
+          ]
+        },
+        {
+          "part_id": 48897,
+          "name": "F15EX HANDLE L",
+          "leds": []
+        },
+        {
+          "part_id": 48898,
+          "name": "F15EX HANDLE R",
+          "leds": []
+        }
+      ],
+      "_notes": [
+        "One USB interface, three parts, all answering a broadcast heartbeat. usb_pid 48484 (0xbd64) is the composite enumeration for base + these handles and changes if different handles are fitted, so parts are discovered rather than trusted from the PID.",
+        "Handle LED inventories are unknown and left empty rather than guessed.",
+        "Nothing on this device has been driven over HID yet."
+      ]
+    }
+  ],
+  "_persisted_brightness": {
+    "comment": "SimAppPro writes the two PTO2 dimmers to device flash at config offset 0x114 as a little-endian word: byte 0 = Backlight, byte 1 = SL. Observed as '00 de 00 00' after SL=222 and '6f de 00 00' after Backlight=111.",
+    "offset": 276,
+    "layout": [
+      "Backlight",
+      "SL",
+      null,
+      null
+    ],
+    "warning": "We must never write this. WRITE_CFG_DATA is persistent and is on the forbidden list. Reading it with READ_CFG_DATA is safe and is how the daemon can warn when a user's stored brightness would make bound lamps invisible."
+  }
+}

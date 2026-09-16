@@ -1,0 +1,37 @@
+# Rust build output. ~340 MB.
+/target/
+
+# Generated signal catalogue - NOT committed on purpose.
+#
+# tools/build_catalogue.py builds this from the DCS-BIOS installed on the local
+# machine. It must not be shared, because:
+#   * DCS-BIOS allocates addresses sequentially as controls are defined, so a
+#     catalogue built against a different release reads the wrong addresses,
+#     silently and with no runtime error
+#   * index.json records the absolute path it was generated from
+#   * it is ~11 MB and regenerates in about two seconds
+#
+# Rebuild with:  python tools/build_catalogue.py
+/data/catalogue/
+
+# User-authored profiles are personal config, not project source.
+/data/profiles/
+
+# Captures and logs from reverse-engineering sessions. Some contain device
+# serial numbers.
+*.pcap
+*.pcapng
+*.log
+/captures/
+
+# Local tool state
+.claude/settings.local.json
+
+# Editors and OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+desktop.ini

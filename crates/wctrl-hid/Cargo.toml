@@ -1,0 +1,16 @@
+[package]
+name = "wctrl-hid"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "HID transport for WinCtrl / WinWing panels: part discovery and LED control"
+
+[dependencies]
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+hidapi = { version = "2.6", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(not(windows))'.dependencies]
+hidapi = { version = "2.6" }

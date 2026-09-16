@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 19 passing
+cargo test --workspace            # expect 17 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -32,6 +32,12 @@ updates it is stamped with the version it came from.
      profile does not bind. Not a reset followed by a sync one pass. Reasoning
      is in `CONFIG.md`.
    - After the sweep, write individual LEDs only as their source values change.
+   - **A governing dimmer must never be swept to 0 while a lamp it gates is
+     bound.** On the PTO2 that would silently kill every bound indicator, with
+     normal acks and dark lamps the exact failure that cost hours already. Give
+     each device an optional `governs` relation in `devices.json`, and when a
+     governed LED is bound but its governor is not, sweep the governor to a
+     sensible default instead of 0.
    - Clear every owned LED on shutdown and on mission end. LED state latches in
      the device, so a crash otherwise leaves the panel frozen mid-flight.
 
@@ -46,19 +52,26 @@ updates it is stamped with the version it came from.
    Empty output means multicast is blocked on the interface or DCS-BIOS is not
    exporting; the command says so itself.
 
-3. **Measure the Orion II.** Three LEDs, nothing ever driven. Indices come from
-   the vendor table, which was right for the PTO2 but is not evidence. Warn Cory
-   to watch the throttle first, then `wctrl led --pid 0xbd64 --part 0xbe60
---index 1 --value 1`. Note the part id differs from the USB pid.
+3. ~~Measure the Orion II.~~ **Done 2026-09-16.** Index 0 is a dimmer; indices
+   1 and 2 (A/A, A/G) are binary. Backlight dims them but does not gate them.
+   Details under Verified facts.
 
-4. **Then the Tauri editor.** Shape is specified in `CONFIG.md`.
+4. **Inventory the three newly-found devices.** `wctrl devices` reports an MCDU
+   CAPTAIN (`0xbb36`), Orion Combat Rudder Pedals Metal (`0xbef0`) and a
+   CarrierAce UFC + HUD (`0xbede`) that `devices.json` knows nothing about. The
+   UFC and MCDU in particular are display devices, so they may not use `SET_LEDX`
+   at all. Same method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
+
+5. **Then the Tauri editor.** Shape is specified in `CONFIG.md`.
 
 **Do not** start the UI before the engine the CLI exists precisely so every
 layer can be exercised on real hardware before anything is wrapped in Tauri.
 
-**Housekeeping:** the project is not yet a git repo. `target/` is ~330 MB and
-needs a `.gitignore`. SimAppPro's `HIDLog` is currently **off**, which is how it
-was found.
+**Housekeeping:** the repo is initialised and `.gitignore` is written 19 files,
+~126 KB, with `target/` and the generated `data/catalogue/` excluded and the
+reasons recorded in the file itself. SimAppPro's `HIDLog` is currently **on**;
+turn it off in `%APPDATA%\SimAppPro\config.json` when done, as it grows
+`WWTHID.log` by ~5 MB per session.
 
 ## What this is
 
@@ -103,6 +116,17 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 - PTO2 indices 0/1/2 are dimmers (0–255); 4–17 are indicators (**0 or 1 only**
   writing 255 acks and lights nothing).
 - Config offset `0x114` persists both PTO2 dimmers to flash. **Never write it.**
+- Orion II part `0xbe60`: index 0 Backlight is a dimmer (0255); indices 1 (A/A)
+  and 2 (A/G) are **binary** SimAppPro only ever sends 0 or 1. Backlight sets
+  how bright they burn but does **not** gate them: at Backlight 0 they are still
+  lit, just very dim. Unlike the PTO2, this device lights an indicator sent 255
+  instead of ignoring it, so brightness looks identical at 1, 30 and 255. Write 1.
+- SimAppPro does not clamp its Backlight field: 1255 went out as 231, the low
+  byte of 0x4E7. A vendor defect, not a device range.
+- **The two panels' dimmers behave differently, and the engine must not
+  generalise.** PTO2 `SL` is a *master gate*: at 0, indices 417 stay dark no
+  matter what they are sent. Orion II `Backlight` only *dims*: at 0, A/A and A/G
+  are still lit, just faint.
 - DCS-BIOS allocates addresses sequentially, so a catalogue must be built from
   the _installed_ DCS-BIOS. Catalogues are stamped with its version.
 
@@ -111,10 +135,10 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 ```text
 crates/wctrl-hid      frame building, part discovery, SET_LEDX   (5 tests)
 crates/wctrl-bios     export-stream decoder + address space      (5 tests)
-crates/wctrl-config   catalogue, device inventory, profiles      (9 tests)
+crates/wctrl-config   catalogue, device inventory, profiles      (7 tests)
 crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/catalogue
 data/catalogue        50 modules, generated, version-stamped
-data/devices.json     PTO2 verified; Orion II unverified
+data/devices.json     PTO2 and Orion II both verified
 tools/                catalogue builder, HID probe, WWTHID log parser
 ```
 
@@ -127,10 +151,11 @@ Tauri renders through WebView2, which ships with Windows.
 1. **The live DCS-BIOS stream is unproven.** The decoder passes synthetic tests
    but has never seen DCS. `cargo run --bin wctrl -- listen --seconds 20` with a
    mission loaded is the check.
-2. **Orion II is entirely unmeasured** three LEDs, never driven. About a
-   minute of work at the panel.
-3. **Does SL (index 2) govern indicator brightness?** Stated from SimAppPro's UI
-   and consistent with observation, never isolated.
+2. ~~Orion II is entirely unmeasured.~~ Resolved 2026-09-16.
+3. **SL (index 2) gates the PTO2 indicators** at SL 0 nothing lights at all.
+   Reported by Cory from direct use; worth a 10-second isolation (`led --index 2
+   --value 0`, then `--index 4 --value 1`) before the engine relies on it. Note
+   the two panels genuinely differ: the Orion II's Backlight only dims.
 4. **Profile inheritance** deferred, leaning no for v1.
 5. **Backlight contention** the one lamp SimAppPro may also drive, if a user
    runs both with "Sync with DCS" on. Detect and warn.

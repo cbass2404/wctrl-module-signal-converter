@@ -1,14 +1,13 @@
 {
   "_comment": "Device and LED inventory. Indices and names come from SimAppPro's www/js/DeviceConfig.js; part ids come from a broadcast ONLINE_HEARTBEAT. See docs/PROTOCOL.md.",
-  "_status": "PTO2 fully verified 2026-09-16. Indices 0/1/2 are dimmers taking 0-255. Indices 4-17 are indicators taking 0 or 1 only; a value of 255 is out of range and is silently ignored (it acks, and nothing lights).",
+  "_status": "PTO2 and Orion Throttle Base II both fully verified 2026-09-16. Indices 0/1/2 are dimmers taking 0-255. Indices 4-17 are indicators taking 0 or 1 only; a value of 255 is out of range and is silently ignored (it acks, and nothing lights).",
   "_evidence": {
     "dimmer": "Indices 0, 1 and 2 observed taking 1, 2, 11, 13, 20, 22, 111, 137, 200, 222 and 255 from SimAppPro's sliders.",
     "indicator": "SimAppPro only ever sends 0 or 1 to indices 4..17. Confirmed on hardware: 1 lights, 0 clears, 255 does nothing.",
     "hook_dimness": "Index 17 (HOOK) is a physically dim lamp - visibly weaker than its neighbours even at full brightness. It is not a protocol difference."
   },
   "_open_questions": [
-    "Does index 2 (SL) govern indicator brightness? Stated from SimAppPro's UI behaviour and consistent with observation, but never isolated in a controlled test.",
-    "Orion II indices and part ids come from DeviceConfig.js and a heartbeat broadcast; no LED on it has been driven."
+    "The two devices differ here and it matters: on the PTO2, SL (index 2) at 0 COMPLETELY extinguishes indices 4-17 - it is a master gate. On the Orion II, Backlight (index 0) at 0 leaves A/A and A/G lit but very dim - it dims without gating. Reported by Cory from direct use of both panels; not yet isolated in a controlled test."
   ],
   "devices": [
     {
@@ -178,7 +177,8 @@
       "_notes": [
         "Index 3 is absent from the vendor's own table. Not an omission here.",
         "Indicators take 0 or 1. Writing 255 acks and does nothing - it is out of range, not truthy.",
-        "The 14 indicators match SimAppPro's UI list read top to bottom, which is how the index order was corroborated."
+        "The 14 indicators match SimAppPro's UI list read top to bottom, which is how the index order was corroborated.",
+        "SL (index 2) is a MASTER GATE for indices 4-17: with SL at 0 no indicator lights at all, whatever value it is sent. This is stronger than the Orion II, where Backlight only dims. ENGINE CONSEQUENCE: a profile that binds any PTO2 indicator but leaves SL unbound must not have SL written to 0 by the module-load sweep, or every bound lamp is dead and acks normally while dark."
       ]
     },
     {
@@ -196,7 +196,8 @@
               "name": "Backlight",
               "label": "Panel backlight",
               "kind": "dimmer",
-              "max": 255
+              "max": 255,
+              "verified": true
             },
             {
               "index": 1,
@@ -204,7 +205,8 @@
               "label": "A/A",
               "kind": "indicator",
               "max": 1,
-              "on_value": 1
+              "on_value": 1,
+              "verified": true
             },
             {
               "index": 2,
@@ -212,7 +214,8 @@
               "label": "A/G",
               "kind": "indicator",
               "max": 1,
-              "on_value": 1
+              "on_value": 1,
+              "verified": true
             }
           ]
         },
@@ -230,7 +233,10 @@
       "_notes": [
         "One USB interface, three parts, all answering a broadcast heartbeat. usb_pid 48484 (0xbd64) is the composite enumeration for base + these handles and changes if different handles are fitted, so parts are discovered rather than trusted from the PID.",
         "Handle LED inventories are unknown and left empty rather than guessed.",
-        "Nothing on this device has been driven over HID yet."
+        "Verified 2026-09-16 on hardware and against a SimAppPro HID capture. Index 0 is a dimmer; indices 1 and 2 are binary indicators - SimAppPro only ever sends 0 or 1 to them.",
+        "Index 0 (Backlight) governs the BRIGHTNESS of indices 1 and 2, but does not gate them: with Backlight at 0 the A/A and A/G lamps are still lit, just very dim. Brightness rises with Backlight. So a profile that binds A/A without binding Backlight yields a visible but very dim lamp, not a dead one.",
+        "Unlike the PTO2, this device LIGHTS an indicator when sent 255 rather than ignoring the out-of-range value. Brightness is identical at 1, 30 and 255 because the value is binary here and Backlight sets the level. Write 1, which is what the vendor sends.",
+        "SimAppPro does not clamp the Backlight field: entering 1255 transmitted 231 (0x4E7 truncated to its low byte 0xE7). That is a SimAppPro defect, not a device range."
       ]
     }
   ],

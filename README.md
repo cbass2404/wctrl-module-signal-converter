@@ -239,6 +239,36 @@ Each condition reads as a sentence until you click its pencil. An open condition
 has keep, cancel and delete: cancel puts it back the way it was before you
 started, and delete asks first.
 
+#### Learn mode
+
+Beside every signal box is a **Learn** button. Press it, flip the switch in the
+cockpit, and the thing you just moved is at the top of the list. Click it to
+bind it.
+
+This is the answer to "I do not know what this is called". A module publishes
+hundreds of signals, up to 1,440, named by DCS-BIOS rather than by anyone who
+flies, so searching only works if you already half know the answer.
+
+What is listed is everything that moved, ordered by how often it moved. A switch
+thrown once comes out above an altimeter that has moved ninety times, and the
+count is shown so you can tell them apart. Nothing is hidden on the grounds of
+being busy: somebody mapping a gauge to a display field needs to find it.
+
+It waits about a second first, while every signal gets a starting value. Until
+that is done an empty list means "still reading", which it says, and afterwards
+it means "nothing in the cockpit moved", which it also says. **Watch again**
+clears the list for the next control without that wait.
+
+**It only listens while the panel is open.** Nothing joins the DCS-BIOS stream
+until you press Learn, and **Stop**, closing the panel, going back to the
+profile list or closing the window all end it. It never sends anything, to DCS
+or to the panels, and it reads its own copy of the multicast, so it changes
+nothing about a mission in progress and runs happily alongside the daemon.
+
+If DCS is flying an aircraft this profile does not cover, it says so rather than
+sitting there empty: nothing you flip in a Hind will appear in a Hornet
+profile.
+
 It reads and writes `data/profiles`, the same folder the daemon reads, and the
 daemon reloads a profile about a second after it is saved. Edit a lamp, save, and
 watch it change on the panel without leaving the cockpit.
@@ -288,3 +318,24 @@ cargo run --bin wctrl -- listen --seconds 60 --watch FLAP_POS --watch FLAPS_SWIT
 ```
 
 It can run at the same time as the daemon.
+
+`learn` is the editor's learn mode without the editor. It watches everything the
+loaded module publishes and prints a table per window, fewest movements first,
+so a control can be named without a window open:
+
+```powershell
+cargo run --bin wctrl -- learn --seconds 5
+```
+
+```text
+  flying FA-18C_hornet, which is module FA-18C_hornet
+  watching 503 signals
+  ready. Flip something in the cockpit.
+
+moves  signal                             value
+    1  GEAR_LEVER                         0 -> 1   Gear Lever
+   14  IFEI_RPM_L                         " 77" -> " 91"   RPM_L
+```
+
+Each window starts a fresh sheet, so several controls can be found in one run.
+Ctrl-C stops it.

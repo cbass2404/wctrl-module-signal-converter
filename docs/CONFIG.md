@@ -359,13 +359,45 @@ For a lamp that is `0 if light is off, 1 if light is on` and a range of 0..1.
 Discrete signals carry their position labels, so the hint states the rules and
 parameters rather than paraphrasing them.
 
-**Learn mode.** With DCS running, the user flips the switch in the cockpit and
-the editor shows which signals just changed, filtering the list to those. This
-is the feature that makes unfamiliar modules tractable and is worth more than
-any amount of search polish. It is also the answer to "I do not know what this
-is called", which is why the typeahead needs no browse-everything mode: an empty
-box until three characters is acceptable precisely because learn mode fills it
-without typing.
+**Learn mode**, built 2026-09-17. With DCS running, the user flips the switch in
+the cockpit and the editor lists what just changed. This is the feature that
+makes unfamiliar modules tractable and is worth more than any amount of search
+polish. It is also the answer to "I do not know what this is called", which is
+why the typeahead needs no browse-everything mode: an empty box until three
+characters is acceptable precisely because learn mode fills it without typing.
+
+Four decisions in it are worth keeping written down.
+
+**Ranked, never filtered.** A cockpit in flight is never still, so "what
+changed" on its own returns the scenery along with the answer. Signals are
+ordered by how many times they moved since the panel opened: a switch thrown
+once outranks a gauge that has moved ninety times. The count is shown. Nothing
+is dropped for being busy, because a gauge is exactly what somebody mapping a
+display field is looking for, and a filter that hid it would be a bug wearing
+the clothes of a feature.
+
+**A word is not a signal.** DCS-BIOS packs several controls into one 16-bit
+word, so a word moving says only that one of its occupants did. Each signal is
+read through its own mask and compared against its own previous value, which is
+where most of the noise goes. A string field is the same problem inverted: six
+characters is three words, all changing at once, and counting per word would
+rank one edit of a scratchpad as three times busier than it is.
+
+**Arriving is not moving.** The stream re-exports its whole map several times a
+second, so the first sighting of a signal is a baseline and never a report. That
+takes about one export cycle to gather, and the panel says it is reading the
+cockpit until it is done, because before then an empty list means something
+different from what it means afterwards.
+
+**It listens only while the panel is open.** Pressing Learn joins the multicast
+group and closing the panel leaves it. The alternative, keeping the socket for
+the session so the next open is instant, saves about a second and costs the user
+knowing whether anything is running while they fly. It reads a copy of a
+multicast the daemon is already receiving and never transmits, so the choice is
+about predictability rather than cost.
+
+`wctrl learn` is the same thing on the command line, over the module DCS is
+flying, printing a table per window.
 
 ## Conditions: every one must hold
 

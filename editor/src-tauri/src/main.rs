@@ -7,12 +7,13 @@
 //! daemon read and write profiles through exactly the same code, so a profile
 //! the editor produces cannot be one the daemon rejects.
 
+mod learn;
 mod paths;
 mod view;
 
 use paths::Paths;
 use view::{DeviceView, ModuleChoice, ProfileSummary, SignalView};
-use wctrl_config::{DeviceInventory, Profile};
+use wctrl_config::{DeviceInventory, Module, Profile};
 
 /// Commands return a message rather than an error type, because the only useful
 /// thing the window can do with a failure is show it to the user.
@@ -206,6 +207,46 @@ fn clone_profile(file: String, name: String, aircraft: Vec<String>) -> Reply<Str
     Ok(out)
 }
 
+/// Start watching the export stream for one module.
+///
+/// Called every time the learn panel is opened, and cheap to repeat: a session
+/// already on this module is left running rather than rebuilt, because its
+/// baseline took a full export cycle to gather and throwing it away would make
+/// the user wait again for nothing.
+#[tauri::command]
+fn learn_start(module: String, learn: tauri::State<learn::State>) -> Reply<()> {
+    let paths = Paths::resolve();
+    let path = paths.catalogue.join(format!("{module}.json"));
+    let module = Module::load(&path).map_err(|e| fail(&format!("reading {}", path.display()), e))?;
+    learn.start(&module);
+    Ok(())
+}
+
+/// What has moved since the panel was opened, most switch-like first.
+///
+/// Polled rather than pushed. The window wants the same four facts on every
+/// tick whether or not anything changed, so there is nothing an event would
+/// save, and a poll cannot leave the panel stale if a message is missed.
+#[tauri::command]
+fn learn_poll(learn: tauri::State<learn::State>) -> Reply<learn::Report> {
+    Ok(learn.with(|s| s.report()).unwrap_or_else(learn::Report::idle))
+}
+
+/// Clear the list and watch again, keeping the map of the cockpit.
+#[tauri::command]
+fn learn_again(learn: tauri::State<learn::State>) -> Reply<()> {
+    learn.with(|s| s.rearm());
+    Ok(())
+}
+
+/// Close the socket. The panel calls this on the way out, and the session
+/// would be dropped with the window in any case.
+#[tauri::command]
+fn learn_stop(learn: tauri::State<learn::State>) -> Reply<()> {
+    learn.stop();
+    Ok(())
+}
+
 #[tauri::command]
 fn save_profile(file: String, profile: Profile) -> Reply<()> {
     let paths = Paths::resolve();
@@ -241,6 +282,7 @@ fn slug(name: &str) -> String {
 
 fn main() {
     tauri::Builder::default()
+        .manage(learn::State::default())
         .invoke_handler(tauri::generate_handler![
             devices,
             modules,
@@ -251,7 +293,11 @@ fn main() {
             create_profile,
             clone_profile,
             save_profile,
-            reset_profile
+            reset_profile,
+            learn_start,
+            learn_poll,
+            learn_again,
+            learn_stop
         ])
         .run(tauri::generate_context!())
         .expect("starting the editor window");

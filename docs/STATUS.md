@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 119 passing
+cargo test --workspace            # expect 130 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -105,12 +105,22 @@ stream clears the panels and a dead `DCS.exe` is what ends the process, so
 sitting in the menu between missions is survived rather than treated as a crash.
 Only one daemon runs at a time; a second backs off.
 
+**Learn mode**, added 2026-09-17, is the one place in the editor that does I/O.
+Press **Learn** beside any signal box, flip the control in the cockpit, and what
+moved is listed with the most switch-like first. `wctrl learn` is the same thing
+without a window.
+
+The judgment lives in `wctrl-engine`'s `learn` module, which has no I/O and is
+tested against a synthetic stream: ranking by movement count, reading each
+signal through its own mask so a shared word does not name its neighbours,
+counting a multi-word string as one movement, and treating a first sighting as a
+baseline rather than a report. The editor backend adds a thread and a socket and
+nothing else. It listens only while the panel is open, which is deliberate, and
+`CONFIG.md` says why.
+
 **Not built yet:**
 
-1. **Learn mode.** The editor has to read the DCS-BIOS stream for this, which
-   it does not do at all yet. `CONFIG.md` calls it worth more than any amount
-   of search polish, and it is the reason the typeahead needs no browse mode.
-2. **Renaming a profile, and editing its aircraft list.** Both are fixed at
+1. **Renaming a profile, and editing its aircraft list.** Both are fixed at
    creation right now. **Copying one is not**, as of 2026-09-17: "Copy to..."
    on a profile row takes a name and an aircraft list and carries everything
    else over, module included. The module is not offered, because a copy whose
@@ -119,7 +129,7 @@ Only one daemon runs at a time; a second backs off.
    a feature: the Super Hornet community mod reads the Hornet's DCS-BIOS
    definitions, so the Hornet profile drives it with only those two fields
    changed.
-3. **Validation before save.** `Profile::validate` exists and is not called from
+2. **Validation before save.** `Profile::validate` exists and is not called from
    the editor, so a binding it would reject still saves quietly. The four forms
    are mutually exclusive and the editor keeps them that way by construction,
    but a hand-edited file is only caught when the daemon loads it.
@@ -471,14 +481,14 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 
 ```text
 crates/wctrl-hid      frame building, part discovery, SET_LEDX   (5 tests)
-crates/wctrl-bios     export-stream decoder + address space      (5 tests)
-crates/wctrl-config   catalogue, inventory, profiles, binding forms (19 tests)
-crates/wctrl-engine   aircraft detection, sweep, incremental writes (24 tests)
-editor/src-tauri      profile editor backend                     (1 test)
+crates/wctrl-bios     export-stream decoder + address space      (10 tests)
+crates/wctrl-config   catalogue, inventory, profiles, displays    (63 tests)
+crates/wctrl-engine   aircraft detection, sweep, writes, learn    (43 tests)
+editor/src-tauri      profile editor backend, learn listener      (4 tests)
 data/defaults         shipped profiles, tracked in git
 data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
-crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/catalogue/run
+crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
 data/devices.json     PTO2 and Orion II both verified
 tools/                catalogue builder, HID probe, WWTHID log parser
@@ -511,8 +521,9 @@ Tauri renders through WebView2, which ships with Windows.
    hardware.
 2. **Prove the stream** against live DCS.
 3. ~~**Tauri editor** scaffold.~~ Done 2026-09-16. Remaining work is listed
-   under "Where the editor stands": binding editor, typeahead, conditions,
-   hint box, learn mode.
+   under "Where the editor stands": renaming a profile, and validation before
+   save. The binding editor, typeahead, conditions, hint box and learn mode are
+   done.
 
 ## Method note
 

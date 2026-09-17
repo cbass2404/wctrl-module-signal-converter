@@ -3,7 +3,14 @@
 
 import { invoke } from "@tauri-apps/api/core";
 
-import type { Device, ModuleChoice, Profile, ProfileSummary, SignalView } from "./types";
+import type {
+  Device,
+  LearnReport,
+  ModuleChoice,
+  Profile,
+  ProfileSummary,
+  SignalView,
+} from "./types";
 
 export const listDevices = () => invoke<Device[]>("devices");
 export const listModules = () => invoke<ModuleChoice[]>("modules");
@@ -18,3 +25,10 @@ export const saveProfile = (file: string, profile: Profile) =>
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
 export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });
+
+// Learn mode. The only commands that touch the DCS-BIOS stream, and the only
+// ones that leave anything running in the backend between calls.
+export const learnStart = (module: string) => invoke<void>("learn_start", { module });
+export const learnPoll = () => invoke<LearnReport>("learn_poll");
+export const learnAgain = () => invoke<void>("learn_again");
+export const learnStop = () => invoke<void>("learn_stop");

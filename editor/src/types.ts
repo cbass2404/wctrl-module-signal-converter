@@ -207,3 +207,36 @@ export interface ModuleChoice {
   signals: number;
   lamps: number;
 }
+
+/** One signal that moved in the cockpit, as learn mode reports it. */
+export interface LearnChange {
+  id: string;
+  /** What it read before the first movement. Null if it was still arriving. */
+  from: string | null;
+  to: string;
+  /**
+   * How many times it has moved since the panel was opened.
+   *
+   * One is a switch being thrown. A hundred is a gauge, and the list is ordered
+   * by this so the thing you just did comes out on top.
+   */
+  moves: number;
+  /** Characters rather than a number, so the value is shown quoted. */
+  text: boolean;
+}
+
+/** Everything the learn panel asks for on a poll. */
+export interface LearnReport {
+  module: string;
+  listening: boolean;
+  /**
+   * Whether every signal has a starting value yet. Before this an empty list
+   * means "still reading the cockpit" and after it means "nothing moved".
+   */
+  ready: boolean;
+  datagrams: number;
+  /** What DCS says it is flying, once the stream has said. */
+  aircraft: string | null;
+  error: string | null;
+  changes: LearnChange[];
+}

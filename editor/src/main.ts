@@ -18,6 +18,7 @@ import {
   saveProfile,
 } from "./api";
 import { bindingEditor } from "./binding";
+import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
 import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView } from "./types";
 
@@ -54,6 +55,9 @@ function showError(where: string, e: unknown): void {
 // ------------------------------------------------------------------- library
 
 async function showLibrary(): Promise<void> {
+  // Nothing on the profile list can use the stream, so the socket goes with it.
+  stopLearning();
+
   clear();
   const header = el(
     "header",
@@ -303,6 +307,10 @@ async function showProfile(file: string): Promise<void> {
   } catch (e) {
     signalError = e instanceof Error ? e.message : String(e);
   }
+
+  // Learn mode reads signals against this profile's module, and warns when DCS
+  // is flying something this profile does not cover.
+  setLearnContext(profile.module, profile.aircraft);
 
   // The shipped copy, so one lamp can be reverted without resetting the file.
   // A profile the user made has none, which is not an error.

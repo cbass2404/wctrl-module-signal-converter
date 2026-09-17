@@ -26,6 +26,8 @@ pub struct LedView {
     /// a user chasing a lamp that will not light deserves to know we are not
     /// certain of it either.
     pub verified: bool,
+    /// Hardware notes, where any were recorded.
+    pub note: String,
     pub part_id: u32,
     pub index: u8,
 }
@@ -40,6 +42,7 @@ impl LedView {
             on_value: led.on_value(),
             dimmable: led.is_dimmable(),
             verified: led.verified,
+            note: led.note.clone(),
             part_id,
             index: led.index,
         }

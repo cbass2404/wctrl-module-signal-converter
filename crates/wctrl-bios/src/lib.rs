@@ -7,12 +7,22 @@
 //! 55 55 55 55 | addr(u16 LE) count(u16 LE) data… | addr count data… | …
 //! ```
 //!
-//! `55 55 55 55` is the frame sync. Only changed values are sent, so a client
-//! that connects mid-flight sees an incomplete picture until each value next
-//! changes. On aircraft change DCS-BIOS marks every entry dirty
-//! (`BIOSStateMachine` calls `memoryMap:clearValues()`), so the whole module
-//! state arrives immediately after load  that flood is what the engine syncs
-//! against.
+//! `55 55 55 55` is the frame sync.
+//!
+//! **The whole map is re-exported on a cycle**, not only what changed. Measured
+//! at roughly every 300 ms: word 0 of `_ACFT_NAME`, which never moves during a
+//! flight, arrived 67 times in 20 seconds. A client that connects mid-flight
+//! therefore has a complete picture within about a second and needs no re-slot.
+//!
+//! Two consequences. The daemon can be started at any time, including mid
+//! mission. And most writes carry a value the address already holds, which is
+//! why `BiosState::apply` reports whether the word actually moved: re-resolving
+//! every bound lamp three times a second for a cockpit sitting still is work
+//! nobody asked for.
+//!
+//! On aircraft change DCS-BIOS also marks every entry dirty (`BIOSStateMachine`
+//! calls `memoryMap:clearValues()`), so the whole module state arrives at once
+//! after load. That flood is what the engine syncs against.
 
 use std::collections::HashMap;
 use std::io;
@@ -161,8 +171,14 @@ impl BiosState {
         Self::default()
     }
 
-    pub fn apply(&mut self, write: Write) {
-        self.words.insert(write.address, write.value);
+    /// Store one word, reporting whether it actually changed.
+    ///
+    /// DCS-BIOS re-exports its whole map on a cycle rather than sending only
+    /// what moved, so most writes carry a value the address already holds.
+    /// Telling the two apart is what lets a caller skip work for a cockpit
+    /// that is sitting still, which is most of the time.
+    pub fn apply(&mut self, write: Write) -> bool {
+        self.words.insert(write.address, write.value) != Some(write.value)
     }
 
     pub fn word(&self, address: u16) -> Option<u16> {
@@ -309,6 +325,31 @@ mod tests {
                 address: 0x2af8,
                 value: 7
             }]
+        );
+    }
+
+    #[test]
+    fn apply_reports_whether_the_word_moved() {
+        // The export stream re-sends unchanged words constantly, and the engine
+        // uses this to tell a real change from the periodic re-export. Getting
+        // it wrong the optimistic way would freeze lamps on a genuine change.
+        let mut state = BiosState::new();
+        let w = Write {
+            address: 100,
+            value: 7,
+        };
+        assert!(state.apply(w), "first sighting of an address is a change");
+        assert!(!state.apply(w), "the same value again is not a change");
+        assert!(
+            state.apply(Write {
+                address: 100,
+                value: 8,
+            }),
+            "a different value is a change"
+        );
+        assert!(
+            state.apply(w),
+            "and moving back to an earlier value is a change too"
         );
     }
 

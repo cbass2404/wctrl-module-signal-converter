@@ -96,16 +96,54 @@ window.addEventListener(
 );
 
 /**
- * The rules and parameters of one signal, as the catalogue records them.
+ * An info icon with a hint box behind it.
  *
- * Shown behind an info icon that opens on hover *and* on focus, because a
- * hover-only hint cannot be reached from the keyboard.
+ * Opens on hover *and* on focus, because a hover-only hint cannot be reached
+ * from the keyboard or on a touch screen. Placement is worked out when it
+ * opens, so it never runs off the edge of the window.
+ *
+ * Generic because two things want one: a signal in the picker, and a lamp in
+ * the row beside it. Both are details that would crowd the workspace if they
+ * were always on screen.
+ */
+export function infoIcon(label: string, ...content: (Node | string)[]): HTMLElement {
+  const lines = el("span", { class: "hint" }, ...content);
+  const info = el(
+    "span",
+    { class: "info", tabindex: "0", role: "button", "aria-label": label },
+    "i",
+    lines,
+  );
+
+  const place = (): void => {
+    open = { info, hint: lines };
+    placeHint(info, lines);
+  };
+  const forget = (): void => {
+    if (open?.info === info) open = null;
+  };
+  info.addEventListener("mouseenter", place);
+  info.addEventListener("focus", place);
+  info.addEventListener("mouseleave", forget);
+  info.addEventListener("blur", forget);
+  return info;
+}
+
+/**
+ * Everything the catalogue knows about one signal.
+ *
+ * All of it lives here rather than on the row, because a binding being edited
+ * already shows the identifier, the test and its values, and a lamp can carry
+ * several conditions. Repeating the description and category beside each one
+ * turned a cell into a wall. This is read when someone is unsure and ignored
+ * the rest of the time, which is exactly what a tooltip is for.
  */
 export function hintFor(signal: SignalView): HTMLElement {
   const lines = el(
     "span",
-    { class: "hint" },
-    el("strong", {}, signal.id),
+    {},
+    el("strong", {}, signal.description || signal.id),
+    el("code", { class: "hint-id block" }, signal.id),
     el("span", { class: "meta block" }, `${signal.control_type} · ${signal.category}`),
   );
   if (signal.reads) {
@@ -121,28 +159,7 @@ export function hintFor(signal: SignalView): HTMLElement {
     lines.append(table);
   }
 
-  const info = el(
-    "span",
-    { class: "info", tabindex: "0", role: "button", "aria-label": "Signal details" },
-    "i",
-    lines,
-  );
-
-  // The CSS reveals the hint on hover and focus; these only decide where it
-  // lands, once it is showing and can be measured.
-  const place = (): void => {
-    open = { info, hint: lines };
-    placeHint(info, lines);
-  };
-  const forget = (): void => {
-    if (open?.info === info) open = null;
-  };
-  info.addEventListener("mouseenter", place);
-  info.addEventListener("focus", place);
-  info.addEventListener("mouseleave", forget);
-  info.addEventListener("blur", forget);
-
-  return info;
+  return infoIcon("Signal details", lines);
 }
 
 /** Score a signal against the query. Lower sorts first; null means no match. */
@@ -200,6 +217,12 @@ export function signalPicker(opts: PickerOptions): HTMLElement {
   });
   input.value = opts.value;
 
+  // The icon sits on the input row rather than under it, so choosing a signal
+  // costs no extra line. A binding can hold several conditions and the cell is
+  // already the busiest thing on screen.
+  const icon = el("span", { class: "icon-slot" });
+  const row = el("div", { class: "signal-row" }, input, icon);
+
   const results = el("div", { class: "results" });
 
   // Keep the input focused while a row is being clicked.
@@ -210,20 +233,21 @@ export function signalPicker(opts: PickerOptions): HTMLElement {
   // wrong: the row highlighted on hover but only sometimes took the click.
   // Cancelling the mousedown means focus never moves and there is no race.
   results.addEventListener("mousedown", (e) => e.preventDefault());
-  const detail = el("div", { class: "detail" });
-  const wrap = el("div", { class: "picker-field" }, input, results, detail);
+  // A signal the module does not have is the one thing said in words rather
+  // than behind the icon, because the lamp will never light and nobody would
+  // think to hover to find that out.
+  const problem = el("div", { class: "detail" });
+  const wrap = el("div", { class: "picker-field" }, row, results, problem);
 
   function showDetail(id: string): void {
-    detail.replaceChildren();
+    icon.replaceChildren();
+    problem.replaceChildren();
     const signal = byId.get(id);
     if (!signal) {
-      if (id) detail.append(el("span", { class: "bad" }, `${id} is not in this module`));
+      if (id) problem.append(el("span", { class: "bad" }, `${id} is not in this module`));
       return;
     }
-    detail.append(
-      el("span", { class: "meta" }, `${signal.description} · ${signal.category}`),
-      hintFor(signal),
-    );
+    icon.append(hintFor(signal));
   }
 
   function close(): void {

@@ -16,6 +16,7 @@ import {
   saveProfile,
 } from "./api";
 import { bindingEditor } from "./binding";
+import { infoIcon } from "./typeahead";
 import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView } from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
@@ -396,7 +397,6 @@ function deviceSection(
         "tr",
         {},
         el("th", {}, "Lamp"),
-        el("th", {}, "Type"),
         el("th", {}, "Driven by"),
         el("th", { class: "num" }, "Output"),
       ),
@@ -412,6 +412,61 @@ function deviceSection(
   );
 }
 
+/**
+ * The details behind a lamp, out of the way until asked for.
+ *
+ * Everything here is true of the hardware rather than of the binding, so it is
+ * read once when someone is curious and never again. On screen permanently it
+ * would crowd the conditions, which are the part being worked on.
+ */
+function lampHint(led: Led): HTMLElement {
+  const lines: (Node | string)[] = [
+    el("strong", {}, led.label || led.name),
+    // The identifier, which is what --verbose prints when this lamp is written
+    // and what learn mode will have to match against. Kept out of the row and
+    // put here, where it is available without being in the way.
+    el("code", { class: "hint-id block" }, led.name),
+    el(
+      "span",
+      { class: "meta block" },
+      led.dimmable ? `dimmer, 0 to ${led.max}` : `on or off, ${led.on_value} is on`,
+    ),
+    el("span", { class: "meta block" }, `part 0x${led.part_id.toString(16)}, index ${led.index}`),
+  ];
+  if (led.note) {
+    lines.push(el("span", { class: "block" }, led.note));
+  }
+  if (!led.verified) {
+    lines.push(
+      el(
+        "span",
+        { class: "block" },
+        "Not confirmed on hardware. If it will not light, the fault may be ours rather than yours.",
+      ),
+    );
+  }
+  return infoIcon("Lamp details", ...lines);
+}
+
+/**
+ * Whether this binding's `on` value affects anything.
+ *
+ * `on` is what a satisfied test resolves to, and conditions combine by taking
+ * the dimmest. A scale ignores `on` entirely and spreads its source across the
+ * lamp's range, so a binding made only of scales never consults it. Mixed with
+ * a threshold it does matter, because the threshold resolves to `on` and the
+ * minimum makes it a ceiling on the scaled value.
+ *
+ * A mirror takes its value from the lamp it follows, so `on` is unused there
+ * too; only `off` still applies.
+ */
+function onValueMatters(binding: Binding): boolean {
+  if (binding.same_as) return false;
+  if (binding.always) return true;
+  const groups = binding.any_of?.length ? binding.any_of : [{ conditions: binding.conditions }];
+  return groups.some((g) => g.conditions.some((c) => !("scale" in c.on_when)));
+}
+
 function lampRow(
   device: Device,
   led: Led,
@@ -421,14 +476,47 @@ function lampRow(
 ): HTMLTableRowElement {
   const binding = bindingFor(device, led, byLamp, session);
 
-  const name = el("td", {}, el("strong", {}, led.name));
-  if (led.label) name.append(el("span", { class: "meta block" }, led.label));
+  // The label, and only the label. It is what is printed on the panel the user
+  // is looking at. The identifier behind it is a key in the profile file, which
+  // is the editor's job to handle rather than the user's to read.
+  //
+  // Type sits here too rather than in a column of its own. It describes the
+  // hardware, not the binding, and never changes, so a whole column of width
+  // was being spent on something read once. The conditions need it far more.
+  // The icon follows the name, everywhere in the window. The name is what is
+  // being read; the icon only says that there is more if you want it.
+  const name = el(
+    "td",
+    {},
+    el("div", { class: "named" }, el("strong", {}, led.label || led.name), lampHint(led)),
+    el("span", { class: "meta block kind" }, led.dimmable ? `dimmer 0..${led.max}` : "on / off"),
+  );
   if (!led.verified) name.append(el("span", { class: "unverified" }, "unverified"));
 
-  // Brightness is offered only where the lamp can produce it. An indicator acks
-  // 255 and lights nothing, which is not "off" and cost a long detour once.
   const output = el("td", { class: "num" });
-  if (led.dimmable) {
+  const renderOutput = (): void => {
+    output.replaceChildren();
+
+    // An indicator acks 255 and lights nothing, which is not "off" and cost a
+    // long detour once. There is no brightness to offer, only its on value.
+    if (!led.dimmable) {
+      output.append(el("span", { class: "meta" }, String(led.on_value)));
+      return;
+    }
+    if (binding.same_as) {
+      output.append(el("span", { class: "meta" }, "matched"));
+      return;
+    }
+    if (!onValueMatters(binding)) {
+      // Either nothing is assigned yet, or every test is a scale. A scale
+      // ignores `on` and spreads the source across the lamp's own range, so an
+      // input here would be a control that quietly does nothing.
+      output.append(
+        el("span", { class: "meta" }, binding.conditions.length || binding.any_of?.length ? `0..${led.max}` : ""),
+      );
+      return;
+    }
+
     const input = el("input", {
       type: "number",
       class: "value",
@@ -436,6 +524,7 @@ function lampRow(
       max: String(led.max),
       value: String(binding.on ?? led.on_value),
     });
+    input.title = "Brightness when this lamp is lit.";
     input.addEventListener("change", () => {
       const n = Number(input.value);
       binding.on = Number.isFinite(n) ? Math.min(Math.max(n, 0), led.max) : led.on_value;
@@ -443,9 +532,8 @@ function lampRow(
       session.refreshDirty();
     });
     output.append(input);
-  } else {
-    output.append(el("span", { class: "meta" }, String(led.on_value)));
-  }
+  };
+  renderOutput();
 
   const driven = el("td", {});
   driven.append(
@@ -462,6 +550,10 @@ function lampRow(
       onChange: () => {
         session.refreshDirty();
         refreshCount();
+        // The binding decides whether an output value can do anything, so the
+        // cell has to follow it: switching a test from a scale to a threshold
+        // is what turns the field on.
+        renderOutput();
       },
     }),
   );
@@ -470,7 +562,6 @@ function lampRow(
     "tr",
     { "data-device": device.key, "data-led": led.name },
     name,
-    el("td", { class: "meta" }, led.dimmable ? `dimmer 0..${led.max}` : "on / off"),
     driven,
     output,
   );

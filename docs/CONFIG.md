@@ -95,6 +95,22 @@ daemon started mid-mission sees the name almost immediately, treats it as an
 aircraft change because it had none, and sweeps once the stream settles. No
 re-slot, no mission restart, and no manual resync command is needed.
 
+**Profiles are reloaded while the daemon runs.** The profile directory is polled
+twice a second, and a change is acted on only once the directory has looked the
+same twice running, so a file caught halfway through being written is never
+read. The editor also writes to a temporary file and renames it, which makes a
+half-written profile nearly impossible rather than merely unlikely.
+
+A reload keeps the signal state and then sweeps every lamp, rather than waiting
+for signals to move. Both halves matter. Keeping the state means the panel is
+not blanked while DCS-BIOS gets around to re-exporting it; sweeping means a lamp
+whose binding changed is corrected even though nothing it reads has moved, and a
+lamp that just became unassigned is driven off. An incremental update would
+notice neither.
+
+A reload arriving while the post-load flood is still settling writes nothing.
+The sweep that was already coming uses the profiles that just arrived.
+
 ## Picking the signal, then the value
 
 Two controls per LED: **which signal**, then **which value of that signal turns

@@ -323,7 +323,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     const text = el("div", { class: "grow" });
     if (signal) {
       text.append(
-        el("span", { class: "desc" }, signal.description),
+        el("div", { class: "named desc" }, signal.description, hintFor(signal)),
         el(
           "span",
           { class: "sub" },
@@ -345,7 +345,6 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     }
 
     const row = el("div", { class: "condition-view" }, text);
-    if (signal) row.append(hintFor(signal));
     row.append(
       iconButton("pencil", "\u270E", "Edit this condition", () => {
         editing.set(condition, structuredClone(condition));

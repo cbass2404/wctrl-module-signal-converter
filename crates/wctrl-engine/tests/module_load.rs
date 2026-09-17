@@ -21,6 +21,19 @@ const DIMMER_ADDR: u16 = 102;
 /// Every LED the PTO2 declares, read from the inventory rather than written as
 /// a literal. Index 3 was found on hardware after these tests were written, and
 /// a hardcoded count turned that discovery into four failing tests.
+
+/// Indices the reload tests name, read from the inventory so that a hardware
+/// discovery renumbering a lamp does not turn these into silent passes.
+fn led_index(name: &str) -> u8 {
+    devices()
+        .device(PTO2)
+        .expect("PTO2 should be in the inventory")
+        .led(name)
+        .unwrap_or_else(|| panic!("{name} should be a lamp on the PTO2"))
+        .1
+        .index
+}
+
 fn pto2_led_count() -> usize {
     devices()
         .device(PTO2)
@@ -525,4 +538,150 @@ fn a_continuous_source_can_be_gated_by_a_switch() {
     let t1 = t0 + Duration::from_secs(2);
     let batch = e.ingest(&[Write { address: LEVER_ADDR, value: 2 }], t1);
     assert_eq!(value_of(&batch, 0), Some(0), "gate shut: dark regardless of the dial");
+}
+
+/// A profile edited while the daemon runs, from the engine's side.
+///
+/// Same aircraft, one binding changed: the caution lamp now follows the dimmer
+/// instead of the caution light.
+fn edited_profile() -> Profile {
+    serde_json::from_str(
+        r#"{
+            "name": "Hornet",
+            "aircraft": ["FA-18C_hornet"],
+            "module": "TEST",
+            "bindings": [
+                {
+                    "device": "TAKEOFF_PLANEL_2",
+                    "led": "Master_Caution",
+                    "conditions": [
+                        { "source": "INST_PNL_DIMMER", "on_when": { "gte": 1 } }
+                    ]
+                }
+            ]
+        }"#,
+    )
+    .expect("fixture profile should parse")
+}
+
+/// Drive an engine to the state a running daemon is in: aircraft detected,
+/// flood settled, lamps swept.
+fn flying() -> Engine {
+    let mut e = engine_with(vec![profile()]);
+    let mut now = Instant::now();
+    e.ingest(&acft_name("FA-18C_hornet"), now);
+    e.ingest(
+        &[
+            // 0x1000 because the fixture masks the caution bit at 4096.
+            Write { address: CAUTION_ADDR, value: 0x1000 },
+            Write { address: DIMMER_ADDR, value: 65535 },
+        ],
+        now,
+    );
+    now += Duration::from_secs(1);
+    e.tick(now);
+    e
+}
+
+#[test]
+fn reloading_profiles_resweeps_against_the_state_already_known() {
+    let mut e = flying();
+
+    // The caution lamp was lit by MASTER_CAUTION_LT, which has not moved. The
+    // new profile ties it to the dimmer instead, and the dimmer is at full, so
+    // the lamp stays lit for a different reason. Nothing re-sent a signal, so
+    // only a full sweep could have noticed.
+    let batch = e.set_profiles(vec![edited_profile()]);
+    assert_eq!(batch.cause, Cause::ProfileReload);
+    assert_eq!(value_of(&batch, led_index("Master_Caution")), Some(1));
+
+    // Backlight is gone from the profile entirely, so it must be driven off
+    // rather than left where the previous sweep put it.
+    assert_eq!(value_of(&batch, led_index("Backlight")), Some(0));
+}
+
+#[test]
+fn a_reload_keeps_the_signal_state() {
+    // The reload must not clear what DCS-BIOS has already told us. Dropping it
+    // would blank the panel until the next re-export refilled it, which is the
+    // exact flicker a reload exists to avoid.
+    let mut e = flying();
+    let batch = e.set_profiles(vec![profile()]);
+    assert_eq!(
+        value_of(&batch, led_index("Master_Caution")),
+        Some(1),
+        "the caution signal was seen before the reload and is still known after it"
+    );
+}
+
+#[test]
+fn reloading_before_an_aircraft_is_known_writes_nothing() {
+    // Editing a profile with DCS closed is normal. There is no cockpit to sync
+    // to, so there is nothing to write, and the new profiles are simply used
+    // when an aircraft next appears.
+    let mut e = engine_with(vec![profile()]);
+    let batch = e.set_profiles(vec![edited_profile()]);
+    assert!(batch.writes.is_empty());
+
+    let batch = e.ingest(&acft_name("FA-18C_hornet"), Instant::now());
+    assert!(batch.writes.is_empty(), "still settling");
+    assert_eq!(
+        e.active_profile().map(|p| p.bindings.len()),
+        Some(1),
+        "the edited profile is the one that got selected"
+    );
+}
+
+#[test]
+fn a_reload_while_still_settling_defers_to_the_pending_sweep() {
+    // A reload mid-flood must not sweep early: the flood has not finished
+    // describing the cockpit, so a sweep now would write half-known values.
+    let mut e = engine_with(vec![profile()]);
+    let now = Instant::now();
+    e.ingest(&acft_name("FA-18C_hornet"), now);
+
+    let batch = e.set_profiles(vec![edited_profile()]);
+    assert!(batch.writes.is_empty(), "nothing is written while settling");
+
+    // The sweep that was already coming uses the profile that just arrived.
+    e.ingest(&[Write { address: DIMMER_ADDR, value: 65535 }], now);
+    let batch = e.tick(now + Duration::from_secs(1));
+    assert_eq!(batch.cause, Cause::ModuleLoad);
+    assert_eq!(value_of(&batch, led_index("Master_Caution")), Some(1));
+}
+
+/// A mission ending with DCS still running.
+///
+/// The panels clear, and the *same* aircraft loading again is treated as a
+/// fresh load. This is the case that fails silently if the aircraft name is
+/// left set: nothing looks like a change, no sweep runs, and the panels simply
+/// stay dark for the rest of the session.
+#[test]
+fn a_mission_ending_forgets_the_cockpit_so_the_next_one_sweeps() {
+    let mut e = flying();
+
+    let batch = e.mission_ended();
+    assert_eq!(batch.cause, Cause::Shutdown);
+    assert_eq!(
+        value_of(&batch, led_index("Master_Caution")),
+        Some(0),
+        "the caution lamp was lit, so it must be cleared"
+    );
+    assert_eq!(e.aircraft(), None, "the cockpit is forgotten");
+
+    // The same aircraft again. Without forgetting, this is not a change.
+    let mut now = Instant::now();
+    e.ingest(&acft_name("FA-18C_hornet"), now);
+    e.ingest(
+        &[Write { address: CAUTION_ADDR, value: 0x1000 }],
+        now,
+    );
+    now += Duration::from_secs(1);
+    let batch = e.tick(now);
+    assert_eq!(batch.cause, Cause::ModuleLoad);
+    assert_eq!(
+        value_of(&batch, led_index("Master_Caution")),
+        Some(1),
+        "the second mission must sweep the panels back to life"
+    );
 }

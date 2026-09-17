@@ -1,0 +1,220 @@
+{
+  "schema_version": 1,
+  "name": "AH-64D",
+  "author": "",
+  "profile_version": "0.1.0",
+  "aircraft": [
+    "AH-64D_BLK_II"
+  ],
+  "module": "AH-64D",
+  "bindings": [
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Landing_gear_lights",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "SL",
+      "conditions": [],
+      "same_as": "Backlight"
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAG",
+      "conditions": [],
+      "same_as": "Backlight"
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Master_Caution",
+      "conditions": [
+        {
+          "source": "PLT_MASTER_CAUTION_L",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "JETT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "CTR",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LI",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LO",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RO",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RI",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAPS",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "NOSE",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FULL",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RIGHT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LEFT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HALF",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HOOK",
+      "conditions": []
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/A",
+      "conditions": [
+        {
+          "source": "PLT_GROUND_OVERRIDE_L",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/G",
+      "conditions": [
+        {
+          "source": "PLT_MASTER_ARM_ARM_L",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -59,6 +59,8 @@ pub enum Cause {
     SignalChange,
     /// Everything owned, driven to zero.
     Shutdown,
+    /// A full sweep after the profiles were edited while running.
+    ProfileReload,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -125,6 +127,59 @@ impl Engine {
         }
     }
 
+    /// Swap in a reloaded set of profiles and resync the panels.
+    ///
+    /// The signal state is deliberately kept. DCS-BIOS has already said what
+    /// the cockpit looks like, and dropping it would blank the panel for a
+    /// second and wait for the next re-export to fill it back in.
+    ///
+    /// A full sweep follows rather than incremental writes, because a binding
+    /// may have changed for a lamp whose signals have not moved, and a lamp
+    /// that just became unbound has to be driven off. Nothing else would
+    /// notice either case.
+    pub fn set_profiles(&mut self, profiles: Vec<Profile>) -> Batch {
+        self.profiles = profiles;
+
+        let Some(aircraft) = self.aircraft.clone() else {
+            // Nothing is loaded, so there is nothing to sweep. The new profiles
+            // are picked up when an aircraft is next detected.
+            self.active = None;
+            self.by_address.clear();
+            return Batch::empty(Cause::ProfileReload);
+        };
+        self.select_profile(&aircraft);
+
+        // Still waiting for the post-load flood to settle. That sweep is coming
+        // anyway and will use the profiles we just installed.
+        if self.pending.is_some() {
+            return Batch::empty(Cause::ProfileReload);
+        }
+
+        Batch {
+            cause: Cause::ProfileReload,
+            writes: self.sweep(),
+        }
+    }
+
+    /// The mission has ended, but DCS is still running.
+    ///
+    /// Clears the panels and forgets the cockpit entirely, so the next mission
+    /// is detected and swept from scratch.
+    ///
+    /// Forgetting the aircraft is the part that is easy to leave out and hard
+    /// to notice: `shutdown` alone would clear the lamps but leave the name
+    /// set, so loading the *same* aircraft again would look like no change at
+    /// all, no sweep would run, and the panels would simply stay dark.
+    pub fn mission_ended(&mut self) -> Batch {
+        let batch = self.shutdown();
+        self.state.clear();
+        self.aircraft = None;
+        self.active = None;
+        self.by_address.clear();
+        self.pending = None;
+        batch
+    }
+
     /// Declare which devices are present. Call after HID enumeration.
     pub fn set_connected(&mut self, keys: Vec<String>) {
         self.connected = keys;
@@ -160,10 +215,16 @@ impl Engine {
     /// `now` is passed in rather than read from the clock so the settle window
     /// can be exercised deterministically in tests.
     pub fn ingest(&mut self, writes: &[Write], now: Instant) -> Batch {
-        let mut touched: Vec<u16> = Vec::with_capacity(writes.len());
+        // Only addresses whose value moved. The whole map is re-exported on a
+        // cycle, so without this every bound lamp would be re-resolved several
+        // times a second with nothing happening in the cockpit. The output was
+        // always the same either way, because the shadow suppresses a write
+        // that would not change the lamp; this skips the work, not the write.
+        let mut touched: Vec<u16> = Vec::new();
         for w in writes {
-            self.state.apply(*w);
-            touched.push(w.address);
+            if self.state.apply(*w) {
+                touched.push(w.address);
+            }
         }
 
         if self.detect_aircraft() {

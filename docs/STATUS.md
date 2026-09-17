@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 61 passing
+cargo test --workspace            # expect 119 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -111,7 +111,14 @@ Only one daemon runs at a time; a second backs off.
    it does not do at all yet. `CONFIG.md` calls it worth more than any amount
    of search polish, and it is the reason the typeahead needs no browse mode.
 2. **Renaming a profile, and editing its aircraft list.** Both are fixed at
-   creation right now.
+   creation right now. **Copying one is not**, as of 2026-09-17: "Copy to..."
+   on a profile row takes a name and an aircraft list and carries everything
+   else over, module included. The module is not offered, because a copy whose
+   signal ids resolve against a different catalogue is not a copy, it is a
+   profile full of signals that do not exist. This is the FA-18E case made into
+   a feature: the Super Hornet community mod reads the Hornet's DCS-BIOS
+   definitions, so the Hornet profile drives it with only those two fields
+   changed.
 3. **Validation before save.** `Profile::validate` exists and is not called from
    the editor, so a binding it would reject still saves quietly. The four forms
    are mutually exclusive and the editor keeps them that way by construction,
@@ -142,6 +149,200 @@ rather than through the hook, which is not installed yet.
 
 **Still not exercised:** `always` and `same_as` are used by no profile, so they
 pass their tests but have never driven a real lamp.
+
+## The UFC, and the first device with a display
+
+Mapped 2026-09-17. The CarrierAce UFC and the HUD control panel below it are one
+USB interface, PID `0xbede`, answering as two parts: `0xbed0` for the UFC and
+`0xbe0e` for the HUD.
+
+**The lamps are trivial and are done.** Three dimmers, no indicators at all:
+`INST_PNL_Backlight` and `LCDBacklight` on the UFC, `INST_PNL_Backlight` on the
+HUD. All three verified on the wire taking the full 0-255 range. They need no
+new code; the existing `set_led` path drives them, and `UFC_BRT` and
+`INST_PNL_DIMMER` already exist in the Hornet catalogue to feed them.
+
+**The display is the new thing.** 96 bytes of segment bitmap, 36 character
+cells, written four bytes at a time with `SET_LCDS` (`0x4c`). There is no text
+on the wire. `data/displays/ufc1.json` holds the cell and glyph map, transcribed
+from SimAppPro's tables and then **confirmed against hardware**: replaying a
+captured mission through it rendered the Hornet A/P page (`ATTH HSEL BALT RALT
+CPL`) and COMM page (`GRCV SQCH CPHR AM MENU`) with 0 of 36 cells unmatched.
+`docs/PROTOCOL.md` has the frame layout and the four behaviours that are not
+obvious.
+
+**Built and wired, 2026-09-17.** Signal to glass works end to end and is
+checked against captured hardware traffic rather than against our own reasoning:
+`crates/wctrl-engine/tests/display_paint.rs` feeds the engine a Hornet COMM page
+as DCS-BIOS frames and asserts the bytes it paints are the ones SimAppPro sent
+the real device. All six compared groups match.
+
+* `wctrl-config::display` holds `Display`, `DisplayCatalogue`, `Screen`,
+  `CellRange` and `Readout`.
+* The engine repaints the whole screen on every batch and diffs whole groups.
+  Not an optimisation: a field spans several words, DCS-BIOS delivers them
+  across separate writes, and a part-arrived field is a state that was never in
+  the cockpit. Painting from scratch means the glass only shows settled text.
+* `mission_ended` and shutdown blank the glass, which the latch behaviour makes
+  mandatory.
+* `Device::set_lcd` sends `SET_LCDS`. It is never acknowledged, so a failed
+  write is corrected by the next repaint rather than retried.
+* The editor has a display section per device with glass, and a "drive this
+  panel" checkbox per device.
+* `data/defaults/fa-18c-hornet.json` ships all 15 UFC fields.
+
+**Two bugs this uncovered, both fixed:**
+
+1. **Lamp names were not unique within a device.** The vendor calls a lamp
+   `INST_PNL_Backlight` on both the UFC part and the HUD part, and a profile
+   addresses a lamp by device and name, so the second was unreachable with no
+   error anywhere. Renamed, and `every_lamp_name_is_unique_within_its_device`
+   now enforces it.
+2. **The editor stripped string signals from its own signal list**, because a
+   lamp condition compares numbers. Every display field therefore fell through
+   to the numeric branch and had a range written into it, which validation then
+   rejected, skipping the whole profile. Signals now carry a `text` flag; the
+   lamp picker hides them and the display picker offers them.
+3. **`--verbose` followed only lamp conditions**, so a display field printed its
+   `paint` lines with nothing above them saying what had moved. `Trace` now
+   follows readout sources too, and reads a string back out of the assembled
+   state under every address it occupies, so it logs once when the field is
+   whole rather than once per word.
+
+**Profiles now self-update.** `Profiles::merge_new` runs at daemon startup and
+adds rows for hardware a profile predates, from the shipped default first and
+then as blank rows. It never touches an existing row, keeps rows for unplugged
+panels, leaves an unparseable file alone, and is idempotent. Bindings are sorted
+by device display name, then part in declared order, then hardware index.
+
+**How it got here, and what is left.** Everything on this list is done except the last item, and each entry keeps what flying it taught, because that is the part that does not survive in the code.
+
+1. ~~**A host-side shadow of the buffer.**~~ Done. `wctrl-config::display`
+   has `Display`, `DisplayCatalogue` and `Screen`, checked against captured
+   hardware traffic by `crates/wctrl-config/tests/display_render.rs`: rendering
+   two real display states reproduces the exact 96 bytes the device was sent.
+   Still to do is naming a display from a device spec so a part can carry
+   one.
+2. ~~**Fly it.**~~ **Flown 2026-09-17.** A profile with readouts drove the real
+   glass from a live Hornet mission. String fields work end to end.
+
+   Flying it found one fault, now fixed. A comm preset worked to 9 and then
+   went blank. Cells 34 and 35 are two digits on one cell, and the vendor
+   spells the tens as a prefix character rather than a digit: `` `2 `` for 12,
+   `~0` for 20. DCS-BIOS sends `"12"`, which was not in the glyph table, and
+   `paint` leaves an undrawable value blank rather than failing the batch. A
+   display can now carry `spellings`, consulted only after the plain lookup
+   fails, and `data/displays/ufc1.json` maps 10 to 20. Confirmed on the panel.
+
+   Worth keeping, because it is the shape of the next one of these: the capture
+   never went past preset 6, so there was no evidence for it anywhere. What
+   found it was the vendor table being self-consistent in a way that only makes
+   sense one way, `` `X `` being exactly `' X'` plus slots 6 and 7 for all ten
+   digits, and holding exactly the 21 values a Hornet comm preset can take.
+
+   The second half of the same fault showed up on the Hind. Cells 34 and 35
+   hold **two characters**, and modules do not agree on how to pad a
+   one-digit channel: the Hornet sends `" 2"`, the Hind sends `"1"` from a
+   one-character field and `"1 "` from a two-character one. A cell now carries
+   `width`, and a wide one trims and right aligns its value before the lookup.
+   Before the lookup rather than as a rescue after it, because `'1'` is a real
+   entry in the shared table: it is the ordinary glyph for cells 0 to 33, and
+   its slots land on this cell's units digit, so taking it would draw a
+   legible wrong answer instead of nothing. The slots divide with no overlap,
+   units 1,2,3,4,9,11,13 and tens 0,5,6,7,15, which is what made that
+   readable.
+
+   SimAppPro's own fallback for an unknown pair is to OR `glyphs[v[0]]` with
+   `glyphs[' ' + v[1]]` (`LCDControl.js`, `sendData`). **Do not copy it.** It
+   is a generic rule for ordinary cells and it is wrong on these two: fusing
+   `'1'` with `' 2'` lights slots 1,2,4,9,11,13 where `` `2 `` lights
+   1,2,4,6,7,11,13. A test pins the difference.
+
+   Lookup settled as **two tries: the form the cell prefers, then the bare
+   trimmed value.** A wide cell prefers its full width. An ordinary cell
+   prefers the spaced form of a single character, because a digit has two
+   forms there and the only one ever captured is spaced, cell 0 reading
+   `' 3'`. The bare fallback then rescues everything with no spaced form,
+   which is every letter and mark: DCS-BIOS pads a string out to its
+   `max_length` while DCS's own indication does not, so a scratchpad letter
+   arrives as `" G"` and a guard channel as `" g"`. A digit never reaches the
+   fallback. Seven-segment cells have no spaced digits at all and are served by
+   it throughout.
+
+   **Letters are drawn as capitals.** Uppercase is tried first and the value
+   as sent second. This panel was built for the Hornet, DCS-BIOS reports the
+   Hornet UFC in capitals throughout, and every letter in both captured pages
+   is a capital, so the small forms were never exercised. They are real and
+   distinct, `'g'` is four slots against eight for `'G'`, but the set is
+   incomplete with no r, u, w, y or z, which is not what a font meant to be
+   used looks like. The case this serves is another module naming a guard
+   channel `"g"`, which should reach the glass looking like the rest of the
+   panel. Falling back to the value as sent is what keeps it safe: `digit7`
+   has a `'p'` and a `'w'` and no capitals at all, so uppercasing alone would
+   have taken both off the glass.
+
+   The generalisation that looked obvious, fit every cell to its width, is
+   wrong, and the golden fixture is what caught it: it failed on `comm_page`
+   cell 0 because trimming `' 3'` to `'3'` picks the other form. That fixture
+   has now paid for itself twice.
+
+   **Confirmed on hardware 2026-09-17**, on two modules the glass was not
+   designed for, which is the whole point of putting the mapping in the profile
+   rather than in code:
+
+   * **Super Hornet.** The Hornet profile copied to `FA-18E`, keeping
+     `"module": "FA-18C_hornet"` and changing only the aircraft list. The UFC
+     is known not to work with the Super Hornet community mod under SimAppPro,
+     and it works here. Nothing was written for it: `module` names the
+     catalogue the signal ids resolve against and `aircraft` names the runtime
+     aircraft served, and keeping those two separate is the entire reason a
+     copied file was enough.
+   * **Hind.** Cells 34 and 35 pointed at `PLT_R828_CHAN_S` and
+     `PLT_R863_CHAN_S` drew two-digit presets correctly, from the editor.
+
+   Neither profile ships. `data/profiles` is the user's own directory and is
+   not tracked; `data/defaults` has the A-10C, Apache and Hornet only.
+3. ~~**A numeric source has never been flown.**~~ **Flown 2026-09-17.** The
+   Hind radar altimeter, `PLT_RV5_ALT`, on cells 30 to 33 with
+   `"reads": [0, 750]`, read consistently with the gauge in the cockpit.
+
+   That is one gauge on one module, so it is evidence and not a proof, but it
+   is the evidence that was missing. DCS-BIOS describes that signal only as
+   `analog_gauge`, `"gauge position"`, 0 to 65535, and says nothing about what
+   the face is marked with, which is why the range is the user's to supply.
+   The open question it answers in part is whether 65535 is linear in the
+   quantity or in needle angle. On a face that is linear in both, as this one
+   is, the two cannot be told apart; a gauge with a compressed or non-linear
+   scale would still read wrong, and there is no way to correct that without
+   per-gauge data we have decided not to carry.
+4. ~~**The editor cannot yet edit aliases or notes**~~ **Built 2026-09-17,**
+   along with two things flying it made obvious:
+
+   * **Fields are placed by name, not by cell run.** A display map now carries
+     `regions`, taken from SimAppPro's own cell map for the Hornet, which
+     accounts for all 36 cells with no gaps or overlaps. The editor offers
+     "Option 5 label" where it used to ask for `30-33`, which is not something
+     anyone deciding what to put on a panel can be expected to know. The run is
+     still what gets stored, and a free-text box remains for part of a region
+     or a display with no regions mapped.
+   * **Substitutions are editable.** The `--` to `_` case was hand-written
+     JSON before, and it is the one that bites: a value the glyph table cannot
+     draw leaves its cell dark with nothing saying why.
+   * **A field can belong to one crew station.** `seat` on a readout, matched
+     against `SEAT_POSITION`. Two fields may share cells when their seats
+     differ, and only then, which is how one window shows the pilot one thing
+     and the gunner another. Offered only on the 5 of 50 modules that publish
+     a seat, and rejected by `validate` elsewhere rather than accepting a field
+     that could never paint. Until the seat is known the field stays dark,
+     because the wrong station's reading looks correct.
+
+   Still hand-edited: `note` on a field.
+
+**Design call, open to revision:** the cell map is a property of the device and
+lives in `data/displays`, but which signal feeds which cell is a property of the
+aircraft and belongs in the profile. SimAppPro hard-codes the Hornet mapping in
+a per-aircraft source file; putting it in the profile is what lets someone point
+the glass at another module without a code change.
 
 ## Profiles ship from `data/defaults`
 
@@ -299,6 +500,9 @@ Tauri renders through WebView2, which ships with Windows.
    runs both with "Sync with DCS" on. Detect and warn.
 6. **Perceptual response curve** for dimmers; linear PWM feels wrong at the
    bottom. Deferred.
+7. **The MCDU Captain** (`0xbb36`) enumerates with 64-byte reports both ways,
+   unlike every other panel here at 14, so its screen is presumably not driven
+   by `SET_LCDS` in this form. Unmapped.
 
 ## Next steps
 

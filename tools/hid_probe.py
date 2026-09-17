@@ -6,6 +6,8 @@
   python tools/hid_probe.py parts  [--pid 0xbf05]
   python tools/hid_probe.py led    [--pid 0xbf05] [--part 0xbf05] --index 1 --value 255
   python tools/hid_probe.py blink  [--pid 0xbf05] [--part 0xbf05] --index 1
+  python tools/hid_probe.py lcd    [--pid 0xbede] [--part 0xbed0] --text HELLO --at 10
+  python tools/hid_probe.py lcd    --clear
 
 Wire protocol (14-byte reports, see docs/PROTOCOL.md):
 
@@ -18,6 +20,7 @@ Replies carry the responding part's id with 0x1000 added.
 """
 import argparse
 import ctypes as C
+import os
 import sys
 import time
 
@@ -47,6 +50,7 @@ WRITE_CFG_DATA = 0x06
 REQUEST_DEVICE_MODE = 0x18
 SET_LEDX = 0x49
 SET_LEDX_WITH_DURATION = 0x4B
+SET_LCDS = 0x4C
 
 # Commands that alter persistent state or interrupt the device. This tool
 # refuses to place any of them in an outgoing frame.
@@ -313,6 +317,85 @@ def cmd_led(args):
         k32.CloseHandle(C.c_void_p(handle))
 
 
+def load_display(path):
+    """Read a segment map written by tools/gen, e.g. data/displays/ufc1.json."""
+    import json
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)["displays"][0]
+
+
+def draw(display, buf, at, text, whole=False):
+    """Light `text` starting at cell `at`, one character per cell.
+
+    Multi-character glyphs exist (a two-character field can occupy one cell),
+    but this walks one character per cell, which is what a legibility test
+    wants. Pass `whole` to look the entire text up as one glyph instead, which
+    is how the daemon draws a field on a single cell. Unknown characters are
+    left blank rather than guessed at.
+    """
+    cells, glyphs = display["cells"], display["glyphs"]
+    spellings = display.get("spellings", {})
+    pieces = [text] if whole else list(text)
+    for offset, piece in enumerate(pieces):
+        index = at + offset
+        if index >= len(cells):
+            print("  cell %d is past the end of the display, stopping" % index)
+            break
+        cell = cells[index]
+        table = glyphs[cell["shape"]]
+        # Same order the daemon uses: the value as given wins, and a spelling
+        # only rescues one the table does not have.
+        lit = table.get(piece)
+        if lit is None and piece in spellings:
+            lit = table.get(spellings[piece])
+            if lit is not None:
+                print("  %r is spelled %r on this display" % (piece, spellings[piece]))
+        if lit is None:
+            print("  no %s glyph for %r, leaving cell %d blank"
+                  % (cell["shape"], piece, index))
+            lit = []
+        for slot, bit in enumerate(cell["segments"]):
+            if slot in lit:
+                buf[bit // 8] |= 1 << (bit % 8)
+            else:
+                buf[bit // 8] &= ~(1 << (bit % 8)) & 0xFF
+
+
+def cmd_lcd(args):
+    display = load_display(args.map)
+    nbytes, gsize = display["buffer_bytes"], display["group_bytes"]
+    buf = bytearray(nbytes)
+    if not args.clear:
+        draw(display, buf, args.at, args.text, args.whole)
+
+    path, caps = find(args.pid)
+    inn, outn = caps.InputReportByteLength, caps.OutputReportByteLength
+    groups = nbytes // gsize
+    what = "clearing" if args.clear else ("drawing %r at cell %d" % (args.text, args.at))
+    print("SET_LCDS part 0x%04x: %s, %d groups" % (args.part, what, groups))
+
+    # Every group is sent, not just the changed ones. This tool has no idea what
+    # is currently on the glass, so a full write is the only way to leave it in
+    # a known state.
+    handle = open_rw(path)
+    sent = 0
+    try:
+        for g in range(groups):
+            chunk = buf[g * gsize:(g + 1) * gsize]
+            frame = build(args.part, [SET_LCDS, g] + list(chunk), outn)
+            ok, detail = write_report(handle, frame)
+            if not ok:
+                print("  group %d FAILED (%s)" % (g, detail))
+                break
+            sent += 1
+            time.sleep(0.002)
+        print("  %d/%d groups written" % (sent, groups))
+        acked = replies(handle, inn, 0.3)
+        print("  %d replies" % len(acked))
+    finally:
+        k32.CloseHandle(C.c_void_p(handle))
+
+
 def cmd_blink(args):
     path, caps = find(args.pid)
     outn = caps.OutputReportByteLength
@@ -364,6 +447,18 @@ p.add_argument("--index", type=int, default=1)
 p.add_argument("--value", type=int, default=255)
 p.add_argument("--count", type=int, default=5)
 p.add_argument("--countdown", type=int, default=6)
+
+p = sub.add_parser("lcd")
+p.set_defaults(func=cmd_lcd)
+p.add_argument("--pid", type=lambda s: int(s, 0), default=0xBEDE)
+p.add_argument("--part", type=lambda s: int(s, 0), default=0xBED0)
+p.add_argument("--map", default=os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "..", "data", "displays", "ufc1.json"))
+p.add_argument("--text", default="")
+p.add_argument("--at", type=int, default=0, help="first cell to draw into")
+p.add_argument("--clear", action="store_true", help="blank the whole display")
+p.add_argument("--whole", action="store_true",
+               help="look --text up as one glyph on one cell, the way a field is drawn")
 
 args = parser.parse_args()
 args.func(args)

@@ -16,3 +16,5 @@ export const createProfile = (module: string) => invoke<string>("create_profile"
 export const saveProfile = (file: string, profile: Profile) =>
   invoke<void>("save_profile", { file, profile });
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
+export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
+  invoke<string>("clone_profile", { file, name, aircraft });

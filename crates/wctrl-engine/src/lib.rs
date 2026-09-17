@@ -17,7 +17,10 @@ use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant};
 
 use wctrl_bios::{BiosState, Write};
-use wctrl_config::{Binding, Catalogue, DeviceInventory, Module, Profile};
+use wctrl_config::{
+    Binding, Catalogue, DeviceInventory, DisplayCatalogue, Module, Profile, Screen,
+    SEAT_SIGNAL,
+};
 
 /// `_ACFT_NAME` sits at the bottom of the address space and is 24 bytes wide.
 /// DCS-BIOS writes it on every aircraft change, which is how we notice one.
@@ -40,6 +43,15 @@ pub struct LedId {
     pub device: String,
     pub part_id: u32,
     pub index: u8,
+}
+
+/// One write to a segment display's buffer, four bytes at a time.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LcdWrite {
+    pub device: String,
+    pub part_id: u32,
+    pub group: u8,
+    pub bytes: Vec<u8>,
 }
 
 /// One LED write for the caller to send.
@@ -67,6 +79,11 @@ pub enum Cause {
 pub struct Batch {
     pub cause: Cause,
     pub writes: Vec<LedWrite>,
+    /// Display groups to send, if any panel has glass. Separate from `writes`
+    /// because the two go out through different commands and only one of them
+    /// is acknowledged.
+    #[allow(clippy::struct_field_names)]
+    pub lcd: Vec<LcdWrite>,
 }
 
 impl Batch {
@@ -74,11 +91,12 @@ impl Batch {
         Batch {
             cause,
             writes: Vec::new(),
+            lcd: Vec::new(),
         }
     }
 
     pub fn is_empty(&self) -> bool {
-        self.writes.is_empty()
+        self.writes.is_empty() && self.lcd.is_empty()
     }
 }
 
@@ -104,6 +122,12 @@ pub struct Engine {
     by_address: HashMap<u16, Vec<usize>>,
     /// Last value written per LED, so we only write on change.
     shadow: HashMap<LedId, u8>,
+    /// Cell and glyph maps for panels with glass.
+    displays: DisplayCatalogue,
+    /// What we believe is on each display, keyed by device and display. The
+    /// device cannot be asked, and a display write is never acknowledged, so
+    /// this is the only record of it.
+    screens: HashMap<(String, String), Screen>,
     pending: Option<Pending>,
     settle_quiet: Duration,
     settle_max: Duration,
@@ -121,6 +145,8 @@ impl Engine {
             active: None,
             by_address: HashMap::new(),
             shadow: HashMap::new(),
+            displays: DisplayCatalogue::default(),
+            screens: HashMap::new(),
             pending: None,
             settle_quiet: DEFAULT_SETTLE_QUIET,
             settle_max: DEFAULT_SETTLE_MAX,
@@ -158,6 +184,7 @@ impl Engine {
         Batch {
             cause: Cause::ProfileReload,
             writes: self.sweep(),
+            lcd: self.paint(),
         }
     }
 
@@ -247,14 +274,19 @@ impl Engine {
                 return Batch {
                     cause: Cause::ModuleLoad,
                     writes: self.sweep(),
+                    lcd: self.paint(),
                 };
             }
             return Batch::empty(Cause::ModuleLoad);
         }
 
+        // The lamps only revisit bindings whose signals moved, but the glass
+        // is repainted whole: a display field is cheap to rebuild and a torn
+        // one is worse than a late one.
         Batch {
             cause: Cause::SignalChange,
             writes: self.incremental(&touched),
+            lcd: self.paint(),
         }
     }
 
@@ -293,13 +325,165 @@ impl Engine {
             self.shadow.insert(id.clone(), 0);
             writes.push(LedWrite { id, value: 0 });
         }
+        let lcd = self.blank_displays();
         Batch {
             cause: Cause::Shutdown,
             writes,
+            lcd,
         }
     }
 
     // ------------------------------------------------------------- internals
+
+    /// Attach the segment display maps. Panels without glass need none, so
+    /// this is opt-in rather than a constructor argument.
+    pub fn with_displays(mut self, displays: DisplayCatalogue) -> Self {
+        self.displays = displays;
+        self
+    }
+
+    /// Repaint every display from the active profile, and report the groups
+    /// that moved.
+    ///
+    /// The whole screen is rebuilt rather than patched. A field spans several
+    /// words and DCS-BIOS delivers them across separate writes, so a partly
+    /// arrived field is a state that was never in the cockpit. Painting from
+    /// scratch each time the engine emits a batch means the glass only ever
+    /// shows a settled reading, and 36 cells is far too cheap to optimise.
+    ///
+    /// A value the glyph table cannot draw leaves its cell blank rather than
+    /// failing the batch. A profile is user-authored and the stream is live:
+    /// one unexpected character must not stop the other 35 cells updating.
+    fn paint(&mut self) -> Vec<LcdWrite> {
+        let Some(profile) = self.active.map(|i| &self.profiles[i]) else {
+            return Vec::new();
+        };
+
+        // Which crew station the player is in, where the module says. Read once
+        // per paint rather than per field, and left as None on a module that
+        // does not report it, which is most of them.
+        let seat = self
+            .catalogue
+            .module(&profile.module)
+            .and_then(|m| m.signal(SEAT_SIGNAL))
+            .and_then(|s| s.primary())
+            .and_then(|o| {
+                self.state
+                    .value(o.address, o.mask.unwrap_or(u16::MAX), o.shift)
+            })
+            // Widened to match a readout's seat, which is sized like every
+            // other value the catalogue reports rather than like a word.
+            .map(u32::from);
+
+        let mut out = Vec::new();
+        for device in &self.devices.devices {
+            if !self.connected.iter().any(|k| k == &device.key) || !profile.drives(&device.key) {
+                continue;
+            }
+            for (part, key) in device.displays() {
+                let Some(map) = self.displays.get(key) else {
+                    continue;
+                };
+                let mut next = Screen::new(map);
+                for r in profile.readouts.iter().filter(|r| {
+                    r.device == device.key && r.display == key
+                }) {
+                    // A field bound to a seat paints only from that seat, and
+                    // not at all until the seat is known. Guessing would put
+                    // the other station's reading on the glass, which is worse
+                    // than a dark cell because it looks right.
+                    if let Some(want) = r.seat {
+                        if seat != Some(want) {
+                            continue;
+                        }
+                    }
+                    let Some(signal) = self
+                        .catalogue
+                        .module(&profile.module)
+                        .and_then(|m| m.signal(&r.source))
+                    else {
+                        continue;
+                    };
+                    let Some(output) = signal.primary() else {
+                        continue;
+                    };
+                    let text = if output.r#type == "string" {
+                        match self.state.text(output.address, output.max_length.unwrap_or(0)) {
+                            Some(t) => t,
+                            None => continue, // not arrived yet; leave it blank
+                        }
+                    } else {
+                        let mask = output.mask.unwrap_or(u16::MAX);
+                        match self.state.value(output.address, mask, output.shift) {
+                            Some(v) => r.format_number(
+                                v,
+                                output.max_value.unwrap_or(u32::from(u16::MAX)).min(u32::from(u16::MAX)) as u16,
+                            ),
+                            None => continue,
+                        }
+                    };
+                    for (offset, cell) in r.cells.cells().enumerate() {
+                        let value = r.lay_out(&text);
+                        let Some(glyph) = value.get(offset) else { continue };
+                        let _ = next.draw(map, cell, r.alias(glyph));
+                    }
+                }
+
+                let id = (device.key.clone(), key.to_string());
+                // A display we have not driven before is painted in full. Its
+                // buffer latches, so whatever a previous run or SimAppPro left
+                // on it is still there, and diffing against a blank we never
+                // sent would leave that showing.
+                let groups = match self.screens.get(&id) {
+                    Some(previous) => next.changes_from(previous),
+                    None => next.all_groups(),
+                };
+                for (group, bytes) in groups {
+                    out.push(LcdWrite {
+                        device: device.key.clone(),
+                        part_id: part.part_id,
+                        group,
+                        bytes,
+                    });
+                }
+                self.screens.insert(id, next);
+            }
+        }
+        out
+    }
+
+    /// Blank every display we have driven, for shutdown and mission end.
+    fn blank_displays(&mut self) -> Vec<LcdWrite> {
+        let mut out = Vec::new();
+        let ids: Vec<(String, String)> = self.screens.keys().cloned().collect();
+        for id in ids {
+            let Some(map) = self.displays.get(&id.1) else {
+                continue;
+            };
+            let Some(part) = self
+                .devices
+                .device(&id.0)
+                .and_then(|d| d.part_with_display(&id.1))
+            else {
+                continue;
+            };
+            let blank = Screen::new(map);
+            let previous = self.screens.remove(&id);
+            let groups = match previous {
+                Some(p) => blank.changes_from(&p),
+                None => blank.all_groups(),
+            };
+            for (group, bytes) in groups {
+                out.push(LcdWrite {
+                    device: id.0.clone(),
+                    part_id: part.part_id,
+                    group,
+                    bytes,
+                });
+            }
+        }
+        out
+    }
 
     /// Returns true when the aircraft name changed, which is the trigger for a
     /// module-load sweep.
@@ -356,9 +540,18 @@ impl Engine {
     }
 
     /// Every LED on every connected device, in a stable order.
+    /// Every LED this profile is willing to drive.
+    ///
+    /// A disabled device contributes nothing, so the sweep does not zero it.
+    /// That is the whole difference between disabling a device and binding
+    /// nothing on it: one is left alone, the other is deliberately darkened.
     fn all_leds(&self) -> Vec<LedId> {
         let mut out = Vec::new();
+        let profile = self.active.map(|i| &self.profiles[i]);
         for key in &self.connected {
+            if profile.is_some_and(|p| !p.drives(key)) {
+                continue;
+            }
             let Some(dev) = self.devices.device(key) else {
                 continue;
             };

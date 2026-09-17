@@ -4016,6 +4016,7 @@ dependencies = [
  "clap",
  "ctrlc",
  "hidapi",
+ "serde_json",
  "wctrl-bios",
  "wctrl-config",
  "wctrl-engine",

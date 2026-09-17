@@ -9,6 +9,12 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod display;
+
+pub use display::{
+    Align, Cell, CellRange, Display, DisplayCatalogue, Readout, Region, Screen, SEAT_SIGNAL,
+};
+
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("io: {0}")]
@@ -39,6 +45,28 @@ pub enum Error {
     MirrorWithConditions(String),
     #[error("LED {0:?} and {1:?} cannot mirror each other; only lamps that dim can, because an on/off lamp has no level to follow")]
     MirrorNotDimmable(String, String),
+    #[error("display {0:?} has no cell {1}")]
+    NoSuchCell(String, usize),
+    #[error("{0:?} cannot be drawn on a {1} cell of display {2:?}")]
+    NoSuchGlyph(String, String, String),
+    #[error("device {0:?} has no display named {1:?}")]
+    NoDisplayOnDevice(String, String),
+    #[error("no display map named {0:?}; expected one in data/displays")]
+    UnknownDisplay(String),
+    #[error("display {0:?} has {1} cells, so the run {2} runs off the end of it")]
+    CellsOutOfRange(String, usize, String),
+    #[error("cell runs {0} and {1} on display {2:?} overlap; a field has one source")]
+    CellsOverlap(String, String, String),
+    #[error("{0:?} is a number, so it needs a range: what the gauge reads in the cockpit at each end of its travel")]
+    RangeMissing(String),
+    #[error("{0:?} already reports characters, so a range would mean nothing")]
+    RangeOnText(String),
+    #[error("profile disables device {0:?}, which is not a device we know")]
+    DisablesUnknownDevice(String),
+    #[error("a field is set to seat {0}, but module {1:?} does not report {2}, so nothing would ever be painted there")]
+    SeatNotReported(u32, String, &'static str),
+    #[error("seat {0} is not one this module has; {1} reports 0 to {2}")]
+    NoSuchSeat(u32, &'static str, u32),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -252,6 +280,13 @@ pub struct Part {
     pub name: String,
     #[serde(default)]
     pub leds: Vec<Led>,
+    /// Key of this part's segment display in `data/displays`, if it has one.
+    ///
+    /// Held on the part rather than the device because a part id is what a
+    /// display write is addressed to, and one USB interface can host several
+    /// parts of which only some have glass.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub display: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -266,6 +301,13 @@ pub struct DeviceSpec {
 
 impl DeviceSpec {
     /// Find an LED by name across every part, returning the part that owns it.
+    ///
+    /// Names must be unique within a device, because a profile addresses a lamp
+    /// by device and name and has no way to say which part it meant. The UFC
+    /// found this the hard way: the vendor calls a lamp `INST_PNL_Backlight` on
+    /// both the UFC part and the HUD part, and the second was simply
+    /// unreachable, with no error anywhere. `every_lamp_name_is_unique_within_its_device`
+    /// keeps that from happening again.
     pub fn led(&self, name: &str) -> Option<(&Part, &Led)> {
         self.parts
             .iter()
@@ -275,6 +317,20 @@ impl DeviceSpec {
     /// Every LED on the device, with its owning part.
     pub fn leds(&self) -> impl Iterator<Item = (&Part, &Led)> {
         self.parts.iter().flat_map(|p| p.leds.iter().map(move |l| (p, l)))
+    }
+
+    /// The part carrying a named display.
+    pub fn part_with_display(&self, key: &str) -> Option<&Part> {
+        self.parts
+            .iter()
+            .find(|p| p.display.as_deref() == Some(key))
+    }
+
+    /// Every display this device carries, with its owning part.
+    pub fn displays(&self) -> impl Iterator<Item = (&Part, &str)> {
+        self.parts
+            .iter()
+            .filter_map(|p| p.display.as_deref().map(|d| (p, d)))
     }
 }
 
@@ -553,6 +609,27 @@ pub struct Profile {
     pub module: String,
     #[serde(default)]
     pub bindings: Vec<Binding>,
+    /// Fields of a segment display, and what feeds each of them.
+    ///
+    /// Separate from `bindings` because a lamp and a display field have nothing
+    /// in common beyond both being output: one resolves to a brightness through
+    /// conditions, the other to characters through a glyph table.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub readouts: Vec<Readout>,
+    /// Devices this aircraft should not drive at all.
+    ///
+    /// Not the same as binding nothing. An unbound device is still swept, so
+    /// its lamps go dark and its glass goes blank, which is what you want for a
+    /// panel you can see. A disabled device is never written to, which is what
+    /// you want for one you cannot.
+    ///
+    /// The case this exists for is physical. A WinWing ICP and UFC share a
+    /// swing arm: whichever is in use covers the other. Flying the Hornet with
+    /// the ICP swung away, there is nothing to be gained by driving the ICP,
+    /// and its panel lighting is better left as the user set it than forced to
+    /// zero by a sweep.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_devices: Vec<String>,
 }
 
 fn default_schema() -> u32 {
@@ -562,6 +639,15 @@ fn default_schema() -> u32 {
 impl Profile {
     pub fn load(path: &Path) -> Result<Self> {
         read_json(path)
+    }
+
+    /// Whether this profile drives a device at all.
+    ///
+    /// A disabled device keeps whatever was last written to it, because panel
+    /// state latches on this hardware. That is the point: it is hidden, and
+    /// leaving its backlight where the user set it beats zeroing it.
+    pub fn drives(&self, device: &str) -> bool {
+        !self.disabled_devices.iter().any(|d| d == device)
     }
 
     /// A profile with one unassigned row per LED on every device given.
@@ -598,6 +684,11 @@ impl Profile {
             aircraft: vec![aircraft.to_string()],
             module: module.to_string(),
             bindings,
+            // A stub lists hardware, and a display field is not hardware: it is
+            // a decision about what to show. There is no useful blank row for
+            // one, so the editor offers to add them instead.
+            readouts: Vec::new(),
+            disabled_devices: Vec::new(),
         }
     }
 
@@ -666,7 +757,12 @@ impl Profile {
     /// Worth doing on load rather than at evaluation time: a profile shared by
     /// someone with different hardware, or built against a newer DCS-BIOS,
     /// should fail loudly once instead of silently never lighting a lamp.
-    pub fn validate(&self, module: &Module, devices: &DeviceInventory) -> Result<()> {
+    pub fn validate(
+        &self,
+        module: &Module,
+        devices: &DeviceInventory,
+        displays: &DisplayCatalogue,
+    ) -> Result<()> {
         for b in &self.bindings {
             if b.same_as.is_some()
                 && !(b.conditions.is_empty() && b.any_of.is_empty() && !b.always)
@@ -730,8 +826,161 @@ impl Profile {
                 }
             }
         }
+        self.validate_readouts(module, devices, displays)
+    }
+
+    /// Bindings and readouts that will never run, because their device is
+    /// disabled. Not an error: turning a panel off should not mean deleting
+    /// the work of configuring it. But silence would be a trap, so the caller
+    /// is given something to say.
+    pub fn inert(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for device in &self.disabled_devices {
+            let lamps = self.bindings.iter().filter(|b| &b.device == device).count();
+            let fields = self.readouts.iter().filter(|r| &r.device == device).count();
+            if lamps + fields > 0 {
+                out.push(format!(
+                    "{device} is disabled in this profile, so {lamps} lamp                      binding(s) and {fields} display field(s) on it do nothing"
+                ));
+            }
+        }
+        out
+    }
+
+    /// Check the display fields: that they name real glass, sit inside it, do
+    /// not fight over cells, and read a source that can actually fill them.
+    fn validate_readouts(
+        &self,
+        module: &Module,
+        devices: &DeviceInventory,
+        displays: &DisplayCatalogue,
+    ) -> Result<()> {
+        for name in &self.disabled_devices {
+            if devices.device(name).is_none() {
+                return Err(Error::DisablesUnknownDevice(name.clone()));
+            }
+        }
+        for (i, r) in self.readouts.iter().enumerate() {
+            let device = devices
+                .device(&r.device)
+                .ok_or_else(|| Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()))?;
+            if device.part_with_display(&r.display).is_none() {
+                return Err(Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()));
+            }
+            let display = displays
+                .get(&r.display)
+                .ok_or_else(|| Error::UnknownDisplay(r.display.clone()))?;
+            if r.cells.last >= display.cells.len() {
+                return Err(Error::CellsOutOfRange(
+                    r.display.clone(),
+                    display.cells.len(),
+                    r.cells.to_string(),
+                ));
+            }
+
+            // A seat is only meaningful where DCS-BIOS reports one, which is 5
+            // of the 50 catalogued modules. Saying so beats accepting the field
+            // and never painting it.
+            if let Some(seat) = r.seat {
+                let reported = module
+                    .signal(SEAT_SIGNAL)
+                    .and_then(|s| s.primary())
+                    .ok_or_else(|| {
+                        Error::SeatNotReported(seat, module.module.clone(), SEAT_SIGNAL)
+                    })?;
+                let highest = reported.max_value.unwrap_or(0);
+                if seat > highest {
+                    return Err(Error::NoSuchSeat(seat, SEAT_SIGNAL, highest));
+                }
+            }
+
+            // One field, one source. Nothing arbitrates between two readouts
+            // claiming a cell, because nothing needs to: the cockpit has
+            // already decided what belongs there, or the user has.
+            //
+            // Two seats are the exception, and the only one. They cannot both
+            // be occupied, so they cannot both be painting, and sharing a
+            // window between them is the whole reason the field exists.
+            for (j, other) in self.readouts.iter().enumerate() {
+                if i == j {
+                    continue;
+                }
+                let both_live = match (r.seat, other.seat) {
+                    (Some(a), Some(b)) => a == b,
+                    _ => true,
+                };
+                if both_live
+                    && other.device == r.device
+                    && other.display == r.display
+                    && other.cells.overlaps(&r.cells)
+                {
+                    return Err(Error::CellsOverlap(
+                        r.cells.to_string(),
+                        other.cells.to_string(),
+                        r.display.clone(),
+                    ));
+                }
+            }
+
+            let signal = module
+                .signal(&r.source)
+                .ok_or_else(|| Error::UnknownSignal(r.source.clone()))?;
+            let output = signal
+                .primary()
+                .ok_or_else(|| Error::UnknownSignal(r.source.clone()))?;
+            // A needle reports a position, not a quantity, and nothing in the
+            // catalogue says what its face is marked with. So the range is the
+            // user's to give, and asking for it beats printing 0 to 65535 and
+            // letting them wonder what broke.
+            if output.r#type == "string" {
+                if r.reads.is_some() {
+                    return Err(Error::RangeOnText(r.source.clone()));
+                }
+            } else if r.reads.is_none() {
+                return Err(Error::RangeMissing(r.source.clone()));
+            }
+        }
         Ok(())
     }
+}
+
+/// Order bindings by device, then part, then hardware index, and say whether
+/// that changed anything.
+///
+/// Devices sort by the name the editor shows, so the file reads in the same
+/// order as the window. Within a device, parts keep the order the inventory
+/// declares them in, which groups a physical panel together: the UFC and the
+/// HUD beneath it are one device with two parts, and interleaving their lamps
+/// by index alone would split each panel in half. Within a part, lamps keep
+/// index order, because that is how they sit on the panel; sorting those by
+/// name would scatter a gear indicator away from the rest of the gear.
+///
+/// A device the inventory does not know sorts last rather than being dropped.
+/// That is a panel the user has unplugged, not a mistake to tidy away.
+fn sort_bindings(bindings: &mut [Binding], devices: &DeviceInventory) -> bool {
+    let key = |b: &Binding| {
+        let device = devices.device(&b.device);
+        let label = device
+            .map(|d| d.display_name.to_lowercase())
+            .unwrap_or_else(|| format!("~{}", b.device.to_lowercase()));
+        let (part, index) = device
+            .and_then(|d| {
+                d.parts.iter().enumerate().find_map(|(n, p)| {
+                    p.leds.iter().find(|l| l.name == b.led).map(|l| (n, l.index))
+                })
+            })
+            .unwrap_or((usize::MAX, u8::MAX));
+        (label, part, index, b.led.to_lowercase())
+    };
+    let was: Vec<(String, String)> = bindings
+        .iter()
+        .map(|b| (b.device.clone(), b.led.clone()))
+        .collect();
+    bindings.sort_by_key(key);
+    was != bindings
+        .iter()
+        .map(|b| (b.device.clone(), b.led.clone()))
+        .collect::<Vec<_>>()
 }
 
 // ------------------------------------------------------------- shipped copies
@@ -793,6 +1042,109 @@ impl Profiles {
     /// decides whether the editor offers a reset button on the row.
     pub fn has_default(&self, file: &str) -> bool {
         self.defaults.join(file).is_file()
+    }
+
+    /// Add rows for anything new to every active profile, changing nothing the
+    /// user has already decided. Returns a line per profile it touched.
+    ///
+    /// [`seed`] only helps a profile the user does not have yet. This is the
+    /// other half: a user who has flown the Hornet since before we supported
+    /// the UFC has a Hornet profile with no UFC in it, and nothing would ever
+    /// put one there. Their own file is the one that runs, so a row missing
+    /// from it is a lamp they cannot configure at all.
+    ///
+    /// Two sources, in order. A shipped default may have gained bindings for
+    /// hardware it did not cover before, and those are worth having. Anything
+    /// still unaccounted for becomes a blank row, because the question the
+    /// editor asks is "what should this lamp do", and it cannot ask about a
+    /// lamp that is not listed.
+    ///
+    /// Existing rows are never touched, in either direction: not rewritten, not
+    /// removed, not reordered relative to what they say. A profile whose device
+    /// has been unplugged keeps its rows, because unplugging a panel for an
+    /// evening is not a decision to discard its configuration.
+    pub fn merge_new(&self, devices: &DeviceInventory) -> Result<Vec<String>> {
+        if !self.active.is_dir() {
+            return Ok(Vec::new());
+        }
+        let mut notes = Vec::new();
+        let mut files: Vec<PathBuf> = std::fs::read_dir(&self.active)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .collect();
+        files.sort();
+
+        for path in files {
+            let Some(name) = path.file_name().map(|n| n.to_string_lossy().into_owned()) else {
+                continue;
+            };
+            // A profile that will not parse is left alone. Rewriting one we do
+            // not understand is how an editing mistake becomes data loss.
+            let Ok(mut profile) = Profile::load(&path) else {
+                continue;
+            };
+
+            let mut have: std::collections::HashSet<(String, String)> = profile
+                .bindings
+                .iter()
+                .map(|b| (b.device.clone(), b.led.clone()))
+                .collect();
+            let before = profile.bindings.len();
+            let mut from_default = 0usize;
+
+            if let Ok(shipped) = Profile::load(&self.defaults.join(&name)) {
+                for b in shipped.bindings {
+                    if have.insert((b.device.clone(), b.led.clone())) {
+                        profile.bindings.push(b);
+                        from_default += 1;
+                    }
+                }
+                // A readout is added only where it cannot collide. The user may
+                // have claimed those cells for something of their own, and a
+                // shipped suggestion does not outrank that.
+                for r in shipped.readouts {
+                    let clash = profile.readouts.iter().any(|o| {
+                        o.device == r.device && o.display == r.display && o.cells.overlaps(&r.cells)
+                    });
+                    if !clash {
+                        profile.readouts.push(r);
+                    }
+                }
+            }
+
+            for device in &devices.devices {
+                for (_, led) in device.leds() {
+                    if have.insert((device.key.clone(), led.name.clone())) {
+                        profile.bindings.push(Binding {
+                            device: device.key.clone(),
+                            led: led.name.clone(),
+                            conditions: Vec::new(),
+                            always: false,
+                            any_of: Vec::new(),
+                            same_as: None,
+                            on: None,
+                            off: 0,
+                            note: String::new(),
+                        });
+                    }
+                }
+            }
+
+            let added = profile.bindings.len() - before;
+            let order_changed = sort_bindings(&mut profile.bindings, devices);
+            if added == 0 && !order_changed {
+                continue;
+            }
+            profile.save(&path)?;
+            if added > 0 {
+                notes.push(format!(
+                    "{name}: added {added} row(s), {from_default} from the shipped default"
+                ));
+            } else {
+                notes.push(format!("{name}: reordered"));
+            }
+        }
+        Ok(notes)
     }
 
     /// Overwrite one active profile with its shipped default.
@@ -1021,6 +1373,8 @@ mod tests {
                     note: String::new(),
                 },
             ],
+            readouts: Vec::new(),
+            disabled_devices: Vec::new(),
         }
     }
 

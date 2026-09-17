@@ -162,6 +162,27 @@ dialog.picker select {
   border-radius: 6px;
 }
 
+/* A labelled text input in a dialog. Stacked rather than inline: the hint
+   under the aircraft box is a sentence, and a sentence beside a label wraps
+   into a mess. */
+dialog.picker label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+dialog.picker label.field input {
+  font: inherit;
+  padding: 5px 7px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
 dialog.picker .actions {
   justify-content: flex-end;
 }
@@ -663,4 +684,152 @@ button.add.revert:hover {
 .kind {
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------- segment displays */
+
+/* A panel this profile leaves alone. Dimmed rather than hidden: the rows are
+   still there and still worth reading, they just do nothing tonight. */
+details.device.off > summary .name,
+details.device.off table {
+  opacity: 0.45;
+}
+
+.drive {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.drive input {
+  margin: 0;
+}
+
+.displays {
+  padding: 0 14px 14px;
+}
+
+.display {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 12px;
+}
+
+.display-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.display-head .name {
+  font-weight: 600;
+}
+
+.display-head .add {
+  margin-left: auto;
+}
+
+table.readouts {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.readouts th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 12.5px;
+  padding: 4px 8px 6px 0;
+}
+
+table.readouts td {
+  vertical-align: top;
+  padding: 6px 8px 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+/* The region menu carries the name, so it needs the room a raw cell run did
+   not. Still narrower than the field beside it, which is doing the real work. */
+select.cells {
+  width: 17em;
+  max-width: 100%;
+}
+
+/* Only on screen when the run is not a named region, so it sits under the menu
+   rather than beside it. Wide enough for "10-13" and no wider. */
+input.cells.run {
+  display: block;
+  width: 5.5em;
+  margin-top: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+input.cells.run[hidden] {
+  display: none;
+}
+
+input.cells.bad {
+  border-color: var(--danger);
+}
+
+.aliases {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.alias-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alias-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Short, because a substitution is a character or two: "--" for "_". Showing
+   the spaces matters, so this is monospaced. */
+input.alias {
+  width: 7em;
+  font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+}
+
+select.seat {
+  min-width: 9em;
+}
+
+button.add.small {
+  font-size: 12.5px;
+  padding: 3px 9px;
+}
+
+.readout-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 6px;
+}
+
+.readout-extras label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.readout-extras .block {
+  flex-basis: 100%;
+}
+
+input.small {
+  width: 5em;
 }

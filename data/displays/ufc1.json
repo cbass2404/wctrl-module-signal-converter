@@ -1,0 +1,1489 @@
+{
+  "_comment": "Segment maps for WinCtrl panels with a glass display. A cell is one character position; `segments` lists the absolute bit index in the device buffer for each of the cell's segment slots, in the order the glyph tables use. A glyph lists which slots it lights.",
+  "_source": "SimAppPro app.asar: config/ScreenCharMapping/deviceScreenMemoryMapping.json and ScreenCharMapping.json, with each cell's startPos folded into its addresses the way mainsrc/LCDControl.js does at load time.",
+  "_status": "CONFIRMED against hardware 2026-09-17 by capturing SimAppPro driving a CarrierAce UFC in a live Hornet mission. Replaying the captured SET_LCDS frames through this map rendered real cockpit content, the A/P page (ATTH HSEL BALT RALT CPL) and the COMM page (GRCV SQCH CPHR AM MENU), with 0 of 36 cells failing to match a glyph. Before that it had only been checked for self-consistency.",
+  "_notes": [
+    "A glyph is looked up by the WHOLE field value, not character by character. Multi-character keys such as ' 0' and '`0' are distinct glyphs, not the OR of their parts: '0' lights slots 0,5,6,7,9,13 while ' 0' lights 1,2,3,4,9,13, and '`' does not exist on its own. Observed live: DCS-BIOS reports UFC_COMM1_DISPLAY as ' 2', two characters for one cell, and the hardware was sent the ' 2' glyph. SimAppPro falls back to OR-ing glyphs[value[0]] with glyphs[' ' + value[1]] when a two character value is absent (LCDControl.js sendData). Do NOT copy that fallback: on cells 34 and 35 it is wrong, because the single character keys are the ordinary 16 segment glyphs for cells 0 to 33 and their slots land on the units digit here. Fusing '1' with ' 2' lights slots 1,2,4,9,11,13, while the correct '`2' lights 1,2,4,6,7,11,13.",
+    "Writes go out in groups of `group_bytes` bytes at a time, so a change to one segment rewrites the whole group containing it. A cell can straddle two groups, which is why a capture shows cells passing through wrong letters between the two writes that settle them.",
+    "Only 438 of the 768 bits are claimed by a cell. The rest are gaps in the driver's address space, not spare display.",
+    "The wire frame is SET_LCDS (0x4c): `4c <group> <b0> <b1> <b2> <b3>`, len 6, addressed to part 0xbed0. Groups run 0 to 23. Capture-verified.",
+    "The comm preset cells 34 and 35 are two digits on one cell: a units digit and a partial tens that can only draw 1 or 2. The vendor spells the tens as a prefix character, '`' for 1 and '~' for 2, so 12 is the glyph '`2' and 20 is '~0'. DCS-BIOS sends '12', so `spellings` rewrites it. CONFIRMED on hardware 2026-09-17: the daemon drove a two digit comm preset onto the real glass in a live mission. The reading that predicted it: '`X' is exactly ' X' plus slots 6 and 7 for all ten digits, and '~0' is exactly ' 0' plus the four slots of '~', which is what a separate digit position looks like. The table holds ' 1' to ' 9', '`0' to '`9' and '~0' and nothing else of that form, which is precisely the 1 to 20 a Hornet comm preset can take.",
+    "Cells 34 and 35 hold two characters and carry `width: 2`. Their slots split cleanly in two with no overlap: the units digit is slots 1,2,3,4,9,11,13 and the tens is 0,5,6,7,15, which is what the ' X' keys and the '`'/'~' prefixes light respectively. A value is trimmed and right aligned to the cell width before lookup, because modules disagree about padding: the Hornet sends ' 2' for channel 2, the Hind sends '1' from a one character field and '1 ' from a two character one. Fitting has to happen BEFORE the lookup, not as a fallback after it, because a bare '1' is a real entry in the shared table and would draw two strokes of the units digit.",
+    "Glyph lookup is two passes, uppercase then the value as sent, and within each pass the form the cell prefers and then the bare trimmed value. Uppercase leads because this panel was built for the Hornet and DCS-BIOS reports the Hornet UFC in capitals throughout: every letter in both captured pages is a capital, the small forms were never exercised, and the lowercase set is incomplete with no r, u, w, y or z. Another module naming a guard channel 'g' should reach the glass looking like the rest of the panel. Falling back to the value as sent is what keeps that safe: digit7 has a 'p' and a 'w' and no capitals at all. A wide cell prefers its full width; an ordinary cell prefers the spaced form of a single character, because a digit has two forms there (' 3' and '3') and the only digit captured on such a cell is the spaced one, cell 0 on the COMM page. The bare value then rescues everything with no spaced form: DCS-BIOS pads a string out to its max_length while DCS's own indication does not, so a scratchpad letter arrives as ' G' and a guard channel as ' g'.",
+    "`regions` names the areas of the glass, taken from SimAppPro's own cell map for the Hornet (F18_lcd.js DCSToCharPos), which accounts for all 36 cells with no gaps and no overlaps. They exist for the editor: a cell run like '30-33' says nothing to someone deciding what to put on the panel. The names describe the position rather than the Hornet's use of it, because the same glass serves other modules, and each note says what the Hornet does with it."
+  ],
+  "displays": [
+    {
+      "key": "UFC1",
+      "part_id": 48848,
+      "buffer_bytes": 96,
+      "group_bytes": 4,
+      "cells": [
+        {
+          "index": 0,
+          "shape": "alnum16",
+          "segments": [
+            4,
+            8,
+            12,
+            15,
+            11,
+            3,
+            2,
+            0,
+            5,
+            9,
+            13,
+            14,
+            10,
+            6,
+            7,
+            1
+          ]
+        },
+        {
+          "index": 1,
+          "shape": "alnum16",
+          "segments": [
+            20,
+            24,
+            28,
+            31,
+            27,
+            19,
+            18,
+            16,
+            21,
+            25,
+            29,
+            30,
+            26,
+            22,
+            23,
+            17
+          ]
+        },
+        {
+          "index": 2,
+          "shape": "digit7",
+          "segments": [
+            36,
+            37,
+            38,
+            39,
+            34,
+            32,
+            33
+          ]
+        },
+        {
+          "index": 3,
+          "shape": "digit7",
+          "segments": [
+            44,
+            45,
+            46,
+            47,
+            42,
+            40,
+            41
+          ]
+        },
+        {
+          "index": 4,
+          "shape": "digit7",
+          "segments": [
+            52,
+            53,
+            54,
+            55,
+            50,
+            48,
+            49
+          ]
+        },
+        {
+          "index": 5,
+          "shape": "digit7",
+          "segments": [
+            60,
+            61,
+            62,
+            63,
+            58,
+            56,
+            57
+          ]
+        },
+        {
+          "index": 6,
+          "shape": "digit7",
+          "segments": [
+            68,
+            69,
+            70,
+            71,
+            66,
+            64,
+            65
+          ]
+        },
+        {
+          "index": 7,
+          "shape": "digit7",
+          "segments": [
+            76,
+            77,
+            78,
+            79,
+            74,
+            72,
+            73
+          ]
+        },
+        {
+          "index": 8,
+          "shape": "digit7",
+          "segments": [
+            84,
+            85,
+            86,
+            87,
+            82,
+            80,
+            81
+          ]
+        },
+        {
+          "index": 9,
+          "shape": "single",
+          "segments": [
+            131
+          ]
+        },
+        {
+          "index": 10,
+          "shape": "alnum16",
+          "segments": [
+            136,
+            140,
+            144,
+            147,
+            143,
+            135,
+            134,
+            132,
+            137,
+            141,
+            145,
+            146,
+            142,
+            138,
+            139,
+            133
+          ]
+        },
+        {
+          "index": 11,
+          "shape": "alnum16",
+          "segments": [
+            152,
+            156,
+            160,
+            163,
+            159,
+            151,
+            150,
+            148,
+            153,
+            157,
+            161,
+            162,
+            158,
+            154,
+            155,
+            149
+          ]
+        },
+        {
+          "index": 12,
+          "shape": "alnum16",
+          "segments": [
+            168,
+            172,
+            176,
+            179,
+            175,
+            167,
+            166,
+            164,
+            169,
+            173,
+            177,
+            178,
+            174,
+            170,
+            171,
+            165
+          ]
+        },
+        {
+          "index": 13,
+          "shape": "alnum16",
+          "segments": [
+            184,
+            188,
+            192,
+            195,
+            191,
+            183,
+            182,
+            180,
+            185,
+            189,
+            193,
+            194,
+            190,
+            186,
+            187,
+            181
+          ]
+        },
+        {
+          "index": 14,
+          "shape": "single",
+          "segments": [
+            259
+          ]
+        },
+        {
+          "index": 15,
+          "shape": "alnum16",
+          "segments": [
+            264,
+            268,
+            272,
+            275,
+            271,
+            263,
+            262,
+            260,
+            265,
+            269,
+            273,
+            274,
+            270,
+            266,
+            267,
+            261
+          ]
+        },
+        {
+          "index": 16,
+          "shape": "alnum16",
+          "segments": [
+            280,
+            284,
+            288,
+            291,
+            287,
+            279,
+            278,
+            276,
+            281,
+            285,
+            289,
+            290,
+            286,
+            282,
+            283,
+            277
+          ]
+        },
+        {
+          "index": 17,
+          "shape": "alnum16",
+          "segments": [
+            296,
+            300,
+            304,
+            307,
+            303,
+            295,
+            294,
+            292,
+            297,
+            301,
+            305,
+            306,
+            302,
+            298,
+            299,
+            293
+          ]
+        },
+        {
+          "index": 18,
+          "shape": "alnum16",
+          "segments": [
+            312,
+            316,
+            320,
+            323,
+            319,
+            311,
+            310,
+            308,
+            313,
+            317,
+            321,
+            322,
+            318,
+            314,
+            315,
+            309
+          ]
+        },
+        {
+          "index": 19,
+          "shape": "single",
+          "segments": [
+            387
+          ]
+        },
+        {
+          "index": 20,
+          "shape": "alnum16",
+          "segments": [
+            392,
+            396,
+            400,
+            403,
+            399,
+            391,
+            390,
+            388,
+            393,
+            397,
+            401,
+            402,
+            398,
+            394,
+            395,
+            389
+          ]
+        },
+        {
+          "index": 21,
+          "shape": "alnum16",
+          "segments": [
+            408,
+            412,
+            416,
+            419,
+            415,
+            407,
+            406,
+            404,
+            409,
+            413,
+            417,
+            418,
+            414,
+            410,
+            411,
+            405
+          ]
+        },
+        {
+          "index": 22,
+          "shape": "alnum16",
+          "segments": [
+            424,
+            428,
+            432,
+            435,
+            431,
+            423,
+            422,
+            420,
+            425,
+            429,
+            433,
+            434,
+            430,
+            426,
+            427,
+            421
+          ]
+        },
+        {
+          "index": 23,
+          "shape": "alnum16",
+          "segments": [
+            440,
+            444,
+            448,
+            451,
+            447,
+            439,
+            438,
+            436,
+            441,
+            445,
+            449,
+            450,
+            446,
+            442,
+            443,
+            437
+          ]
+        },
+        {
+          "index": 24,
+          "shape": "single",
+          "segments": [
+            515
+          ]
+        },
+        {
+          "index": 25,
+          "shape": "alnum16",
+          "segments": [
+            520,
+            524,
+            528,
+            531,
+            527,
+            519,
+            518,
+            516,
+            521,
+            525,
+            529,
+            530,
+            526,
+            522,
+            523,
+            517
+          ]
+        },
+        {
+          "index": 26,
+          "shape": "alnum16",
+          "segments": [
+            536,
+            540,
+            544,
+            547,
+            543,
+            535,
+            534,
+            532,
+            537,
+            541,
+            545,
+            546,
+            542,
+            538,
+            539,
+            533
+          ]
+        },
+        {
+          "index": 27,
+          "shape": "alnum16",
+          "segments": [
+            552,
+            556,
+            560,
+            563,
+            559,
+            551,
+            550,
+            548,
+            553,
+            557,
+            561,
+            562,
+            558,
+            554,
+            555,
+            549
+          ]
+        },
+        {
+          "index": 28,
+          "shape": "alnum16",
+          "segments": [
+            568,
+            572,
+            576,
+            579,
+            575,
+            567,
+            566,
+            564,
+            569,
+            573,
+            577,
+            578,
+            574,
+            570,
+            571,
+            565
+          ]
+        },
+        {
+          "index": 29,
+          "shape": "single",
+          "segments": [
+            643
+          ]
+        },
+        {
+          "index": 30,
+          "shape": "alnum16",
+          "segments": [
+            648,
+            652,
+            656,
+            659,
+            655,
+            647,
+            646,
+            644,
+            649,
+            653,
+            657,
+            658,
+            654,
+            650,
+            651,
+            645
+          ]
+        },
+        {
+          "index": 31,
+          "shape": "alnum16",
+          "segments": [
+            664,
+            668,
+            672,
+            675,
+            671,
+            663,
+            662,
+            660,
+            665,
+            669,
+            673,
+            674,
+            670,
+            666,
+            667,
+            661
+          ]
+        },
+        {
+          "index": 32,
+          "shape": "alnum16",
+          "segments": [
+            680,
+            684,
+            688,
+            691,
+            687,
+            679,
+            678,
+            676,
+            681,
+            685,
+            689,
+            690,
+            686,
+            682,
+            683,
+            677
+          ]
+        },
+        {
+          "index": 33,
+          "shape": "alnum16",
+          "segments": [
+            696,
+            700,
+            704,
+            707,
+            703,
+            695,
+            694,
+            692,
+            697,
+            701,
+            705,
+            706,
+            702,
+            698,
+            699,
+            693
+          ]
+        },
+        {
+          "index": 34,
+          "shape": "alnum16",
+          "width": 2,
+          "segments": [
+            720,
+            723,
+            719,
+            711,
+            710,
+            708,
+            712,
+            716,
+            721,
+            722,
+            718,
+            714,
+            715,
+            709,
+            713,
+            717
+          ]
+        },
+        {
+          "index": 35,
+          "shape": "alnum16",
+          "width": 2,
+          "segments": [
+            736,
+            739,
+            735,
+            727,
+            726,
+            724,
+            728,
+            732,
+            737,
+            738,
+            734,
+            730,
+            731,
+            725,
+            729,
+            733
+          ]
+        }
+      ],
+      "regions": [
+        {
+          "name": "Scratchpad, mark 1",
+          "cells": "0",
+          "note": "Hornet: the option letter or cue to the left of the scratchpad number."
+        },
+        {
+          "name": "Scratchpad, mark 2",
+          "cells": "1",
+          "note": "Hornet: the cursor beside the scratchpad number. DCS-BIOS reports '--' where DCS shows '_', so this field ships with an alias."
+        },
+        {
+          "name": "Scratchpad number",
+          "cells": "2-8",
+          "note": "Seven digits, right aligned. Hornet: the frequency or value being entered."
+        },
+        {
+          "name": "Option 1 cue",
+          "cells": "9",
+          "note": "A single mark beside the first option label. Hornet: the colon that shows the option is selectable."
+        },
+        {
+          "name": "Option 1 label",
+          "cells": "10-13",
+          "note": "Four characters. Hornet: the name of the first option, such as ATTH or GRCV."
+        },
+        {
+          "name": "Option 2 cue",
+          "cells": "14",
+          "note": "A single mark beside the second option label."
+        },
+        {
+          "name": "Option 2 label",
+          "cells": "15-18",
+          "note": "Four characters. Hornet: the name of the second option."
+        },
+        {
+          "name": "Option 3 cue",
+          "cells": "19",
+          "note": "A single mark beside the third option label."
+        },
+        {
+          "name": "Option 3 label",
+          "cells": "20-23",
+          "note": "Four characters. Hornet: the name of the third option."
+        },
+        {
+          "name": "Option 4 cue",
+          "cells": "24",
+          "note": "A single mark beside the fourth option label."
+        },
+        {
+          "name": "Option 4 label",
+          "cells": "25-28",
+          "note": "Four characters. Hornet: the name of the fourth option."
+        },
+        {
+          "name": "Option 5 cue",
+          "cells": "29",
+          "note": "A single mark beside the fifth option label."
+        },
+        {
+          "name": "Option 5 label",
+          "cells": "30-33",
+          "note": "Four characters. Hornet: the name of the fifth option."
+        },
+        {
+          "name": "Comm 1 channel",
+          "cells": "34",
+          "note": "Two digits in one window, 1 to 20, or a letter such as G for guard."
+        },
+        {
+          "name": "Comm 2 channel",
+          "cells": "35",
+          "note": "Two digits in one window, 1 to 20, or a letter such as G for guard."
+        }
+      ],
+      "spellings": {
+        "10": "`0",
+        "11": "`1",
+        "12": "`2",
+        "13": "`3",
+        "14": "`4",
+        "15": "`5",
+        "16": "`6",
+        "17": "`7",
+        "18": "`8",
+        "19": "`9",
+        "20": "~0"
+      },
+      "glyphs": {
+        "alnum16": {
+          "A": [
+            0,
+            1,
+            2,
+            3,
+            6,
+            7,
+            11,
+            15
+          ],
+          "B": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            9,
+            11,
+            13
+          ],
+          "C": [
+            0,
+            1,
+            4,
+            5,
+            6,
+            7
+          ],
+          "D": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            9,
+            13
+          ],
+          "E": [
+            0,
+            1,
+            4,
+            5,
+            6,
+            7,
+            15
+          ],
+          "F": [
+            0,
+            1,
+            6,
+            7,
+            15
+          ],
+          "G": [
+            0,
+            1,
+            3,
+            4,
+            5,
+            6,
+            7,
+            11
+          ],
+          "H": [
+            2,
+            3,
+            6,
+            7,
+            11,
+            15
+          ],
+          "I": [
+            0,
+            1,
+            4,
+            5,
+            9,
+            13
+          ],
+          "J": [
+            0,
+            1,
+            5,
+            6,
+            9,
+            13
+          ],
+          "K": [
+            6,
+            7,
+            10,
+            12,
+            15
+          ],
+          "L": [
+            4,
+            5,
+            6,
+            7
+          ],
+          "M": [
+            2,
+            3,
+            6,
+            7,
+            8,
+            10
+          ],
+          "N": [
+            2,
+            3,
+            6,
+            7,
+            8,
+            12
+          ],
+          "O": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "P": [
+            0,
+            1,
+            2,
+            6,
+            7,
+            11,
+            15
+          ],
+          "Q": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            12
+          ],
+          "R": [
+            0,
+            1,
+            2,
+            6,
+            7,
+            11,
+            12,
+            15
+          ],
+          "S": [
+            0,
+            1,
+            3,
+            4,
+            5,
+            7,
+            11,
+            15
+          ],
+          "T": [
+            0,
+            1,
+            9,
+            13
+          ],
+          "U": [
+            2,
+            3,
+            4,
+            5,
+            6,
+            7
+          ],
+          "V": [
+            6,
+            7,
+            10,
+            14
+          ],
+          "W": [
+            2,
+            3,
+            6,
+            7,
+            12,
+            14
+          ],
+          "X": [
+            8,
+            10,
+            12,
+            14
+          ],
+          "Y": [
+            8,
+            10,
+            13
+          ],
+          "Z": [
+            0,
+            1,
+            4,
+            5,
+            10,
+            14
+          ],
+          "/": [
+            10,
+            14
+          ],
+          "-": [
+            15
+          ],
+          "*": [
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15
+          ],
+          "@": [
+            0,
+            7,
+            9,
+            15
+          ],
+          " 1": [
+            2,
+            3
+          ],
+          "a": [
+            0,
+            5,
+            6,
+            7
+          ],
+          "b": [
+            0,
+            5,
+            6,
+            7,
+            13
+          ],
+          "c": [
+            0,
+            5,
+            6,
+            7,
+            9
+          ],
+          "e": [
+            0,
+            5,
+            15
+          ],
+          "f": [
+            0,
+            5,
+            13,
+            15
+          ],
+          "g": [
+            0,
+            5,
+            9,
+            15
+          ],
+          "h": [
+            7,
+            15
+          ],
+          "i": [
+            7,
+            13,
+            15
+          ],
+          "j": [
+            7,
+            9,
+            15
+          ],
+          "k": [
+            0,
+            5,
+            7,
+            15
+          ],
+          "l": [
+            5,
+            6,
+            7,
+            15
+          ],
+          "m": [
+            0
+          ],
+          "n": [
+            0,
+            13
+          ],
+          "o": [
+            0,
+            9
+          ],
+          "p": [
+            0,
+            5,
+            6,
+            7,
+            15
+          ],
+          "q": [
+            0,
+            5,
+            6,
+            7,
+            13,
+            15
+          ],
+          "s": [
+            0,
+            5,
+            6,
+            7,
+            9,
+            15
+          ],
+          "t": [
+            0,
+            7,
+            15
+          ],
+          "v": [
+            0,
+            7,
+            13,
+            15
+          ],
+          "x": [
+            0,
+            6,
+            7,
+            9,
+            13,
+            15
+          ],
+          " 2": [
+            1,
+            2,
+            4,
+            11,
+            13
+          ],
+          " 3": [
+            1,
+            2,
+            3,
+            4,
+            11
+          ],
+          " 4": [
+            2,
+            3,
+            9,
+            11
+          ],
+          " 5": [
+            1,
+            3,
+            4,
+            9,
+            11
+          ],
+          " 6": [
+            3,
+            4,
+            9,
+            11,
+            13
+          ],
+          " 7": [
+            1,
+            2,
+            3
+          ],
+          " 8": [
+            1,
+            2,
+            3,
+            4,
+            9,
+            11,
+            13
+          ],
+          " 9": [
+            1,
+            2,
+            3,
+            9,
+            11
+          ],
+          "`0": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            13
+          ],
+          "`1": [
+            2,
+            3,
+            6,
+            7
+          ],
+          "`2": [
+            1,
+            2,
+            4,
+            6,
+            7,
+            11,
+            13
+          ],
+          "`3": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            7,
+            11
+          ],
+          "`4": [
+            2,
+            3,
+            6,
+            7,
+            9,
+            11
+          ],
+          "`5": [
+            1,
+            3,
+            4,
+            6,
+            7,
+            9,
+            11
+          ],
+          "`6": [
+            3,
+            4,
+            6,
+            7,
+            9,
+            11,
+            13
+          ],
+          "`7": [
+            1,
+            2,
+            3,
+            6,
+            7
+          ],
+          "`8": [
+            1,
+            2,
+            3,
+            4,
+            6,
+            7,
+            9,
+            11,
+            13
+          ],
+          "`9": [
+            1,
+            2,
+            3,
+            6,
+            7,
+            9,
+            11
+          ],
+          "~0": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            9,
+            13,
+            15
+          ],
+          " ": [],
+          "0": [
+            0,
+            5,
+            6,
+            7,
+            9,
+            13
+          ],
+          "1": [
+            9,
+            13
+          ],
+          "2": [
+            0,
+            5,
+            6,
+            9,
+            15
+          ],
+          "3": [
+            0,
+            5,
+            9,
+            13,
+            15
+          ],
+          "4": [
+            7,
+            9,
+            13,
+            15
+          ],
+          "5": [
+            0,
+            5,
+            7,
+            13,
+            15
+          ],
+          "6": [
+            5,
+            6,
+            7,
+            13,
+            15
+          ],
+          "7": [
+            0,
+            9,
+            13
+          ],
+          "8": [
+            0,
+            5,
+            6,
+            7,
+            9,
+            13,
+            15
+          ],
+          "9": [
+            0,
+            7,
+            9,
+            13,
+            15
+          ],
+          "_": [
+            11,
+            15
+          ],
+          " 0": [
+            1,
+            2,
+            3,
+            4,
+            9,
+            13
+          ],
+          "~": [
+            0,
+            5,
+            6,
+            15
+          ],
+          "  ": [],
+          "d": [
+            0,
+            1,
+            8,
+            10
+          ]
+        },
+        "digit7": {
+          "0": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "1": [
+            1,
+            2
+          ],
+          "2": [
+            0,
+            1,
+            3,
+            4,
+            6
+          ],
+          "3": [
+            0,
+            1,
+            2,
+            3,
+            6
+          ],
+          "4": [
+            1,
+            2,
+            5,
+            6
+          ],
+          "5": [
+            0,
+            2,
+            3,
+            5,
+            6
+          ],
+          "6": [
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "7": [
+            0,
+            1,
+            2
+          ],
+          "8": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6
+          ],
+          "9": [
+            0,
+            1,
+            2,
+            5,
+            6
+          ],
+          " ": [],
+          ".": [
+            2,
+            3,
+            4,
+            6
+          ],
+          "p": [
+            0,
+            3,
+            4,
+            5,
+            6
+          ],
+          "w": [
+            0,
+            1,
+            2,
+            4,
+            5,
+            6
+          ],
+          "-": [
+            6
+          ],
+          "@": [
+            0,
+            1,
+            5,
+            6
+          ],
+          "'": [
+            1
+          ]
+        },
+        "single": {
+          ":": [
+            0
+          ],
+          " ": []
+        }
+      }
+    }
+  ]
+}

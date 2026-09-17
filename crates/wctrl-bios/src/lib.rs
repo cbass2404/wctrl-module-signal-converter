@@ -190,9 +190,9 @@ impl BiosState {
         self.word(address).map(|w| (w & mask) >> shift)
     }
 
-    /// Read a string signal: `len` bytes starting at `address`, two per word,
-    /// trimmed at the first NUL.
-    pub fn string(&self, address: u16, len: u16) -> Option<String> {
+    /// The raw bytes of a string signal: `len` of them starting at `address`,
+    /// two per word, low byte first. `None` until every word has been seen.
+    fn bytes(&self, address: u16, len: u16) -> Option<Vec<u8>> {
         let mut bytes = Vec::with_capacity(len as usize);
         for i in 0..len.div_ceil(2) {
             let word = self.word(address.wrapping_add(i * 2))?;
@@ -200,10 +200,35 @@ impl BiosState {
             bytes.push((word >> 8) as u8);
         }
         bytes.truncate(len as usize);
+        Some(bytes)
+    }
+
+    /// Read a string signal as a name: truncated at the first NUL and trimmed.
+    ///
+    /// This is what `_ACFT_NAME` wants. It is the wrong reader for anything
+    /// that will be drawn on a display; see [`BiosState::text`].
+    pub fn string(&self, address: u16, len: u16) -> Option<String> {
+        let mut bytes = self.bytes(address, len)?;
         if let Some(nul) = bytes.iter().position(|&b| b == 0) {
             bytes.truncate(nul);
         }
         Some(String::from_utf8_lossy(&bytes).trim_end().to_string())
+    }
+
+    /// Read a string signal as a display field: the full `len` bytes, with NUL
+    /// treated as a blank rather than a terminator, and nothing trimmed.
+    ///
+    /// Where the characters sit inside the field is information, not padding to
+    /// be tidied away. The Hornet UFC scratchpad is right aligned in its window,
+    /// so trimming would shift every character into the wrong cell, and a field
+    /// that has gone blank would read as absent rather than as blank.
+    pub fn text(&self, address: u16, len: u16) -> Option<String> {
+        let bytes: Vec<u8> = self
+            .bytes(address, len)?
+            .into_iter()
+            .map(|b| if b == 0 { b' ' } else { b })
+            .collect();
+        Some(String::from_utf8_lossy(&bytes).to_string())
     }
 
     pub fn len(&self) -> usize {
@@ -373,5 +398,58 @@ mod tests {
     fn unknown_address_reads_none() {
         let state = BiosState::new();
         assert_eq!(state.value(0x1234, 0xffff, 0), None);
+    }
+
+    /// Write an ASCII field the way DCS-BIOS packs one: two bytes per word,
+    /// low byte first.
+    fn put_text(state: &mut BiosState, address: u16, s: &[u8]) {
+        for (i, pair) in s.chunks(2).enumerate() {
+            let lo = pair[0] as u16;
+            let hi = *pair.get(1).unwrap_or(&0) as u16;
+            state.apply(Write {
+                address: address + (i as u16) * 2,
+                value: lo | (hi << 8),
+            });
+        }
+    }
+
+    #[test]
+    fn text_keeps_the_padding_that_string_removes() {
+        let mut state = BiosState::new();
+        // A Hornet UFC scratchpad holding "3", right aligned in its window.
+        put_text(&mut state, 0x7446, b"       3");
+        assert_eq!(state.text(0x7446, 8), Some("       3".to_string()));
+        // `string` is for names, and would put the digit in the leftmost cell.
+        assert_eq!(state.string(0x7446, 8), Some("       3".trim_end().to_string()));
+    }
+
+    #[test]
+    fn text_reads_a_blanked_field_as_blank_not_absent() {
+        let mut state = BiosState::new();
+        put_text(&mut state, 0x7446, b"    ");
+        // Distinguishing "the field is empty" from "the field has not arrived"
+        // is the difference between clearing a display cell and leaving it lit.
+        assert_eq!(state.text(0x7446, 4), Some("    ".to_string()));
+        assert_eq!(state.text(0x9999, 4), None);
+    }
+
+    #[test]
+    fn text_treats_nul_as_a_blank_rather_than_an_end() {
+        let mut state = BiosState::new();
+        put_text(&mut state, 0x7446, b"AB\0\0EF");
+        // Truncating here would shorten the field and shift everything after
+        // the hole into the wrong cell.
+        assert_eq!(state.text(0x7446, 6), Some("AB  EF".to_string()));
+        assert_eq!(state.string(0x7446, 6), Some("AB".to_string()));
+    }
+
+    #[test]
+    fn a_partly_arrived_field_reads_none() {
+        let mut state = BiosState::new();
+        // Four characters wanted, one word present.
+        put_text(&mut state, 0x7446, b"AB");
+        assert_eq!(state.text(0x7446, 4), None);
+        put_text(&mut state, 0x7448, b"CD");
+        assert_eq!(state.text(0x7446, 4), Some("ABCD".to_string()));
     }
 }

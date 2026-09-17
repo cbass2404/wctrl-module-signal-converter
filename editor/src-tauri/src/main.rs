@@ -39,7 +39,14 @@ fn inventory(paths: &Paths) -> Reply<DeviceInventory> {
 #[tauri::command]
 fn devices() -> Reply<Vec<DeviceView>> {
     let paths = Paths::resolve();
-    let mut out: Vec<DeviceView> = inventory(&paths)?.devices.iter().map(DeviceView::of).collect();
+    let inv = inventory(&paths)?;
+    let maps = wctrl_config::DisplayCatalogue::load_dir(&paths.displays)
+        .map_err(|e| format!("loading {}: {e}", paths.displays.display()))?;
+    let mut out: Vec<DeviceView> = inv
+        .devices
+        .iter()
+        .map(|d| DeviceView::of(d).with_displays(d, &maps))
+        .collect();
     out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
     Ok(out)
 }
@@ -156,6 +163,49 @@ fn create_profile(module: String) -> Reply<String> {
     Ok(file)
 }
 
+/// Copy an existing profile to a new aircraft.
+///
+/// The case this exists for is a module that reuses another's DCS-BIOS
+/// definitions, where the work is already done and only the name and the
+/// aircraft list differ: the Super Hornet community mod reads the Hornet
+/// catalogue, so the Hornet profile drives it unchanged. Doing that by hand
+/// means copying a file, editing two fields, and getting the third one wrong.
+///
+/// `module` is deliberately carried over rather than asked for. A copy whose
+/// signal ids resolve against a different catalogue is not a copy, it is a
+/// profile full of unknown signals.
+#[tauri::command]
+fn clone_profile(file: String, name: String, aircraft: Vec<String>) -> Reply<String> {
+    let paths = Paths::resolve();
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("a profile needs a name".into());
+    }
+    let aircraft: Vec<String> = aircraft
+        .into_iter()
+        .map(|a| a.trim().to_string())
+        .filter(|a| !a.is_empty())
+        .collect();
+    if aircraft.is_empty() {
+        return Err("a profile needs at least one aircraft name, as DCS reports it".into());
+    }
+
+    let mut profile = Profile::load(&paths.profiles.active.join(&file))
+        .map_err(|e| fail(&format!("reading {file}"), e))?;
+    profile.name = name.to_string();
+    profile.aircraft = aircraft;
+
+    let out = format!("{}.json", slug(name));
+    let path = paths.profiles.active.join(&out);
+    if path.exists() {
+        return Err(format!("{out} already exists"));
+    }
+    std::fs::create_dir_all(&paths.profiles.active)
+        .map_err(|e| fail("creating the profile folder", e))?;
+    profile.save(&path).map_err(|e| fail(&format!("writing {out}"), e))?;
+    Ok(out)
+}
+
 #[tauri::command]
 fn save_profile(file: String, profile: Profile) -> Reply<()> {
     let paths = Paths::resolve();
@@ -199,6 +249,7 @@ fn main() {
             open_profile,
             default_profile,
             create_profile,
+            clone_profile,
             save_profile,
             reset_profile
         ])
@@ -209,6 +260,18 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::slug;
+
+    #[test]
+    fn a_copied_profile_is_named_after_what_it_was_called() {
+        // The file name comes from the profile name, not the module, because a
+        // copy is by definition a second profile on the same module: naming it
+        // after the module would collide with the one it came from.
+        assert_eq!(slug("FA-18E"), "fa-18e");
+        assert_eq!(slug("F/A-18C Hornet copy"), "f-a-18c-hornet-copy");
+        // A name that slugs to nothing would write ".json", so the command
+        // rejects an empty name before it reaches here.
+        assert_eq!(slug("   "), "");
+    }
 
     #[test]
     fn module_keys_slug_to_the_names_already_shipped() {

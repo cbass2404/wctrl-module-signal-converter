@@ -9,11 +9,11 @@
   "module": "FA-18C_hornet",
   "bindings": [
     {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "Backlight",
+      "device": "CarrierAce_UFC",
+      "led": "INST_PNL_Backlight",
       "conditions": [
         {
-          "source": "CONSOLES_DIMMER",
+          "source": "INST_PNL_DIMMER",
           "on_when": {
             "scale": [
               0,
@@ -21,28 +21,14 @@
             ]
           }
         }
-      ],
-      "note": "Panel backlight follows the CONSOLES knob, so the panel dims with the cockpit at night."
+      ]
     },
     {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "SL",
+      "device": "CarrierAce_UFC",
+      "led": "LCDBacklight",
       "conditions": [
         {
-          "source": "CONSOLES_DIMMER",
-          "on_when": {
-            "gte": 0
-          }
-        }
-      ],
-      "note": "Held at full. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so tying it to a cockpit dimmer would blank every lamp in daylight. Change on_when to {\"scale\": [0, 65535]} to make indicator brightness track the console lighting instead."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "FLAG",
-      "conditions": [
-        {
-          "source": "CONSOLES_DIMMER",
+          "source": "UFC_BRT",
           "on_when": {
             "scale": [
               0,
@@ -50,191 +36,22 @@
             ]
           }
         }
-      ],
-      "off": 255,
-      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the console dimmer at night, and goes full bright when the console is off, because console off means daylight and a dim flag lamp is unreadable then. The daylight case is the off value: a scale of a zero source resolves to zero, and a binding that resolves to zero takes its off value."
+      ]
     },
     {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "Landing_gear_lights",
+      "device": "CarrierAce_UFC",
+      "led": "HUD_INST_PNL_Backlight",
       "conditions": [
         {
-          "source": "LANDING_GEAR_HANDLE_LT",
+          "source": "INST_PNL_DIMMER",
           "on_when": {
-            "equals": 1
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
-      ],
-      "note": "Gear handle light. A dimmer lamp driven by a binary source, so it goes to full rather than scaling."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "Master_Caution",
-      "conditions": [
-        {
-          "source": "MASTER_CAUTION_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "MASTER CAUTION (yellow)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "NOSE",
-      "conditions": [
-        {
-          "source": "FLP_LG_NOSE_GEAR_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "NOSE GEAR down and locked (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "LEFT",
-      "conditions": [
-        {
-          "source": "FLP_LG_LEFT_GEAR_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "LEFT GEAR down and locked (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "RIGHT",
-      "conditions": [
-        {
-          "source": "FLP_LG_RIGHT_GEAR_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "RIGHT GEAR down and locked (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "FLAPS",
-      "conditions": [
-        {
-          "source": "FLP_LG_FLAPS_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "FLAPS caption (yellow), flap transit or disagreement."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "HALF",
-      "conditions": [
-        {
-          "source": "FLP_LG_HALF_FLAPS_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "HALF FLAPS (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "FULL",
-      "conditions": [
-        {
-          "source": "FLP_LG_FULL_FLAPS_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "FULL FLAPS (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "HOOK",
-      "conditions": [
-        {
-          "source": "ARRESTING_HOOK_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "Arresting hook down. Physically the dimmest lamp on the panel; that is the hardware, not this mapping."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "LI",
-      "conditions": [
-        {
-          "source": "SJ_LI_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "SELECT JETTISON left inboard station (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "LO",
-      "conditions": [
-        {
-          "source": "SJ_LO_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "SELECT JETTISON left outboard station (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "CTR",
-      "conditions": [
-        {
-          "source": "SJ_CTR_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "SELECT JETTISON centreline station (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "RO",
-      "conditions": [
-        {
-          "source": "SJ_RO_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "SELECT JETTISON right outboard station (green)."
-    },
-    {
-      "device": "TAKEOFF_PLANEL_2",
-      "led": "RI",
-      "conditions": [
-        {
-          "source": "SJ_RI_LT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ],
-      "note": "SELECT JETTISON right inboard station (green)."
+      ]
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -277,6 +94,338 @@
         }
       ],
       "note": "A/G master mode selected (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ],
+      "note": "Panel backlight follows the CONSOLES knob, so the panel dims with the cockpit at night."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Landing_gear_lights",
+      "conditions": [
+        {
+          "source": "LANDING_GEAR_HANDLE_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "Gear handle light. A dimmer lamp driven by a binary source, so it goes to full rather than scaling."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "SL",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "gte": 0
+          }
+        }
+      ],
+      "note": "Held at full. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so tying it to a cockpit dimmer would blank every lamp in daylight. Change on_when to {\"scale\": [0, 65535]} to make indicator brightness track the console lighting instead."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAG",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ],
+      "off": 255,
+      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the console dimmer at night, and goes full bright when the console is off, because console off means daylight and a dim flag lamp is unreadable then. The daylight case is the off value: a scale of a zero source resolves to zero, and a binding that resolves to zero takes its off value."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Master_Caution",
+      "conditions": [
+        {
+          "source": "MASTER_CAUTION_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "MASTER CAUTION (yellow)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "JETT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "CTR",
+      "conditions": [
+        {
+          "source": "SJ_CTR_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "SELECT JETTISON centreline station (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LI",
+      "conditions": [
+        {
+          "source": "SJ_LI_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "SELECT JETTISON left inboard station (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LO",
+      "conditions": [
+        {
+          "source": "SJ_LO_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "SELECT JETTISON left outboard station (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RO",
+      "conditions": [
+        {
+          "source": "SJ_RO_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "SELECT JETTISON right outboard station (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RI",
+      "conditions": [
+        {
+          "source": "SJ_RI_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "SELECT JETTISON right inboard station (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAPS",
+      "conditions": [
+        {
+          "source": "FLP_LG_FLAPS_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "FLAPS caption (yellow), flap transit or disagreement."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "NOSE",
+      "conditions": [
+        {
+          "source": "FLP_LG_NOSE_GEAR_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "NOSE GEAR down and locked (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FULL",
+      "conditions": [
+        {
+          "source": "FLP_LG_FULL_FLAPS_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "FULL FLAPS (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RIGHT",
+      "conditions": [
+        {
+          "source": "FLP_LG_RIGHT_GEAR_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "RIGHT GEAR down and locked (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LEFT",
+      "conditions": [
+        {
+          "source": "FLP_LG_LEFT_GEAR_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "LEFT GEAR down and locked (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HALF",
+      "conditions": [
+        {
+          "source": "FLP_LG_HALF_FLAPS_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "HALF FLAPS (green)."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HOOK",
+      "conditions": [
+        {
+          "source": "ARRESTING_HOOK_LT",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "Arresting hook down. Physically the dimmest lamp on the panel; that is the hardware, not this mapping."
+    }
+  ],
+  "readouts": [
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "0",
+      "source": "UFC_SCRATCHPAD_STRING_1_DISPLAY",
+      "note": "Two characters into one cell. A digit keeps its leading space, which selects the small form the hardware was observed being sent. A letter has no spaced form, so ' G' falls back to 'G'."
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "1",
+      "source": "UFC_SCRATCHPAD_STRING_2_DISPLAY",
+      "aliases": {
+        "--": "_"
+      },
+      "note": "DCS-BIOS reports '--' where DCS's own indication says '_', and '--' is not a glyph. Without the alias this cell draws a single dash."
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "2-8",
+      "source": "UFC_SCRATCHPAD_NUMBER_DISPLAY",
+      "align": "right",
+      "note": "DCS-BIOS gives 8 characters for 7 cells. Right aligned, so the leading pad is what gets dropped and keypresses land at the right."
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "9",
+      "source": "UFC_OPTION_CUEING_1"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "10-13",
+      "source": "UFC_OPTION_DISPLAY_1"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "14",
+      "source": "UFC_OPTION_CUEING_2"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "15-18",
+      "source": "UFC_OPTION_DISPLAY_2"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "19",
+      "source": "UFC_OPTION_CUEING_3"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "20-23",
+      "source": "UFC_OPTION_DISPLAY_3"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "24",
+      "source": "UFC_OPTION_CUEING_4"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "25-28",
+      "source": "UFC_OPTION_DISPLAY_4"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "29",
+      "source": "UFC_OPTION_CUEING_5"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "30-33",
+      "source": "UFC_OPTION_DISPLAY_5"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "34",
+      "source": "UFC_COMM1_DISPLAY"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "35",
+      "source": "UFC_COMM2_DISPLAY"
     }
   ]
 }

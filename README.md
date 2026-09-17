@@ -104,9 +104,50 @@ the one-pass write after a module load, `write` is an incremental change, and
 value moved but no lamp changed state, which is the normal case for a gauge
 travelling inside a threshold.
 
-Only signals the loaded profile actually binds are followed. A cockpit pushes
-thousands of writes a second, so logging all of them would bury the few that
-matter. Use `listen --watch` when you need to see one that nothing is bound to.
+A panel with glass adds two more. `paint` is a group of four bytes sent to a
+segment display, and `blank` is the same on the way out. The bytes are a bitmap
+rather than characters, so read the `signal` line above them for what the field
+now says:
+
+```text
+   31440 ms  signal  UFC_SCRATCHPAD_NUMBER_DISPLAY = " 264.000"
+   31440 ms  paint   CarrierAce_UFC group 1       = b6 c7 63 c6
+   31440 ms  paint   CarrierAce_UFC group 2       = f5 f5 f5 00
+```
+
+A string is printed quoted, because on a display field the padding is the
+layout: a right aligned scratchpad would otherwise read the same as a left
+aligned one. It is logged once the whole field has arrived, not once per word,
+since DCS-BIOS delivers a string across several writes.
+
+A gauge feeding a display field shows both numbers:
+
+```text
+   31502 ms  signal  PLT_RV5_ALT                  = 8738 -> 100
+```
+
+The position is what the stream carries and the reading is what reaches the
+glass. Neither alone answers "is this right": 8738 cannot be checked against a
+cockpit gauge, and 100 cannot be checked against the stream. Both go through
+the same conversion the display uses, so they cannot drift apart.
+
+Only signals the loaded profile actually reads are followed, whether a lamp
+condition or a display field reads them. A cockpit pushes thousands of writes a
+second, so logging all of them would bury the few that matter. Use
+`listen --watch` when you need to see one that nothing is bound to.
+
+This is why a busy log can go quiet on switching aircraft, which looks like a
+fault and is not one. The line under the aircraft says how much there is to
+see:
+
+```text
+aircraft F-14BU  ->  profile F-14BU
+  following 1 signal address(es) for this profile
+```
+
+One address, from a profile with two lamps on one word and no display fields,
+will log twice in a sortie. A profile with several display fields logs
+constantly. Both are working.
 
 ### Stopping
 

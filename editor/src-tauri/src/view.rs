@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use wctrl_config::{DeviceSpec, Led, Profile};
+use wctrl_config::{DeviceSpec, Led, Module, Profile, ValueLabel};
 
 #[derive(Serialize)]
 pub struct LedView {
@@ -164,6 +164,72 @@ impl ModuleChoice {
             })
             .collect();
         out.sort_by(|a, b| a.key.to_lowercase().cmp(&b.key.to_lowercase()));
+        Ok(out)
+    }
+}
+
+/// One bindable signal, as the typeahead and the hint box need it.
+///
+/// String outputs are dropped: a binding compares a number, so a signal whose
+/// value is text can never satisfy one, and offering it would be offering a
+/// choice that silently never lights the lamp.
+#[derive(Serialize)]
+pub struct SignalView {
+    pub id: String,
+    /// The human label. Every signal in every catalogued module has one, which
+    /// is why the typeahead can search on it rather than on identifiers.
+    pub description: String,
+    /// The cockpit panel. Not decoration: descriptions repeat heavily inside a
+    /// single module, 696 of CH-47F's 1,440 signals share one, and the category
+    /// is what separates the six identical `Call Button Light (Yellow)` rows.
+    pub category: String,
+    pub control_type: String,
+    /// True for cockpit lamps, which sort first because they are the likely
+    /// intent when mapping a panel lamp.
+    pub lamp: bool,
+    pub max_value: u32,
+    /// Description of the reading itself, such as "0 if light is off, 1 if
+    /// light is on". Shown in the hint box.
+    pub reads: String,
+    /// Present for signals with few enough values to label individually, such
+    /// as a three-position switch. The editor offers these instead of a number.
+    pub values: Vec<ValueLabel>,
+}
+
+impl SignalView {
+    /// Every readable numeric signal in one module, lamps first.
+    ///
+    /// Only the profile's own module is ever loaded. The catalogue is about
+    /// 11 MB across fifty files and nothing here needs the other forty-nine.
+    pub fn of_module(path: &Path) -> Result<Vec<SignalView>, String> {
+        let module = Module::load(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
+        let mut out: Vec<SignalView> = module
+            .signals
+            .iter()
+            .filter_map(|sig| {
+                let out = sig.primary()?;
+                if out.r#type == "string" || out.max_length.is_some() {
+                    return None;
+                }
+                Some(SignalView {
+                    id: sig.id.clone(),
+                    description: sig.description.clone(),
+                    category: sig.category.clone(),
+                    control_type: sig.control_type.clone(),
+                    lamp: sig.is_lamp(),
+                    max_value: out.max_value.unwrap_or(u16::MAX as u32),
+                    reads: out.description.clone(),
+                    values: if out.discrete { out.values.clone() } else { Vec::new() },
+                })
+            })
+            .collect();
+        // Lamps first, then everything else alphabetically by what the user
+        // reads rather than by identifier.
+        out.sort_by(|a, b| {
+            b.lamp
+                .cmp(&a.lamp)
+                .then_with(|| a.description.to_lowercase().cmp(&b.description.to_lowercase()))
+        });
         Ok(out)
     }
 }

@@ -11,7 +11,7 @@ mod paths;
 mod view;
 
 use paths::Paths;
-use view::{DeviceView, ModuleChoice, ProfileSummary};
+use view::{DeviceView, ModuleChoice, ProfileSummary, SignalView};
 use wctrl_config::{DeviceInventory, Profile};
 
 /// Commands return a message rather than an error type, because the only useful
@@ -95,11 +95,35 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
     Ok(out)
 }
 
+/// Every bindable signal in one module, for the typeahead and the hint box.
+#[tauri::command]
+fn signals(module: String) -> Reply<Vec<SignalView>> {
+    let paths = Paths::resolve();
+    SignalView::of_module(&paths.catalogue.join(format!("{module}.json")))
+}
+
 #[tauri::command]
 fn open_profile(file: String) -> Reply<Profile> {
     let paths = Paths::resolve();
     let path = paths.profiles.active.join(&file);
     Profile::load(&path).map_err(|e| fail(&format!("reading {file}"), e))
+}
+
+/// The shipped version of one profile, if it has one.
+///
+/// Loaded alongside the profile so a single lamp can be put back the way it
+/// shipped without discarding every other edit in the file. Profiles the user
+/// created themselves have no default, which is not an error: the answer is
+/// simply that there is nothing to revert to.
+#[tauri::command]
+fn default_profile(file: String) -> Reply<Option<Profile>> {
+    let paths = Paths::resolve();
+    if !paths.profiles.has_default(&file) {
+        return Ok(None);
+    }
+    Profile::load(&paths.profiles.defaults.join(&file))
+        .map(Some)
+        .map_err(|e| fail(&format!("reading the shipped {file}"), e))
 }
 
 /// Create a profile for one module, populated with every lamp and none assigned.
@@ -171,7 +195,9 @@ fn main() {
             devices,
             modules,
             profiles,
+            signals,
             open_profile,
+            default_profile,
             create_profile,
             save_profile,
             reset_profile

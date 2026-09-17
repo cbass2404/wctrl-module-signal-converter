@@ -173,7 +173,6 @@ details.device {
   border-radius: 8px;
   margin-bottom: 8px;
   background: var(--panel);
-  overflow: hidden;
 }
 
 details.device > summary {
@@ -193,10 +192,34 @@ details[open] > summary {
   border-bottom: 1px solid var(--line);
 }
 
+/* Fixed layout with explicit widths, so the columns line up from one device
+   section to the next. Each section is its own table, and automatic widths made
+   every one of them size to its own longest lamp name. */
 table.lamps {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   background: var(--bg);
+}
+
+table.lamps th:nth-child(1),
+table.lamps td:nth-child(1) {
+  width: 23%;
+}
+
+table.lamps th:nth-child(2),
+table.lamps td:nth-child(2) {
+  width: 14%;
+}
+
+table.lamps th:nth-child(4),
+table.lamps td:nth-child(4) {
+  width: 86px;
+}
+
+/* Long identifiers must wrap rather than widen the column past its share. */
+table.lamps td {
+  overflow-wrap: anywhere;
 }
 
 table.lamps th {
@@ -218,6 +241,16 @@ table.lamps td {
 
 table.lamps tr:last-child td {
   border-bottom: none;
+}
+
+/* The section used to clip its contents to get these corners. It cannot any
+   more, because the hint box overlays the row it belongs to. */
+table.lamps tr:last-child td:first-child {
+  border-bottom-left-radius: 7px;
+}
+
+table.lamps tr:last-child td:last-child {
+  border-bottom-right-radius: 7px;
 }
 
 .num {
@@ -259,4 +292,323 @@ table.lamps tr:last-child td {
 .condition .test {
   color: var(--muted);
   font-size: 12.5px;
+}
+
+/* ------------------------------------------------------------ binding editor */
+
+.binding {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.condition-edit {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+/* "and" between conditions, because that is what they mean. A stacked list
+   without it reads like a choice between them rather than all of them. */
+.and {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+
+.picker-field {
+  flex: 1;
+  min-width: 0;
+}
+
+input.signal {
+  width: 100%;
+  font: 12.5px/1.5 "Cascadia Mono", Consolas, monospace;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+input.signal:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+/* Results flow inline rather than floating, so nothing can clip them and no
+   stacking order has to be maintained. The row grows while searching. */
+.results {
+  display: none;
+  max-height: 230px;
+  overflow-y: auto;
+  margin-top: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.results.open {
+  display: block;
+}
+
+button.result {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  padding: 6px 9px;
+}
+
+button.result:last-child {
+  border-bottom: none;
+}
+
+button.result:hover,
+button.result:focus {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+button.result .desc {
+  display: block;
+}
+
+button.result .sub {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+button.result .id {
+  display: block;
+  font: 11.5px/1.5 "Cascadia Mono", Consolas, monospace;
+  color: var(--muted);
+}
+
+.detail {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin-top: 3px;
+}
+
+/* Opens on hover and on focus. Hover alone cannot be reached from a keyboard. */
+.info {
+  position: relative;
+  flex: none;
+  width: 15px;
+  height: 15px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 10.5px;
+  line-height: 13px;
+  text-align: center;
+  color: var(--muted);
+  cursor: help;
+}
+
+/* Fixed, and placed from script: see placeHint. An absolutely positioned box
+   was cut off against the right edge of the window, and CSS cannot ask how much
+   room is left beside the icon. */
+.hint {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 50;
+  width: max-content;
+  max-width: 300px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 22%);
+  font-size: 12.5px;
+  text-align: left;
+  line-height: 1.45;
+}
+
+.info:hover .hint,
+.info:focus .hint,
+.info:focus-within .hint {
+  display: block;
+}
+
+.hint .values {
+  margin-top: 5px;
+  display: flex;
+  flex-direction: column;
+  font: 12px/1.5 "Cascadia Mono", Consolas, monospace;
+}
+
+.test-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex: none;
+}
+
+select.test,
+input.value,
+select.value {
+  font: inherit;
+  font-size: 12.5px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+input.value {
+  width: 74px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+input.value.wide {
+  width: 110px;
+  text-align: left;
+}
+
+.values-row {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.values-row .sep {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* A condition reads as a sentence until the pencil opens it. */
+.condition-view {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+}
+
+.condition-view .desc {
+  display: block;
+}
+
+.condition-view .sub {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.condition-view .sub code {
+  font: 12px/1.5 "Cascadia Mono", Consolas, monospace;
+  color: var(--muted);
+}
+
+.condition-view .test {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+/* The pencil and the check hold the same slot, so a row does not shift as it
+   opens and closes. The delete button appears beside them only while open. */
+.row-actions {
+  display: flex;
+  gap: 5px;
+  flex: none;
+}
+
+button.icon {
+  flex: none;
+  width: 26px;
+  padding: 2px 0;
+  line-height: 1.3;
+  text-align: center;
+  color: var(--muted);
+}
+
+button.icon.pencil:hover,
+button.icon.done:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Undo, not delete. It puts the condition back the way it was when the pencil
+   was clicked, or removes it if it was added during this edit. */
+button.icon.cancel:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+/* Red, and only reachable once a row has deliberately been opened. */
+button.icon.trash {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
+}
+
+button.icon.trash:hover {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border-color: var(--danger);
+}
+
+button.add {
+  align-self: flex-start;
+  font-size: 12.5px;
+  padding: 3px 9px;
+}
+
+/* The Output column holds a number input for lamps that can dim. */
+td.num input.value {
+  width: 62px;
+}
+
+/* Shown only where a lamp differs from the shipped profile, so it is never a
+   no-op. Unlike the profile-level Reset, it touches one lamp. */
+button.add.revert {
+  color: var(--muted);
+}
+
+button.add.revert:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* The two ways to start an undecided lamp: read a signal, or just be on. */
+.choices {
+  display: flex;
+  gap: 7px;
+}
+
+.condition-view.always .desc {
+  color: var(--accent);
+}
+
+/* Alternatives. Each is indented under its own rule so the eye can see where
+   one ends and the next begins, which is the whole difficulty with OR. */
+.group.alt {
+  border-left: 2px solid var(--line);
+  padding-left: 10px;
+}
+
+.or {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.or::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
 }

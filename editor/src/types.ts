@@ -87,6 +87,17 @@ export interface Readout {
   align?: "left" | "right";
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
+  /**
+   * Only paint this field from one crew station.
+   *
+   * DCS-BIOS exports the whole cockpit whatever seat you are in, so a multicrew
+   * aircraft publishes both stations at once and a field cannot tell which
+   * reading is yours. Two fields may share cells when their seats differ.
+   *
+   * Only offered on a module that publishes `SEAT_POSITION`, which is 5 of the
+   * 50 catalogued.
+   */
+  seat?: number;
   note?: string;
 }
 
@@ -126,11 +137,21 @@ export interface Led {
 }
 
 /** A segment display, as far as the window needs to know about one. */
+/** One named area of the glass, offered in place of a raw cell run. */
+export interface RegionInfo {
+  name: string;
+  /** `"34"` or `"30-33"`, the same spelling a readout stores. */
+  cells: string;
+  /** What the aircraft this panel was built for puts here. May be empty. */
+  note: string;
+}
+
 export interface DisplayInfo {
   key: string;
   cells: number;
   /** Cell index to shape, so a run that cannot take letters can be flagged. */
   shapes: string[];
+  regions: RegionInfo[];
 }
 
 export interface Device {

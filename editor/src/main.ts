@@ -6,6 +6,7 @@
 
 import { displaySection } from "./readout";
 import {
+  cloneProfile,
   createProfile,
   defaultProfile,
   listDevices,
@@ -100,6 +101,11 @@ async function showLibrary(): Promise<void> {
       edit.addEventListener("click", () => void showProfile(row.file));
       actions.append(edit);
     }
+    if (!row.error) {
+      const copy = el("button", {}, "Copy to...");
+      copy.addEventListener("click", () => void showCloneProfile(row));
+      actions.append(copy);
+    }
     if (row.has_default) {
       const reset = el("button", { class: "danger" }, "Reset");
       reset.addEventListener("click", () => void resetOne(row));
@@ -126,6 +132,76 @@ async function resetOne(row: ProfileSummary): Promise<void> {
   } catch (e) {
     showError("Resetting the profile", e);
   }
+}
+
+/**
+ * Copy a profile to another aircraft.
+ *
+ * The case this exists for is a module that reuses another's DCS-BIOS
+ * definitions. The Super Hornet community mod reads the Hornet's, so the
+ * Hornet profile drives it unchanged and only the name and the aircraft list
+ * differ. Doing that by hand means copying a file and editing two fields.
+ *
+ * The module is carried over and not offered, because a copy whose signal ids
+ * resolve against a different catalogue is not a copy, it is a profile full of
+ * signals that do not exist.
+ */
+async function showCloneProfile(row: ProfileSummary): Promise<void> {
+  const name = el("input", { type: "text", value: `${row.name} copy` });
+  // Prefilled with what it came from, because the common case is one aircraft
+  // name away from the original and the exact spelling is easy to get wrong.
+  const aircraft = el("input", { type: "text", value: row.aircraft.join(", ") });
+
+  const dialog = el(
+    "dialog",
+    { class: "picker" },
+    el("h2", {}, `Copy ${row.name}`),
+    el(
+      "p",
+      { class: "meta" },
+      `Everything assigned in this profile is carried over, still reading ${row.module}. ` +
+        `Give the copy a name and say which aircraft DCS reports for it.`,
+    ),
+    el("label", { class: "field" }, "Name", name),
+    el(
+      "label",
+      { class: "field" },
+      "Aircraft",
+      aircraft,
+      el(
+        "span",
+        { class: "meta block" },
+        "As DCS reports it, not as it is written in the mission editor. " +
+          "Separate several with commas.",
+      ),
+    ),
+    el(
+      "div",
+      { class: "actions" },
+      el("button", { id: "cancel" }, "Cancel"),
+      el("button", { class: "primary", id: "make" }, "Copy"),
+    ),
+  );
+  app.append(dialog);
+  dialog.showModal();
+  name.select();
+
+  dialog.querySelector("#cancel")?.addEventListener("click", () => dialog.close());
+  dialog.querySelector("#make")?.addEventListener("click", () => {
+    const names = aircraft.value
+      .split(",")
+      .map((a) => a.trim())
+      .filter((a) => a !== "");
+    dialog.close();
+    void (async () => {
+      try {
+        const file = await cloneProfile(row.file, name.value, names);
+        await showProfile(file);
+      } catch (e) {
+        showError("Copying the profile", e);
+      }
+    })();
+  });
 }
 
 /**

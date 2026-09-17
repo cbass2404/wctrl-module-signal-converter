@@ -73,6 +73,17 @@ pub struct DisplayView {
     /// Cell index to shape, so the window can say why a run will not take
     /// letters before the user tries it.
     pub shapes: Vec<String>,
+    /// Named areas of the glass, in cell order. The window offers these instead
+    /// of asking for a cell run, because a cell run is not something anyone
+    /// deciding what to put on a panel can be expected to know.
+    pub regions: Vec<RegionView>,
+}
+
+#[derive(Serialize)]
+pub struct RegionView {
+    pub name: String,
+    pub cells: String,
+    pub note: String,
 }
 
 impl DeviceView {
@@ -95,6 +106,15 @@ impl DeviceView {
                 key: d.key.clone(),
                 cells: d.cells.len(),
                 shapes: d.cells.iter().map(|c| c.shape.clone()).collect(),
+                regions: d
+                    .regions
+                    .iter()
+                    .map(|r| RegionView {
+                        name: r.name.clone(),
+                        cells: r.cells.clone(),
+                        note: r.note.clone(),
+                    })
+                    .collect(),
             })
             .collect();
         self

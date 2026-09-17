@@ -162,6 +162,27 @@ dialog.picker select {
   border-radius: 6px;
 }
 
+/* A labelled text input in a dialog. Stacked rather than inline: the hint
+   under the aircraft box is a sentence, and a sentence beside a label wraps
+   into a mess. */
+dialog.picker label.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 12px 0;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+dialog.picker label.field input {
+  font: inherit;
+  padding: 5px 7px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
 dialog.picker .actions {
   justify-content: flex-end;
 }
@@ -731,15 +752,65 @@ table.readouts td {
   border-top: 1px solid var(--line);
 }
 
-/* Wide enough for "10-13" and no wider. The field beside it is the one doing
-   the work and deserves the room. */
-input.cells {
+/* The region menu carries the name, so it needs the room a raw cell run did
+   not. Still narrower than the field beside it, which is doing the real work. */
+select.cells {
+  width: 17em;
+  max-width: 100%;
+}
+
+/* Only on screen when the run is not a named region, so it sits under the menu
+   rather than beside it. Wide enough for "10-13" and no wider. */
+input.cells.run {
+  display: block;
   width: 5.5em;
+  margin-top: 6px;
   font-variant-numeric: tabular-nums;
+}
+
+input.cells.run[hidden] {
+  display: none;
 }
 
 input.cells.bad {
   border-color: var(--danger);
+}
+
+.aliases {
+  flex-basis: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.alias-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.alias-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Short, because a substitution is a character or two: "--" for "_". Showing
+   the spaces matters, so this is monospaced. */
+input.alias {
+  width: 7em;
+  font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+}
+
+select.seat {
+  min-width: 9em;
+}
+
+button.add.small {
+  font-size: 12.5px;
+  padding: 3px 9px;
 }
 
 .readout-extras {

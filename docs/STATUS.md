@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 41 passing
+cargo test --workspace            # expect 54 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -33,8 +33,8 @@ updates it is stamped with the version it came from.
    its window. The flap lamps looked dead and were not; see the `FLAG` dimmer in
    the verified facts.
 
-2. **Fly it.** Author one profile under `data/profiles`, then, with a mission
-   loaded:
+2. **Fly it.** Edit a profile in `data/profiles` (the active folder, seeded
+   from `data/defaults` on startup), then, with a mission loaded:
 
    ```powershell
    cargo run --bin wctrl -- run --dry-run    # prints writes, opens no device
@@ -75,23 +75,44 @@ npm run tauri dev
 
 **Working:** the profile library (list, create, reset), the module picker fed
 from the catalogue index, and one collapsible section per device, collapsed on
-open with an expand/collapse-all control. Lamp rows render every condition
-stacked, not just the first, because a lamp commonly needs more than one.
+open with an expand/collapse-all control whose label follows the sections.
 
-**Not built yet, in the order it should be done:**
+Bindings are fully editable. A condition reads as a sentence until its pencil is
+clicked, and an open condition carries keep, cancel and delete: cancel restores
+it as it was when editing began, and delete confirms first. All four binding
+forms are offered, each only where it can mean something:
 
-1. **Editing a binding.** Rows are read-only. This is the next piece and it is
-   the whole point of the app.
-2. **The signal typeahead**, specified in `CONFIG.md`. Three characters
-   minimum, matching description, category and identifier, two-line rows.
-3. **Add and remove conditions on a binding.** The A-10C half-flaps lamp needs
-   the lever at MVR *and* the gauge inside the half window; without this the
-   editor cannot express a profile the engine already runs.
-4. **The usage hint** behind an info icon, on hover and on focus.
-5. **Learn mode**, which needs the editor to read the DCS-BIOS stream.
+* **conditions**, through the signal typeahead, its test and its values
+* **any_of**, through "+ Add alternative (or)"
+* **always**, on a lamp nothing is assigned to
+* **same_as**, only on a dimmer with another dimmer to point at
 
-**Untested:** the window has never been opened. Both halves compile and the
-commands are thin wrappers over `wctrl-config`, but nothing has been clicked.
+`Reset this lamp` appears only where a lamp differs from the shipped profile.
+Save is explicit, and the unsaved marker compares against a snapshot rather than
+setting a flag, so undoing an edit clears it.
+
+Only the open profile's module is loaded, never the whole catalogue.
+
+**Not built yet:**
+
+1. **Learn mode.** The editor has to read the DCS-BIOS stream for this, which
+   it does not do at all yet. `CONFIG.md` calls it worth more than any amount
+   of search polish, and it is the reason the typeahead needs no browse mode.
+2. **Renaming a profile, and editing its aircraft list.** Both are fixed at
+   creation right now.
+3. **Validation before save.** `Profile::validate` exists and is not called from
+   the editor, so a binding it would reject still saves quietly. The four forms
+   are mutually exclusive and the editor keeps them that way by construction,
+   but a hand-edited file is only caught when the daemon loads it.
+
+**Confirmed in the window 2026-09-16:** profile list, create with the module
+picker, collapsible sections, and the signal search. Three faults found by using
+it and fixed: columns not aligning between sections, the hint box being cut off
+at the window edge, and dropdown rows losing clicks to a focus race.
+
+**Not yet exercised:** no profile edited in the window has been flown, and
+nothing in `data/defaults` uses `any_of`, `always` or `same_as`, so those three
+have passed their tests but have never driven a real lamp.
 
 ## Profiles ship from `data/defaults`
 
@@ -221,8 +242,9 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 ```text
 crates/wctrl-hid      frame building, part discovery, SET_LEDX   (5 tests)
 crates/wctrl-bios     export-stream decoder + address space      (5 tests)
-crates/wctrl-config   catalogue, device inventory, profiles      (7 tests)
-crates/wctrl-engine   aircraft detection, sweep, incremental writes (19 tests)
+crates/wctrl-config   catalogue, inventory, profiles, binding forms (19 tests)
+crates/wctrl-engine   aircraft detection, sweep, incremental writes (24 tests)
+editor/src-tauri      profile editor backend                     (1 test)
 data/defaults         shipped profiles, tracked in git
 data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace

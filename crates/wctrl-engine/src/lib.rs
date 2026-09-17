@@ -271,13 +271,14 @@ impl Engine {
 
         let mut index: HashMap<u16, Vec<usize>> = HashMap::new();
         for (bi, b) in profile.bindings.iter().enumerate() {
-            // A binding is re-evaluated when *any* of its conditions moves, so
-            // it is indexed under every address it reads. Placeholder rows have
-            // no conditions and so appear nowhere: they stay in the file for the
-            // editor, and are swept off like any unbound lamp.
-            for condition in &b.conditions {
+            // A binding is re-evaluated when *any* signal it reads moves, so it
+            // is indexed under every address it reads, wherever in the binding
+            // that signal is named. Rows that read nothing appear nowhere: a
+            // placeholder is swept off like any unbound lamp, and an always-on
+            // lamp is written by the sweep and never needs revisiting.
+            for source in profile.sources_of(b) {
                 if let Some(addr) = module
-                    .signal(&condition.source)
+                    .signal(source)
                     .and_then(|s| s.primary())
                     .map(|o| o.address)
                 {
@@ -353,7 +354,7 @@ impl Engine {
             };
             hit.iter()
                 .filter_map(|&bi| {
-                    resolve(&self.devices, module, &self.state, &profile.bindings[bi])
+                    resolve(&self.devices, module, &self.state, profile, &profile.bindings[bi])
                 })
                 .collect()
         };
@@ -377,7 +378,7 @@ impl Engine {
             return out;
         };
         for b in &profile.bindings {
-            if let Some((id, v)) = resolve(&self.devices, module, &self.state, b) {
+            if let Some((id, v)) = resolve(&self.devices, module, &self.state, profile, b) {
                 out.insert(id, v);
             }
         }
@@ -395,12 +396,15 @@ fn resolve(
     devices: &DeviceInventory,
     module: &Module,
     state: &BiosState,
+    profile: &Profile,
     b: &Binding,
 ) -> Option<(LedId, u8)> {
     let device = devices.device(&b.device)?;
     let (part, led) = device.led(&b.led)?;
 
-    let value = b.resolve(led, |source| {
+    // Through the profile rather than the binding alone, because a lamp may
+    // mirror another one and needs its sibling to resolve itself.
+    let value = profile.resolve_binding(b, led, |source| {
         let output = module.signal(source)?.primary()?;
         state
             .value(output.address, output.mask.unwrap_or(u16::MAX), output.shift)

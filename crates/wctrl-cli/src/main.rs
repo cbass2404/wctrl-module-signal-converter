@@ -4,7 +4,7 @@
 //! real DCS-BIOS stream before any of it is wrapped in Tauri.
 
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, UdpSocket};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -142,6 +142,13 @@ enum Command {
         /// Stop after this many seconds. Runs until Ctrl-C when omitted.
         #[arg(long)]
         seconds: Option<u64>,
+        /// Exit once the export stream has been quiet this long, having seen it
+        /// at least once. Meant for the DCS hook: DCS-BIOS re-exports several
+        /// times a second while a mission is loaded, so lasting silence means
+        /// the mission ended or DCS is gone, and the panels should not be left
+        /// lit either way.
+        #[arg(long, value_name = "SECONDS")]
+        exit_when_idle: Option<u64>,
     },
     /// Catalogue summary, or one module's signals.
     Catalogue {
@@ -285,6 +292,7 @@ fn main() -> Result<()> {
             dry_run,
             verbose,
             seconds,
+            exit_when_idle,
         } => run(
             &devices,
             &catalogue,
@@ -293,6 +301,7 @@ fn main() -> Result<()> {
             dry_run,
             verbose,
             seconds,
+            exit_when_idle,
         )?,
 
         Command::Catalogue {
@@ -739,6 +748,211 @@ impl Trace {
     }
 }
 
+/// Loopback address the daemon binds to prove it is the only one running.
+///
+/// Nothing is ever sent to it. It exists because binding is atomic and the
+/// operating system releases it when the process dies, crash included, so a
+/// second daemon can ask "is one already running" and get a truthful answer
+/// with no stale state to clean up.
+const INSTANCE_LOCK: &str = "127.0.0.1:16539";
+
+/// Claim the right to drive the panels, or report who already has it.
+///
+/// Two daemons on one set of panels mostly looks fine, because both write the
+/// same values from the same stream. It goes wrong at the end: one exits and
+/// clears the lamps while the other is still lighting them.
+///
+/// This is reachable in ordinary use. If DCS crashes and is restarted inside
+/// the idle window, the new DCS gets a fresh Lua state, so the hook's own
+/// "already started" flag is gone and it launches a second daemon while the
+/// first is still alive.
+///
+/// A lock file would survive a crash and then need its own liveness check,
+/// which is the problem this is meant to solve rather than a solution to it.
+fn take_instance_lock() -> std::io::Result<UdpSocket> {
+    UdpSocket::bind(INSTANCE_LOCK)
+}
+
+/// How often to re-ask whether DCS is still there, once the stream has gone
+/// quiet. Only reached while quiet, so it costs nothing during a flight.
+const DCS_RECHECK: Duration = Duration::from_secs(5);
+
+/// Whether DCS is running at all.
+///
+/// A quiet export stream is not the same as a dead DCS: sitting in the menu
+/// between missions is silent too, and exiting there would mean the panels only
+/// worked on the first mission of each session. This is the question that
+/// actually decides whether to leave.
+///
+/// Asked through `tasklist` rather than a Windows API crate: it is reached only
+/// while the stream is already quiet, so a process spawn every few seconds is
+/// cheaper than a dependency. `CREATE_NO_WINDOW` keeps it from flashing a
+/// console, which matters when the daemon was launched hidden by the DCS hook.
+#[cfg(windows)]
+fn dcs_is_running() -> bool {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+    match std::process::Command::new("tasklist")
+        .args(["/FI", "IMAGENAME eq DCS.exe", "/NH"])
+        .creation_flags(CREATE_NO_WINDOW)
+        .output()
+    {
+        Ok(out) => process_listed(&String::from_utf8_lossy(&out.stdout)),
+        // If the question cannot be answered, assume DCS is alive. Staying up
+        // wrongly costs an idle process; exiting wrongly leaves the user with
+        // dark panels and no explanation.
+        Err(_) => true,
+    }
+}
+
+#[cfg(not(windows))]
+fn dcs_is_running() -> bool {
+    true
+}
+
+/// Did `tasklist` list a matching process?
+///
+/// Split out so it can be tested without closing DCS. A filter that matches
+/// nothing does not produce empty output, it produces a sentence, and that
+/// sentence must not be mistaken for a match.
+fn process_listed(stdout: &str) -> bool {
+    stdout.to_ascii_lowercase().contains("dcs.exe")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::process_listed;
+
+    #[test]
+    fn tasklist_output_is_read_correctly() {
+        // Both captured from a real tasklist on this machine.
+        assert!(process_listed(
+            "DCS.exe                      19820 Console                    1    404,240 K"
+        ));
+        assert!(!process_listed(
+            "INFO: No tasks are running which match the specified criteria."
+        ));
+        // Nothing at all is not a match either, which is the case if the
+        // command somehow produced no output.
+        assert!(!process_listed(""));
+    }
+}
+
+/// How often the profile directory is checked for edits.
+const PROFILE_POLL: Duration = Duration::from_millis(500);
+
+/// The result of reading a profile directory.
+struct Loaded {
+    profiles: Vec<Profile>,
+    /// One line per profile accepted or skipped, for the caller to print. The
+    /// loader is called again on every reload, and a reload should not repeat
+    /// the whole startup listing unless something actually went wrong.
+    messages: Vec<String>,
+    skipped: usize,
+}
+
+/// Read every profile in a directory, keeping the ones that are usable.
+///
+/// One broken profile must not stop the others. A user with six aircraft
+/// configured should lose the one they mistyped, not the whole session.
+fn load_profiles(dir: &PathBuf, cat: &Catalogue, inventory: &DeviceInventory) -> Loaded {
+    let mut out = Loaded {
+        profiles: Vec::new(),
+        messages: Vec::new(),
+        skipped: 0,
+    };
+    if !dir.is_dir() {
+        return out;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    let mut paths: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .collect();
+    paths.sort();
+
+    for path in paths {
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+
+        let p = match Profile::load(&path) {
+            Ok(p) => p,
+            Err(e) => {
+                out.messages.push(format!("skipped  {name}: {e}"));
+                out.skipped += 1;
+                continue;
+            }
+        };
+        let Some(module) = cat.module(&p.module) else {
+            out.messages.push(format!(
+                "skipped  {name}: module {:?} has no catalogue entry. Either DCS-BIOS does not support it, or the catalogue needs rebuilding.",
+                p.module
+            ));
+            out.skipped += 1;
+            continue;
+        };
+        if let Err(e) = p.validate(module, inventory) {
+            out.messages.push(format!("skipped  {name}: {e}"));
+            out.skipped += 1;
+            continue;
+        }
+
+        let unset = p.bindings.iter().filter(|b| b.is_placeholder()).count();
+        out.messages.push(format!(
+            "profile  {:<22} {:>2} set, {:>2} unset  for {}",
+            p.name,
+            p.bindings.len() - unset,
+            unset,
+            p.aircraft.join(", ")
+        ));
+        out.profiles.push(p);
+    }
+    if out.skipped > 0 {
+        out.messages
+            .push(format!("{} profile(s) skipped; the rest still run.", out.skipped));
+    }
+    out
+}
+
+/// A cheap summary of a profile directory: name, size and modification time.
+///
+/// Polled rather than watched with a filesystem notification API, because the
+/// daemon already wakes every 100 ms for the socket and a directory of a dozen
+/// small files costs nothing to stat. It also avoids a dependency whose
+/// behaviour differs per platform, for a feature that is pure convenience.
+fn profiles_fingerprint(dir: &PathBuf) -> Vec<(String, u64, u64)> {
+    let mut out = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return out;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else { continue };
+        let stamp = meta
+            .modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or(0);
+        out.push((
+            path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+            meta.len(),
+            stamp,
+        ));
+    }
+    out.sort();
+    out
+}
+
 /// Run the converter.
 ///
 /// The loop is deliberately boring: decode, feed the engine, write whatever it
@@ -752,6 +966,7 @@ fn run(
     dry_run: bool,
     verbose: bool,
     seconds: Option<u64>,
+    exit_when_idle: Option<u64>,
 ) -> Result<()> {
     let inventory = DeviceInventory::load(devices_path)
         .with_context(|| format!("loading {}", devices_path.display()))?;
@@ -782,66 +997,17 @@ fn run(
         );
     }
 
-    let mut profiles = Vec::new();
-    let mut skipped = 0usize;
-    if profiles_dir.is_dir() {
-        let mut paths: Vec<PathBuf> = std::fs::read_dir(profiles_dir)?
-            .filter_map(|e| e.ok().map(|e| e.path()))
-            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
-            .collect();
-        paths.sort();
-
-        // One broken profile must not stop the others. A user with six aircraft
-        // configured should lose the one they mistyped, not the whole session.
-        for path in paths {
-            let name = path
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-
-            let p = match Profile::load(&path) {
-                Ok(p) => p,
-                Err(e) => {
-                    println!("skipped  {name}: {e}");
-                    skipped += 1;
-                    continue;
-                }
-            };
-            let Some(module) = cat.module(&p.module) else {
-                println!(
-                    "skipped  {name}: module {:?} has no catalogue entry. Either DCS-BIOS does not support it, or the catalogue needs rebuilding.",
-                    p.module
-                );
-                skipped += 1;
-                continue;
-            };
-            if let Err(e) = p.validate(module, &inventory) {
-                println!("skipped  {name}: {e}");
-                skipped += 1;
-                continue;
-            }
-
-            let unset = p.bindings.iter().filter(|b| b.is_placeholder()).count();
-            println!(
-                "profile  {:<22} {:>2} set, {:>2} unset  for {}",
-                p.name,
-                p.bindings.len() - unset,
-                unset,
-                p.aircraft.join(", ")
-            );
-            profiles.push(p);
-        }
+    let loaded = load_profiles(profiles_dir, &cat, &inventory);
+    for line in &loaded.messages {
+        println!("{line}");
     }
-    if skipped > 0 {
-        println!("{skipped} profile(s) skipped; the rest still run.");
-    }
-    if profiles.is_empty() {
+    if loaded.profiles.is_empty() {
         println!(
             "No usable profiles in {}. Every LED will be swept to zero on module load.",
             profiles_dir.display()
         );
     }
+    let profiles = loaded.profiles;
 
     // Only drive hardware that is actually plugged in. A shared profile may
     // name panels this user does not own, which is not an error.
@@ -877,6 +1043,25 @@ fn run(
     let mut engine = Engine::new(inventory, cat, profiles);
     engine.set_connected(connected);
 
+    // Held for the lifetime of the run. A dry run writes nothing, so it is
+    // allowed alongside a real daemon: the lock exists to stop two processes
+    // driving one panel, not to stop two processes existing.
+    let _lock = if dry_run {
+        None
+    } else {
+        match take_instance_lock() {
+            Ok(socket) => Some(socket),
+            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                println!(
+                    "Another wctrl daemon is already running and driving the panels.\n\
+                     Leaving it alone. Stop it first if you meant to replace it."
+                );
+                return Ok(());
+            }
+            Err(e) => return Err(e).context("claiming the single-instance lock"),
+        }
+    };
+
     let mut listener = Listener::bind(Ipv4Addr::UNSPECIFIED)
         .context("joining the DCS-BIOS multicast group on 239.255.50.10:5010")?;
     listener.set_read_timeout(Some(Duration::from_millis(100)))?;
@@ -900,6 +1085,21 @@ fn run(
     let mut writes: Vec<BiosWrite> = Vec::new();
     let mut last_aircraft: Option<String> = None;
 
+    // Silence only counts once the stream has been heard at least once, so
+    // starting before DCS does not exit immediately. `None` means nothing has
+    // arrived yet, which is a wait rather than a death.
+    let idle_limit = exit_when_idle.map(Duration::from_secs);
+    let mut last_traffic: Option<Instant> = None;
+    let mut next_dcs_check = Instant::now();
+    let mut cleared_for_idle = false;
+
+    // Profile hot reload. The directory is checked on a timer, and a change is
+    // acted on only once it has stopped changing, so a profile caught halfway
+    // through being written is not read.
+    let mut fingerprint = profiles_fingerprint(profiles_dir);
+    let mut settling: Option<Vec<(String, u64, u64)>> = None;
+    let mut next_check = Instant::now() + PROFILE_POLL;
+
     while running.load(Ordering::SeqCst) {
         if let Some(limit) = seconds {
             if started.elapsed() >= Duration::from_secs(limit) {
@@ -909,7 +1109,12 @@ fn run(
 
         writes.clear();
         match listener.recv(&mut writes) {
-            Ok(_) => {}
+            Ok(_) => {
+                if !writes.is_empty() {
+                    last_traffic = Some(Instant::now());
+                    cleared_for_idle = false;
+                }
+            }
             Err(e)
                 if e.kind() == std::io::ErrorKind::TimedOut
                     || e.kind() == std::io::ErrorKind::WouldBlock => {}
@@ -918,6 +1123,71 @@ fn run(
 
         let now = Instant::now();
         let elapsed = started.elapsed().as_millis();
+
+        // A quiet stream means the cockpit is gone, which is worth clearing the
+        // panels for either way: they latch, so the last frame of the last
+        // mission would otherwise stay lit. Whether to *exit* is a separate
+        // question, and only a dead DCS answers it yes. Sitting in the menu
+        // between missions is silent too, and exiting there would leave the
+        // panels working only on the first mission of each session.
+        if let (Some(limit), Some(seen)) = (idle_limit, last_traffic) {
+            if now.saturating_duration_since(seen) >= limit && now >= next_dcs_check {
+                next_dcs_check = now + DCS_RECHECK;
+
+                if !cleared_for_idle {
+                    cleared_for_idle = true;
+                    let batch = engine.mission_ended();
+                    apply(&batch, &handles, dry_run, verbose.then_some((&trace, elapsed)))?;
+                    last_aircraft = None;
+                    println!("stream quiet for {}s. Panels cleared.", limit.as_secs());
+                }
+
+                if !dcs_is_running() {
+                    println!("DCS is no longer running. Exiting.");
+                    break;
+                }
+            }
+        }
+
+        if now >= next_check {
+            next_check = now + PROFILE_POLL;
+            let current = profiles_fingerprint(profiles_dir);
+            if current != fingerprint {
+                // Seen changed once; act on it when it looks the same twice
+                // running. An editor saving a file and a hand edit both settle
+                // within one poll, and a half-written file does not.
+                if settling.as_ref() == Some(&current) {
+                    fingerprint = current;
+                    settling = None;
+
+                    let reloaded = load_profiles(profiles_dir, engine.catalogue(), engine.devices());
+                    println!(
+                        "reloaded {} profile(s) from {}",
+                        reloaded.profiles.len(),
+                        profiles_dir.display()
+                    );
+                    for line in &reloaded.messages {
+                        if line.starts_with("skipped") || reloaded.skipped > 0 {
+                            println!("{line}");
+                        }
+                    }
+                    let batch = engine.set_profiles(reloaded.profiles);
+                    apply(&batch, &handles, dry_run, verbose.then_some((&trace, elapsed)))?;
+                    if let Some(name) = engine.aircraft() {
+                        if let Some(p) = engine.active_profile() {
+                            let p = p.clone();
+                            trace.follow(&p, engine.catalogue());
+                            println!("aircraft {name}  ->  profile {}", p.name);
+                        }
+                    }
+                } else {
+                    settling = Some(current);
+                }
+            } else {
+                settling = None;
+            }
+        }
+
         let batch = if writes.is_empty() {
             engine.tick(now)
         } else {
@@ -997,6 +1267,7 @@ fn apply(
                     Cause::ModuleLoad => "sweep",
                     Cause::SignalChange => "write",
                     Cause::Shutdown => "clear",
+                    Cause::ProfileReload => "reload",
                 },
                 t.lamp(&w.id),
                 w.value

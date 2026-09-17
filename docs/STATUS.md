@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 54 passing
+cargo test --workspace            # expect 61 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -93,6 +93,18 @@ setting a flag, so undoing an edit clears it.
 
 Only the open profile's module is loaded, never the whole catalogue.
 
+Saving from the editor takes effect in the running daemon within about a second:
+the profile directory is polled, a settled change triggers a reload, and the
+engine re-sweeps. Editing a lamp mid-flight and seeing it change on the panel
+needs no restart of anything.
+
+The daemon can be started by a DCS hook (`tools/hook`). The hook only starts it;
+stopping is the daemon's own business, because a hook cannot run when DCS is
+killed or crashes and the panels latch. With `--exit-when-idle`, a quiet export
+stream clears the panels and a dead `DCS.exe` is what ends the process, so
+sitting in the menu between missions is survived rather than treated as a crash.
+Only one daemon runs at a time; a second backs off.
+
 **Not built yet:**
 
 1. **Learn mode.** The editor has to read the DCS-BIOS stream for this, which
@@ -110,9 +122,26 @@ picker, collapsible sections, and the signal search. Three faults found by using
 it and fixed: columns not aligning between sections, the hint box being cut off
 at the window edge, and dropdown rows losing clicks to a focus race.
 
-**Not yet exercised:** no profile edited in the window has been flown, and
-nothing in `data/defaults` uses `any_of`, `always` or `same_as`, so those three
-have passed their tests but have never driven a real lamp.
+**Verified on hardware 2026-09-17**, in a running mission with real panels:
+
+* **Lamps still follow signals** after `apply` began reporting whether a word
+  actually moved. This was the regression risk of that change: a wrong answer
+  would have left lamps lit by the module-load sweep and then frozen.
+* **Hot reload.** A profile saved in the editor reached the running daemon and
+  changed the panel without stopping anything.
+* **A quiet stream clears the panels**, and the daemon stays up through it while
+  DCS is still running.
+* **The same aircraft loaded twice** sweeps the second time. This is the one
+  that fails silently if the engine does not forget the cockpit on a quiet
+  stream, and a different aircraft would have passed either way.
+* **`any_of` in the AH-64D**, including the seat swap, which is the half that
+  cannot be proven any other way.
+
+The daemon exiting when `DCS.exe` disappears was proven from the command line
+rather than through the hook, which is not installed yet.
+
+**Still not exercised:** `always` and `same_as` are used by no profile, so they
+pass their tests but have never driven a real lamp.
 
 ## Profiles ship from `data/defaults`
 

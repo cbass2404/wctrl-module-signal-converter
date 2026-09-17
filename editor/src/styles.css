@@ -204,16 +204,13 @@ table.lamps {
 
 table.lamps th:nth-child(1),
 table.lamps td:nth-child(1) {
-  width: 23%;
+  width: 21%;
 }
 
-table.lamps th:nth-child(2),
-table.lamps td:nth-child(2) {
-  width: 14%;
-}
-
-table.lamps th:nth-child(4),
-table.lamps td:nth-child(4) {
+/* Everything left over goes to the conditions, which are the only column whose
+   contents grow: a signal name, a test, its values and a row of controls. */
+table.lamps th:nth-child(3),
+table.lamps td:nth-child(3) {
   width: 86px;
 }
 
@@ -389,15 +386,48 @@ button.result .id {
   color: var(--muted);
 }
 
-.detail {
+/* The details icon sits inside the search box, at its trailing edge, so it
+   costs no line and no width of its own. It is pinned to the edge of the box
+   rather than to the end of the text, so it stays in one place however long the
+   identifier is. */
+.signal-row {
+  position: relative;
+}
+
+.signal-row input.signal {
+  width: 100%;
+  padding-right: 27px;
+}
+
+/* Centred with flex rather than a transform: a transform on an ancestor would
+   make the fixed-position hint resolve against this element instead of the
+   viewport, and it would no longer be kept inside the window. */
+.icon-slot {
+  position: absolute;
+  right: 6px;
+  top: 0;
+  bottom: 0;
   display: flex;
-  gap: 6px;
-  align-items: baseline;
+  align-items: center;
+}
+
+/* Only ever holds the "not in this module" warning. */
+.detail {
   margin-top: 3px;
 }
 
-/* Opens on hover and on focus. Hover alone cannot be reached from a keyboard. */
+/* The identifier inside a hint: a key, not prose. */
+.hint-id {
+  font: 11.5px/1.5 "Cascadia Mono", Consolas, monospace;
+  color: var(--muted);
+}
+
+/* Opens on hover and on focus. Hover alone cannot be reached from a keyboard.
+   Inline-block because width and height do nothing on an inline element, and
+   this sits inline beside a lamp name as well as inside a flex row, where it
+   was a flex item and so happened to be sized correctly. */
 .info {
+  display: inline-block;
   position: relative;
   flex: none;
   width: 15px;
@@ -490,12 +520,22 @@ input.value.wide {
 /* A condition reads as a sentence until the pencil opens it. */
 .condition-view {
   display: flex;
-  gap: 7px;
+  gap: 0;
   align-items: flex-start;
 }
 
+/* A name with its details icon after it: a lamp, and a condition that is not
+   being edited. The icon trails the name everywhere, including inside the
+   search box when a condition is open, so the eye reaches the name first and
+   the icon reads as "there is more here if you want it". */
+.named {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .condition-view .desc {
-  display: block;
+  justify-content: flex-start;
 }
 
 .condition-view .sub {
@@ -521,6 +561,12 @@ input.value.wide {
   display: flex;
   gap: 5px;
   flex: none;
+  margin-left: 7px;
+}
+
+/* The pencil on a closed condition needs the same breathing room. */
+.condition-view > button.icon {
+  margin-left: 7px;
 }
 
 button.icon {
@@ -611,4 +657,10 @@ button.add.revert:hover {
   flex: 1;
   height: 1px;
   background: var(--line);
+}
+
+/* The lamp type, now under the name rather than in a column of its own. */
+.kind {
+  margin-top: 2px;
+  font-variant-numeric: tabular-nums;
 }

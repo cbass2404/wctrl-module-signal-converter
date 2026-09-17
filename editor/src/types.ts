@@ -79,6 +79,8 @@ export interface Led {
   on_value: number;
   dimmable: boolean;
   verified: boolean;
+  /** Anything worth knowing that the name does not say. Often empty. */
+  note: string;
   part_id: number;
   index: number;
 }

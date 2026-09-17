@@ -216,6 +216,12 @@ pub struct Led {
     pub on_value: Option<u8>,
     #[serde(default)]
     pub verified: bool,
+    /// Anything worth knowing about this lamp that its name does not say, such
+    /// as HOOK being physically dim rather than wrongly driven. Written while
+    /// mapping the hardware, and shown in the editor so the next person does
+    /// not have to rediscover it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
 }
 
 impl Led {
@@ -595,10 +601,20 @@ impl Profile {
         }
     }
 
+    /// Write the profile, replacing any existing file in one step.
+    ///
+    /// Written to a temporary file and renamed rather than written in place,
+    /// because the running daemon watches this directory and a plain write is
+    /// visible while it is still half finished. A reader would see truncated
+    /// JSON, and the profile would appear to vanish for as long as it took to
+    /// finish writing.
     pub fn save(&self, path: &Path) -> Result<()> {
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| Error::Json(e, path.display().to_string()))?;
-        std::fs::write(path, text)?;
+        let temp = path.with_extension("json.saving");
+        std::fs::write(&temp, text)?;
+        // Rename replaces an existing file on Windows as well as on Unix.
+        std::fs::rename(&temp, path)?;
         Ok(())
     }
 
@@ -807,6 +823,7 @@ mod tests {
             max: Some(max),
             on_value: None,
             verified: true,
+            note: String::new(),
         }
     }
 

@@ -112,21 +112,34 @@ frame per keystroke:
 02 05 bf 00 00 03 49 01 89    = 137
 ```
 
-### Persisted brightness, config offset 0x114
+### Persisted brightness
 
-SimAppPro saves the PTO2's two dimmers to device flash as one little-endian word
-at config offset `0x114` byte 0 is `Backlight`, byte 1 is `SL`:
+SimAppPro saves a panel's dimmers to device flash. The offset differs per part
+and the layout is one byte per dimmer, in index order:
+
+| Part     | Offset  | Byte 0               | Byte 1         |
+| -------- | ------- | -------------------- | -------------- |
+| `0xbf05` | `0x114` | `Backlight`          | `SL`           |
+| `0xbed0` | `0x0d8` | `INST_PNL_Backlight` | `LCDBacklight` |
+| `0xbe0e` | `0x0c8` | `INST_PNL_Backlight` |                |
 
 ```text
-WRITE_CFG_DATA  offset 0x114  <- 00 de 00 00     after SL = 222
-WRITE_CFG_DATA  offset 0x114  <- 6f de 00 00     after Backlight = 111
+WRITE_CFG_DATA  offset 0x114  <- 00 de 00 00     after PTO2 SL = 222
+WRITE_CFG_DATA  offset 0x114  <- 6f de 00 00     after PTO2 Backlight = 111
+WRITE_CFG_DATA  offset 0x0d8  <- 0f 7b ff ff     after UFC LCDBacklight = 123
+WRITE_CFG_DATA  offset 0x0d8  <- d3 7b ff ff     after UFC panel = 211
+WRITE_CFG_DATA  offset 0x0c8  <- fb ff ff ff     after HUD panel = 251
 ```
 
-**Never write this.** `WRITE_CFG_DATA` is persistent and is on the forbidden
+**Never write these.** `WRITE_CFG_DATA` is persistent and is on the forbidden
 list, so our brightness changes stay volatile which is correct: we should not
 wear flash or silently change a user's saved panel settings. `READ_CFG_DATA` at
-the same offset is a safe read, and is how the daemon can warn that a stored
-brightness of zero would leave correctly-bound lamps invisible.
+the same offsets is a safe read, and is how the daemon can warn that a stored
+brightness of zero would leave correctly-bound output invisible.
+
+The UFC sets that trap twice. A dark `INST_PNL_Backlight` hides the legends, and
+a dark `LCDBacklight` hides the entire segment display while every cell is being
+driven correctly.
 
 ### Value ranges differ per LED and are not yet settled
 
@@ -165,7 +178,8 @@ id. Observed on this machine:
 | `0xbe60`           | Orion Throttle Base II           |
 | `0xbf01`, `0xbf02` | F15EX handles L / R              |
 | `0xbef0`           | Orion Combat Rudder Pedals Metal |
-| `0xbe0e`, `0xbed0` | CarrierAce UFC / HUD             |
+| `0xbed0`           | CarrierAce UFC, the glass and its backlights |
+| `0xbe0e`           | CarrierAce HUD control panel     |
 | `0xbb32`           | MCDU Captain                     |
 
 A part id is not the USB product id: the Orion II enumerates under PID `0xbd64`
@@ -232,6 +246,129 @@ near 0 where SimAppPro had left it. A dimmer nothing writes is invisible state.
 | 1     | A/A       |
 | 2     | A/G       |
 
+### CarrierAce UFC part `0xbed0`, HUD part `0xbe0e`
+
+| Part     | Index | LED                  |
+| -------- | ----- | -------------------- |
+| `0xbed0` | 0     | INST_PNL_Backlight   |
+| `0xbed0` | 1     | LCDBacklight         |
+| `0xbe0e` | 1     | INST_PNL_Backlight   |
+
+All three are dimmers, seen taking values across the whole `0-255` span while
+the sliders moved. **There are no indicators on either panel.** Every light is
+a backlight or part of the segment display.
+
+`0xbe0e` really does start at index 1, with no index 0. That reads like a
+transcription slip and is not: nothing addressed index 0 in a capture, and the
+vendor table declares only the one entry.
+
+The UFC also carries a segment display, which is a different command entirely.
+
+## Driving a segment display
+
+`SET_LCDS` (`0x4c`) writes four bytes of a device-side bitmap. It is volatile,
+like `SET_LEDX`, and the payload is:
+
+```text
+02 | d0 be 00 00 | 06 | 4c <group> <b0> <b1> <b2> <b3> 00
+```
+
+`len` is 6. `group` selects which four bytes of the buffer to replace, so the
+byte offset is `group * 4`. The UFC's buffer is 96 bytes, giving groups `0x00`
+to `0x17`.
+
+**`SET_LCDS` is not acknowledged.** 24 frames written to the UFC drew 0
+replies, using the same read window that had just taken an immediate echo from
+a `SET_LEDX` write to the same device moments earlier. So the ack discipline
+that applies to LEDs, where a dropped write would otherwise persist unnoticed,
+has no equivalent here: a display write cannot be confirmed from the device.
+
+The mitigation is that a display is redrawn from a shadow buffer rather than
+from deltas, so a full repaint restores a display that has drifted, and a
+resync path that writes every group costs 24 frames.
+
+**The buffer is segments, not characters.** There is no text anywhere on the
+wire. A character position is a set of bit indices scattered across the buffer,
+and a glyph says which of that position's segments to light. The map for the
+UFC, 36 cells and 105 glyphs, is `data/displays/ufc1.json`.
+
+Two consequences that are not obvious:
+
+- A cell can straddle two groups, so a single character change can take two
+  frames, and the cell reads as a **different, wrong letter in between**. A
+  capture is full of these. They are not errors.
+- Writing a cell means read-modify-write of its group, because the other bits in
+  that group belong to neighbouring cells. A host shadow of the whole buffer is
+  not an optimisation here, it is required for correctness.
+
+SimAppPro diffs its own shadow and sends only groups whose bytes changed, which
+is the same write-on-change discipline the LEDs need and for the same reason.
+
+### Glyphs are looked up by the whole field value
+
+A field is not necessarily one character per cell. `UFC_COMM1_DISPLAY` is two
+characters wide in DCS-BIOS and occupies **one** cell, and the glyph table has an
+entry keyed by the two-character string. Those multi-character glyphs are not
+the union of their parts:
+
+```text
+'0'   lights slots 0,5,6,7,9,13
+' 0'  lights slots 1,2,3,4,9,13
+```
+
+and `` ` `` does not exist as a glyph at all, so `` `0 `` can only come from the
+table. Verified live: DCS-BIOS reported `UFC_COMM1_DISPLAY` as `' 2'` and the
+hardware was sent the `' 2'` glyph. Look up the whole value first; SimAppPro
+only falls back to OR-ing two glyphs when the pair is absent.
+
+### Where the UFC's cells come from, for the Hornet
+
+| Cells                             | Shape   | DCS-BIOS signal                  | Rule                |
+| --------------------------------- | ------- | -------------------------------- | ------------------- |
+| 0, 1                              | 16-seg  | `UFC_SCRATCHPAD_STRING_1/2_DISPLAY` | whole 2-char value |
+| 2 to 8                            | 7-seg   | `UFC_SCRATCHPAD_NUMBER_DISPLAY`  | **last 7 of 8**     |
+| 9, 14, 19, 24, 29                 | 1-seg   | `UFC_OPTION_CUEING_1..5`         | one char            |
+| 10-13, 15-18, 20-23, 25-28, 30-33 | 16-seg  | `UFC_OPTION_DISPLAY_1..5`        | one char per cell   |
+| 34, 35                            | 16-seg  | `UFC_COMM1/2_DISPLAY`            | whole 2-char value  |
+
+The scratchpad rule was confirmed from both ends. DCS-BIOS reports eight
+characters, the panel has seven cells, and keypresses enter at the right:
+`'    .  1'`, `'    . 12'`, `'    .123'`.
+
+This table is Hornet-specific and belongs in a profile, not in the firmware
+knowledge above it. The cell and glyph map is a property of the device; which
+signal feeds which cell is a property of the aircraft.
+
+### DCS-BIOS is not the same as DCS's own indication
+
+SimAppPro reads `list_indication(6)` directly. DCS-BIOS reads the same
+indication but does not always report the same characters:
+
+```text
+raw DCS     UFC_ScratchPadString2Display = '_'
+DCS-BIOS    UFC_SCRATCHPAD_STRING_2_DISPLAY = '--'
+```
+
+`'--'` is not in the glyph table, so a lookup falls through to the merge path
+and draws one dash where the hardware should show an underscore. Mapping a
+DCS-BIOS value onto a glyph key therefore needs an alias table, and since the
+wording is a property of the module, it belongs with the rest of the per-module
+mapping.
+
+### String fields arrive in pieces
+
+DCS-BIOS packs a string two bytes to a word, and the words of one field do not
+all land in the same write. Captured between two keypresses:
+
+```text
+'    . 12'      <- real
+'    .112'      <- never on screen, half of the update applied
+'    .123'      <- real
+```
+
+So a display must be repainted on a settled state, not per write. Batching by
+datagram is the natural place to do it.
+
 ## Capturing SimAppPro's own traffic
 
 1. Set `"HIDLog": true` in `%APPDATA%\SimAppPro\config.json` (read at startup only).
@@ -252,11 +389,21 @@ HidData:<device>,<COMMAND>,<send|accept>,channel:2,id: 05 bf 00 00,len:3,data: 4
 The setting survived a SimAppPro update on 2026-09-16, but that is not guaranteed;
 re-check it after any update.
 
-## LED state is latched no host watchdog
+## Panel state is latched no host watchdog
 
 Verified 2026-09-16: an LED set to 255 stayed lit indefinitely with SimAppPro
 closed, our process exited and no handle open, so nothing was sending
 `ONLINE_HEARTBEAT` at all.
+
+**The segment display latches the same way.** Verified 2026-09-17 on a
+CarrierAce UFC: a pattern written with `SET_LCDS` was still on the glass
+minutes later with the writing process exited and no handle open. Writing zeros
+to all 24 groups blanks it.
+
+So a display is not self-clearing state that lapses when we stop feeding it. It
+is exactly as sticky as a lamp, and needs the same treatment: blanked on
+mission end and on shutdown, or a user who quits mid-flight is left reading a
+stale frequency forever.
 
 The daemon therefore **writes only on change**. No keepalive traffic, no periodic
 re-assertion, nothing at idle. SimAppPro's 1-2s heartbeat is its own presence
@@ -284,10 +431,18 @@ not alias the source: DCS-BIOS exports at 30 Hz, comfortably above a 2-4 Hz lamp
 1. Are LEDs on parts behind a throttle base addressed via the base's part id or
    their own?
 2. What does `SET_LEDX_WITH_DURATION` (`0x4b`) take as arguments?
+3. The MCDU Captain (`0xbb36`) enumerates with 64-byte reports in both
+   directions, unlike every other panel here at 14. Its screen is presumably
+   not driven by `SET_LCDS` in this form.
 
 ## Tools
 
-- `tools/hid_probe.py` `list`, `listen` (read-only), `parts`, `led`, `blink`.
-  Frame assembly refuses any command in the forbidden set.
+- `tools/hid_probe.py` `list`, `listen` (read-only), `parts`, `led`, `blink`,
+  `lcd`. Frame assembly refuses any command in the forbidden set. `lcd` renders
+  text through a segment map and can blank a display.
 - `tools/parse_wwthid_log.py` decode `WWTHID.log` into frames.
 - `tools/decode_hid_capture.py` decode a USBPcap capture, if ever needed.
+- `tools/decode_ufc_lcd.py` replay captured `SET_LCDS` frames through the
+  segment map and read the glass back as text. Round-trips against synthetic
+  frames, so a garbled decode means the capture or the map is wrong rather than
+  the tool.

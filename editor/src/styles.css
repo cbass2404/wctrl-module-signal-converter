@@ -664,3 +664,101 @@ button.add.revert:hover {
   margin-top: 2px;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------- segment displays */
+
+/* A panel this profile leaves alone. Dimmed rather than hidden: the rows are
+   still there and still worth reading, they just do nothing tonight. */
+details.device.off > summary .name,
+details.device.off table {
+  opacity: 0.45;
+}
+
+.drive {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.drive input {
+  margin: 0;
+}
+
+.displays {
+  padding: 0 14px 14px;
+}
+
+.display {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-top: 12px;
+}
+
+.display-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.display-head .name {
+  font-weight: 600;
+}
+
+.display-head .add {
+  margin-left: auto;
+}
+
+table.readouts {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.readouts th {
+  text-align: left;
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 12.5px;
+  padding: 4px 8px 6px 0;
+}
+
+table.readouts td {
+  vertical-align: top;
+  padding: 6px 8px 6px 0;
+  border-top: 1px solid var(--line);
+}
+
+/* Wide enough for "10-13" and no wider. The field beside it is the one doing
+   the work and deserves the room. */
+input.cells {
+  width: 5.5em;
+  font-variant-numeric: tabular-nums;
+}
+
+input.cells.bad {
+  border-color: var(--danger);
+}
+
+.readout-extras {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin-top: 6px;
+}
+
+.readout-extras label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.readout-extras .block {
+  flex-basis: 100%;
+}
+
+input.small {
+  width: 5em;
+}

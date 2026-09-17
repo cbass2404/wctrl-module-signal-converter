@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use wctrl_bios::{BiosState, Listener, Write as BiosWrite};
-use wctrl_config::{Catalogue, DeviceInventory, Profile, Profiles};
+use wctrl_config::{Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles};
 use wctrl_engine::{Batch, Cause, Engine};
 use wctrl_hid::Device;
 
@@ -130,6 +130,10 @@ enum Command {
         /// that is not there yet. Never overwrites one the user already has.
         #[arg(long, default_value = "data/defaults")]
         defaults: PathBuf,
+        /// Segment display maps, for panels with glass. A missing directory is
+        /// not an error: most panels have none.
+        #[arg(long, default_value = "data/displays")]
+        displays: PathBuf,
         /// Print what would be written without opening any device. Lets the
         /// whole pipeline be checked against live DCS with no hardware present.
         #[arg(long)]
@@ -289,6 +293,7 @@ fn main() -> Result<()> {
             catalogue,
             profiles,
             defaults,
+            displays,
             dry_run,
             verbose,
             seconds,
@@ -298,6 +303,7 @@ fn main() -> Result<()> {
             &catalogue,
             &profiles,
             &defaults,
+            &displays,
             dry_run,
             verbose,
             seconds,
@@ -425,13 +431,23 @@ fn probe_brightness(
     Ok(())
 }
 
+/// How a watched signal is read out of the stream, and what it last read.
+///
+/// A string is not a wide number. DCS-BIOS packs it two bytes to a word across
+/// several addresses, so the whole run has to be reassembled before it can be
+/// compared with what was seen last, and it is read with `text` rather than
+/// `string` so the padding survives. On a display field the padding is the
+/// layout: the Hornet UFC scratchpad is right aligned in its window.
+enum Reading {
+    Number { mask: u16, shift: u8, last: Option<u16> },
+    Text { len: u16, last: Option<String> },
+}
+
 /// One signal being followed, and the last value seen for it.
 struct Watch {
     label: String,
     address: u16,
-    mask: u16,
-    shift: u8,
-    last: Option<u16>,
+    reading: Reading,
 }
 
 /// Parse `address:mask:shift` in hex. `None` for anything else, which is then
@@ -472,12 +488,12 @@ fn listen(
     let mut unresolved: Vec<String> = Vec::new();
     for spec in watch {
         match parse_watch_triple(spec) {
+            // A raw triple is always a number: naming a string signal by
+            // address would also have to say how long it is.
             Some((address, mask, shift)) => watches.push(Watch {
                 label: spec.clone(),
                 address,
-                mask,
-                shift,
-                last: None,
+                reading: Reading::Number { mask, shift, last: None },
             }),
             None => unresolved.push(spec.clone()),
         }
@@ -552,6 +568,27 @@ fn listen(
                 if let Some(m) = c.module(key) {
                     for id in &unresolved {
                         match m.signal(id).and_then(|sig| sig.primary()) {
+                            Some(o) if o.r#type == "string" => {
+                                // max_length is what DCS-BIOS sizes a string
+                                // by; without it there is no way to know where
+                                // the field ends, so say so rather than guess.
+                                match o.max_length {
+                                    Some(len) => {
+                                        println!(
+                                            "  watching {id} as {len} characters at {:#06x}",
+                                            o.address
+                                        );
+                                        watches.push(Watch {
+                                            label: id.clone(),
+                                            address: o.address,
+                                            reading: Reading::Text { len, last: None },
+                                        });
+                                    }
+                                    None => println!(
+                                        "  {id} is a string with no max_length; cannot read it"
+                                    ),
+                                }
+                            }
                             Some(o) => {
                                 println!(
                                     "  watching {id} at {:#06x} & {:#06x} >> {}",
@@ -562,9 +599,11 @@ fn listen(
                                 watches.push(Watch {
                                     label: id.clone(),
                                     address: o.address,
-                                    mask: o.mask.unwrap_or(u16::MAX),
-                                    shift: o.shift,
-                                    last: None,
+                                    reading: Reading::Number {
+                                        mask: o.mask.unwrap_or(u16::MAX),
+                                        shift: o.shift,
+                                        last: None,
+                                    },
                                 });
                             }
                             None => println!("  {id} is not a signal in module {key}"),
@@ -579,13 +618,32 @@ fn listen(
         // having to be inferred from the shape of the numbers.
         let elapsed = started.elapsed().as_millis();
         for w in &mut watches {
-            let now = state.value(w.address, w.mask, w.shift);
-            if now != w.last {
-                match now {
-                    Some(v) => println!("{elapsed:>7} ms  {:<16} = {v}", w.label),
-                    None => println!("{elapsed:>7} ms  {:<16} = (unset)", w.label),
+            let label = &w.label;
+            match &mut w.reading {
+                Reading::Number { mask, shift, last } => {
+                    let now = state.value(w.address, *mask, *shift);
+                    if now != *last {
+                        match now {
+                            Some(v) => println!("{elapsed:>7} ms  {label:<32} = {v}"),
+                            None => println!("{elapsed:>7} ms  {label:<32} = (unset)"),
+                        }
+                        *last = now;
+                    }
                 }
-                w.last = now;
+                Reading::Text { len, last } => {
+                    let now = state.text(w.address, *len);
+                    if now != *last {
+                        match &now {
+                            // Quoted, because on a display field the spaces are
+                            // the layout. Printing it bare would make a right
+                            // aligned scratchpad indistinguishable from a left
+                            // aligned one.
+                            Some(s) => println!("{elapsed:>7} ms  {label:<32} = {s:?}"),
+                            None => println!("{elapsed:>7} ms  {label:<32} = (unset)"),
+                        }
+                        *last = now;
+                    }
+                }
             }
         }
     }
@@ -856,7 +914,12 @@ struct Loaded {
 ///
 /// One broken profile must not stop the others. A user with six aircraft
 /// configured should lose the one they mistyped, not the whole session.
-fn load_profiles(dir: &PathBuf, cat: &Catalogue, inventory: &DeviceInventory) -> Loaded {
+fn load_profiles(
+    dir: &PathBuf,
+    cat: &Catalogue,
+    inventory: &DeviceInventory,
+    displays: &DisplayCatalogue,
+) -> Loaded {
     let mut out = Loaded {
         profiles: Vec::new(),
         messages: Vec::new(),
@@ -897,12 +960,15 @@ fn load_profiles(dir: &PathBuf, cat: &Catalogue, inventory: &DeviceInventory) ->
             out.skipped += 1;
             continue;
         };
-        if let Err(e) = p.validate(module, inventory) {
+        if let Err(e) = p.validate(module, inventory, displays) {
             out.messages.push(format!("skipped  {name}: {e}"));
             out.skipped += 1;
             continue;
         }
 
+        for note in p.inert() {
+            out.messages.push(format!("note     {name}: {note}"));
+        }
         let unset = p.bindings.iter().filter(|b| b.is_placeholder()).count();
         out.messages.push(format!(
             "profile  {:<22} {:>2} set, {:>2} unset  for {}",
@@ -963,6 +1029,7 @@ fn run(
     catalogue_dir: &PathBuf,
     profiles_dir: &PathBuf,
     defaults_dir: &PathBuf,
+    displays_dir: &PathBuf,
     dry_run: bool,
     verbose: bool,
     seconds: Option<u64>,
@@ -976,6 +1043,8 @@ fn run(
             catalogue_dir.display()
         )
     })?;
+    let displays = DisplayCatalogue::load_dir(displays_dir)
+        .with_context(|| format!("loading {}", displays_dir.display()))?;
 
     // Shipped profiles are copied in rather than read from a second folder, so
     // there is only ever one place profiles live and one place the user edits.
@@ -997,7 +1066,18 @@ fn run(
         );
     }
 
-    let loaded = load_profiles(profiles_dir, &cat, &inventory);
+    // Seeding only helps a profile the user does not have. This is the other
+    // half: a profile written before we supported a panel has no rows for it,
+    // and their file is the one that runs, so without this the lamps on that
+    // panel could never be configured at all.
+    for note in Profiles::new(defaults_dir, profiles_dir)
+        .merge_new(&inventory)
+        .with_context(|| format!("updating profiles in {}", profiles_dir.display()))?
+    {
+        println!("updated  {note}");
+    }
+
+    let loaded = load_profiles(profiles_dir, &cat, &inventory, &displays);
     for line in &loaded.messages {
         println!("{line}");
     }
@@ -1022,7 +1102,31 @@ fn run(
         if !present.contains(&spec.usb_pid) {
             continue;
         }
-        println!("device   {:<22} pid 0x{:04x}", spec.display_name, spec.usb_pid);
+        let glass: Vec<&str> = spec.displays().map(|(_, k)| k).collect();
+        println!(
+            "device   {:<22} pid 0x{:04x}{}",
+            spec.display_name,
+            spec.usb_pid,
+            if glass.is_empty() {
+                String::new()
+            } else {
+                // Say whether the map for that glass was actually found. A
+                // display declared with no map is silent otherwise: the panel
+                // simply never lights and nothing explains it.
+                format!(
+                    "  display {}",
+                    glass
+                        .iter()
+                        .map(|k| if displays.get(k).is_some() {
+                            (*k).to_string()
+                        } else {
+                            format!("{k} (NO MAP FOUND)")
+                        })
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            }
+        );
         connected.push(spec.key.clone());
         if !dry_run {
             let dev = Device::open(&api, spec.usb_pid)
@@ -1040,7 +1144,7 @@ fn run(
         ..Trace::default()
     };
 
-    let mut engine = Engine::new(inventory, cat, profiles);
+    let mut engine = Engine::new(inventory, cat, profiles).with_displays(displays.clone());
     engine.set_connected(connected);
 
     // Held for the lifetime of the run. A dry run writes nothing, so it is
@@ -1160,7 +1264,8 @@ fn run(
                     fingerprint = current;
                     settling = None;
 
-                    let reloaded = load_profiles(profiles_dir, engine.catalogue(), engine.devices());
+                    let reloaded =
+                        load_profiles(profiles_dir, engine.catalogue(), engine.devices(), &displays);
                     println!(
                         "reloaded {} profile(s) from {}",
                         reloaded.profiles.len(),
@@ -1286,6 +1391,45 @@ fn apply(
         if let Some(dev) = handles.get(&w.id.device) {
             dev.set_led(w.id.part_id, w.id.index, w.value)
                 .with_context(|| format!("writing {} index {}", w.id.device, w.id.index))?;
+        }
+    }
+
+    // Segment displays. A group is four bytes of a device-side bitmap, so it is
+    // not readable as text here; the engine has already decided what the glass
+    // should say and this only carries it.
+    for w in &batch.lcd {
+        let hex = || {
+            w.bytes
+                .iter()
+                .map(|b| format!("{b:02x}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        };
+        match trace {
+            Some((_, elapsed)) => println!(
+                "{elapsed:>8} ms  {:<7} {:<28} = {}",
+                match batch.cause {
+                    Cause::Shutdown => "blank",
+                    _ => "paint",
+                },
+                format!("{} group {}", w.device, w.group),
+                hex()
+            ),
+            None if dry_run => println!(
+                "  {:?}  {} display group {:<2} = {}",
+                batch.cause,
+                w.device,
+                w.group,
+                hex()
+            ),
+            None => {}
+        }
+        if dry_run {
+            continue;
+        }
+        if let Some(dev) = handles.get(&w.device) {
+            dev.set_lcd(w.part_id, w.group, &w.bytes)
+                .with_context(|| format!("writing {} display group {}", w.device, w.group))?;
         }
     }
     Ok(())

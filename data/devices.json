@@ -1,6 +1,6 @@
 {
   "_comment": "Device and LED inventory. Indices and names come from SimAppPro's www/js/DeviceConfig.js; part ids come from a broadcast ONLINE_HEARTBEAT. See docs/PROTOCOL.md.",
-  "_status": "PTO2 and Orion Throttle Base II both fully verified 2026-09-16. Indices 0/1/2 are dimmers taking 0-255. Indices 4-17 are indicators taking 0 or 1 only; a value of 255 is out of range and is silently ignored (it acks, and nothing lights).",
+  "_status": "PTO2 and Orion Throttle Base II both fully verified 2026-09-16. Indices 0/1/2 are dimmers taking 0-255. Indices 4-17 are indicators taking 0 or 1 only; a value of 255 is out of range and is silently ignored (it acks, and nothing lights). CarrierAce UFC + HUD verified 2026-09-17: three dimmers and a segment display, no indicators.",
   "_evidence": {
     "dimmer": "Indices 0, 1 and 2 observed taking 1, 2, 11, 13, 20, 22, 111, 137, 200, 222 and 255 from SimAppPro's sliders.",
     "indicator": "SimAppPro only ever sends 0 or 1 to indices 4..17. Confirmed on hardware: 1 lights, 0 clears, 255 does nothing.",
@@ -34,7 +34,7 @@
               "label": "Landing gear",
               "kind": "dimmer",
               "max": 255,
-              "verified": false
+              "verified": true
             },
             {
               "index": 2,
@@ -249,17 +249,96 @@
         "Unlike the PTO2, this device LIGHTS an indicator when sent 255 rather than ignoring the out-of-range value. Brightness is identical at 1, 30 and 255 because the value is binary here and Backlight sets the level. Write 1, which is what the vendor sends.",
         "SimAppPro does not clamp the Backlight field: entering 1255 transmitted 231 (0x4E7 truncated to its low byte 0xE7). That is a SimAppPro defect, not a device range."
       ]
+    },
+    {
+      "key": "CarrierAce_UFC",
+      "display_name": "CarrierAce UFC + HUD",
+      "product_name": "WINCTRL CarrierAce UFC + CarrierAce HUD",
+      "usb_pid": 48862,
+      "parts": [
+        {
+          "part_id": 48848,
+          "name": "UFC1",
+          "leds": [
+            {
+              "index": 0,
+              "name": "INST_PNL_Backlight",
+              "label": "Panel backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "note": "Lights the legends only. The glass has its own dimmer."
+            },
+            {
+              "index": 1,
+              "name": "LCDBacklight",
+              "label": "LCD backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "note": "Governs the segment display. At 0 the glass is dark even when the cells are being driven correctly."
+            }
+          ],
+          "display": "UFC1"
+        },
+        {
+          "part_id": 48654,
+          "name": "HUD1",
+          "leds": [
+            {
+              "index": 1,
+              "name": "HUD_INST_PNL_Backlight",
+              "label": "HUD panel backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "note": "Index 1 on part 0xbe0e, not 0. There is no index 0 on this part as far as SimAppPro is concerned, and it was never addressed in a capture. This looks like a transcription slip and is not. Renamed from the vendor's INST_PNL_Backlight because the UFC part carries a lamp of that name too, and a profile names a lamp by device and name."
+            }
+          ]
+        }
+      ],
+      "_notes": [
+        "Verified on hardware 2026-09-17 by capturing SimAppPro driving the panel in a live Hornet mission. All three indices were seen taking values across the 0-255 range (1, 12, 123, 211 on UFC1 index 0; 1, 12, 123, 178 on UFC1 index 1; 2, 25, 251 on HUD1 index 1), which is what makes them dimmers rather than indicators.",
+        "One USB interface at PID 0xbede, two parts, both answering a broadcast heartbeat. The UFC and the HUD control panel below it are one physical assembly but separate part ids.",
+        "NO DISCRETE INDICATORS. Every light on both panels is either a backlight or the segment display, so nothing here is a lamp in the sense the PTO2 uses the word.",
+        "UFC1 carries a 96-byte segment display driven by SET_LCDS rather than SET_LEDX. Its cell and glyph map is data/displays/ufc1.json.",
+        "SimAppPro drives LCDBacklight only from its own slider, never from DCS. INST_PNL_Backlight it drives from DCS only when the user has set that device to sync mode. Neither is a constraint on us; it just means a capture will not show them moving unless the sliders are.",
+        "THE DISPLAY LATCHES, verified on hardware 2026-09-17: a pattern written with SET_LCDS was still on the glass minutes later with the writing process exited and no handle open. It must be blanked on mission end and on shutdown exactly as the lamps are. Writing zeros to all 24 groups clears it.",
+        "SET_LCDS is not acknowledged. 24 frames drew 0 replies from the same read window that had just taken an immediate echo from a SET_LEDX write to this device, so a display write cannot be confirmed the way a lamp write can."
+      ]
     }
   ],
   "_persisted_brightness": {
-    "comment": "SimAppPro writes the two PTO2 dimmers to device flash at config offset 0x114 as a little-endian word: byte 0 = Backlight, byte 1 = SL. Observed as '00 de 00 00' after SL=222 and '6f de 00 00' after Backlight=111.",
-    "offset": 276,
-    "layout": [
-      "Backlight",
-      "SL",
-      null,
-      null
-    ],
-    "warning": "We must never write this. WRITE_CFG_DATA is persistent and is on the forbidden list. Reading it with READ_CFG_DATA is safe and is how the daemon can warn when a user's stored brightness would make bound lamps invisible."
+    "comment": "SimAppPro saves panel brightness to device flash. Each part has its own config offset, and the layout is one byte per dimmer in index order. Observed by watching WRITE_CFG_DATA while moving the sliders.",
+    "parts": {
+      "0xbf05": {
+        "offset": 276,
+        "layout": [
+          "Backlight",
+          "SL",
+          null,
+          null
+        ]
+      },
+      "0xbed0": {
+        "offset": 216,
+        "layout": [
+          "INST_PNL_Backlight",
+          "LCDBacklight",
+          null,
+          null
+        ]
+      },
+      "0xbe0e": {
+        "offset": 200,
+        "layout": [
+          "INST_PNL_Backlight",
+          null,
+          null,
+          null
+        ]
+      }
+    },
+    "warning": "We must never write these. WRITE_CFG_DATA is persistent and is on the forbidden list. Reading them with READ_CFG_DATA is safe and is how the daemon can warn when a user's stored brightness would make correctly driven output invisible. The UFC has two such traps, not one: a dark LCDBacklight hides the whole display."
   }
 }

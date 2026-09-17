@@ -373,7 +373,11 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       "div",
       { class: "condition-edit" },
       signalPicker({
-        signals,
+        // Text signals are hidden here. A condition compares a number, so one
+        // that reports characters could never satisfy it, and offering it would
+        // be offering a choice that silently never lights the lamp. They belong
+        // to display fields, which is where they are offered.
+        signals: signals.filter((s) => !s.text),
         value: condition.source,
         onPick: (id) => {
           const wasUnset = condition.source === "";

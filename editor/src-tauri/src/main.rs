@@ -39,7 +39,14 @@ fn inventory(paths: &Paths) -> Reply<DeviceInventory> {
 #[tauri::command]
 fn devices() -> Reply<Vec<DeviceView>> {
     let paths = Paths::resolve();
-    let mut out: Vec<DeviceView> = inventory(&paths)?.devices.iter().map(DeviceView::of).collect();
+    let inv = inventory(&paths)?;
+    let maps = wctrl_config::DisplayCatalogue::load_dir(&paths.displays)
+        .map_err(|e| format!("loading {}: {e}", paths.displays.display()))?;
+    let mut out: Vec<DeviceView> = inv
+        .devices
+        .iter()
+        .map(|d| DeviceView::of(d).with_displays(d, &maps))
+        .collect();
     out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
     Ok(out)
 }

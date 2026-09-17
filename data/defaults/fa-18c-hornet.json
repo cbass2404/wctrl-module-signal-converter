@@ -278,5 +278,104 @@
       ],
       "note": "A/G master mode selected (green)."
     }
+  ],
+  "readouts": [
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "0",
+      "source": "UFC_SCRATCHPAD_STRING_1_DISPLAY",
+      "note": "Two characters into one cell, looked up whole. The leading space selects the small-digit form, which is what the hardware was observed being sent."
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "1",
+      "source": "UFC_SCRATCHPAD_STRING_2_DISPLAY",
+      "aliases": {
+        "--": "_"
+      },
+      "note": "DCS-BIOS reports '--' where DCS's own indication says '_', and '--' is not a glyph. Without the alias this cell draws a single dash."
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "2-8",
+      "source": "UFC_SCRATCHPAD_NUMBER_DISPLAY",
+      "align": "right",
+      "note": "DCS-BIOS gives 8 characters for 7 cells. Right aligned, so the leading pad is what gets dropped and keypresses land at the right."
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "9",
+      "source": "UFC_OPTION_CUEING_1"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "10-13",
+      "source": "UFC_OPTION_DISPLAY_1"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "14",
+      "source": "UFC_OPTION_CUEING_2"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "15-18",
+      "source": "UFC_OPTION_DISPLAY_2"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "19",
+      "source": "UFC_OPTION_CUEING_3"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "20-23",
+      "source": "UFC_OPTION_DISPLAY_3"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "24",
+      "source": "UFC_OPTION_CUEING_4"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "25-28",
+      "source": "UFC_OPTION_DISPLAY_4"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "29",
+      "source": "UFC_OPTION_CUEING_5"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "30-33",
+      "source": "UFC_OPTION_DISPLAY_5"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "34",
+      "source": "UFC_COMM1_DISPLAY"
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "display": "UFC1",
+      "cells": "35",
+      "source": "UFC_COMM2_DISPLAY"
+    }
   ]
 }

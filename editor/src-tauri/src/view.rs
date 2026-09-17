@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use wctrl_config::{DeviceSpec, Led, Module, Profile, ValueLabel};
+use wctrl_config::{DeviceSpec, DisplayCatalogue, Led, Module, Profile, ValueLabel};
 
 #[derive(Serialize)]
 pub struct LedView {
@@ -55,6 +55,24 @@ pub struct DeviceView {
     pub display_name: String,
     pub product_name: String,
     pub leds: Vec<LedView>,
+    /// Segment displays this device carries, if any. Almost every panel has
+    /// none, so the window only grows a display section where there is glass.
+    pub displays: Vec<DisplayView>,
+}
+
+/// A segment display, described only as far as the window needs it.
+///
+/// The glyph tables are far too big to hand over and the editor has no use for
+/// them: it chooses which signal feeds which cells, and the daemon does the
+/// drawing. What it does need is how many cells there are, so a cell run can be
+/// checked before it is saved.
+#[derive(Serialize)]
+pub struct DisplayView {
+    pub key: String,
+    pub cells: usize,
+    /// Cell index to shape, so the window can say why a run will not take
+    /// letters before the user tries it.
+    pub shapes: Vec<String>,
 }
 
 impl DeviceView {
@@ -64,7 +82,22 @@ impl DeviceView {
             display_name: spec.display_name.clone(),
             product_name: spec.product_name.clone(),
             leds: spec.leds().map(|(part, led)| LedView::of(part.part_id, led)).collect(),
+            displays: Vec::new(),
         }
+    }
+
+    /// Fill in the display descriptions from the loaded maps.
+    pub fn with_displays(mut self, spec: &DeviceSpec, maps: &DisplayCatalogue) -> Self {
+        self.displays = spec
+            .displays()
+            .filter_map(|(_, key)| maps.get(key))
+            .map(|d| DisplayView {
+                key: d.key.clone(),
+                cells: d.cells.len(),
+                shapes: d.cells.iter().map(|c| c.shape.clone()).collect(),
+            })
+            .collect();
+        self
     }
 }
 
@@ -173,9 +206,10 @@ impl ModuleChoice {
 
 /// One bindable signal, as the typeahead and the hint box need it.
 ///
-/// String outputs are dropped: a binding compares a number, so a signal whose
-/// value is text can never satisfy one, and offering it would be offering a
-/// choice that silently never lights the lamp.
+/// String outputs are carried but flagged. A lamp binding compares a number, so
+/// a signal whose value is text can never satisfy one and the lamp picker hides
+/// it. A display field is the opposite case: text is exactly what it wants, and
+/// dropping these here would make the UFC's own signals unreachable.
 #[derive(Serialize)]
 pub struct SignalView {
     pub id: String,
@@ -191,6 +225,12 @@ pub struct SignalView {
     /// intent when mapping a panel lamp.
     pub lamp: bool,
     pub max_value: u32,
+    /// True when this signal reports characters rather than a number. Decides
+    /// which picker offers it, and whether a display field needs a gauge range.
+    pub text: bool,
+    /// Characters in the field, for a text signal. A field wider than the cells
+    /// it is given gets cropped, and the window can say so before it is saved.
+    pub length: u32,
     /// Description of the reading itself, such as "0 if light is off, 1 if
     /// light is on". Shown in the hint box.
     pub reads: String,
@@ -211,9 +251,7 @@ impl SignalView {
             .iter()
             .filter_map(|sig| {
                 let out = sig.primary()?;
-                if out.r#type == "string" || out.max_length.is_some() {
-                    return None;
-                }
+                let text = out.r#type == "string" || out.max_length.is_some();
                 Some(SignalView {
                     id: sig.id.clone(),
                     description: sig.description.clone(),
@@ -221,6 +259,8 @@ impl SignalView {
                     control_type: sig.control_type.clone(),
                     lamp: sig.is_lamp(),
                     max_value: out.max_value.unwrap_or(u16::MAX as u32),
+                    text,
+                    length: u32::from(out.max_length.unwrap_or(0)),
                     reads: out.description.clone(),
                     values: if out.discrete { out.values.clone() } else { Vec::new() },
                 })

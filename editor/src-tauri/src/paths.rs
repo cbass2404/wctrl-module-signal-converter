@@ -15,6 +15,8 @@ pub struct Paths {
     pub devices: PathBuf,
     /// Generated signal catalogue, built from the user's own DCS-BIOS.
     pub catalogue: PathBuf,
+    /// Cell and glyph maps for panels with glass. Usually absent.
+    pub displays: PathBuf,
     /// Shipped defaults and the active folder the user edits.
     pub profiles: Profiles,
 }
@@ -25,6 +27,7 @@ impl Paths {
         Paths {
             devices: root.join("devices.json"),
             catalogue: root.join("catalogue"),
+            displays: root.join("displays"),
             profiles: Profiles::new(root.join("defaults"), root.join("profiles")),
         }
     }

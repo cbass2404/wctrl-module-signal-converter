@@ -61,6 +61,35 @@ export interface Binding {
   note?: string;
 }
 
+/**
+ * One field of a segment display, and the signal that feeds it.
+ *
+ * A field has exactly one owner: nothing chooses between two sources for the
+ * same cells at runtime, because the cockpit has already decided what belongs
+ * there, or the user has.
+ */
+export interface Readout {
+  device: string;
+  display: string;
+  /** `"34"` for one cell, `"2-8"` for a run. */
+  cells: string;
+  source: string;
+  /**
+   * What the gauge reads in the cockpit at each end of its travel.
+   *
+   * Required for a number, meaningless for a signal that already reports
+   * characters. DCS-BIOS gives a needle as a position, not a quantity, and
+   * nothing says what the dial face is marked with, so this is the user's to
+   * supply. Handles faces that start below zero, and ones that run backwards.
+   */
+  reads?: [number, number];
+  decimals?: number;
+  align?: "left" | "right";
+  /** Values this module words differently from the glyph table. */
+  aliases?: Record<string, string>;
+  note?: string;
+}
+
 export interface Profile {
   schema_version: number;
   name: string;
@@ -69,6 +98,17 @@ export interface Profile {
   aircraft: string[];
   module: string;
   bindings: Binding[];
+  readouts?: Readout[];
+  /**
+   * Devices this aircraft should not drive at all.
+   *
+   * Not the same as binding nothing. An unbound device is still swept, so it
+   * goes dark, which is what you want for a panel you can see. A disabled one
+   * is never written to, which is what you want for a panel that is physically
+   * covered: a WinWing ICP and UFC share a swing arm, and whichever is in use
+   * hides the other.
+   */
+  disabled_devices?: string[];
 }
 
 export interface Led {
@@ -85,11 +125,20 @@ export interface Led {
   index: number;
 }
 
+/** A segment display, as far as the window needs to know about one. */
+export interface DisplayInfo {
+  key: string;
+  cells: number;
+  /** Cell index to shape, so a run that cannot take letters can be flagged. */
+  shapes: string[];
+}
+
 export interface Device {
   key: string;
   display_name: string;
   product_name: string;
   leds: Led[];
+  displays: DisplayInfo[];
 }
 
 export interface ProfileSummary {
@@ -116,6 +165,15 @@ export interface SignalView {
   control_type: string;
   lamp: boolean;
   max_value: number;
+  /**
+   * True when this signal reports characters rather than a number.
+   *
+   * A lamp binding compares numbers, so the lamp picker hides these. A display
+   * field is the opposite case and wants them, and needs no gauge range for one.
+   */
+  text: boolean;
+  /** Characters in the field, for a text signal. Zero otherwise. */
+  length: number;
   /** "0 if light is off, 1 if light is on", and the like. */
   reads: string;
   /** Non-empty for signals with few enough values to label individually. */

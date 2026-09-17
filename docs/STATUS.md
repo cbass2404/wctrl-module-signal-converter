@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 61 passing
+cargo test --workspace            # expect 94 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -142,6 +142,90 @@ rather than through the hook, which is not installed yet.
 
 **Still not exercised:** `always` and `same_as` are used by no profile, so they
 pass their tests but have never driven a real lamp.
+
+## The UFC, and the first device with a display
+
+Mapped 2026-09-17. The CarrierAce UFC and the HUD control panel below it are one
+USB interface, PID `0xbede`, answering as two parts: `0xbed0` for the UFC and
+`0xbe0e` for the HUD.
+
+**The lamps are trivial and are done.** Three dimmers, no indicators at all:
+`INST_PNL_Backlight` and `LCDBacklight` on the UFC, `INST_PNL_Backlight` on the
+HUD. All three verified on the wire taking the full 0-255 range. They need no
+new code; the existing `set_led` path drives them, and `UFC_BRT` and
+`INST_PNL_DIMMER` already exist in the Hornet catalogue to feed them.
+
+**The display is the new thing.** 96 bytes of segment bitmap, 36 character
+cells, written four bytes at a time with `SET_LCDS` (`0x4c`). There is no text
+on the wire. `data/displays/ufc1.json` holds the cell and glyph map, transcribed
+from SimAppPro's tables and then **confirmed against hardware**: replaying a
+captured mission through it rendered the Hornet A/P page (`ATTH HSEL BALT RALT
+CPL`) and COMM page (`GRCV SQCH CPHR AM MENU`) with 0 of 36 cells unmatched.
+`docs/PROTOCOL.md` has the frame layout and the four behaviours that are not
+obvious.
+
+**Built and wired, 2026-09-17.** Signal to glass works end to end and is
+checked against captured hardware traffic rather than against our own reasoning:
+`crates/wctrl-engine/tests/display_paint.rs` feeds the engine a Hornet COMM page
+as DCS-BIOS frames and asserts the bytes it paints are the ones SimAppPro sent
+the real device. All six compared groups match.
+
+* `wctrl-config::display` holds `Display`, `DisplayCatalogue`, `Screen`,
+  `CellRange` and `Readout`.
+* The engine repaints the whole screen on every batch and diffs whole groups.
+  Not an optimisation: a field spans several words, DCS-BIOS delivers them
+  across separate writes, and a part-arrived field is a state that was never in
+  the cockpit. Painting from scratch means the glass only shows settled text.
+* `mission_ended` and shutdown blank the glass, which the latch behaviour makes
+  mandatory.
+* `Device::set_lcd` sends `SET_LCDS`. It is never acknowledged, so a failed
+  write is corrected by the next repaint rather than retried.
+* The editor has a display section per device with glass, and a "drive this
+  panel" checkbox per device.
+* `data/defaults/fa-18c-hornet.json` ships all 15 UFC fields.
+
+**Two bugs this uncovered, both fixed:**
+
+1. **Lamp names were not unique within a device.** The vendor calls a lamp
+   `INST_PNL_Backlight` on both the UFC part and the HUD part, and a profile
+   addresses a lamp by device and name, so the second was unreachable with no
+   error anywhere. Renamed, and `every_lamp_name_is_unique_within_its_device`
+   now enforces it.
+2. **The editor stripped string signals from its own signal list**, because a
+   lamp condition compares numbers. Every display field therefore fell through
+   to the numeric branch and had a range written into it, which validation then
+   rejected, skipping the whole profile. Signals now carry a `text` flag; the
+   lamp picker hides them and the display picker offers them.
+
+**Profiles now self-update.** `Profiles::merge_new` runs at daemon startup and
+adds rows for hardware a profile predates, from the shipped default first and
+then as blank rows. It never touches an existing row, keeps rows for unplugged
+panels, leaves an unparseable file alone, and is idempotent. Bindings are sorted
+by device display name, then part in declared order, then hardware index.
+
+**Not built yet, and this is the actual work:**
+
+1. ~~**A host-side shadow of the buffer.**~~ Done. `wctrl-config::display`
+   has `Display`, `DisplayCatalogue` and `Screen`, checked against captured
+   hardware traffic by `crates/wctrl-config/tests/display_render.rs`: rendering
+   two real display states reproduces the exact 96 bytes the device was sent.
+   Still to do is naming a display from a device spec so a part can carry
+   one.
+2. **Fly it.** Everything above is proven against captured traffic and in
+   tests. No profile with readouts has yet driven the real glass in a live
+   mission, which is the one thing left to confirm.
+3. **A numeric source has never been flown.** The conversion is tested,
+   including faces that start below zero and run backwards, but no gauge has
+   been put on the glass. Whether 65535 is linear in the quantity or in needle
+   angle is still unmeasured, and matters for how honest the reading is.
+4. **The editor cannot yet edit aliases or notes** on a display field; both are
+   editable by hand in the JSON.
+
+**Design call, open to revision:** the cell map is a property of the device and
+lives in `data/displays`, but which signal feeds which cell is a property of the
+aircraft and belongs in the profile. SimAppPro hard-codes the Hornet mapping in
+a per-aircraft source file; putting it in the profile is what lets someone point
+the glass at another module without a code change.
 
 ## Profiles ship from `data/defaults`
 
@@ -299,6 +383,9 @@ Tauri renders through WebView2, which ships with Windows.
    runs both with "Sync with DCS" on. Detect and warn.
 6. **Perceptual response curve** for dimmers; linear PWM feels wrong at the
    bottom. Deferred.
+7. **The MCDU Captain** (`0xbb36`) enumerates with 64-byte reports both ways,
+   unlike every other panel here at 14, so its screen is presumably not driven
+   by `SET_LCDS` in this form. Unmapped.
 
 ## Next steps
 

@@ -36,6 +36,7 @@ pub const CMD_REQUEST_DEVICE_FW: u8 = 0x02;
 pub const CMD_REQUEST_DEVICE_SN: u8 = 0x03;
 pub const CMD_READ_CFG_DATA: u8 = 0x05;
 pub const CMD_SET_LEDX: u8 = 0x49;
+const CMD_SET_LCDS: u8 = 0x4c;
 pub const CMD_SET_LEDX_WITH_DURATION: u8 = 0x4B;
 
 /// Commands that alter persistent state, calibration, or firmware. This crate
@@ -156,6 +157,20 @@ impl Device {
     /// non-zero as on (see `data/devices.json` for per-LED ranges).
     pub fn set_led(&self, part_id: u32, index: u8, value: u8) -> Result<()> {
         self.send(part_id, &[CMD_SET_LEDX, index, value])
+    }
+
+    /// Write one group of a segment display's buffer.
+    ///
+    /// Unlike `set_led`, this is never acknowledged: 24 frames to a UFC drew no
+    /// replies at all, from the same read window that had just taken an echo
+    /// from an LED write. So a display write cannot be confirmed, and a failed
+    /// one is corrected by the next full repaint rather than by a retry.
+    pub fn set_lcd(&self, part_id: u32, group: u8, bytes: &[u8]) -> Result<()> {
+        let mut data = Vec::with_capacity(bytes.len() + 2);
+        data.push(CMD_SET_LCDS);
+        data.push(group);
+        data.extend_from_slice(bytes);
+        self.send(part_id, &data)
     }
 
     /// Collect vendor-channel replies until `window` elapses with nothing new.

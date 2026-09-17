@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use wctrl_bios::Write;
-use wctrl_config::{Catalogue, DeviceInventory, Module, Profile};
+use wctrl_config::{Catalogue, DeviceInventory, DisplayCatalogue, Module, Profile};
 use wctrl_engine::{Cause, Engine, LedId, ACFT_NAME_LEN};
 
 const PTO2: &str = "TAKEOFF_PLANEL_2";
@@ -411,7 +411,8 @@ fn a_stub_profile_covers_every_lamp_and_binds_none_of_them() {
     // or auto-generating one would produce a file the loader then rejects.
     let cat = catalogue();
     let module = cat.module("TEST").expect("fixture module");
-    stub.validate(module, &devs).expect("a stub must validate");
+    stub.validate(module, &devs, &DisplayCatalogue::default())
+        .expect("a stub must validate");
 }
 
 const LEVER_ADDR: u16 = 104;

@@ -22,6 +22,10 @@ use wctrl_config::{
     SEAT_SIGNAL,
 };
 
+pub mod learn;
+
+pub use learn::{Change, Watcher};
+
 /// `_ACFT_NAME` sits at the bottom of the address space and is 24 bytes wide.
 /// DCS-BIOS writes it on every aircraft change, which is how we notice one.
 pub const ACFT_NAME_ADDRESS: u16 = 0;

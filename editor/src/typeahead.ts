@@ -8,6 +8,7 @@
 // signals share a description with another signal in the same module, and
 // `Call Button Light (Yellow)` occurs six times, separated only by category.
 
+import { canLearn, learnPanel } from "./learn";
 import type { SignalView } from "./types";
 
 const MIN_CHARS = 3;
@@ -201,9 +202,9 @@ export interface PickerOptions {
 /**
  * A search box bound to one condition's source.
  *
- * The empty state is deliberate. Learn mode, which watches the cockpit while
- * the user flips a switch, is how someone finds a signal they cannot name, so
- * there is no browse-everything mode to fall back on here.
+ * The empty state is deliberate. The Learn button beside it watches the cockpit
+ * while the user flips a switch, which is how someone finds a signal they
+ * cannot name, so there is no browse-everything mode to fall back on here.
  */
 export function signalPicker(opts: PickerOptions): HTMLElement {
   const byId = new Map(opts.signals.map((s) => [s.id, s]));
@@ -221,9 +222,18 @@ export function signalPicker(opts: PickerOptions): HTMLElement {
   // costs no extra line. A binding can hold several conditions and the cell is
   // already the busiest thing on screen.
   const icon = el("span", { class: "icon-slot" });
-  const row = el("div", { class: "signal-row" }, input, icon);
+  // The box holds the input and its icon; the row holds the box and the Learn
+  // button beside it, so having both still costs one line.
+  const box = el("div", { class: "signal-box" }, input, icon);
+  const row = el("div", { class: "signal-row" }, box);
 
   const results = el("div", { class: "results" });
+
+  // Learn mode lives under the same box it fills in, because it is the other
+  // half of the same question. The button is only offered with a profile open,
+  // which is the only time there is a module to read signals against.
+  const learn = el("button", { class: "learn-open small", type: "button" }, "Learn");
+  let panel: { node: HTMLElement; close: () => void } | null = null;
 
   // Keep the input focused while a row is being clicked.
   //
@@ -238,6 +248,26 @@ export function signalPicker(opts: PickerOptions): HTMLElement {
   // think to hover to find that out.
   const problem = el("div", { class: "detail" });
   const wrap = el("div", { class: "picker-field" }, row, results, problem);
+  if (canLearn()) row.append(learn);
+
+  learn.addEventListener("click", () => {
+    if (panel) {
+      panel.close();
+      panel = null;
+      return;
+    }
+    close();
+    panel = learnPanel({
+      signals: opts.signals,
+      onPick: (id) => {
+        input.value = id;
+        showDetail(id);
+        opts.onPick(id);
+        panel = null;
+      },
+    });
+    wrap.insertBefore(panel.node, problem);
+  });
 
   function showDetail(id: string): void {
     icon.replaceChildren();

@@ -412,10 +412,20 @@ button.result .id {
    rather than to the end of the text, so it stays in one place however long the
    identifier is. */
 .signal-row {
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.signal-row input.signal {
+.signal-box {
+  position: relative;
+  flex: 1;
+  /* Without this the box refuses to shrink below the input's intrinsic width
+     and pushes the Learn button out of the column. */
+  min-width: 0;
+}
+
+.signal-box input.signal {
   width: 100%;
   padding-right: 27px;
 }
@@ -832,4 +842,52 @@ button.add.small {
 
 input.small {
   width: 5em;
+}
+
+/* Learn mode.
+
+   Under the box it fills in, because it answers the same question the box
+   does. It is only on while it is open: pressing Learn joins the multicast
+   group, closing the panel leaves it, and nothing reads the stream in
+   between. */
+.learn {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.learn-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.learn-head .meta {
+  flex: 1;
+}
+
+button.small {
+  font-size: 12.5px;
+  padding: 3px 9px;
+}
+
+.learn-status {
+  margin: 6px 0;
+}
+
+/* The one thing said in red: a stream that is not arriving, or an aircraft
+   that is not this profile's, both of which mean nothing will ever appear. */
+.learn-status.bad {
+  color: var(--danger);
+}
+
+.learn-rows {
+  max-height: 260px;
+}
+
+.learn-hidden {
+  padding: 6px 9px;
+  border-top: 1px solid var(--line);
 }

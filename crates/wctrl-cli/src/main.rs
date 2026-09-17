@@ -14,7 +14,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use wctrl_bios::{BiosState, Listener, Write as BiosWrite};
 use wctrl_config::{Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout};
-use wctrl_engine::{Batch, Cause, Engine};
+use wctrl_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
 #[derive(Parser)]
@@ -113,6 +113,26 @@ enum Command {
         watch: Vec<String>,
         /// Catalogue module for resolving watch names. Detected from the stream
         /// when omitted, which costs the first few samples.
+        #[arg(long)]
+        module: Option<String>,
+        #[arg(long, default_value = "data/catalogue")]
+        catalogue: PathBuf,
+    },
+    /// Name a signal by moving it in the cockpit.
+    ///
+    /// Reads every signal the loaded module publishes and reports what moved,
+    /// fewest movements first, so a switch thrown once comes out above the
+    /// gauges that never stop. This is learn mode without the editor window,
+    /// and it is the way to find a control whose identifier nobody knows.
+    Learn {
+        /// Length of each watch window. Every window ends with a table and
+        /// starts a fresh sheet, so several controls can be found in one run.
+        #[arg(long, default_value_t = 5)]
+        seconds: u64,
+        /// Rows per table. A busy cockpit moves more than anyone can read.
+        #[arg(long, default_value_t = 12)]
+        top: usize,
+        /// Catalogue module. Detected from the stream when omitted.
         #[arg(long)]
         module: Option<String>,
         #[arg(long, default_value = "data/catalogue")]
@@ -287,6 +307,13 @@ fn main() -> Result<()> {
             module,
             catalogue,
         } => listen(seconds, verbose, &watch, module.as_deref(), &catalogue)?,
+
+        Command::Learn {
+            seconds,
+            top,
+            module,
+            catalogue,
+        } => learn(seconds, top, module.as_deref(), &catalogue)?,
 
         Command::Run {
             devices,
@@ -658,6 +685,145 @@ fn listen(
              installed in Saved Games/DCS/Scripts, and that no firewall rule is blocking\n\
              multicast on this interface."
         );
+    }
+    Ok(())
+}
+
+/// Learn mode on the command line.
+///
+/// Windows rather than one long capture. A single table over a whole flight
+/// would list every signal in the module; a table per window is one answer per
+/// thing the user did, and re-arming keeps the map so the second control is
+/// found as fast as the first.
+fn learn(seconds: u64, top: usize, module: Option<&str>, catalogue_dir: &PathBuf) -> Result<()> {
+    let cat = Catalogue::load_dir(catalogue_dir).with_context(|| {
+        format!(
+            "loading {} (generated - build it with: python tools/build_catalogue.py)",
+            catalogue_dir.display()
+        )
+    })?;
+
+    let mut listener = Listener::bind(Ipv4Addr::UNSPECIFIED)
+        .context("joining the DCS-BIOS multicast group on 239.255.50.10:5010")?;
+    listener.set_read_timeout(Some(Duration::from_millis(250)))?;
+
+    let running = Arc::new(AtomicBool::new(true));
+    {
+        let flag = Arc::clone(&running);
+        ctrlc::set_handler(move || flag.store(false, Ordering::SeqCst))
+            .context("installing the Ctrl-C handler")?;
+    }
+
+    // The module has to be known before a watcher can exist, and until the
+    // stream names the aircraft there is nothing to look one up by. Reading the
+    // name costs about a second, which is the same wait the editor has.
+    let mut watcher: Option<Watcher> = None;
+    let mut names = BiosState::new();
+    let mut writes: Vec<BiosWrite> = Vec::new();
+    let mut announced = false;
+    let mut window_ends = Instant::now() + Duration::from_secs(seconds);
+
+    match module {
+        Some(key) => println!("Learning signals of {key}. Ctrl-C to stop."),
+        None => println!("Waiting for DCS to say what you are flying. Ctrl-C to stop."),
+    }
+
+    while running.load(Ordering::SeqCst) {
+        writes.clear();
+        match listener.recv(&mut writes) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
+            Err(e) if e.kind() == std::io::ErrorKind::TimedOut => continue,
+            Err(e) => return Err(e).context("receiving from the export stream"),
+        }
+        let now = Instant::now();
+
+        let watching = match &mut watcher {
+            Some(w) => w,
+            None => {
+                for write in &writes {
+                    names.apply(*write);
+                }
+                let key = match module {
+                    Some(key) => key.to_string(),
+                    None => {
+                        let Some(aircraft) = names.string(0, 24) else { continue };
+                        let aircraft = aircraft.trim().to_string();
+                        if aircraft.is_empty() {
+                            continue;
+                        }
+                        match cat.for_aircraft(&aircraft) {
+                            Some(m) => {
+                                println!("  flying {aircraft}, which is module {}", m.module);
+                                m.module.clone()
+                            }
+                            None => {
+                                println!("  flying {aircraft}, which is not in the catalogue");
+                                return Ok(());
+                            }
+                        }
+                    }
+                };
+                let Some(m) = cat.module(&key) else {
+                    anyhow::bail!("{key} is not in {}", catalogue_dir.display());
+                };
+                println!("  watching {} signals", m.signals.len());
+                window_ends = now + Duration::from_secs(seconds);
+                watcher.insert(Watcher::new(m, now))
+            }
+        };
+
+        watching.ingest(&writes, now);
+        if watching.ready() && !announced {
+            println!("  ready. Flip something in the cockpit.");
+            println!();
+            announced = true;
+        }
+        if now < window_ends {
+            continue;
+        }
+        window_ends = now + Duration::from_secs(seconds);
+        if !watching.ready() {
+            continue;
+        }
+
+        let changes = watching.changes();
+        watching.rearm(now);
+        if changes.is_empty() {
+            continue;
+        }
+
+        println!("{:>5}  {:<34} {}", "moves", "signal", "value");
+        for change in changes.iter().take(top) {
+            // Quoted for a string and bare for a number, for the reason the
+            // verbose log quotes them: on a display field the spaces are the
+            // layout, and " 1" and "1 " are different readings.
+            let show = |v: &str| {
+                if change.text {
+                    format!("{v:?}")
+                } else {
+                    v.to_string()
+                }
+            };
+            let from = change.from.as_deref().map(show).unwrap_or_default();
+            let description = cat
+                .module(watching.module())
+                .and_then(|m| m.signal(&change.id))
+                .map(|s| s.description.as_str())
+                .unwrap_or_default();
+            println!(
+                "{:>5}  {:<34} {} -> {}   {}",
+                change.moves,
+                change.id,
+                from,
+                show(&change.to),
+                description
+            );
+        }
+        if changes.len() > top {
+            println!("  and {} more, which moved less recently", changes.len() - top);
+        }
+        println!();
     }
     Ok(())
 }

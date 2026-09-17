@@ -4041,7 +4041,9 @@ dependencies = [
  "serde_json",
  "tauri",
  "tauri-build",
+ "wctrl-bios",
  "wctrl-config",
+ "wctrl-engine",
 ]
 
 [[package]]

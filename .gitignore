@@ -1,5 +1,7 @@
-# Rust build output. ~340 MB.
+# Rust build output. ~340 MB each.
+# target-alt is used to build while a daemon is holding target/debug/wctrl.exe.
 /target/
+/target-alt/
 
 # Generated signal catalogue - NOT committed on purpose.
 #
@@ -14,8 +16,9 @@
 # Rebuild with:  python tools/build_catalogue.py
 /data/catalogue/
 
-# User-authored profiles are personal config, not project source.
-/data/profiles/
+# Profiles in data/profiles ARE tracked. They are the worked examples that make
+# the tool usable out of the box, and they are the reference for the format.
+# A user's own profiles will live in their app data directory, not here.
 
 # Captures and logs from reverse-engineering sessions. Some contain device
 # serial numbers.

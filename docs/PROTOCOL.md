@@ -50,7 +50,7 @@ Wire values, i.e. `data[0]`.
 
 | Code          | Name                                                                                   | Notes                                            |
 | ------------- | -------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `0x00`        | ONLINE_HEARTBEAT                                                                       | SimAppPro polls this every 1–2s per device       |
+| `0x00`        | ONLINE_HEARTBEAT                                                                       | SimAppPro polls this every 1-2s per device       |
 | `0x01`        | REQUEST_DEVICE_HW                                                                      | read                                             |
 | `0x02`        | REQUEST_DEVICE_FW                                                                      | read                                             |
 | `0x03`        | REQUEST_DEVICE_SN                                                                      | read                                             |
@@ -59,7 +59,7 @@ Wire values, i.e. `data[0]`.
 | `0x06`        | **WRITE_CFG_DATA**                                                                     | **persistent**; `06 oo oo oo dd dd dd dd`, len 8 |
 | `0x07`        | LOOP_BACK                                                                              | diagnostic                                       |
 | `0x18`        | REQUEST_DEVICE_MODE                                                                    | read                                             |
-| `0x20`–`0x25` | **START_UPDATE / UPDATE_DATA / \_LEN / \_CRC / QUIT_UPDATA_MODE / READ_UPDATE_OFFSET** | **firmware**                                     |
+| `0x20`-`0x25` | **START_UPDATE / UPDATE_DATA / \_LEN / \_CRC / QUIT_UPDATA_MODE / READ_UPDATE_OFFSET** | **firmware**                                     |
 | `0x40`        | **ENTER_UPDATA_MODE**                                                                  | **bootloader**                                   |
 | `0x41`        | SET_HIDE_MODE                                                                          | volatile                                         |
 | `0x42`        | REQUEST_HIDE_MODE                                                                      | read                                             |
@@ -132,9 +132,9 @@ brightness of zero would leave correctly-bound lamps invisible.
 
 `Backlight` (0), `Landing_gear_lights` (1) and `SL` (2) are dimmers: SimAppPro
 drives them with sliders and they were observed taking values across the whole
-`0–255` span.
+`0-255` span.
 
-The fourteen indicators at indices 4–17 are **not** understood yet. What is known:
+The fourteen indicators at indices 4-17 are **not** understood yet. What is known:
 
 - SimAppPro only ever sends them `0` or `1`.
 - Writing `1` to index 17 lit it very faintly; writing `255` appeared to leave it
@@ -176,6 +176,10 @@ parts.
 
 From `www/js/DeviceConfig.js` inside `app.asar`. These are the `index` byte.
 
+**That table is not complete.** It omits index 3 entirely, and index 3 is a
+dimmer that governs half the PTO2's lamps. Treat the vendor's list as a starting
+point to verify against hardware, never as the inventory.
+
 ### PTO2 `TAKEOFF_PLANEL_2`, part `0xbf05`
 
 | Index | LED                 |
@@ -183,6 +187,7 @@ From `www/js/DeviceConfig.js` inside `app.asar`. These are the `index` byte.
 | 0     | Backlight           |
 | 1     | Landing_gear_lights |
 | 2     | SL                  |
+| 3     | FLAG                |
 | 4     | Master_Caution      |
 | 5     | JETT                |
 | 6     | CTR                 |
@@ -197,6 +202,27 @@ From `www/js/DeviceConfig.js` inside `app.asar`. These are the `index` byte.
 | 15    | LEFT                |
 | 16    | HALF                |
 | 17    | HOOK                |
+
+**Three independent brightness groups, measured 2026-09-16** by holding all 14
+indicators at 1 and moving one dimmer at a time:
+
+| Dimmer          | Governs                                          | Behaviour     |
+| --------------- | ------------------------------------------------ | ------------- |
+| `SL` (2)        | all indicators, 4 to 17                          | hard gate     |
+| `FLAG` (3)      | NOSE, LEFT, RIGHT, FLAPS, HALF, FULL, HOOK       | brightness    |
+| `Backlight` (0) | panel labels only, no indicator                  | brightness    |
+
+At `FLAG` 0 those seven lamps are invisible while CAUTION, JETT, CTR, LI, LO, RO
+and RI stay lit; raising `FLAG` brings all seven back with no rewrite of the
+lamps, the same latch-beneath-the-governor behaviour `SL` shows.
+
+Index 1 carries the vendor's name `Landing_gear_lights`, but setting it to 0 with
+every indicator lit changed nothing visible. What it drives is still
+unidentified, and it is marked unverified in `data/devices.json`.
+
+This cost a full debugging session. The engine resolved the A-10C flap lamps
+correctly, every write acked, and the lamps were invisible because `FLAG` sat
+near 0 where SimAppPro had left it. A dimmer nothing writes is invisible state.
 
 ### Orion Throttle Base II part `0xbe60`
 
@@ -233,7 +259,7 @@ closed, our process exited and no handle open, so nothing was sending
 `ONLINE_HEARTBEAT` at all.
 
 The daemon therefore **writes only on change**. No keepalive traffic, no periodic
-re-assertion, nothing at idle. SimAppPro's 1–2s heartbeat is its own presence
+re-assertion, nothing at idle. SimAppPro's 1-2s heartbeat is its own presence
 tracking, not a device requirement.
 
 Two consequences:
@@ -251,7 +277,7 @@ mirroring of the source signal reproduces the blink for free.
 
 A flash primitive in the rule engine is therefore an _override_ for behaviour DCS
 does not already express, not core vocabulary. It does mean the sample rate must
-not alias the source: DCS-BIOS exports at 30 Hz, comfortably above a 2–4 Hz lamp.
+not alias the source: DCS-BIOS exports at 30 Hz, comfortably above a 2-4 Hz lamp.
 
 ## Open questions
 

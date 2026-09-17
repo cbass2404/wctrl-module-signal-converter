@@ -18,6 +18,8 @@ use std::collections::HashMap;
 use std::io;
 use std::net::{Ipv4Addr, SocketAddrV4, UdpSocket};
 
+use socket2::{Domain, Protocol as SockProtocol, SockAddr, Socket, Type};
+
 /// Default multicast group and port from `BIOSConfig.lua`.
 pub const MULTICAST_GROUP: Ipv4Addr = Ipv4Addr::new(239, 255, 50, 10);
 pub const MULTICAST_PORT: u16 = 5010;
@@ -212,7 +214,21 @@ impl Listener {
     /// Join the DCS-BIOS multicast group on the given interface
     /// (`Ipv4Addr::UNSPECIFIED` for the default route).
     pub fn bind(interface: Ipv4Addr) -> io::Result<Self> {
-        let socket = UdpSocket::bind(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, MULTICAST_PORT))?;
+        // SO_REUSEADDR before bind, which `std::net::UdpSocket` cannot express
+        // because it binds on construction.
+        //
+        // Without it exactly one process on the machine can read the export
+        // stream, so `wctrl run` and `wctrl listen` cannot be used together and
+        // neither can coexist with any other DCS-BIOS client. Multicast is a
+        // broadcast medium and every listener gets its own copy, so sharing the
+        // port is the intended arrangement rather than a workaround.
+        let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(SockProtocol::UDP))?;
+        socket.set_reuse_address(true)?;
+        socket.bind(&SockAddr::from(SocketAddrV4::new(
+            Ipv4Addr::UNSPECIFIED,
+            MULTICAST_PORT,
+        )))?;
+        let socket: UdpSocket = socket.into();
         socket.join_multicast_v4(&MULTICAST_GROUP, &interface)?;
         Ok(Listener {
             socket,

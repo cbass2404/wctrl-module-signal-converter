@@ -139,6 +139,23 @@ impl Catalogue {
         Ok(cat)
     }
 
+    /// Build a catalogue from modules already in memory.
+    ///
+    /// The editor holds modules it has parsed or edited without writing them to
+    /// disk first, and tests need a fixture that does not depend on the
+    /// generated `data/catalogue` (which is machine-local and gitignored).
+    pub fn from_modules(modules: Vec<Module>) -> Self {
+        let mut cat = Catalogue::default();
+        for module in modules {
+            for aircraft in &module.aircraft {
+                cat.by_aircraft
+                    .insert(aircraft.clone(), module.module.clone());
+            }
+            cat.modules.insert(module.module.clone(), module);
+        }
+        cat
+    }
+
     /// Resolve the runtime aircraft name (`LoGetSelfData().Name`) to a module.
     pub fn for_aircraft(&self, aircraft: &str) -> Option<&Module> {
         self.by_aircraft
@@ -304,12 +321,76 @@ impl OnWhen {
 pub struct Binding {
     pub device: String,
     pub led: String,
-    pub source: String,
-    pub on_when: OnWhen,
+    /// Every condition must hold for the lamp to light.
+    ///
+    /// An empty list is a placeholder: the user has not configured this lamp
+    /// yet. That is a normal state, not an error. The editor lists every lamp on
+    /// the hardware whether or not it is configured, and a half-filled profile
+    /// has to load and run so it can be filled in one lamp at a time.
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
     /// Omitted means "fully on for this lamp", resolved from the LED itself.
     pub on: Option<u8>,
     #[serde(default)]
     pub off: u8,
+    /// Why this mapping, in the author's words. Profiles are meant to be
+    /// shared, and a bare signal id does not say whether a mapping is the
+    /// obvious counterpart or someone's deliberate reinterpretation of a spare
+    /// lamp. The editor shows it; nothing at runtime reads it.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+}
+
+/// One signal and the test applied to it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Condition {
+    pub source: String,
+    pub on_when: OnWhen,
+}
+
+impl Binding {
+    /// A row that names a lamp but drives nothing.
+    pub fn is_placeholder(&self) -> bool {
+        self.conditions.is_empty()
+    }
+
+    /// Resolve every condition against current signal values and combine them.
+    ///
+    /// `read` returns the raw value of a signal, or `None` if it has not been
+    /// seen yet. An unseen signal makes the whole binding unresolved rather than
+    /// false, so lamps hold their swept value instead of flickering while the
+    /// post-load flood arrives.
+    ///
+    /// Conditions are combined by taking the **dimmest** value any of them asks
+    /// for. That single rule gives boolean AND for on/off tests, since each
+    /// resolves to either `on` or zero, and it also lets a continuous source be
+    /// gated: a scaled backlight behind a power switch yields the scaled value
+    /// while the switch is on and zero while it is off.
+    pub fn resolve<F>(&self, led: &Led, mut read: F) -> Option<u8>
+    where
+        F: FnMut(&str) -> Option<u32>,
+    {
+        if self.conditions.is_empty() {
+            return None;
+        }
+        let on = self.on.unwrap_or_else(|| led.on_value());
+        let led_max = led.max_value();
+
+        let mut value = u8::MAX;
+        for condition in &self.conditions {
+            let raw = read(&condition.source)?;
+            // `off` is deliberately zero here rather than `self.off`: it is the
+            // combining identity for "this condition is not met". The binding's
+            // own `off` is applied once, at the end.
+            let resolved = condition.on_when.resolve(raw, on, 0, led_max);
+            value = value.min(resolved);
+            if value == 0 {
+                break;
+            }
+        }
+
+        Some(if value == 0 { self.off } else { value })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -338,6 +419,40 @@ impl Profile {
         read_json(path)
     }
 
+    /// A profile with one unassigned row per LED on every device given.
+    ///
+    /// This is what gets written when the user flies an aircraft nothing is
+    /// configured for. Every lamp appears, none of them drive anything, and the
+    /// user fills them in over time. Starting from a complete list of their
+    /// hardware beats starting from an empty file, because the question the
+    /// editor asks is "what should this lamp do", not "which lamps exist".
+    pub fn stub(name: &str, aircraft: &str, module: &str, devices: &DeviceInventory) -> Self {
+        let bindings = devices
+            .devices
+            .iter()
+            .flat_map(|d| {
+                d.leds().map(|(_, led)| Binding {
+                    device: d.key.clone(),
+                    led: led.name.clone(),
+                    conditions: Vec::new(),
+                    on: None,
+                    off: 0,
+                    note: String::new(),
+                })
+            })
+            .collect();
+
+        Profile {
+            schema_version: default_schema(),
+            name: name.to_string(),
+            author: String::new(),
+            profile_version: "0.1.0".to_string(),
+            aircraft: vec![aircraft.to_string()],
+            module: module.to_string(),
+            bindings,
+        }
+    }
+
     pub fn save(&self, path: &Path) -> Result<()> {
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| Error::Json(e, path.display().to_string()))?;
@@ -352,8 +467,12 @@ impl Profile {
     /// should fail loudly once instead of silently never lighting a lamp.
     pub fn validate(&self, module: &Module, devices: &DeviceInventory) -> Result<()> {
         for b in &self.bindings {
-            if module.signal(&b.source).is_none() {
-                return Err(Error::UnknownSignal(b.source.clone()));
+            // The lamp must exist even on a placeholder row: it names real
+            // hardware. Only the conditions are allowed to be undecided.
+            for condition in &b.conditions {
+                if module.signal(&condition.source).is_none() {
+                    return Err(Error::UnknownSignal(condition.source.clone()));
+                }
             }
             let device = devices
                 .device(&b.device)

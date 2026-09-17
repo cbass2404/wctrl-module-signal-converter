@@ -7,7 +7,7 @@
     "hook_dimness": "Index 17 (HOOK) is a physically dim lamp - visibly weaker than its neighbours even at full brightness. It is not a protocol difference."
   },
   "_open_questions": [
-    "The two devices differ here and it matters: on the PTO2, SL (index 2) at 0 COMPLETELY extinguishes indices 4-17 - it is a master gate. On the Orion II, Backlight (index 0) at 0 leaves A/A and A/G lit but very dim - it dims without gating. Reported by Cory from direct use of both panels; not yet isolated in a controlled test."
+    "None open. The last one - how the governing dimmers behave - was isolated on hardware 2026-09-16; see the SL and Backlight notes on each device."
   ],
   "devices": [
     {
@@ -34,12 +34,20 @@
               "label": "Landing gear",
               "kind": "dimmer",
               "max": 255,
-              "verified": true
+              "verified": false
             },
             {
               "index": 2,
               "name": "SL",
               "label": "SL",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true
+            },
+            {
+              "index": 3,
+              "name": "FLAG",
+              "label": "Flag lamp brightness",
               "kind": "dimmer",
               "max": 255,
               "verified": true
@@ -175,10 +183,13 @@
         }
       ],
       "_notes": [
-        "Index 3 is absent from the vendor's own table. Not an omission here.",
+        "Index 3 is the FLAG dimmer, exposed in SimAppPro as the 'flag' slider. It was missing from the vendor table we transcribed, which cost a debugging session: the engine drove the flap lamps correctly and they were invisible because FLAG was parked near 0.",
+        "THREE INDEPENDENT BRIGHTNESS GROUPS, not one. Measured 2026-09-16 with every indicator held at 1: SL (2) gates all of 4-17 hard. FLAG (3) governs NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK beneath it; at FLAG=0 those seven are invisible while CAUTION, JETT, CTR, LI, LO, RO and RI stay lit. Backlight (0) drives the panel labels and governs neither indicator group.",
+        "Index 1 carries the vendor's name Landing_gear_lights, but setting it to 0 with all 14 indicators lit changed nothing visible. What it drives is unidentified, so the name is not evidence.",
         "Indicators take 0 or 1. Writing 255 acks and does nothing - it is out of range, not truthy.",
         "The 14 indicators match SimAppPro's UI list read top to bottom, which is how the index order was corroborated.",
-        "SL (index 2) is a MASTER GATE for indices 4-17: with SL at 0 no indicator lights at all, whatever value it is sent. This is stronger than the Orion II, where Backlight only dims. ENGINE CONSEQUENCE: a profile that binds any PTO2 indicator but leaves SL unbound must not have SL written to 0 by the module-load sweep, or every bound lamp is dead and acks normally while dark."
+        "SL (index 2) is a MASTER GATE for indices 4-17: with SL at 0 no indicator lights at all, whatever value it is sent. Isolated 2026-09-16: SL=0 then CAUTION=1 acked and stayed dark. Stronger than the Orion II, where Backlight only dims.",
+        "Indicator values LATCH INDEPENDENTLY of SL. Raising SL from 0 to 255 without rewriting the indicator brought CAUTION up at full brightness on its own. So SL is applied downstream of the latched per-LED value, and a change to SL never requires the engine to re-sweep the indicators - the hardware re-applies them."
       ]
     },
     {

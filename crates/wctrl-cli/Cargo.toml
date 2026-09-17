@@ -14,6 +14,8 @@ path = "src/main.rs"
 wctrl-hid = { path = "../wctrl-hid" }
 wctrl-bios = { path = "../wctrl-bios" }
 wctrl-config = { path = "../wctrl-config" }
+wctrl-engine = { path = "../wctrl-engine" }
 anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
 hidapi = { version = "2.6", default-features = false, features = ["windows-native"] }

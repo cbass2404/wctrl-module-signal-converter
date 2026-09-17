@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 17 passing
+cargo test --workspace            # expect 41 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -23,34 +23,27 @@ updates it is stamped with the version it came from.
 
 **Then, in order:**
 
-1. **Build the engine crate** (`crates/wctrl-engine`). No hardware or DCS needed,
-   and it is the last piece before a UI has anything to drive.
-   - Detect aircraft change from `_ACFT_NAME`: address `0`, 24-byte string,
-     decoded by `BiosState::string`.
-   - On change, wait for DCS-BIOS's post-load flood to settle, then do **one
-     sweep**: write every LED on every connected device, using `0` for any the
-     profile does not bind. Not a reset followed by a sync one pass. Reasoning
-     is in `CONFIG.md`.
-   - After the sweep, write individual LEDs only as their source values change.
-   - **A governing dimmer must never be swept to 0 while a lamp it gates is
-     bound.** On the PTO2 that would silently kill every bound indicator, with
-     normal acks and dark lamps the exact failure that cost hours already. Give
-     each device an optional `governs` relation in `devices.json`, and when a
-     governed LED is bound but its governor is not, sweep the governor to a
-     sensible default instead of 0.
-   - Clear every owned LED on shutdown and on mission end. LED state latches in
-     the device, so a crash otherwise leaves the panel frozen mid-flight.
+1. ~~Build the engine crate.~~ **Done 2026-09-16.** `crates/wctrl-engine` holds
+   all the policy and does no I/O, so the whole module-load sequence is tested
+   without hardware or DCS. `wctrl run` is the daemon around it.
 
-2. **Prove the live stream.** The decoder passes synthetic tests but has never
-   seen DCS. With a mission loaded:
+   **Proven end to end 2026-09-16.** `wctrl run --verbose` drove the PTO2 from a
+   live A-10C mission: gear lamps, Master Caution, backlight tracking the console
+   dimmer, and the two-condition HALF lamp lighting only at MVR with the gauge in
+   its window. The flap lamps looked dead and were not; see the `FLAG` dimmer in
+   the verified facts.
+
+2. **Fly it.** Author one profile under `data/profiles`, then, with a mission
+   loaded:
 
    ```powershell
-   cargo run --bin wctrl -- listen --seconds 20
-   cargo run --bin wctrl -- listen --seconds 30 --watch 2af8:1000:12   # F-4E hook lamp
+   cargo run --bin wctrl -- run --dry-run    # prints writes, opens no device
+   cargo run --bin wctrl -- run              # drives the panels
    ```
 
-   Empty output means multicast is blocked on the interface or DCS-BIOS is not
-   exporting; the command says so itself.
+   `--dry-run` is the safe first pass: it proves aircraft detection, profile
+   selection and the sweep without touching hardware. Ctrl-C clears whatever
+   was lit, which matters because the panels latch.
 
 3. ~~Measure the Orion II.~~ **Done 2026-09-16.** Index 0 is a dimmer; indices
    1 and 2 (A/A, A/G) are binary. Backlight dims them but does not gate them.
@@ -113,9 +106,55 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 - 14-byte HID vendor frame, part-addressed, every command acked.
 - `SET_LEDX` is `0x49`. LED state latches **no host watchdog**, so the daemon
   writes only on change and must clear LEDs on exit.
-- PTO2 indices 0/1/2 are dimmers (0–255); 4–17 are indicators (**0 or 1 only**
-  writing 255 acks and lights nothing).
+- PTO2 indices 0/1/2/**3** are dimmers (0-255); 4-17 are indicators (**0 or 1
+  only** writing 255 acks and lights nothing).
+- **The PTO2 has three brightness groups, not one, and the vendor's table is
+  missing one of them.** `SL` (2) hard-gates every indicator. `FLAG` (3),
+  absent from `DeviceConfig.js` entirely, governs NOSE, LEFT, RIGHT, FLAPS,
+  HALF, FULL and HOOK. `Backlight` (0) governs neither. Measured 2026-09-16
+  after the A-10C flap lamps appeared dead: the engine was right, the writes
+  acked, and `FLAG` sat near 0 where SimAppPro had left it. **A dimmer nothing
+  writes is invisible state**, so the sweep must own every dimmer on the device.
+- **Console lights off means daylight, not lamps off.** `FLAG` scales with the
+  cockpit console dimmer and takes `off: 255`, so it goes full bright when the
+  console reads zero. `scale` of a zero source resolves to zero and a binding
+  that resolves to zero takes its `off` value, so the floor needs no new field.
 - Config offset `0x114` persists both PTO2 dimmers to flash. **Never write it.**
+- **A DCS-BIOS description's position order does not give the value order.**
+  `FLAPS_SWITCH` is described "Flaps Setting DN - MVR - UP", which reads as
+  0 = DN. Measured, it is **0 = UP, 1 = MVR, 2 = DN**, the exact reverse. Read
+  positions off the stream, never off the description.
+- **A signal's resting value is not necessarily zero.** A-10C `FLAP_POS` with
+  the flaps fully up undershoots to 34, rebounds to **462**, and settles near
+  138, though a second capture settled at 0. The rebound is *higher* than the
+  first sample of real travel (283), so "retracted" and "just moving" overlap
+  and no threshold separates them cleanly.
+- **Analog gauges ring, and settle differently by direction.** `FLAP_POS` at MVR
+  settles at 22726 arriving from retracted and 23411 arriving from DN, ringing
+  out to 22415 and 23476. A threshold read off a single approach works in one
+  direction and silently fails in the other.
+  `crates/wctrl-engine/tests/flap_capture.rs` replays the real capture, lever
+  values included.
+- **A daemon started mid-mission syncs to the cockpit on its own.** DCS-BIOS
+  re-exports on a cycle rather than sending deltas only: word 0 of `_ACFT_NAME`
+  arrived 67 times in 20 seconds, about every 300 ms. Documented the other way
+  round until 2026-09-16, which produced a README rule telling users to start
+  before entering the cockpit. There is no ordering requirement.
+- **`wctrl listen` takes repeated `--watch` by signal name.** Watching a gauge
+  alone cannot say which detent it was travelling towards; watching the lever
+  beside it, on one timestamped timeline, is what caught both errors above.
+- **The DCS-BIOS listener sets `SO_REUSEADDR`.** Without it only one process on
+  the machine can read the export stream, so `run` and `listen` could not be
+  used together and neither could coexist with any other DCS-BIOS client.
+- **A binding is a list of conditions, all of which must hold.** The lamp takes
+  the dimmest value any condition asks for, which is boolean AND for on/off
+  tests and leaves a scaled value intact for continuous ones. An empty list is a
+  placeholder: it loads, validates, sweeps its lamp off, and never reaches the
+  incremental path. Nothing about an unconfigured lamp is an error.
+- **Nothing aborts the daemon.** A profile that fails to parse, names a module
+  with no catalogue entry, or references an unknown signal is reported and
+  skipped; the other profiles still run. An aircraft with no profile gets a stub
+  written with every lamp listed and none assigned.
 - Orion II part `0xbe60`: index 0 Backlight is a dimmer (0255); indices 1 (A/A)
   and 2 (A/G) are **binary** SimAppPro only ever sends 0 or 1. Backlight sets
   how bright they burn but does **not** gate them: at Backlight 0 they are still
@@ -123,10 +162,14 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
   instead of ignoring it, so brightness looks identical at 1, 30 and 255. Write 1.
 - SimAppPro does not clamp its Backlight field: 1255 went out as 231, the low
   byte of 0x4E7. A vendor defect, not a device range.
-- **The two panels' dimmers behave differently, and the engine must not
+- **The two panels' governing dimmers differ, and the engine must not
   generalise.** PTO2 `SL` is a *master gate*: at 0, indices 417 stay dark no
   matter what they are sent. Orion II `Backlight` only *dims*: at 0, A/A and A/G
-  are still lit, just faint.
+  are still lit, just faint. Both measured, not inferred.
+- **Per-LED values latch beneath the governor.** With SL at 0, `CAUTION` was set
+  to 1 and stayed dark; raising SL to 255 with no further write to `CAUTION`
+  brought it up at full brightness. The governor is applied downstream of the
+  latched value, so changing it never requires re-sweeping the LEDs it governs.
 - DCS-BIOS allocates addresses sequentially, so a catalogue must be built from
   the _installed_ DCS-BIOS. Catalogues are stamped with its version.
 
@@ -136,7 +179,9 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 crates/wctrl-hid      frame building, part discovery, SET_LEDX   (5 tests)
 crates/wctrl-bios     export-stream decoder + address space      (5 tests)
 crates/wctrl-config   catalogue, device inventory, profiles      (7 tests)
-crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/catalogue
+crates/wctrl-engine   aircraft detection, sweep, incremental writes (19 tests)
+data/profiles         shipped example profiles, tracked in git
+crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/catalogue/run
 data/catalogue        50 modules, generated, version-stamped
 data/devices.json     PTO2 and Orion II both verified
 tools/                catalogue builder, HID probe, WWTHID log parser
@@ -148,14 +193,11 @@ Tauri renders through WebView2, which ships with Windows.
 
 ## Open threads
 
-1. **The live DCS-BIOS stream is unproven.** The decoder passes synthetic tests
-   but has never seen DCS. `cargo run --bin wctrl -- listen --seconds 20` with a
-   mission loaded is the check.
+1. ~~The live DCS-BIOS stream is unproven.~~ Proven 2026-09-16 against running
+   DCS: 402 datagrams, 9687 writes, 887 distinct addresses in 20 seconds.
 2. ~~Orion II is entirely unmeasured.~~ Resolved 2026-09-16.
-3. **SL (index 2) gates the PTO2 indicators** at SL 0 nothing lights at all.
-   Reported by Cory from direct use; worth a 10-second isolation (`led --index 2
-   --value 0`, then `--index 4 --value 1`) before the engine relies on it. Note
-   the two panels genuinely differ: the Orion II's Backlight only dims.
+3. ~~Does SL govern PTO2 indicator brightness?~~ Resolved 2026-09-16: it is a
+   hard gate, and per-LED values latch beneath it. See Verified facts.
 4. **Profile inheritance** deferred, leaning no for v1.
 5. **Backlight contention** the one lamp SimAppPro may also drive, if a user
    runs both with "Sync with DCS" on. Detect and warn.
@@ -174,7 +216,7 @@ Tauri renders through WebView2, which ships with Windows.
 
 ## Method note
 
-Several assumptions here were wrong and expensive: that indicators take 0–255,
+Several assumptions here were wrong and expensive: that indicators take 0-255,
 that a vendor table could be trusted, that an ack meant an effect. The pattern
 was asserting inference as fact and then reading failures as confirmation.
 

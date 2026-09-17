@@ -8,3 +8,4 @@ description = "Decoder for the DCS-BIOS export stream"
 
 [dependencies]
 thiserror.workspace = true
+socket2.workspace = true

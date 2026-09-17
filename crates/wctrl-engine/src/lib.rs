@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use wctrl_bios::{BiosState, Write};
 use wctrl_config::{
     Binding, Catalogue, DeviceInventory, DisplayCatalogue, Module, Profile, Screen,
+    SEAT_SIGNAL,
 };
 
 /// `_ACFT_NAME` sits at the bottom of the address space and is 24 bytes wide.
@@ -357,6 +358,23 @@ impl Engine {
         let Some(profile) = self.active.map(|i| &self.profiles[i]) else {
             return Vec::new();
         };
+
+        // Which crew station the player is in, where the module says. Read once
+        // per paint rather than per field, and left as None on a module that
+        // does not report it, which is most of them.
+        let seat = self
+            .catalogue
+            .module(&profile.module)
+            .and_then(|m| m.signal(SEAT_SIGNAL))
+            .and_then(|s| s.primary())
+            .and_then(|o| {
+                self.state
+                    .value(o.address, o.mask.unwrap_or(u16::MAX), o.shift)
+            })
+            // Widened to match a readout's seat, which is sized like every
+            // other value the catalogue reports rather than like a word.
+            .map(u32::from);
+
         let mut out = Vec::new();
         for device in &self.devices.devices {
             if !self.connected.iter().any(|k| k == &device.key) || !profile.drives(&device.key) {
@@ -370,6 +388,15 @@ impl Engine {
                 for r in profile.readouts.iter().filter(|r| {
                     r.device == device.key && r.display == key
                 }) {
+                    // A field bound to a seat paints only from that seat, and
+                    // not at all until the seat is known. Guessing would put
+                    // the other station's reading on the glass, which is worse
+                    // than a dark cell because it looks right.
+                    if let Some(want) = r.seat {
+                        if seat != Some(want) {
+                            continue;
+                        }
+                    }
                     let Some(signal) = self
                         .catalogue
                         .module(&profile.module)

@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 94 passing
+cargo test --workspace            # expect 119 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -111,7 +111,14 @@ Only one daemon runs at a time; a second backs off.
    it does not do at all yet. `CONFIG.md` calls it worth more than any amount
    of search polish, and it is the reason the typeahead needs no browse mode.
 2. **Renaming a profile, and editing its aircraft list.** Both are fixed at
-   creation right now.
+   creation right now. **Copying one is not**, as of 2026-09-17: "Copy to..."
+   on a profile row takes a name and an aircraft list and carries everything
+   else over, module included. The module is not offered, because a copy whose
+   signal ids resolve against a different catalogue is not a copy, it is a
+   profile full of signals that do not exist. This is the FA-18E case made into
+   a feature: the Super Hornet community mod reads the Hornet's DCS-BIOS
+   definitions, so the Hornet profile drives it with only those two fields
+   changed.
 3. **Validation before save.** `Profile::validate` exists and is not called from
    the editor, so a binding it would reject still saves quietly. The four forms
    are mutually exclusive and the editor keeps them that way by construction,
@@ -196,6 +203,11 @@ the real device. All six compared groups match.
    to the numeric branch and had a range written into it, which validation then
    rejected, skipping the whole profile. Signals now carry a `text` flag; the
    lamp picker hides them and the display picker offers them.
+3. **`--verbose` followed only lamp conditions**, so a display field printed its
+   `paint` lines with nothing above them saying what had moved. `Trace` now
+   follows readout sources too, and reads a string back out of the assembled
+   state under every address it occupies, so it logs once when the field is
+   whole rather than once per word.
 
 **Profiles now self-update.** `Profiles::merge_new` runs at daemon startup and
 adds rows for hardware a profile predates, from the shipped default first and
@@ -203,7 +215,7 @@ then as blank rows. It never touches an existing row, keeps rows for unplugged
 panels, leaves an unparseable file alone, and is idempotent. Bindings are sorted
 by device display name, then part in declared order, then hardware index.
 
-**Not built yet, and this is the actual work:**
+**How it got here, and what is left.** Everything on this list is done except the last item, and each entry keeps what flying it taught, because that is the part that does not survive in the code.
 
 1. ~~**A host-side shadow of the buffer.**~~ Done. `wctrl-config::display`
    has `Display`, `DisplayCatalogue` and `Screen`, checked against captured
@@ -211,15 +223,120 @@ by device display name, then part in declared order, then hardware index.
    two real display states reproduces the exact 96 bytes the device was sent.
    Still to do is naming a display from a device spec so a part can carry
    one.
-2. **Fly it.** Everything above is proven against captured traffic and in
-   tests. No profile with readouts has yet driven the real glass in a live
-   mission, which is the one thing left to confirm.
-3. **A numeric source has never been flown.** The conversion is tested,
-   including faces that start below zero and run backwards, but no gauge has
-   been put on the glass. Whether 65535 is linear in the quantity or in needle
-   angle is still unmeasured, and matters for how honest the reading is.
-4. **The editor cannot yet edit aliases or notes** on a display field; both are
-   editable by hand in the JSON.
+2. ~~**Fly it.**~~ **Flown 2026-09-17.** A profile with readouts drove the real
+   glass from a live Hornet mission. String fields work end to end.
+
+   Flying it found one fault, now fixed. A comm preset worked to 9 and then
+   went blank. Cells 34 and 35 are two digits on one cell, and the vendor
+   spells the tens as a prefix character rather than a digit: `` `2 `` for 12,
+   `~0` for 20. DCS-BIOS sends `"12"`, which was not in the glyph table, and
+   `paint` leaves an undrawable value blank rather than failing the batch. A
+   display can now carry `spellings`, consulted only after the plain lookup
+   fails, and `data/displays/ufc1.json` maps 10 to 20. Confirmed on the panel.
+
+   Worth keeping, because it is the shape of the next one of these: the capture
+   never went past preset 6, so there was no evidence for it anywhere. What
+   found it was the vendor table being self-consistent in a way that only makes
+   sense one way, `` `X `` being exactly `' X'` plus slots 6 and 7 for all ten
+   digits, and holding exactly the 21 values a Hornet comm preset can take.
+
+   The second half of the same fault showed up on the Hind. Cells 34 and 35
+   hold **two characters**, and modules do not agree on how to pad a
+   one-digit channel: the Hornet sends `" 2"`, the Hind sends `"1"` from a
+   one-character field and `"1 "` from a two-character one. A cell now carries
+   `width`, and a wide one trims and right aligns its value before the lookup.
+   Before the lookup rather than as a rescue after it, because `'1'` is a real
+   entry in the shared table: it is the ordinary glyph for cells 0 to 33, and
+   its slots land on this cell's units digit, so taking it would draw a
+   legible wrong answer instead of nothing. The slots divide with no overlap,
+   units 1,2,3,4,9,11,13 and tens 0,5,6,7,15, which is what made that
+   readable.
+
+   SimAppPro's own fallback for an unknown pair is to OR `glyphs[v[0]]` with
+   `glyphs[' ' + v[1]]` (`LCDControl.js`, `sendData`). **Do not copy it.** It
+   is a generic rule for ordinary cells and it is wrong on these two: fusing
+   `'1'` with `' 2'` lights slots 1,2,4,9,11,13 where `` `2 `` lights
+   1,2,4,6,7,11,13. A test pins the difference.
+
+   Lookup settled as **two tries: the form the cell prefers, then the bare
+   trimmed value.** A wide cell prefers its full width. An ordinary cell
+   prefers the spaced form of a single character, because a digit has two
+   forms there and the only one ever captured is spaced, cell 0 reading
+   `' 3'`. The bare fallback then rescues everything with no spaced form,
+   which is every letter and mark: DCS-BIOS pads a string out to its
+   `max_length` while DCS's own indication does not, so a scratchpad letter
+   arrives as `" G"` and a guard channel as `" g"`. A digit never reaches the
+   fallback. Seven-segment cells have no spaced digits at all and are served by
+   it throughout.
+
+   **Letters are drawn as capitals.** Uppercase is tried first and the value
+   as sent second. This panel was built for the Hornet, DCS-BIOS reports the
+   Hornet UFC in capitals throughout, and every letter in both captured pages
+   is a capital, so the small forms were never exercised. They are real and
+   distinct, `'g'` is four slots against eight for `'G'`, but the set is
+   incomplete with no r, u, w, y or z, which is not what a font meant to be
+   used looks like. The case this serves is another module naming a guard
+   channel `"g"`, which should reach the glass looking like the rest of the
+   panel. Falling back to the value as sent is what keeps it safe: `digit7`
+   has a `'p'` and a `'w'` and no capitals at all, so uppercasing alone would
+   have taken both off the glass.
+
+   The generalisation that looked obvious, fit every cell to its width, is
+   wrong, and the golden fixture is what caught it: it failed on `comm_page`
+   cell 0 because trimming `' 3'` to `'3'` picks the other form. That fixture
+   has now paid for itself twice.
+
+   **Confirmed on hardware 2026-09-17**, on two modules the glass was not
+   designed for, which is the whole point of putting the mapping in the profile
+   rather than in code:
+
+   * **Super Hornet.** The Hornet profile copied to `FA-18E`, keeping
+     `"module": "FA-18C_hornet"` and changing only the aircraft list. The UFC
+     is known not to work with the Super Hornet community mod under SimAppPro,
+     and it works here. Nothing was written for it: `module` names the
+     catalogue the signal ids resolve against and `aircraft` names the runtime
+     aircraft served, and keeping those two separate is the entire reason a
+     copied file was enough.
+   * **Hind.** Cells 34 and 35 pointed at `PLT_R828_CHAN_S` and
+     `PLT_R863_CHAN_S` drew two-digit presets correctly, from the editor.
+
+   Neither profile ships. `data/profiles` is the user's own directory and is
+   not tracked; `data/defaults` has the A-10C, Apache and Hornet only.
+3. ~~**A numeric source has never been flown.**~~ **Flown 2026-09-17.** The
+   Hind radar altimeter, `PLT_RV5_ALT`, on cells 30 to 33 with
+   `"reads": [0, 750]`, read consistently with the gauge in the cockpit.
+
+   That is one gauge on one module, so it is evidence and not a proof, but it
+   is the evidence that was missing. DCS-BIOS describes that signal only as
+   `analog_gauge`, `"gauge position"`, 0 to 65535, and says nothing about what
+   the face is marked with, which is why the range is the user's to supply.
+   The open question it answers in part is whether 65535 is linear in the
+   quantity or in needle angle. On a face that is linear in both, as this one
+   is, the two cannot be told apart; a gauge with a compressed or non-linear
+   scale would still read wrong, and there is no way to correct that without
+   per-gauge data we have decided not to carry.
+4. ~~**The editor cannot yet edit aliases or notes**~~ **Built 2026-09-17,**
+   along with two things flying it made obvious:
+
+   * **Fields are placed by name, not by cell run.** A display map now carries
+     `regions`, taken from SimAppPro's own cell map for the Hornet, which
+     accounts for all 36 cells with no gaps or overlaps. The editor offers
+     "Option 5 label" where it used to ask for `30-33`, which is not something
+     anyone deciding what to put on a panel can be expected to know. The run is
+     still what gets stored, and a free-text box remains for part of a region
+     or a display with no regions mapped.
+   * **Substitutions are editable.** The `--` to `_` case was hand-written
+     JSON before, and it is the one that bites: a value the glyph table cannot
+     draw leaves its cell dark with nothing saying why.
+   * **A field can belong to one crew station.** `seat` on a readout, matched
+     against `SEAT_POSITION`. Two fields may share cells when their seats
+     differ, and only then, which is how one window shows the pilot one thing
+     and the gunner another. Offered only on the 5 of 50 modules that publish
+     a seat, and rejected by `validate` elsewhere rather than accepting a field
+     that could never paint. Until the seat is known the field stays dark,
+     because the wrong station's reading looks correct.
+
+   Still hand-edited: `note` on a field.
 
 **Design call, open to revision:** the cell map is a property of the device and
 lives in `data/displays`, but which signal feeds which cell is a property of the

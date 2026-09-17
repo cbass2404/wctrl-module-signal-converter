@@ -494,6 +494,79 @@ other deliberately reads none, so a binding carrying both is rejected by
 `validate` rather than silently resolved one way, and the editor offers
 whichever the lamp does not already have.
 
+## Display fields
+
+A panel with glass carries `readouts` alongside `bindings`. They have almost
+nothing in common: a lamp asks "under what conditions" and resolves to a
+brightness, a field asks "which cells, fed by what" and resolves to characters.
+
+```jsonc
+"readouts": [
+  {
+    "device": "CarrierAce_UFC",
+    "display": "UFC1",       // key in data/displays
+    "cells": "30-33",        // one cell, or a run
+    "source": "PLT_RV5_ALT",
+    "reads": [0, 750],       // what the dial is marked with, numbers only
+    "decimals": 0,
+    "align": "right",        // only means something across several cells
+    "seat": 0,               // only where the module reports one
+    "aliases": { "--": "_" },
+    "note": "",
+  },
+]
+```
+
+**A field has one owner.** Nothing arbitrates between two fields claiming a
+cell, because nothing needs to: the cockpit has already decided what belongs
+there, or you have. Overlapping runs are rejected by `validate`. The one
+exception is two different seats, below.
+
+**`cells` is what gets stored, but not what you pick.** A display map names its
+areas, and the editor offers those names: "Option 5 label" rather than `30-33`.
+The run is still the thing written to the file, because a region is only a
+label for one, and a field is free to take part of a region or a display that
+has no regions mapped.
+
+**`reads` is required for a number and refused for text.** DCS-BIOS reports a
+needle as a position, 0 to 65535, and says nothing about what the face is
+marked with, so it is yours to give. Faces that start below zero or run
+backwards both work: a g meter is `[-10, 12]`, and a gauge whose numbers
+descend is `[100, 0]`. A signal that already reports characters needs no
+conversion, and giving it a range is an error rather than a no-op.
+
+**`aliases` is for a value the glass cannot draw.** DCS-BIOS reports the Hornet
+scratchpad cursor as `--` where the cockpit shows `_`, and `--` is not a glyph,
+so without the substitution that cell goes dark. Nothing can guess this, which
+is why it is per profile rather than in the display map: the map describes the
+hardware, the alias describes what one module calls something.
+
+### Crew stations
+
+`seat` restricts a field to one station. DCS-BIOS exports the whole cockpit
+whatever seat you are sitting in, so a multicrew aircraft publishes both
+stations at once and the field has no way to know which reading you want.
+
+```jsonc
+{ "cells": "34", "source": "PLT_CHAN", "seat": 0 },  // pilot
+{ "cells": "34", "source": "OP_CHAN",  "seat": 1 },  // operator
+```
+
+Those two share cells on purpose, and it is the only case where sharing is
+allowed: the stations cannot both be occupied, so they cannot both be painting.
+A field with no `seat` paints from every station and therefore shares with
+nothing.
+
+The seat comes from `SEAT_POSITION`, which DCS-BIOS spells the same way in
+every module that has one, so this is a convention rather than knowledge of any
+aircraft. Only 5 of the 50 catalogued modules publish it, and `validate`
+rejects a `seat` on the other 45 rather than accepting a field that could never
+paint. The editor hides the control entirely there.
+
+Until the seat is known, a field bound to one stays dark. Guessing would put
+the other station's reading on the glass, which is worse than a blank cell
+because it looks correct.
+
 ## Open questions
 
 1. **Profile inheritance.** Should a profile be able to extend a base, so a

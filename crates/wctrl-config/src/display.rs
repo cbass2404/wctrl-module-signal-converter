@@ -31,9 +31,67 @@ pub struct Cell {
     /// rather than a blank, because silently blanking a cell looks like a
     /// wiring fault and sends you hunting in the wrong place.
     pub shape: String,
+    /// How many characters this cell holds.
+    ///
+    /// Nearly always one. The UFC comm windows are two: a units digit and a
+    /// partial tens, on one cell, addressed as one glyph. A wide cell fits its
+    /// value to this width before the glyph is looked up, because modules do
+    /// not agree on the padding: the Hornet sends `" 2"`, the Hind sends `"1"`
+    /// from a one-character field and `"1 "` from a two-character one, and all
+    /// three mean the same channel.
+    #[serde(default = "one")]
+    pub width: usize,
     /// Absolute bit index in the device buffer for each of this cell's segment
     /// slots, in the order the glyph tables index them.
     pub segments: Vec<u16>,
+}
+
+fn one() -> usize {
+    1
+}
+
+/// How DCS-BIOS reports which crew station the player is in.
+///
+/// Spelled the same way in every module that has one, so naming it here is a
+/// DCS-BIOS convention rather than knowledge of any particular aircraft. Only 5
+/// of the 50 catalogued modules publish it, which is why a seat is optional and
+/// rejected where it would never resolve.
+pub const SEAT_SIGNAL: &str = "SEAT_POSITION";
+
+/// One named area of a display.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Region {
+    pub name: String,
+    /// The cells it covers, written the way a profile writes them: `"34"` or
+    /// `"30-33"`.
+    pub cells: String,
+    /// What the aircraft this panel was built for puts here. Often the only
+    /// thing that makes the name meaningful.
+    #[serde(default)]
+    pub note: String,
+}
+
+/// Fit a value to the number of characters a wide cell holds.
+///
+/// Trimmed and then right aligned, which is what a number wants: a short value
+/// keeps its leading blank and a long one loses its leading digits rather than
+/// its trailing ones. Trimming both ends rather than one, because the padding
+/// side is the module's choice: the Hornet sends `" 2"`, the Hind sends `"1 "`.
+///
+/// Trimming is safe here and is not safe on a run of cells. A run gives each
+/// cell one character, so its padding is the layout and removing it would shift
+/// every character sideways. On one cell the whole value is a single glyph and
+/// the padding is only alignment inside it.
+fn fit(value: &str, width: usize) -> String {
+    let trimmed = value.trim();
+    let chars: Vec<char> = trimmed.chars().collect();
+    if chars.len() >= width {
+        chars[chars.len() - width..].iter().collect()
+    } else {
+        let mut out = " ".repeat(width - chars.len());
+        out.push_str(trimmed);
+        out
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -49,6 +107,33 @@ pub struct Display {
     /// can occupy one cell, and those glyphs are not the union of their parts:
     /// `'0'` and `' 0'` share almost no segments.
     pub glyphs: HashMap<String, HashMap<String, Vec<u8>>>,
+    /// Named areas of the glass, for choosing where a field goes.
+    ///
+    /// A cell run says nothing to someone deciding what to put on a panel, and
+    /// `30-33` in particular is the kind of thing that turns into a support
+    /// question. These name the positions instead. They describe where a region
+    /// is rather than what one aircraft uses it for, because the same glass
+    /// serves other modules, and the note says what the aircraft it was built
+    /// for does with it.
+    ///
+    /// Advisory, not a constraint: a profile may still name any run of cells.
+    #[serde(default)]
+    pub regions: Vec<Region>,
+    /// Values this hardware spells differently from the way a source reports
+    /// them, applied before the glyph is looked up.
+    ///
+    /// A glyph table is the vendor's, and the vendor did not have to agree with
+    /// DCS-BIOS about how to write a number down. The UFC comm preset cells are
+    /// the case: two digits on one cell, where the tens is a partial digit that
+    /// can only draw 1 or 2, and the vendor spells those `` `X `` and `~X`.
+    /// DCS-BIOS sends `"12"`.
+    ///
+    /// Held on the display rather than on a `Readout`, because it is a fact
+    /// about the panel and not a choice the user made. Every profile that ever
+    /// drives this cell needs the same rewrite, and none of them should have to
+    /// know about it.
+    #[serde(default)]
+    pub spellings: HashMap<String, String>,
 }
 
 impl Display {
@@ -57,8 +142,63 @@ impl Display {
     }
 
     /// The glyph for `value` on `cell`, if that cell's shape can draw it.
+    ///
+    /// Two passes, uppercase then as sent, and within each pass the form the
+    /// cell prefers and then the bare value. Every quirk this hardware has
+    /// falls out of those four tries.
+    ///
+    /// **Uppercase leads** because this panel was built for the Hornet, and
+    /// DCS-BIOS reports the Hornet's UFC in capitals throughout. The lowercase
+    /// glyphs are real and distinct, `'g'` lights four slots where `'G'` lights
+    /// eight, but they were never exercised: every letter in both captured
+    /// pages is a capital. The set is also incomplete, with no small r, u, w, y
+    /// or z, which is not what a font meant to be used looks like. Another
+    /// module naming a guard channel `"g"` should reach the glass looking like
+    /// the rest of the panel rather than in a small form nothing else uses.
+    ///
+    /// Falling back to the value as sent is what keeps that from being a
+    /// gamble. `digit7` has a `'p'` and a `'w'` and no capitals at all, so
+    /// uppercasing alone would have taken those off the glass.
+    ///
+    /// The **preferred** form differs by cell. A wide cell wants its full
+    /// width, trimmed and right aligned, because the wrong width can still hit
+    /// a real entry: a glyph table is shared by every cell of a shape, and the
+    /// same slot numbers are different bits on different cells, so `'1'` draws
+    /// two strokes of the units digit on a comm window. An ordinary cell wants
+    /// the spaced form of a single character, because a digit has two forms
+    /// there and the only one ever captured is the spaced one: the COMM page
+    /// has cell 0 reading `' 3'`.
+    ///
+    /// The **bare** value then rescues everything with no spaced form, which is
+    /// every letter and every mark. DCS-BIOS pads a string out to its
+    /// `max_length` while DCS's own indication does not, so a scratchpad letter
+    /// arrives as `" G"` and a guard channel as `" g"`, and both would
+    /// otherwise leave the cell dark. A digit never reaches this fallback,
+    /// because its preferred form is always in the table.
     pub fn glyph(&self, cell: &Cell, value: &str) -> Option<&Vec<u8>> {
-        self.glyphs.get(&cell.shape)?.get(value)
+        let table = self.glyphs.get(&cell.shape)?;
+        // A spelling only rescues a value the table does not already have, so a
+        // display that spells "20" for itself is never overridden by ours.
+        let look = |value: &str| -> Option<&Vec<u8>> {
+            table
+                .get(value)
+                .or_else(|| table.get(self.spellings.get(value)?))
+        };
+        let bare = value.trim();
+        let upper = bare.to_uppercase();
+        for candidate in [upper.as_str(), bare] {
+            let preferred = if cell.width > 1 {
+                fit(candidate, cell.width)
+            } else if candidate.chars().count() <= 1 {
+                format!(" {candidate}")
+            } else {
+                candidate.to_string()
+            };
+            if let Some(lit) = look(&preferred).or_else(|| look(candidate)) {
+                return Some(lit);
+            }
+        }
+        None
     }
 
     /// How many write groups the buffer is divided into.
@@ -278,6 +418,23 @@ pub struct Readout {
     pub cells: CellRange,
     /// Catalogue signal id.
     pub source: String,
+    /// Only paint this field from one crew station.
+    ///
+    /// DCS-BIOS exports the whole cockpit whatever seat you are sitting in, so
+    /// a multicrew aircraft publishes both stations at once and a field has no
+    /// way to know which one you want. `SEAT_POSITION` is how DCS-BIOS reports
+    /// the seat, and it names it the same way in every module that has one, so
+    /// this is a convention rather than knowledge of any aircraft.
+    ///
+    /// Two fields may share cells when their seats differ, which is the point:
+    /// the same window shows the pilot one thing and the gunner another. A
+    /// field with no seat is always painted, and shares with nothing.
+    ///
+    /// Only meaningful on a module that reports a seat at all, which is 5 of
+    /// the 50 catalogued. Validation rejects it elsewhere rather than silently
+    /// never painting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seat: Option<u32>,
     /// What the gauge reads in the cockpit, for a numeric source: the real
     /// values at the bottom and top of its travel.
     ///

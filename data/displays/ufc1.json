@@ -3,10 +3,14 @@
   "_source": "SimAppPro app.asar: config/ScreenCharMapping/deviceScreenMemoryMapping.json and ScreenCharMapping.json, with each cell's startPos folded into its addresses the way mainsrc/LCDControl.js does at load time.",
   "_status": "CONFIRMED against hardware 2026-09-17 by capturing SimAppPro driving a CarrierAce UFC in a live Hornet mission. Replaying the captured SET_LCDS frames through this map rendered real cockpit content, the A/P page (ATTH HSEL BALT RALT CPL) and the COMM page (GRCV SQCH CPHR AM MENU), with 0 of 36 cells failing to match a glyph. Before that it had only been checked for self-consistency.",
   "_notes": [
-    "A glyph is looked up by the WHOLE field value, not character by character. Multi-character keys such as ' 0' and '`0' are distinct glyphs, not the OR of their parts: '0' lights slots 0,5,6,7,9,13 while ' 0' lights 1,2,3,4,9,13, and '`' does not exist on its own. Observed live: DCS-BIOS reports UFC_COMM1_DISPLAY as ' 2', two characters for one cell, and the hardware was sent the ' 2' glyph. SimAppPro only falls back to OR-ing two glyphs when the pair is absent from the table.",
+    "A glyph is looked up by the WHOLE field value, not character by character. Multi-character keys such as ' 0' and '`0' are distinct glyphs, not the OR of their parts: '0' lights slots 0,5,6,7,9,13 while ' 0' lights 1,2,3,4,9,13, and '`' does not exist on its own. Observed live: DCS-BIOS reports UFC_COMM1_DISPLAY as ' 2', two characters for one cell, and the hardware was sent the ' 2' glyph. SimAppPro falls back to OR-ing glyphs[value[0]] with glyphs[' ' + value[1]] when a two character value is absent (LCDControl.js sendData). Do NOT copy that fallback: on cells 34 and 35 it is wrong, because the single character keys are the ordinary 16 segment glyphs for cells 0 to 33 and their slots land on the units digit here. Fusing '1' with ' 2' lights slots 1,2,4,9,11,13, while the correct '`2' lights 1,2,4,6,7,11,13.",
     "Writes go out in groups of `group_bytes` bytes at a time, so a change to one segment rewrites the whole group containing it. A cell can straddle two groups, which is why a capture shows cells passing through wrong letters between the two writes that settle them.",
     "Only 438 of the 768 bits are claimed by a cell. The rest are gaps in the driver's address space, not spare display.",
-    "The wire frame is SET_LCDS (0x4c): `4c <group> <b0> <b1> <b2> <b3>`, len 6, addressed to part 0xbed0. Groups run 0 to 23. Capture-verified."
+    "The wire frame is SET_LCDS (0x4c): `4c <group> <b0> <b1> <b2> <b3>`, len 6, addressed to part 0xbed0. Groups run 0 to 23. Capture-verified.",
+    "The comm preset cells 34 and 35 are two digits on one cell: a units digit and a partial tens that can only draw 1 or 2. The vendor spells the tens as a prefix character, '`' for 1 and '~' for 2, so 12 is the glyph '`2' and 20 is '~0'. DCS-BIOS sends '12', so `spellings` rewrites it. CONFIRMED on hardware 2026-09-17: the daemon drove a two digit comm preset onto the real glass in a live mission. The reading that predicted it: '`X' is exactly ' X' plus slots 6 and 7 for all ten digits, and '~0' is exactly ' 0' plus the four slots of '~', which is what a separate digit position looks like. The table holds ' 1' to ' 9', '`0' to '`9' and '~0' and nothing else of that form, which is precisely the 1 to 20 a Hornet comm preset can take.",
+    "Cells 34 and 35 hold two characters and carry `width: 2`. Their slots split cleanly in two with no overlap: the units digit is slots 1,2,3,4,9,11,13 and the tens is 0,5,6,7,15, which is what the ' X' keys and the '`'/'~' prefixes light respectively. A value is trimmed and right aligned to the cell width before lookup, because modules disagree about padding: the Hornet sends ' 2' for channel 2, the Hind sends '1' from a one character field and '1 ' from a two character one. Fitting has to happen BEFORE the lookup, not as a fallback after it, because a bare '1' is a real entry in the shared table and would draw two strokes of the units digit.",
+    "Glyph lookup is two passes, uppercase then the value as sent, and within each pass the form the cell prefers and then the bare trimmed value. Uppercase leads because this panel was built for the Hornet and DCS-BIOS reports the Hornet UFC in capitals throughout: every letter in both captured pages is a capital, the small forms were never exercised, and the lowercase set is incomplete with no r, u, w, y or z. Another module naming a guard channel 'g' should reach the glass looking like the rest of the panel. Falling back to the value as sent is what keeps that safe: digit7 has a 'p' and a 'w' and no capitals at all. A wide cell prefers its full width; an ordinary cell prefers the spaced form of a single character, because a digit has two forms there (' 3' and '3') and the only digit captured on such a cell is the spaced one, cell 0 on the COMM page. The bare value then rescues everything with no spaced form: DCS-BIOS pads a string out to its max_length while DCS's own indication does not, so a scratchpad letter arrives as ' G' and a guard channel as ' g'.",
+    "`regions` names the areas of the glass, taken from SimAppPro's own cell map for the Hornet (F18_lcd.js DCSToCharPos), which accounts for all 36 cells with no gaps and no overlaps. They exist for the editor: a cell run like '30-33' says nothing to someone deciding what to put on the panel. The names describe the position rather than the Hornet's use of it, because the same glass serves other modules, and each note says what the Hornet does with it."
   ],
   "displays": [
     {
@@ -628,6 +632,7 @@
         {
           "index": 34,
           "shape": "alnum16",
+          "width": 2,
           "segments": [
             720,
             723,
@@ -650,6 +655,7 @@
         {
           "index": 35,
           "shape": "alnum16",
+          "width": 2,
           "segments": [
             736,
             739,
@@ -670,6 +676,96 @@
           ]
         }
       ],
+      "regions": [
+        {
+          "name": "Scratchpad, mark 1",
+          "cells": "0",
+          "note": "Hornet: the option letter or cue to the left of the scratchpad number."
+        },
+        {
+          "name": "Scratchpad, mark 2",
+          "cells": "1",
+          "note": "Hornet: the cursor beside the scratchpad number. DCS-BIOS reports '--' where DCS shows '_', so this field ships with an alias."
+        },
+        {
+          "name": "Scratchpad number",
+          "cells": "2-8",
+          "note": "Seven digits, right aligned. Hornet: the frequency or value being entered."
+        },
+        {
+          "name": "Option 1 cue",
+          "cells": "9",
+          "note": "A single mark beside the first option label. Hornet: the colon that shows the option is selectable."
+        },
+        {
+          "name": "Option 1 label",
+          "cells": "10-13",
+          "note": "Four characters. Hornet: the name of the first option, such as ATTH or GRCV."
+        },
+        {
+          "name": "Option 2 cue",
+          "cells": "14",
+          "note": "A single mark beside the second option label."
+        },
+        {
+          "name": "Option 2 label",
+          "cells": "15-18",
+          "note": "Four characters. Hornet: the name of the second option."
+        },
+        {
+          "name": "Option 3 cue",
+          "cells": "19",
+          "note": "A single mark beside the third option label."
+        },
+        {
+          "name": "Option 3 label",
+          "cells": "20-23",
+          "note": "Four characters. Hornet: the name of the third option."
+        },
+        {
+          "name": "Option 4 cue",
+          "cells": "24",
+          "note": "A single mark beside the fourth option label."
+        },
+        {
+          "name": "Option 4 label",
+          "cells": "25-28",
+          "note": "Four characters. Hornet: the name of the fourth option."
+        },
+        {
+          "name": "Option 5 cue",
+          "cells": "29",
+          "note": "A single mark beside the fifth option label."
+        },
+        {
+          "name": "Option 5 label",
+          "cells": "30-33",
+          "note": "Four characters. Hornet: the name of the fifth option."
+        },
+        {
+          "name": "Comm 1 channel",
+          "cells": "34",
+          "note": "Two digits in one window, 1 to 20, or a letter such as G for guard."
+        },
+        {
+          "name": "Comm 2 channel",
+          "cells": "35",
+          "note": "Two digits in one window, 1 to 20, or a letter such as G for guard."
+        }
+      ],
+      "spellings": {
+        "10": "`0",
+        "11": "`1",
+        "12": "`2",
+        "13": "`3",
+        "14": "`4",
+        "15": "`5",
+        "16": "`6",
+        "17": "`7",
+        "18": "`8",
+        "19": "`9",
+        "20": "~0"
+      },
       "glyphs": {
         "alnum16": {
           "A": [

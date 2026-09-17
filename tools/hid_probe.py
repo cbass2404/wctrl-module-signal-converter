@@ -324,24 +324,35 @@ def load_display(path):
         return json.load(fh)["displays"][0]
 
 
-def draw(display, buf, at, text):
+def draw(display, buf, at, text, whole=False):
     """Light `text` starting at cell `at`, one character per cell.
 
     Multi-character glyphs exist (a two-character field can occupy one cell),
     but this walks one character per cell, which is what a legibility test
-    wants. Unknown characters are left blank rather than guessed at.
+    wants. Pass `whole` to look the entire text up as one glyph instead, which
+    is how the daemon draws a field on a single cell. Unknown characters are
+    left blank rather than guessed at.
     """
     cells, glyphs = display["cells"], display["glyphs"]
-    for offset, ch in enumerate(text):
+    spellings = display.get("spellings", {})
+    pieces = [text] if whole else list(text)
+    for offset, piece in enumerate(pieces):
         index = at + offset
         if index >= len(cells):
             print("  cell %d is past the end of the display, stopping" % index)
             break
         cell = cells[index]
-        lit = glyphs[cell["shape"]].get(ch)
+        table = glyphs[cell["shape"]]
+        # Same order the daemon uses: the value as given wins, and a spelling
+        # only rescues one the table does not have.
+        lit = table.get(piece)
+        if lit is None and piece in spellings:
+            lit = table.get(spellings[piece])
+            if lit is not None:
+                print("  %r is spelled %r on this display" % (piece, spellings[piece]))
         if lit is None:
             print("  no %s glyph for %r, leaving cell %d blank"
-                  % (cell["shape"], ch, index))
+                  % (cell["shape"], piece, index))
             lit = []
         for slot, bit in enumerate(cell["segments"]):
             if slot in lit:
@@ -355,7 +366,7 @@ def cmd_lcd(args):
     nbytes, gsize = display["buffer_bytes"], display["group_bytes"]
     buf = bytearray(nbytes)
     if not args.clear:
-        draw(display, buf, args.at, args.text)
+        draw(display, buf, args.at, args.text, args.whole)
 
     path, caps = find(args.pid)
     inn, outn = caps.InputReportByteLength, caps.OutputReportByteLength
@@ -446,6 +457,8 @@ p.add_argument("--map", default=os.path.join(
 p.add_argument("--text", default="")
 p.add_argument("--at", type=int, default=0, help="first cell to draw into")
 p.add_argument("--clear", action="store_true", help="blank the whole display")
+p.add_argument("--whole", action="store_true",
+               help="look --text up as one glyph on one cell, the way a field is drawn")
 
 args = parser.parse_args()
 args.func(args)

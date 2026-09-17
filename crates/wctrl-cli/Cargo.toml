@@ -19,3 +19,6 @@ anyhow.workspace = true
 clap = { version = "4", features = ["derive"] }
 ctrlc = "3"
 hidapi = { version = "2.6", default-features = false, features = ["windows-native"] }
+
+[dev-dependencies]
+serde_json.workspace = true

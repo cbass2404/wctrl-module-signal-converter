@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use wctrl_bios::{BiosState, Listener, Write as BiosWrite};
-use wctrl_config::{Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles};
+use wctrl_config::{Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout};
 use wctrl_engine::{Batch, Cause, Engine};
 use wctrl_hid::Device;
 
@@ -734,12 +734,44 @@ fn catalogue(dir: &PathBuf, aircraft: Option<&str>, find: Option<&str>) -> Resul
 #[derive(Default)]
 struct Trace {
     lamps: HashMap<(String, u32, u8), String>,
-    /// Address to the signals read from it: name, mask and shift, because
-    /// several signals share one 16-bit word.
-    sources: HashMap<u16, Vec<(String, u16, u8)>>,
-    /// Last value logged per signal. DCS-BIOS repeats a word when anything in
-    /// it moves, so without this a shared address logs its neighbours too.
-    last: HashMap<(u16, u16, u8), u16>,
+    /// Address to the signals read from it, because several signals share one
+    /// 16-bit word and a string spans several words.
+    sources: HashMap<u16, Vec<Followed>>,
+    /// Last value logged per signal, by name. DCS-BIOS repeats a word when
+    /// anything in it moves, so without this a shared address logs its
+    /// neighbours too, and a string logs once per word of it that arrives.
+    last: HashMap<String, String>,
+    /// Display fields that convert a position into a reading, by signal name.
+    ///
+    /// The raw number is what the stream carries and the converted one is what
+    /// reaches the glass, and neither alone answers "is this right". A log
+    /// showing 8738 cannot be checked against a cockpit gauge, and one showing
+    /// only 100 cannot be checked against the stream.
+    ///
+    /// The readout itself is kept rather than its numbers copied out, so the
+    /// line and the glass cannot drift apart: both go through
+    /// `Readout::format_number`.
+    converts: HashMap<String, (Readout, u16)>,
+}
+
+/// One signal the active profile reads, and how to read it.
+///
+/// A string is not a wide number. It is packed two bytes to a word across
+/// several addresses, so it is registered under every address it occupies and
+/// read back whole; read as a number it would print the two characters that
+/// happen to share a word.
+#[derive(PartialEq)]
+enum Followed {
+    Number { name: String, mask: u16, shift: u8 },
+    Text { name: String, address: u16, len: u16 },
+}
+
+impl Followed {
+    fn name(&self) -> &str {
+        match self {
+            Followed::Number { name, .. } | Followed::Text { name, .. } => name,
+        }
+    }
 }
 
 impl Trace {
@@ -761,19 +793,63 @@ impl Trace {
     fn follow(&mut self, profile: &Profile, cat: &Catalogue) {
         self.sources.clear();
         self.last.clear();
+        self.converts.clear();
         let Some(module) = cat.module(&profile.module) else {
             return;
         };
-        for b in &profile.bindings {
-            for condition in &b.conditions {
-                let Some(o) = module.signal(&condition.source).and_then(|s| s.primary()) else {
-                    continue;
+        let sources = profile
+            .bindings
+            .iter()
+            .flat_map(|b| b.conditions.iter().map(|c| c.source.as_str()))
+            // A display field reads the stream exactly as a lamp condition
+            // does. Leaving it out meant a paint line appeared with nothing
+            // above it saying what had moved.
+            .chain(profile.readouts.iter().map(|r| r.source.as_str()));
+
+        for source in sources {
+            let Some(o) = module.signal(source).and_then(|s| s.primary()) else {
+                continue;
+            };
+            if o.r#type == "string" {
+                // Without max_length there is no way to know where the field
+                // ends. Skipping it costs a log line; guessing would print the
+                // next field as part of this one.
+                let Some(len) = o.max_length else { continue };
+                // Registered under every word it occupies, so it is re-read
+                // whichever part of it arrives.
+                for word in 0..len.div_ceil(2) {
+                    let entry = Followed::Text {
+                        name: source.to_string(),
+                        address: o.address,
+                        len,
+                    };
+                    let slot = self.sources.entry(o.address + word * 2).or_default();
+                    if !slot.contains(&entry) {
+                        slot.push(entry);
+                    }
+                }
+            } else {
+                // A field reading this signal knows what the dial is marked
+                // with. Held by name rather than folded into the entry, so a
+                // signal that is both a lamp condition and a display field
+                // still registers once and still logs once.
+                if let Some(r) = profile
+                    .readouts
+                    .iter()
+                    .find(|r| r.source == source && r.reads.is_some())
+                {
+                    let max = o
+                        .max_value
+                        .unwrap_or(u32::from(u16::MAX))
+                        .min(u32::from(u16::MAX)) as u16;
+                    self.converts
+                        .insert(source.to_string(), (r.clone(), max));
+                }
+                let entry = Followed::Number {
+                    name: source.to_string(),
+                    mask: o.mask.unwrap_or(u16::MAX),
+                    shift: o.shift,
                 };
-                let entry = (
-                    condition.source.clone(),
-                    o.mask.unwrap_or(u16::MAX),
-                    o.shift,
-                );
                 let slot = self.sources.entry(o.address).or_default();
                 if !slot.contains(&entry) {
                     slot.push(entry);
@@ -790,17 +866,40 @@ impl Trace {
     }
 
     /// Log the bound signals that moved in this datagram.
-    fn signals(&mut self, writes: &[BiosWrite], elapsed: u128) {
+    ///
+    /// A string is read back out of `state` rather than off the datagram,
+    /// because it is only whole once every word of it has been applied.
+    fn signals(&mut self, writes: &[BiosWrite], state: &BiosState, elapsed: u128) {
         for w in writes {
             let Some(signals) = self.sources.get(&w.address) else {
                 continue;
             };
-            for (name, mask, shift) in signals {
-                let value = (w.value & mask) >> shift;
-                if self.last.insert((w.address, *mask, *shift), value) == Some(value) {
+            for followed in signals {
+                let shown = match followed {
+                    Followed::Number { name, mask, shift } => {
+                        let raw = (w.value & mask) >> shift;
+                        // Both numbers, because the raw one is checkable
+                        // against the stream and the converted one against the
+                        // gauge in the cockpit.
+                        match self.converts.get(name) {
+                            Some((r, max)) => format!("{raw} -> {}", r.format_number(raw, *max)),
+                            None => raw.to_string(),
+                        }
+                    }
+                    // Quoted, because on a display field the padding is the
+                    // layout: a right aligned scratchpad would otherwise read
+                    // the same as a left aligned one.
+                    Followed::Text { address, len, .. } => match state.text(*address, *len) {
+                        Some(text) => format!("{text:?}"),
+                        None => continue,
+                    },
+                };
+                let name = followed.name();
+                if self.last.get(name) == Some(&shown) {
                     continue;
                 }
-                println!("{elapsed:>8} ms  signal  {name:<28} = {value}");
+                println!("{elapsed:>8} ms  signal  {name:<28} = {shown}");
+                self.last.insert(name.to_string(), shown);
             }
         }
     }
@@ -880,7 +979,194 @@ fn process_listed(stdout: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::process_listed;
+    use super::{process_listed, Followed, Trace};
+    use wctrl_bios::{BiosState, Write as BiosWrite};
+    use wctrl_config::{Catalogue, Module, Profile};
+
+    /// A module with one lamp signal and one string signal, so a trace can be
+    /// followed without the generated catalogue, which is machine-local.
+    fn fixture() -> (Catalogue, Profile) {
+        let module: Module = serde_json::from_str(
+            r#"{
+              "module": "FA-18C_hornet",
+              "aircraft": ["FA-18C_hornet"],
+              "signals": [
+                {
+                  "id": "MASTER_CAUTION_LT",
+                  "control_type": "led",
+                  "outputs": [{"address": 100, "mask": 4, "shift": 2, "max_value": 1, "max_length": null}]
+                },
+                {
+                  "id": "UFC_SCRATCHPAD_NUMBER_DISPLAY",
+                  "outputs": [{"address": 200, "mask": null, "max_value": null, "max_length": 8, "type": "string"}]
+                }
+              ]
+            }"#,
+        )
+        .expect("the fixture module parses");
+
+        let profile: Profile = serde_json::from_str(
+            r#"{
+              "name": "Hornet",
+              "aircraft": ["FA-18C_hornet"],
+              "module": "FA-18C_hornet",
+              "bindings": [
+                {
+                  "device": "PTO2",
+                  "led": "MASTER_CAUTION",
+                  "conditions": [{"source": "MASTER_CAUTION_LT", "on_when": {"equals": 1}}]
+                }
+              ],
+              "readouts": [
+                {
+                  "device": "CarrierAce_UFC",
+                  "display": "UFC1",
+                  "cells": "2-8",
+                  "source": "UFC_SCRATCHPAD_NUMBER_DISPLAY",
+                  "align": "right"
+                }
+              ]
+            }"#,
+        )
+        .expect("the fixture profile parses");
+
+        (Catalogue::from_modules(vec![module]), profile)
+    }
+
+    #[test]
+    fn a_display_field_is_followed_the_same_as_a_lamp_condition() {
+        let (cat, profile) = fixture();
+        let mut trace = Trace::default();
+        trace.follow(&profile, &cat);
+
+        assert!(
+            trace.sources.contains_key(&100),
+            "the lamp condition is still followed"
+        );
+        // A readout was reported by --verbose as a paint line with nothing
+        // above it saying what had moved, because only bindings were followed.
+        assert!(
+            trace.sources.contains_key(&200),
+            "the display field is followed too"
+        );
+        // Eight characters is four words, and any of them arriving is a reason
+        // to read the field again.
+        for address in [200, 202, 204, 206] {
+            assert!(
+                trace.sources.contains_key(&address),
+                "word at {address} is part of the field"
+            );
+        }
+        assert!(!trace.sources.contains_key(&208), "and the field ends there");
+
+        match &trace.sources[&200][0] {
+            Followed::Text { name, len, .. } => {
+                assert_eq!(name, "UFC_SCRATCHPAD_NUMBER_DISPLAY");
+                assert_eq!(*len, 8);
+            }
+            Followed::Number { .. } => panic!("a string read as a number prints packed characters"),
+        }
+    }
+
+    #[test]
+    fn a_gauge_logs_the_position_and_what_it_converts_to() {
+        let module: Module = serde_json::from_str(
+            r#"{
+              "module": "HIND",
+              "aircraft": ["Mi-24P"],
+              "signals": [
+                {
+                  "id": "PLT_RV5_ALT",
+                  "control_type": "analog_gauge",
+                  "outputs": [{"address": 300, "mask": 65535, "shift": 0, "max_value": 65535, "max_length": null}]
+                }
+              ]
+            }"#,
+        )
+        .unwrap();
+        let profile: Profile = serde_json::from_str(
+            r#"{
+              "name": "Hind", "aircraft": ["Mi-24P"], "module": "HIND",
+              "readouts": [{
+                "device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33",
+                "source": "PLT_RV5_ALT", "reads": [0, 750]
+              }]
+            }"#,
+        )
+        .unwrap();
+
+        let mut trace = Trace::default();
+        trace.follow(&profile, &Catalogue::from_modules(vec![module]));
+
+        // 8738 of 65535 on a face marked 0 to 750 is 100 metres. Neither number
+        // alone is checkable: the position can be compared with the stream and
+        // the reading with the gauge in the cockpit, and a fault shows up as
+        // the two disagreeing.
+        let mut state = BiosState::new();
+        let writes = vec![BiosWrite { address: 300, value: 8738 }];
+        for w in &writes {
+            state.apply(*w);
+        }
+        trace.signals(&writes, &state, 0);
+        assert_eq!(
+            trace.last.get("PLT_RV5_ALT").map(String::as_str),
+            Some("8738 -> 100")
+        );
+    }
+
+    #[test]
+    fn a_signal_nothing_converts_is_logged_as_it_arrives() {
+        // Only a display field knows what a dial reads. A lamp condition does
+        // not, so nothing is invented for it.
+        let (cat, profile) = fixture();
+        let mut trace = Trace::default();
+        trace.follow(&profile, &cat);
+
+        let mut state = BiosState::new();
+        let writes = vec![BiosWrite { address: 100, value: 0b100 }];
+        for w in &writes {
+            state.apply(*w);
+        }
+        trace.signals(&writes, &state, 0);
+        assert_eq!(trace.last.get("MASTER_CAUTION_LT").map(String::as_str), Some("1"));
+    }
+
+    #[test]
+    fn a_string_is_logged_once_it_is_whole_and_not_once_per_word() {
+        let (cat, profile) = fixture();
+        let mut trace = Trace::default();
+        trace.follow(&profile, &cat);
+
+        // " 264.000" packed two characters to a word, low byte first.
+        let mut state = BiosState::new();
+        let writes: Vec<BiosWrite> = [(200u16, " 2"), (202, "64"), (204, ".0"), (206, "00")]
+            .iter()
+            .map(|(address, pair)| {
+                let b = pair.as_bytes();
+                BiosWrite {
+                    address: *address,
+                    value: u16::from(b[0]) | (u16::from(b[1]) << 8),
+                }
+            })
+            .collect();
+        for w in &writes {
+            state.apply(*w);
+        }
+
+        // Nothing here asserts on stdout; what it proves is that the field is
+        // read whole from state and deduplicated by name, so four words that
+        // complete one value do not log four times.
+        trace.signals(&writes, &state, 0);
+        assert_eq!(
+            trace.last.get("UFC_SCRATCHPAD_NUMBER_DISPLAY").map(String::as_str),
+            Some("\" 264.000\""),
+            "the whole field, with the padding that is its layout"
+        );
+
+        let before = trace.last.clone();
+        trace.signals(&writes, &state, 1);
+        assert_eq!(trace.last, before, "an unchanged field is not logged again");
+    }
 
     #[test]
     fn tasklist_output_is_read_correctly() {
@@ -1302,7 +1588,7 @@ fn run(
         // After ingest, so a signal line and the lamp it moved read in the
         // order they happened.
         if verbose {
-            trace.signals(&writes, elapsed);
+            trace.signals(&writes, engine.state(), elapsed);
         }
 
         let current = engine.aircraft().map(str::to_string);

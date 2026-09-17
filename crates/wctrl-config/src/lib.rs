@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 
 pub mod display;
 
-pub use display::{Align, Cell, CellRange, Display, DisplayCatalogue, Readout, Screen};
+pub use display::{
+    Align, Cell, CellRange, Display, DisplayCatalogue, Readout, Region, Screen, SEAT_SIGNAL,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -61,6 +63,10 @@ pub enum Error {
     RangeOnText(String),
     #[error("profile disables device {0:?}, which is not a device we know")]
     DisablesUnknownDevice(String),
+    #[error("a field is set to seat {0}, but module {1:?} does not report {2}, so nothing would ever be painted there")]
+    SeatNotReported(u32, String, &'static str),
+    #[error("seat {0} is not one this module has; {1} reports 0 to {2}")]
+    NoSuchSeat(u32, &'static str, u32),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -872,14 +878,39 @@ impl Profile {
                 ));
             }
 
+            // A seat is only meaningful where DCS-BIOS reports one, which is 5
+            // of the 50 catalogued modules. Saying so beats accepting the field
+            // and never painting it.
+            if let Some(seat) = r.seat {
+                let reported = module
+                    .signal(SEAT_SIGNAL)
+                    .and_then(|s| s.primary())
+                    .ok_or_else(|| {
+                        Error::SeatNotReported(seat, module.module.clone(), SEAT_SIGNAL)
+                    })?;
+                let highest = reported.max_value.unwrap_or(0);
+                if seat > highest {
+                    return Err(Error::NoSuchSeat(seat, SEAT_SIGNAL, highest));
+                }
+            }
+
             // One field, one source. Nothing arbitrates between two readouts
             // claiming a cell, because nothing needs to: the cockpit has
             // already decided what belongs there, or the user has.
+            //
+            // Two seats are the exception, and the only one. They cannot both
+            // be occupied, so they cannot both be painting, and sharing a
+            // window between them is the whole reason the field exists.
             for (j, other) in self.readouts.iter().enumerate() {
                 if i == j {
                     continue;
                 }
-                if other.device == r.device
+                let both_live = match (r.seat, other.seat) {
+                    (Some(a), Some(b)) => a == b,
+                    _ => true,
+                };
+                if both_live
+                    && other.device == r.device
                     && other.display == r.display
                     && other.cells.overlaps(&r.cells)
                 {

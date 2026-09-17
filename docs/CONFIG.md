@@ -207,6 +207,44 @@ with `max_value == 1` defaults to `equals: 1` at full brightness. A wide
 continuous signal onto a dimmable lamp defaults to `scale`. Both are one click to
 change; the point is that choosing a signal should usually be the only step.
 
+### Matching another lamp
+
+`same_as` points one lamp at another on the same device, and it follows whatever
+that lamp resolved to:
+
+```jsonc
+{ "device": "TAKEOFF_PLANEL_2", "led": "FLAG", "same_as": "Backlight", "off": 255 }
+```
+
+This is a link, not a copy. The PTO2 is the case it exists for: it carries three
+independent brightness governors that are usually meant to sit at one level, and
+writing the same conditions into all three means every later change has to be
+made three times or they drift apart without anyone noticing.
+
+**Only between lamps that dim, on both ends.** An indicator takes 0 or 1, so it
+has no level to follow and none to offer; mirroring one either way would be a
+setting that cannot mean what it says. `validate` rejects it and the editor
+offers the option only on a dimmer with another dimmer to point at.
+
+**The mirroring lamp keeps its own `off`.** The value is taken from the target,
+clamped to what this lamp accepts, and this lamp's `off` applies when that value
+is zero. So `FLAG` can follow the backlight through the night and still go full
+bright when the console knob reaches zero, which is the daylight floor that kept
+the flap and hook lamps readable. Without that, syncing `FLAG` to the backlight
+would reintroduce exactly the fault that made those lamps look dead.
+
+The same caution applies to `SL`, harder. `SL` is a hard gate over all 14
+indicators, so pointing it at the backlight with no `off` means every lamp on the
+panel goes out whenever the console knob is down, which in daylight is always.
+Give it a floor, or leave it at `"always": true`.
+
+**Chains are not allowed.** The target must read signals of its own, which rules
+out cycles with no cycle detection to get wrong. A mirroring lamp reads nothing
+directly, so the engine indexes it under its target's addresses; otherwise it
+would be written once by the sweep and then never follow anything.
+
+`same_as` is mutually exclusive with `conditions`, `any_of` and `always`.
+
 ## Blink comes from the source
 
 Where a DCS lamp flashes F/A-18 gear in transit, for instance the module's own
@@ -315,6 +353,10 @@ without typing.
 
 ## Conditions: every one must hold
 
+A binding drives its lamp in one of four ways, and exactly one of them at a
+time: `conditions`, `any_of`, `always` or `same_as`. This section is about the
+first, which is the common case; the others are described above.
+
 A binding carries a **list** of conditions, and the lamp lights only when all of
 them are satisfied. A single-condition list is the common case and the one the
 editor offers first, but the list is the shape, not an escape hatch bolted onto a
@@ -349,6 +391,92 @@ detent moves rather than when the flaps arrive.
 An **unseen** signal makes the whole binding unresolved rather than false, so
 the lamp holds its swept value instead of flickering while the post-load flood
 arrives. An **empty** list is a placeholder, and the lamp is swept off.
+
+### Alternatives: any one may hold
+
+`conditions` is one group, and every condition in it must hold. `any_of` is a
+list of such groups, and the lamp lights if **any one of them** holds. That is a
+list of ANDs joined by OR, which can express any boolean rule without
+parentheses or precedence, the two things that make a general expression editor
+easy to misread.
+
+The case it exists for is a multicrew aircraft, where a lamp should follow
+whichever seat the player is actually in:
+
+```jsonc
+{
+  "device": "TAKEOFF_PLANEL_2",
+  "led": "Backlight",
+  "any_of": [
+    {
+      "conditions": [
+        { "source": "SEAT_POSITION", "on_when": { "equals": 1 } },
+        { "source": "CPG_LIGHT_PANEL", "on_when": { "scale": [0, 65535] } }
+      ]
+    },
+    {
+      "conditions": [
+        { "source": "SEAT_POSITION", "on_when": { "equals": 0 } },
+        { "source": "PLT_LIGHT_PANEL", "on_when": { "scale": [0, 65535] } }
+      ]
+    }
+  ]
+}
+```
+
+**The combining rule is the exact dual of the one within a group.** A group
+takes the dimmest value any of its conditions asks for; `any_of` takes the
+brightest value any group produces. For on/off tests that is boolean OR, and for
+a continuous source it means the branch that is actually live supplies the value
+while the gated branches sit at zero. One sentence each way, and no third
+mechanism.
+
+A branch that is already false stops there rather than reading the rest of
+itself. That is what keeps the example above working: the empty seat's dimmer
+may never have been touched, so it may never have been exported, and requiring
+every branch to be fully readable would leave the lamp unresolved and therefore
+dark. A signal that actually decides the outcome, `SEAT_POSITION` here, still
+leaves the binding unresolved until it arrives.
+
+`any_of` is mutually exclusive with `conditions` and with `always`. A binding
+carrying more than one form is rejected by `validate` rather than resolved on a
+guess, and the editor collapses a single remaining alternative back to
+`conditions` so the file never carries two spellings of one thing.
+
+**Seat position comes from DCS-BIOS**, not from anything we add. `SEAT_POSITION`
+is exported by the five multicrew modules that have it: AH-64D (0 = Pilot,
+1 = CP/G), CH-47F, C-101, Mi-24P and UH-1H. The F-14 does not export it, so a
+Pilot/RIO profile has to find another discriminator.
+
+### Always on
+
+Some lamps have no counterpart in the cockpit, and the honest answer is that the
+user wants them lit. `always` says so, and reads nothing:
+
+```jsonc
+{ "device": "TAKEOFF_PLANEL_2", "led": "SL", "always": true }
+```
+
+It is deliberately not the same as an empty condition list. Empty means "not
+decided yet" and drives the lamp off, which is the right default for a lamp
+nobody has looked at. `always` is a decision, so such a lamp counts as
+configured and is never swept away as unassigned.
+
+On a lamp that dims it is also how a fixed brightness is set, because `on` still
+applies: a panel backlight held at one level rather than following the cockpit
+dimmer.
+
+```jsonc
+{ "device": "TAKEOFF_PLANEL_2", "led": "Backlight", "always": true, "on": 40 }
+```
+
+It resolves the same at every moment, so the module-load sweep writes it once
+and nothing revisits it.
+
+`always` and `conditions` are mutually exclusive. One reads signals and the
+other deliberately reads none, so a binding carrying both is rejected by
+`validate` rather than silently resolved one way, and the editor offers
+whichever the lamp does not already have.
 
 ## Open questions
 

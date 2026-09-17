@@ -25,6 +25,20 @@ pub enum Error {
     OutOfRange(String, u8, u8),
     #[error("no shipped default named {0:?} to reset from")]
     NoDefault(String),
+    #[error("LED {0:?} is set to always on but also carries conditions; it can have one or the other")]
+    AlwaysWithConditions(String),
+    #[error("LED {0:?} carries both conditions and any_of; put every alternative in any_of")]
+    ConditionsWithAnyOf(String),
+    #[error("LED {0:?} has an alternative in any_of with no conditions in it")]
+    EmptyBranch(String),
+    #[error("LED {0:?} mirrors {1:?}, which is not a lamp on device {2:?}")]
+    UnknownMirror(String, String, String),
+    #[error("LED {0:?} mirrors {1:?}, which mirrors something itself; a mirror must point at a lamp that reads signals")]
+    MirrorChain(String, String),
+    #[error("LED {0:?} mirrors another lamp and also carries its own conditions; it can have one or the other")]
+    MirrorWithConditions(String),
+    #[error("LED {0:?} and {1:?} cannot mirror each other; only lamps that dim can, because an on/off lamp has no level to follow")]
+    MirrorNotDimmable(String, String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -331,9 +345,69 @@ pub struct Binding {
     /// has to load and run so it can be filled in one lamp at a time.
     #[serde(default)]
     pub conditions: Vec<Condition>,
+    /// Light this lamp whenever the profile is active, reading nothing.
+    ///
+    /// Distinct from an empty condition list, which means "not decided yet" and
+    /// drives the lamp off. Some lamps have no counterpart in the cockpit and
+    /// the honest answer is that the user simply wants them lit, and on a lamp
+    /// that dims this is also how a fixed brightness is set: a panel backlight
+    /// held at one level rather than following the cockpit dimmer.
+    ///
+    /// Mutually exclusive with `conditions`. Carrying both is rejected by
+    /// `validate` rather than silently resolved, because either reading of it
+    /// would be a guess at what the author meant.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub always: bool,
+    /// Alternatives, any one of which lights the lamp.
+    ///
+    /// Each branch is its own `conditions` list and holds only when all of them
+    /// hold, so this is a list of ANDs joined by OR. Any boolean expression can
+    /// be written that way, and it avoids parentheses and precedence, which are
+    /// what make a general expression editor hard to use and easy to misread.
+    ///
+    /// The case this exists for is a multicrew aircraft, where a lamp follows
+    /// whichever station is occupied:
+    ///
+    /// ```jsonc
+    /// "any_of": [
+    ///   { "conditions": [ { "source": "STATION", "on_when": { "equals": 1 } },
+    ///                     { "source": "CPG_BRIGHT", "on_when": { "scale": [0, 65535] } } ] },
+    ///   { "conditions": [ { "source": "STATION", "on_when": { "equals": 0 } },
+    ///                     { "source": "PLT_BRIGHT", "on_when": { "scale": [0, 65535] } } ] }
+    /// ]
+    /// ```
+    ///
+    /// Mutually exclusive with `conditions` and with `always`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub any_of: Vec<Branch>,
+    /// Mirror another lamp on the same device, by name.
+    ///
+    /// A link rather than a copy: change what the other lamp reads and this one
+    /// follows. The PTO2 is the case it exists for, because its three
+    /// brightness governors are usually meant to sit at one level, and copying
+    /// the conditions into all three means every later change has to be made
+    /// three times or they drift apart silently.
+    ///
+    /// This binding's own `off` still applies when the mirrored lamp resolves
+    /// to zero, which is what keeps the daylight floor available: `FLAG` can
+    /// follow the backlight at night and still go full bright when the console
+    /// is off.
+    ///
+    /// Chains are not allowed, so the target must read signals of its own.
+    /// That rules out cycles without any cycle detection to get wrong.
+    ///
+    /// Mutually exclusive with `conditions`, `any_of` and `always`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub same_as: Option<String>,
     /// Omitted means "fully on for this lamp", resolved from the LED itself.
+    ///
+    /// Skipped when absent, and `off` when zero, so a profile the editor saves
+    /// stays as readable as one written by hand. These files are shipped and
+    /// diffed, and a rewrite that added `"on": null` to every lamp would bury
+    /// the one line that actually changed.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub on: Option<u8>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "is_zero")]
     pub off: u8,
     /// Why this mapping, in the author's words. Profiles are meant to be
     /// shared, and a bare signal id does not say whether a mapping is the
@@ -341,6 +415,42 @@ pub struct Binding {
     /// lamp. The editor shows it; nothing at runtime reads it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+}
+
+fn is_zero(v: &u8) -> bool {
+    *v == 0
+}
+
+fn is_false(v: &bool) -> bool {
+    !*v
+}
+
+/// The dimmest value any of these conditions asks for, or `None` if a signal
+/// has not been seen yet.
+///
+/// `off` is deliberately zero here rather than the binding's: it is the
+/// combining identity for "this condition is not met". The binding's own `off`
+/// is applied once, at the end.
+fn all_of<F>(conditions: &[Condition], on: u8, led_max: u8, read: &mut F) -> Option<u8>
+where
+    F: FnMut(&str) -> Option<u32>,
+{
+    let mut value = u8::MAX;
+    for condition in conditions {
+        let raw = read(condition.source.as_str())?;
+        value = value.min(condition.on_when.resolve(raw, on, 0, led_max));
+        if value == 0 {
+            break;
+        }
+    }
+    Some(value)
+}
+
+/// One alternative within `any_of`: conditions that must all hold together.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Branch {
+    #[serde(default)]
+    pub conditions: Vec<Condition>,
 }
 
 /// One signal and the test applied to it.
@@ -352,8 +462,27 @@ pub struct Condition {
 
 impl Binding {
     /// A row that names a lamp but drives nothing.
+    ///
+    /// An always-on lamp is configured, not undecided, so it is not a
+    /// placeholder even though it reads no signals.
     pub fn is_placeholder(&self) -> bool {
         self.conditions.is_empty()
+            && self.any_of.is_empty()
+            && !self.always
+            && self.same_as.is_none()
+    }
+
+    /// Every signal this binding reads, across all forms.
+    ///
+    /// The engine indexes a binding under each address it reads so it can be
+    /// re-evaluated when one moves. Having one place that answers "what does
+    /// this read" keeps that index correct as new forms are added: when
+    /// `any_of` arrived, the index needed no knowledge of it.
+    pub fn sources(&self) -> impl Iterator<Item = &str> {
+        self.conditions
+            .iter()
+            .chain(self.any_of.iter().flat_map(|b| b.conditions.iter()))
+            .map(|c| c.source.as_str())
     }
 
     /// Resolve every condition against current signal values and combine them.
@@ -372,25 +501,33 @@ impl Binding {
     where
         F: FnMut(&str) -> Option<u32>,
     {
-        if self.conditions.is_empty() {
-            return None;
-        }
         let on = self.on.unwrap_or_else(|| led.on_value());
         let led_max = led.max_value();
 
-        let mut value = u8::MAX;
-        for condition in &self.conditions {
-            let raw = read(&condition.source)?;
-            // `off` is deliberately zero here rather than `self.off`: it is the
-            // combining identity for "this condition is not met". The binding's
-            // own `off` is applied once, at the end.
-            let resolved = condition.on_when.resolve(raw, on, 0, led_max);
-            value = value.min(resolved);
-            if value == 0 {
-                break;
+        // Reads nothing, so it resolves the same on the module-load sweep as it
+        // would at any other moment, and no later write ever revisits it.
+        if self.always {
+            return Some(on.min(led_max));
+        }
+        // Alternatives take the **brightest** branch, the exact dual of the
+        // dimmest-condition rule within a branch. For on/off tests that is
+        // boolean OR, and for a continuous source it means the branch that is
+        // actually live supplies the value while the gated ones sit at zero.
+        if !self.any_of.is_empty() {
+            let mut best = 0u8;
+            for branch in &self.any_of {
+                if branch.conditions.is_empty() {
+                    continue;
+                }
+                best = best.max(all_of(&branch.conditions, on, led_max, &mut read)?);
             }
+            return Some(if best == 0 { self.off } else { best });
         }
 
+        if self.conditions.is_empty() {
+            return None;
+        }
+        let value = all_of(&self.conditions, on, led_max, &mut read)?;
         Some(if value == 0 { self.off } else { value })
     }
 }
@@ -437,6 +574,9 @@ impl Profile {
                     device: d.key.clone(),
                     led: led.name.clone(),
                     conditions: Vec::new(),
+                    always: false,
+                    any_of: Vec::new(),
+                    same_as: None,
                     on: None,
                     off: 0,
                     note: String::new(),
@@ -462,6 +602,49 @@ impl Profile {
         Ok(())
     }
 
+    /// The binding a mirroring lamp points at, if any.
+    fn mirrored<'a>(&'a self, b: &'a Binding) -> Option<&'a Binding> {
+        let target = b.same_as.as_deref()?;
+        self.bindings
+            .iter()
+            .find(|o| o.device == b.device && o.led == target)
+    }
+
+    /// Every signal a binding depends on, following a mirror to its target.
+    ///
+    /// The engine indexes a binding under each address it reads so it can be
+    /// re-evaluated when one moves. A mirroring lamp reads nothing itself, so
+    /// without this it would be written once by the sweep and then never
+    /// follow the lamp it is supposed to be mirroring.
+    pub fn sources_of<'a>(&'a self, b: &'a Binding) -> Vec<&'a str> {
+        match self.mirrored(b) {
+            Some(target) => target.sources().collect(),
+            None => b.sources().collect(),
+        }
+    }
+
+    /// Resolve one binding, following a mirror to the lamp it copies.
+    ///
+    /// The mirrored value is taken as-is and then clamped to what *this* lamp
+    /// accepts, and this lamp's own `off` applies when that value is zero. So a
+    /// lamp can follow another one and still carry its own daylight floor.
+    pub fn resolve_binding<F>(&self, b: &Binding, led: &Led, read: F) -> Option<u8>
+    where
+        F: FnMut(&str) -> Option<u32>,
+    {
+        let Some(target) = self.mirrored(b) else {
+            return b.resolve(led, read);
+        };
+        // Resolved against the target's own lamp range, then brought into this
+        // one. `validate` rejects chains, so this never recurses further.
+        let value = target.resolve(led, read)?;
+        Some(if value == 0 {
+            b.off
+        } else {
+            value.min(led.max_value())
+        })
+    }
+
     /// Check every binding resolves against the catalogue and the hardware.
     ///
     /// Worth doing on load rather than at evaluation time: a profile shared by
@@ -469,11 +652,52 @@ impl Profile {
     /// should fail loudly once instead of silently never lighting a lamp.
     pub fn validate(&self, module: &Module, devices: &DeviceInventory) -> Result<()> {
         for b in &self.bindings {
+            if b.same_as.is_some()
+                && !(b.conditions.is_empty() && b.any_of.is_empty() && !b.always)
+            {
+                return Err(Error::MirrorWithConditions(b.led.clone()));
+            }
+            if let Some(target) = &b.same_as {
+                let other = self
+                    .bindings
+                    .iter()
+                    .find(|o| o.device == b.device && &o.led == target)
+                    .ok_or_else(|| {
+                        Error::UnknownMirror(b.led.clone(), target.clone(), b.device.clone())
+                    })?;
+                if other.same_as.is_some() {
+                    return Err(Error::MirrorChain(b.led.clone(), target.clone()));
+                }
+                // Only lamps that dim, on both ends. An indicator takes 0 or 1,
+                // so it has no level to follow and none to offer: mirroring one
+                // either way would be a setting that cannot mean what it says.
+                let device = devices
+                    .device(&b.device)
+                    .ok_or_else(|| Error::UnknownLed(b.led.clone(), b.device.clone()))?;
+                let dims = |name: &str| {
+                    device
+                        .led(name)
+                        .map(|(_, led)| led.is_dimmable())
+                        .unwrap_or(false)
+                };
+                if !dims(&b.led) || !dims(target) {
+                    return Err(Error::MirrorNotDimmable(b.led.clone(), target.clone()));
+                }
+            }
+            if b.always && !(b.conditions.is_empty() && b.any_of.is_empty()) {
+                return Err(Error::AlwaysWithConditions(b.led.clone()));
+            }
+            if !b.conditions.is_empty() && !b.any_of.is_empty() {
+                return Err(Error::ConditionsWithAnyOf(b.led.clone()));
+            }
+            if b.any_of.iter().any(|branch| branch.conditions.is_empty()) {
+                return Err(Error::EmptyBranch(b.led.clone()));
+            }
             // The lamp must exist even on a placeholder row: it names real
             // hardware. Only the conditions are allowed to be undecided.
-            for condition in &b.conditions {
-                if module.signal(&condition.source).is_none() {
-                    return Err(Error::UnknownSignal(condition.source.clone()));
+            for source in b.sources() {
+                if module.signal(source).is_none() {
+                    return Err(Error::UnknownSignal(source.to_string()));
                 }
             }
             let device = devices
@@ -573,6 +797,275 @@ impl Profiles {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn lamp(kind: LedKind, max: u8) -> Led {
+        Led {
+            index: 4,
+            name: "TEST".into(),
+            label: String::new(),
+            kind,
+            max: Some(max),
+            on_value: None,
+            verified: true,
+        }
+    }
+
+    fn always_on(on: Option<u8>) -> Binding {
+        Binding {
+            device: "D".into(),
+            led: "TEST".into(),
+            conditions: Vec::new(),
+            always: true,
+            any_of: Vec::new(),
+            same_as: None,
+            on,
+            off: 0,
+            note: String::new(),
+        }
+    }
+
+    /// Always-on reads nothing, so it must resolve without any signal having
+    /// arrived. If it returned `None` the sweep would drive the lamp to zero,
+    /// which is the exact opposite of what the user asked for.
+    #[test]
+    fn always_on_resolves_with_no_signals_seen() {
+        let led = lamp(LedKind::Indicator, 1);
+        let value = always_on(None).resolve(&led, |_| panic!("must not read any signal"));
+        assert_eq!(value, Some(1));
+    }
+
+    /// The same mechanism sets a fixed brightness, which is how a backlight is
+    /// held at one level instead of following the cockpit dimmer.
+    #[test]
+    fn always_on_carries_a_chosen_brightness() {
+        let led = lamp(LedKind::Dimmer, 255);
+        assert_eq!(always_on(Some(128)).resolve(&led, |_| None), Some(128));
+        // Still clamped to what the lamp accepts: an indicator acks 255 and
+        // lights nothing, which is indistinguishable from a dead lamp.
+        let indicator = lamp(LedKind::Indicator, 1);
+        assert_eq!(always_on(Some(255)).resolve(&indicator, |_| None), Some(1));
+    }
+
+    /// An empty condition list means "not decided yet" and drives the lamp off.
+    /// Always-on is a decision, so it must not be swept away as unassigned.
+    #[test]
+    fn always_on_is_not_a_placeholder() {
+        assert!(!always_on(None).is_placeholder());
+        let mut undecided = always_on(None);
+        undecided.always = false;
+        assert!(undecided.is_placeholder());
+    }
+
+    fn cond(source: &str, on_when: OnWhen) -> Condition {
+        Condition {
+            source: source.into(),
+            on_when,
+        }
+    }
+
+    /// The case `any_of` exists for: a multicrew lamp that follows whichever
+    /// station is occupied. Each branch gates a brightness behind a station
+    /// test, so the branch for the empty seat resolves to zero and the live one
+    /// supplies the value.
+    fn multicrew() -> Binding {
+        Binding {
+            device: "D".into(),
+            led: "TEST".into(),
+            conditions: Vec::new(),
+            always: false,
+            same_as: None,
+            any_of: vec![
+                Branch {
+                    conditions: vec![
+                        cond("STATION", OnWhen::Equals(1)),
+                        cond("CPG_BRIGHT", OnWhen::Scale([0, 65535])),
+                    ],
+                },
+                Branch {
+                    conditions: vec![
+                        cond("STATION", OnWhen::Equals(0)),
+                        cond("PLT_BRIGHT", OnWhen::Scale([0, 65535])),
+                    ],
+                },
+            ],
+            on: None,
+            off: 0,
+            note: String::new(),
+        }
+    }
+
+    #[test]
+    fn any_of_takes_the_branch_that_is_live() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let binding = multicrew();
+
+        // In the CPG seat: the CPG branch supplies its brightness and the PLT
+        // branch is gated to zero, so the brighter of the two is the CPG value.
+        let value = binding.resolve(&led, |s| match s {
+            "STATION" => Some(1),
+            "CPG_BRIGHT" => Some(65535),
+            "PLT_BRIGHT" => Some(0),
+            _ => None,
+        });
+        assert_eq!(value, Some(255));
+
+        // In the PLT seat, with the CPG dimmer left high. The station test, not
+        // the brightness, is what decides, which is the whole point.
+        let value = binding.resolve(&led, |s| match s {
+            "STATION" => Some(0),
+            "CPG_BRIGHT" => Some(65535),
+            "PLT_BRIGHT" => Some(32768),
+            _ => None,
+        });
+        assert_eq!(value, Some(127));
+    }
+
+    #[test]
+    fn any_of_is_off_when_no_branch_holds() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let value = multicrew().resolve(&led, |s| match s {
+            "STATION" => Some(7),
+            _ => Some(65535),
+        });
+        assert_eq!(value, Some(0), "no station matched, so nothing lights");
+    }
+
+    /// Same conservatism as a single group: a signal nobody has seen leaves the
+    /// lamp at its swept value rather than forcing it somewhere.
+    #[test]
+    fn any_of_is_unresolved_while_a_deciding_signal_is_unseen() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let value = multicrew().resolve(&led, |s| match s {
+            "CPG_BRIGHT" | "PLT_BRIGHT" => Some(65535),
+            // The station is what decides, and nothing has reported it yet.
+            _ => None,
+        });
+        assert_eq!(value, None);
+    }
+
+    /// A branch already gated off stops before reading the rest of itself.
+    ///
+    /// Worth pinning, because it is what keeps a multicrew lamp working in the
+    /// occupied seat when the other seat's dimmer has never been touched and so
+    /// has never been exported. Requiring every branch to be fully readable
+    /// would leave the lamp unresolved and therefore dark.
+    #[test]
+    fn a_branch_that_cannot_hold_does_not_need_the_rest_of_its_signals() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let value = multicrew().resolve(&led, |s| match s {
+            "STATION" => Some(1),
+            "CPG_BRIGHT" => Some(65535),
+            // The PLT branch is already false at the station test.
+            _ => None,
+        });
+        assert_eq!(value, Some(255));
+    }
+
+    /// The engine indexes a binding by every address it reads, so a signal
+    /// named only inside a branch still has to be reported.
+    #[test]
+    fn sources_reach_inside_every_branch() {
+        let binding = multicrew();
+        let mut found: Vec<&str> = binding.sources().collect();
+        found.sort_unstable();
+        found.dedup();
+        assert_eq!(found, vec!["CPG_BRIGHT", "PLT_BRIGHT", "STATION"]);
+    }
+
+    fn mirror_profile(same_as: Option<&str>) -> Profile {
+        Profile {
+            schema_version: 1,
+            name: "t".into(),
+            author: String::new(),
+            profile_version: String::new(),
+            aircraft: vec!["A".into()],
+            module: "M".into(),
+            bindings: vec![
+                Binding {
+                    device: "D".into(),
+                    led: "Backlight".into(),
+                    conditions: vec![cond("DIM", OnWhen::Scale([0, 65535]))],
+                    always: false,
+                    any_of: Vec::new(),
+                    same_as: None,
+                    on: None,
+                    off: 0,
+                    note: String::new(),
+                },
+                Binding {
+                    device: "D".into(),
+                    led: "FLAG".into(),
+                    conditions: Vec::new(),
+                    always: false,
+                    any_of: Vec::new(),
+                    same_as: same_as.map(str::to_string),
+                    on: None,
+                    off: 255,
+                    note: String::new(),
+                },
+            ],
+        }
+    }
+
+    /// A mirror follows the lamp it points at, which is the whole point: change
+    /// the backlight and the governors above it move with it.
+    #[test]
+    fn a_mirror_follows_its_target() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let profile = mirror_profile(Some("Backlight"));
+        let flag = &profile.bindings[1];
+
+        let value = profile.resolve_binding(flag, &led, |_| Some(65535));
+        assert_eq!(value, Some(255));
+        let value = profile.resolve_binding(flag, &led, |_| Some(32768));
+        assert_eq!(value, Some(127));
+    }
+
+    /// The mirroring lamp keeps its own `off`, so it can follow the backlight at
+    /// night and still hold a daylight floor when the console knob is at zero.
+    /// This is exactly the FLAG case that left the flap lamps invisible once.
+    #[test]
+    fn a_mirror_keeps_its_own_daylight_floor() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let profile = mirror_profile(Some("Backlight"));
+        let value = profile.resolve_binding(&profile.bindings[1], &led, |_| Some(0));
+        assert_eq!(value, Some(255), "console off means daylight, so the flags stay readable");
+    }
+
+    /// A mirror reads no signal of its own, so the engine has to index it under
+    /// the target's addresses or it would be written once and never follow.
+    #[test]
+    fn a_mirror_reports_the_signals_of_its_target() {
+        let profile = mirror_profile(Some("Backlight"));
+        assert_eq!(profile.sources_of(&profile.bindings[1]), vec!["DIM"]);
+        // And without the mirror it reports nothing, because it reads nothing.
+        let plain = mirror_profile(None);
+        assert!(profile.sources_of(&plain.bindings[1]).is_empty());
+    }
+
+    /// The editor rewrites whole profiles, and these files are shipped and
+    /// diffed by hand. A round trip that added a line to every lamp would make
+    /// every future change unreviewable.
+    #[test]
+    fn saving_a_shipped_profile_does_not_pad_it() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/defaults");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).expect("data/defaults should exist") {
+            let path = entry.expect("readable entry").path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let profile = Profile::load(&path).expect("shipped profile should parse");
+            let text = serde_json::to_string_pretty(&profile).expect("should serialise");
+            assert!(
+                !text.contains("\"on\": null"),
+                "{} gained an explicit null on save",
+                path.display()
+            );
+            checked += 1;
+        }
+        assert!(checked > 0, "no shipped profiles were checked, so this proves nothing");
+    }
 
     #[test]
     fn equals_drives_full_brightness() {

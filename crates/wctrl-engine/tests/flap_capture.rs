@@ -95,7 +95,7 @@ fn catalogue() -> Catalogue {
     Catalogue::from_modules(vec![module])
 }
 
-/// The three flap bindings exactly as `data/profiles/a-10c-2.json` carries them.
+/// The three flap bindings exactly as `data/defaults/a-10c-2.json` carries them.
 fn profile() -> Profile {
     serde_json::from_str(
         r#"{

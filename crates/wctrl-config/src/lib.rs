@@ -5,7 +5,7 @@
 //! keyed by LED rather than by signal  see docs/CONFIG.md.
 
 use std::collections::HashMap;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -23,6 +23,8 @@ pub enum Error {
     UnknownLed(String, String),
     #[error("LED {0:?} was given on={1}, above its maximum of {2}")]
     OutOfRange(String, u8, u8),
+    #[error("no shipped default named {0:?} to reset from")]
+    NoDefault(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -488,6 +490,82 @@ impl Profile {
                 }
             }
         }
+        Ok(())
+    }
+}
+
+// ------------------------------------------------------------- shipped copies
+
+/// Shipped profiles, and the folder the user actually edits.
+///
+/// Profiles ship as a product rather than a sample, so they are copied into the
+/// active folder rather than consulted as a second layer at load time. One
+/// folder is in use, which means what a user sees in it is what runs: nothing is
+/// shadowed and no lookup order has to be explained.
+///
+/// Seeding only ever adds. A profile the user has is theirs, and an update never
+/// rewrites it. The deliberate cost is that a correction shipped to a default
+/// never reaches someone who already has that profile, including someone who
+/// never opened it. [`reset_to_default`] is the remedy, and it is the only path
+/// that overwrites.
+pub struct Profiles {
+    pub defaults: PathBuf,
+    pub active: PathBuf,
+}
+
+impl Profiles {
+    pub fn new(defaults: impl Into<PathBuf>, active: impl Into<PathBuf>) -> Self {
+        Profiles {
+            defaults: defaults.into(),
+            active: active.into(),
+        }
+    }
+
+    /// Copy in every default the active folder does not already have, returning
+    /// the file names copied. Creates the active folder if it is missing.
+    ///
+    /// Safe to run on every start, which is the point: install, update and a
+    /// user who deleted the folder all take the same path.
+    pub fn seed(&self) -> Result<Vec<String>> {
+        if !self.defaults.is_dir() {
+            return Ok(Vec::new());
+        }
+        std::fs::create_dir_all(&self.active)?;
+        let mut copied = Vec::new();
+        for entry in std::fs::read_dir(&self.defaults)? {
+            let from = entry?.path();
+            if from.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            let Some(name) = from.file_name() else { continue };
+            let to = self.active.join(name);
+            if to.exists() {
+                continue;
+            }
+            std::fs::copy(&from, &to)?;
+            copied.push(name.to_string_lossy().into_owned());
+        }
+        copied.sort();
+        Ok(copied)
+    }
+
+    /// True when a shipped default exists for this file name, which is what
+    /// decides whether the editor offers a reset button on the row.
+    pub fn has_default(&self, file: &str) -> bool {
+        self.defaults.join(file).is_file()
+    }
+
+    /// Overwrite one active profile with its shipped default.
+    ///
+    /// The only call that destroys user work, so it is never reached except by
+    /// someone clicking reset.
+    pub fn reset_to_default(&self, file: &str) -> Result<()> {
+        let from = self.defaults.join(file);
+        if !from.is_file() {
+            return Err(Error::NoDefault(file.to_string()));
+        }
+        std::fs::create_dir_all(&self.active)?;
+        std::fs::copy(&from, self.active.join(file))?;
         Ok(())
     }
 }

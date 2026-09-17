@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use wctrl_bios::{BiosState, Listener, Write as BiosWrite};
-use wctrl_config::{Catalogue, DeviceInventory, Profile};
+use wctrl_config::{Catalogue, DeviceInventory, Profile, Profiles};
 use wctrl_engine::{Batch, Cause, Engine};
 use wctrl_hid::Device;
 
@@ -126,6 +126,10 @@ enum Command {
         catalogue: PathBuf,
         #[arg(long, default_value = "data/profiles")]
         profiles: PathBuf,
+        /// Shipped profiles, copied into --profiles at startup for any name
+        /// that is not there yet. Never overwrites one the user already has.
+        #[arg(long, default_value = "data/defaults")]
+        defaults: PathBuf,
         /// Print what would be written without opening any device. Lets the
         /// whole pipeline be checked against live DCS with no hardware present.
         #[arg(long)]
@@ -277,10 +281,19 @@ fn main() -> Result<()> {
             devices,
             catalogue,
             profiles,
+            defaults,
             dry_run,
             verbose,
             seconds,
-        } => run(&devices, &catalogue, &profiles, dry_run, verbose, seconds)?,
+        } => run(
+            &devices,
+            &catalogue,
+            &profiles,
+            &defaults,
+            dry_run,
+            verbose,
+            seconds,
+        )?,
 
         Command::Catalogue {
             dir,
@@ -735,6 +748,7 @@ fn run(
     devices_path: &PathBuf,
     catalogue_dir: &PathBuf,
     profiles_dir: &PathBuf,
+    defaults_dir: &PathBuf,
     dry_run: bool,
     verbose: bool,
     seconds: Option<u64>,
@@ -747,6 +761,26 @@ fn run(
             catalogue_dir.display()
         )
     })?;
+
+    // Shipped profiles are copied in rather than read from a second folder, so
+    // there is only ever one place profiles live and one place the user edits.
+    // Seeding adds and never replaces, so this is safe on every start.
+    let seeded = Profiles::new(defaults_dir, profiles_dir)
+        .seed()
+        .with_context(|| {
+            format!(
+                "seeding {} from {}",
+                profiles_dir.display(),
+                defaults_dir.display()
+            )
+        })?;
+    if !seeded.is_empty() {
+        println!(
+            "seeded   {} profile(s) from {}",
+            seeded.len(),
+            defaults_dir.display()
+        );
+    }
 
     let mut profiles = Vec::new();
     let mut skipped = 0usize;

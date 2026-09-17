@@ -1,0 +1,262 @@
+/* Deliberately plain. This is a config editor that sits beside a flight sim, so
+   it follows the OS light/dark setting and otherwise stays out of the way. */
+
+:root {
+  --bg: #ffffff;
+  --panel: #f4f5f7;
+  --line: #d8dce2;
+  --text: #16191d;
+  --muted: #646c78;
+  --accent: #1f6feb;
+  --danger: #b4232c;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16181c;
+    --panel: #1e2126;
+    --line: #2e333b;
+    --text: #e6e8eb;
+    --muted: #949daa;
+    --accent: #58a6ff;
+    --danger: #f0716f;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 "Segoe UI", system-ui, sans-serif;
+}
+
+#app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 20px 16px 48px;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+h1 {
+  font-size: 19px;
+  margin: 0;
+}
+
+h2 {
+  font-size: 16px;
+  margin: 0 0 4px;
+}
+
+.grow,
+.spacer {
+  flex: 1;
+  min-width: 0;
+}
+
+.meta {
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+.block {
+  display: block;
+}
+
+.empty {
+  color: var(--muted);
+  padding: 32px 0;
+}
+
+.error {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.bad {
+  color: var(--danger);
+  font-size: 12.5px;
+}
+
+button {
+  font: inherit;
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+
+button:hover {
+  border-color: var(--muted);
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+button.danger {
+  color: var(--danger);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+/* ------------------------------------------------------------- profile list */
+
+ul.profiles {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+ul.profiles li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--panel);
+}
+
+dialog.picker {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--text);
+  padding: 18px;
+  min-width: 460px;
+}
+
+dialog.picker select {
+  width: 100%;
+  margin: 10px 0 14px;
+  font: inherit;
+  padding: 4px;
+  background: var(--panel);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+dialog.picker .actions {
+  justify-content: flex-end;
+}
+
+/* ---------------------------------------------------------- device sections */
+
+details.device {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  background: var(--panel);
+  overflow: hidden;
+}
+
+details.device > summary {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+details.device > summary .name {
+  font-weight: 600;
+}
+
+details[open] > summary {
+  border-bottom: 1px solid var(--line);
+}
+
+table.lamps {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--bg);
+}
+
+table.lamps th {
+  text-align: left;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  font-weight: 600;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+table.lamps td {
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: top;
+}
+
+table.lamps tr:last-child td {
+  border-bottom: none;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.unset {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.unverified {
+  display: inline-block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 0 5px;
+}
+
+/* Conditions stack, because every one of them must hold for the lamp to light
+   and a row that showed only the first would be a lie about what drives it. */
+.condition {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.condition + .condition {
+  margin-top: 3px;
+}
+
+.condition code {
+  font: 12.5px/1.5 "Cascadia Mono", Consolas, monospace;
+}
+
+.condition .test {
+  color: var(--muted);
+  font-size: 12.5px;
+}

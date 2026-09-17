@@ -49,22 +49,65 @@ updates it is stamped with the version it came from.
    1 and 2 (A/A, A/G) are binary. Backlight dims them but does not gate them.
    Details under Verified facts.
 
-4. **Inventory the three newly-found devices.** `wctrl devices` reports an MCDU
+4. **Inventory the three devices.** `wctrl devices` reports an MCDU
    CAPTAIN (`0xbb36`), Orion Combat Rudder Pedals Metal (`0xbef0`) and a
    CarrierAce UFC + HUD (`0xbede`) that `devices.json` knows nothing about. The
    UFC and MCDU in particular are display devices, so they may not use `SET_LEDX`
    at all. Same method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
 
-5. **Then the Tauri editor.** Shape is specified in `CONFIG.md`.
+5. **The Tauri editor.** Scaffolded 2026-09-16, see below. Shape is specified
+   in `CONFIG.md`.
 
-**Do not** start the UI before the engine the CLI exists precisely so every
-layer can be exercised on real hardware before anything is wrapped in Tauri.
+The engine came first on purpose: every layer was exercised on real hardware
+through the CLI before anything was wrapped in Tauri.
+
+## Where the editor stands
+
+Scaffolded and compiling, 2026-09-16. `editor/` holds a Tauri 2 app: vanilla
+TypeScript with Vite in `editor/src`, and `editor/src-tauri` as a workspace
+member. Frontend builds to 5.6 kB of JavaScript, no framework.
+
+```powershell
+cd editor
+npm install
+npm run tauri dev
+```
+
+**Working:** the profile library (list, create, reset), the module picker fed
+from the catalogue index, and one collapsible section per device, collapsed on
+open with an expand/collapse-all control. Lamp rows render every condition
+stacked, not just the first, because a lamp commonly needs more than one.
+
+**Not built yet, in the order it should be done:**
+
+1. **Editing a binding.** Rows are read-only. This is the next piece and it is
+   the whole point of the app.
+2. **The signal typeahead**, specified in `CONFIG.md`. Three characters
+   minimum, matching description, category and identifier, two-line rows.
+3. **Add and remove conditions on a binding.** The A-10C half-flaps lamp needs
+   the lever at MVR *and* the gauge inside the half window; without this the
+   editor cannot express a profile the engine already runs.
+4. **The usage hint** behind an info icon, on hover and on focus.
+5. **Learn mode**, which needs the editor to read the DCS-BIOS stream.
+
+**Untested:** the window has never been opened. Both halves compile and the
+commands are thin wrappers over `wctrl-config`, but nothing has been clicked.
+
+## Profiles ship from `data/defaults`
+
+Changed 2026-09-16. `data/defaults` holds the profiles we ship, tracked in git.
+`data/profiles` is the active folder the daemon reads and the editor writes; it
+is gitignored and seeded from `data/defaults` on every start for any name not
+already there. Seeding adds and never replaces. Reset is the only overwrite.
+
+`Profiles` in `wctrl-config` owns this, and both the CLI and the editor call it,
+so there is one implementation of the rule rather than two.
 
 **Housekeeping:** the repo is initialised and `.gitignore` is written 19 files,
 ~126 KB, with `target/` and the generated `data/catalogue/` excluded and the
-reasons recorded in the file itself. SimAppPro's `HIDLog` is currently **on**;
-turn it off in `%APPDATA%\SimAppPro\config.json` when done, as it grows
-`WWTHID.log` by ~5 MB per session.
+reasons recorded in the file itself. SimAppPro's `HIDLog` is **off** again as of
+2026-09-16. Turn it back on in `%APPDATA%\SimAppPro\config.json` only while
+capturing a device, since it grows `WWTHID.log` by ~5 MB per session.
 
 ## What this is
 
@@ -180,7 +223,9 @@ crates/wctrl-hid      frame building, part discovery, SET_LEDX   (5 tests)
 crates/wctrl-bios     export-stream decoder + address space      (5 tests)
 crates/wctrl-config   catalogue, device inventory, profiles      (7 tests)
 crates/wctrl-engine   aircraft detection, sweep, incremental writes (19 tests)
-data/profiles         shipped example profiles, tracked in git
+data/defaults         shipped profiles, tracked in git
+data/profiles         active profiles, gitignored, seeded from data/defaults
+editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
 crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/catalogue/run
 data/catalogue        50 modules, generated, version-stamped
 data/devices.json     PTO2 and Orion II both verified
@@ -210,9 +255,9 @@ Tauri renders through WebView2, which ships with Windows.
    24-byte string), the single-sweep sync, then incremental writes. Needs no
    hardware.
 2. **Prove the stream** against live DCS.
-3. **Tauri editor** LED-keyed rows, searchable signal dropdown, value input
-   constrained to what the chosen signal can report, and a learn mode that
-   watches the stream while the user flips a cockpit switch.
+3. ~~**Tauri editor** scaffold.~~ Done 2026-09-16. Remaining work is listed
+   under "Where the editor stands": binding editor, typeahead, conditions,
+   hint box, learn mode.
 
 ## Method note
 

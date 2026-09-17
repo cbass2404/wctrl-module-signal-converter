@@ -16,9 +16,19 @@
 # Rebuild with:  python tools/build_catalogue.py
 /data/catalogue/
 
-# Profiles in data/profiles ARE tracked. They are the worked examples that make
-# the tool usable out of the box, and they are the reference for the format.
-# A user's own profiles will live in their app data directory, not here.
+# Shipped profiles live in data/defaults and ARE tracked. They are the product:
+# a baseline every user starts from, and the reference for the format.
+#
+# data/profiles is the active folder, the one the daemon reads and the editor
+# writes. It is seeded from data/defaults on startup for any name it does not
+# already have, so it regenerates itself and must not be committed: tracking it
+# would mean every edit made while testing showed up as a diff against the
+# thing being shipped.
+/data/profiles/
+
+# Node output for the editor.
+/editor/node_modules/
+/editor/dist/
 
 # Captures and logs from reverse-engineering sessions. Some contain device
 # serial numbers.

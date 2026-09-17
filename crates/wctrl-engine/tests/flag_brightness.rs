@@ -36,7 +36,7 @@ fn devices() -> DeviceInventory {
 }
 
 fn profile(file: &str) -> Profile {
-    Profile::load(&root().join("data/profiles").join(file))
+    Profile::load(&root().join("data/defaults").join(file))
         .unwrap_or_else(|e| panic!("{file} should parse: {e}"))
 }
 
@@ -153,16 +153,35 @@ fn the_panel_labels_still_follow_the_console_all_the_way_down() {
 fn every_shipped_profile_binds_both_gates() {
     // An unbound gate is swept to 0 and silently blanks the lamps beneath it.
     // SL hides all 14 indicators, FLAG hides 7 of them.
-    for file in ["a-10c-2.json", "fa-18c-hornet.json"] {
-        let p = profile(file);
+    //
+    // This walks the profiles directory rather than a list, because these
+    // profiles ship as a baseline for other people's panels. A new one added
+    // without both gates bound is a panel that looks broken on someone else's
+    // desk, and they have no way to know why.
+    let dir = root().join("data/defaults");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&dir).expect("data/defaults should exist") {
+        let path = entry.expect("readable entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let p = Profile::load(&path).unwrap_or_else(|e| panic!("{name} should parse: {e}"));
+
+        // Only panels the profile actually drives need their gates bound.
+        if !p.bindings.iter().any(|b| b.device == PTO2) {
+            continue;
+        }
         for gate in ["SL", "FLAG"] {
             let bound = p
                 .bindings
                 .iter()
                 .any(|b| b.device == PTO2 && b.led == gate && !b.is_placeholder());
-            assert!(bound, "{file} leaves {gate} unbound, which blanks lamps beneath it");
+            assert!(bound, "{name} leaves {gate} unbound, which blanks lamps beneath it");
         }
+        checked += 1;
     }
+    assert!(checked > 0, "no shipped profiles were checked, so this proves nothing");
     let _ = SL;
 }
 

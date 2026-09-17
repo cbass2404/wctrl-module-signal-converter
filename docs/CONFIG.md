@@ -217,20 +217,101 @@ apply it on top of an already-blinking source and get a beat frequency.
 A synthetic blink belongs only where DCS does not already express one. It is a
 later addition, not part of v1.
 
+## The editor window
+
+Nothing fancy. A profile list with new, edit and reset, and one profile open at
+a time.
+
+**New profile asks for a module from a dropdown, never a typed name.** The list
+comes from the catalogue index, so it offers only what the user's own DCS-BIOS
+supports. A module can cover several runtime aircraft names, `A-10C` covering
+both `A-10C_2` and `A-10C`, so the entry shows the names underneath it. The new
+profile is then populated with every LED of every inventoried device, all
+unassigned, which is the same starter the CLI writes.
+
+**One collapsible section per device**, ordered alphabetically by `display_name`
+and all collapsed on open, with a single control to expand and collapse
+everything. Ordering is done once when the inventory loads, not per render and
+not by hand in `devices.json`: that file is edited by hand, so a sort order
+maintained there would drift the first time a device was appended at the bottom.
+It also has to be `display_name` rather than the key, because `PTO2` and
+`TAKEOFF_PLANEL_2` do not sort the same way and the user only ever sees one of
+them.
+
+**Every inventoried device is listed, not only the connected ones**, with
+connected ones marked. A profile has to be editable with the panels unplugged,
+which is most of the time.
+
+## Where profiles live
+
+Shipped profiles are a product, not a sample. They live read-only in `DEFAULT/`
+beside the executable. The folder the daemon and editor actually read is a
+separate, writable one, and it starts as a copy of `DEFAULT/`.
+
+- **Install** copies every default in.
+- **Update** copies in only the names that are not already there. A profile the
+  user has is theirs, and an update never rewrites it.
+- **Reset** copies one default back over the active file.
+
+There is exactly one folder in use, so what a user sees in it is what runs.
+Nothing is shadowed at load time and `--profiles` keeps pointing at one place.
+
+The cost, accepted deliberately: a correction shipped to a default never reaches
+a user who already has that profile, including one who never opened it. Reset is
+the manual remedy. A profile the user deletes reappears on the next update
+unless the seeded names are tracked.
+
 ## The source dropdown
 
-This is the hard part of the UI. Modules carry hundreds to 1,440 signals, so a
-plain `<select>` is unusable. It needs:
+This is the hard part of the UI. A module carries hundreds to 1,440 signals, so
+a plain `<select>` is unusable. Only the profile's own module is offered; the
+catalogue is never pooled across modules.
 
-- **Search** across identifier and description.
-- **Grouping** by the catalogue's category.
-- **Ordering** that puts likely intent first: lamps, then selectors, then the rest.
-- **Inline context** identifier, description, control type, value range because
-  `PLT_WCA_HOOK_DOWN` alone does not tell a user it is a red lamp with range 0..1.
-- **Learn mode.** With DCS running, the user flips the switch in the cockpit and
-  the editor shows which signals just changed, filtering the dropdown to those.
-  This is the feature that makes unfamiliar modules tractable and is worth more
-  than any amount of search polish.
+**It is a typeahead, not a list.** Nothing is shown until three characters are
+typed. The match runs over description, category and identifier.
+
+Each row is two lines plus a dim identifier:
+
+```text
+  Call Button Light (Yellow)
+  Gunner (L) Low Profile Audio Panel          LG_LPCAP_CALL_LIGHT
+```
+
+The second line is not decoration. Descriptions are human-readable but far from
+unique: every one of the 21,644 signals across the 51 catalogued modules has a
+description, yet CH-47F alone has 696 signals that share one with another signal
+in the same module. `Call Button Light (Yellow)` occurs six times there,
+separated only by category: PLT, CPLT, Gunner (L), Gunner (R), Ramp and TC.
+Description with category leaves 143 signals ambiguous across everything, 0.7%,
+and the identifier on the row settles those.
+
+Matching the identifier as well as the description costs nothing and serves the
+user who already knows `FLAP_POS` and would rather type it than describe it.
+
+**Ordering** puts likely intent first: lamps, then selectors, then the rest.
+
+**A usage hint per selected signal**, behind an info icon so it costs no space
+until wanted. It opens on hover and on focus or click, because a hover-only hint
+cannot be reached from the keyboard or on a touch screen. Everything it shows is
+already in the catalogue:
+
+```text
+  FLAPS_SWITCH   selector   Landing Gear and Flap Control Panel
+  selector position, 0..2
+    0 = DN    1 = MVR    2 = UP
+```
+
+For a lamp that is `0 if light is off, 1 if light is on` and a range of 0..1.
+Discrete signals carry their position labels, so the hint states the rules and
+parameters rather than paraphrasing them.
+
+**Learn mode.** With DCS running, the user flips the switch in the cockpit and
+the editor shows which signals just changed, filtering the list to those. This
+is the feature that makes unfamiliar modules tractable and is worth more than
+any amount of search polish. It is also the answer to "I do not know what this
+is called", which is why the typeahead needs no browse-everything mode: an empty
+box until three characters is acceptable precisely because learn mode fills it
+without typing.
 
 ## Conditions: every one must hold
 

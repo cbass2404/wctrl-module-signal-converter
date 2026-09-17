@@ -6,6 +6,7 @@ members = [
     "crates/wctrl-config",
     "crates/wctrl-engine",
     "crates/wctrl-cli",
+    "editor/src-tauri",
 ]
 
 [workspace.package]

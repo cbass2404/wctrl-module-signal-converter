@@ -184,6 +184,10 @@ ul.profiles li {
   background: var(--panel);
 }
 
+ul.profiles li[hidden] {
+  display: none;
+}
+
 dialog.picker {
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -243,7 +247,8 @@ dialog.picker label.field {
   color: var(--muted);
 }
 
-dialog.picker label.field input {
+dialog.picker label.field input,
+header input.filter {
   font: inherit;
   padding: 5px 7px;
   background: var(--panel);
@@ -419,9 +424,15 @@ input.signal {
   color: var(--text);
 }
 
-input.signal:focus {
+input.signal:focus,
+header input.filter:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
+}
+
+header input.filter {
+  width: 320px;
+  min-width: 0;
 }
 
 /* Results flow inline rather than floating, so nothing can clip them and no

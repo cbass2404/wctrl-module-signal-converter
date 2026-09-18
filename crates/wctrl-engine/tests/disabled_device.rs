@@ -41,15 +41,15 @@ fn engine(drive_ufc: bool) -> Engine {
     e
 }
 
-/// Load the Hornet, then turn the instrument panel dimmer, which the shipped
-/// profile binds to the UFC's panel backlight.
+/// Load the Hornet, then turn the consoles dimmer, which the shipped profile
+/// binds to every backlight, the UFC's included.
 fn fly(e: &mut Engine) -> Vec<Batch> {
     let dimmer = e
         .catalogue()
         .module("FA-18C_hornet")
-        .and_then(|m| m.signal("INST_PNL_DIMMER"))
+        .and_then(|m| m.signal("CONSOLES_DIMMER"))
         .and_then(|s| s.primary())
-        .expect("INST_PNL_DIMMER")
+        .expect("CONSOLES_DIMMER")
         .address;
     let t0 = Instant::now();
     let mut writes = text_at(0, "FA-18C_hornet\0\0\0\0\0\0\0\0\0\0\0");

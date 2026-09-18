@@ -9,6 +9,357 @@
   "module": "AH-64D",
   "bindings": [
     {
+      "device": "CarrierAce_MFD_C",
+      "led": "INST_PNL_Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "CarrierAce_MFD_L",
+      "led": "INST_PNL_Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "CarrierAce_MFD_R",
+      "led": "INST_PNL_Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "INST_PNL_Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "HUD_INST_PNL_Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "Orion_Combat_Rudder_Pedals",
+      "led": "Backlight_L",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "Orion_Combat_Rudder_Pedals",
+      "led": "Backlight_R",
+      "conditions": [],
+      "same_as": "Backlight_L"
+    },
+    {
+      "device": "Orion_Combat_Rudder_Pedals",
+      "led": "Logo",
+      "conditions": [],
+      "same_as": "Backlight_L"
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/A",
+      "conditions": [
+        {
+          "source": "PLT_GROUND_OVERRIDE_L",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/G",
+      "conditions": [
+        {
+          "source": "PLT_MASTER_ARM_ARM_L",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
+    },
+    {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
       "conditions": [],
@@ -152,7 +503,7 @@
       "conditions": []
     },
     {
-      "device": "Orion_Throttle_Base_II",
+      "device": "ViperAce_ICP",
       "led": "Backlight",
       "conditions": [],
       "any_of": [
@@ -193,30 +544,6 @@
               }
             }
           ]
-        }
-      ]
-    },
-    {
-      "device": "Orion_Throttle_Base_II",
-      "led": "A/A",
-      "conditions": [
-        {
-          "source": "PLT_GROUND_OVERRIDE_L",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ]
-    },
-    {
-      "device": "Orion_Throttle_Base_II",
-      "led": "A/G",
-      "conditions": [
-        {
-          "source": "PLT_MASTER_ARM_ARM_L",
-          "on_when": {
-            "equals": 1
-          }
         }
       ]
     }

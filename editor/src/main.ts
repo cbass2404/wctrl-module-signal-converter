@@ -80,15 +80,39 @@ function showError(where: string, e: unknown): void {
 
 // ------------------------------------------------------------------- library
 
+/** Kept across views, so opening a profile and coming back keeps the list narrowed. */
+let libraryFilter = "";
+
+/**
+ * Every word typed must appear somewhere in the profile's name, module or
+ * aircraft. The full aircraft list is searched, not the shortened one shown,
+ * so FC3's jets are findable by name.
+ */
+function matchesFilter(row: ProfileSummary, filter: string): boolean {
+  const haystack = [row.name, row.module, ...row.aircraft].join(" ").toLowerCase();
+  return filter
+    .toLowerCase()
+    .split(/\s+/)
+    .every((word) => haystack.includes(word));
+}
+
 async function showLibrary(): Promise<void> {
   // Nothing on the profile list can use the stream, so the socket goes with it.
   stopLearning();
 
   clear();
+  const filter = el("input", {
+    type: "search",
+    class: "filter",
+    placeholder: "Filter by name, module or aircraft",
+    value: libraryFilter,
+  }) as HTMLInputElement;
   const header = el(
     "header",
     {},
     el("h1", {}, "Profiles"),
+    el("div", { class: "spacer" }),
+    filter,
     el("div", { class: "spacer" }),
     el("button", { class: "primary", id: "new" }, "New profile"),
   );
@@ -116,6 +140,8 @@ async function showLibrary(): Promise<void> {
   }
 
   const list = el("ul", { class: "profiles" });
+  const none = el("p", { class: "empty" }, "No profiles match.");
+  const shown: [ProfileSummary, HTMLElement][] = [];
   for (const row of rows) {
     const aircraft = aircraftSummary(row.aircraft);
     const meta = row.error
@@ -148,11 +174,31 @@ async function showLibrary(): Promise<void> {
       actions.append(remove);
     }
 
-    list.append(
-      el("li", {}, el("div", { class: "grow" }, el("strong", {}, row.name), el("br"), meta), actions),
-    );
+    const item = el("li", {}, el("div", { class: "grow" }, el("strong", {}, row.name), el("br"), meta), actions);
+    shown.push([row, item]);
+    list.append(item);
   }
-  app.append(list);
+  app.append(list, none);
+
+  const apply = (): void => {
+    libraryFilter = filter.value;
+    const text = libraryFilter.trim();
+    let visible = 0;
+    for (const [row, item] of shown) {
+      const show = text === "" || matchesFilter(row, text);
+      item.hidden = !show;
+      if (show) visible++;
+    }
+    none.hidden = visible > 0;
+  };
+  filter.addEventListener("input", apply);
+  filter.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && filter.value !== "") {
+      filter.value = "";
+      apply();
+    }
+  });
+  apply();
 }
 
 /** Reset discards the user's work, so it asks first and says exactly what it does. */

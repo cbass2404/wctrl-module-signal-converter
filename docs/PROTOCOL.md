@@ -31,6 +31,15 @@ required.**
 The vendor channel is solicited: with SimAppPro closed the device sends nothing on
 report `0x02` until addressed.
 
+**One PID is not always one collection.** A CarrierAce MFD in "1 Split 3" mode
+enumerates as three collections under one PID, `col01` to `col03`, all usage
+`0x0001`/`0x04`. Only `col01` declares report `0x02` and an output report; the
+other two are joysticks on reports `0x03` and `0x04` with no output, and a write
+to them fails. Windows' listing order is not a promise, so `Device::open` takes
+the collection whose report descriptor declares an Output item, and falls back
+to the first when none can be read. Every other panel here is a single
+collection with an output report, so the rule picks what it always did.
+
 ## Frame layout
 
 14 bytes, matching `OutputReportByteLength`. Verified both by decoding
@@ -117,13 +126,16 @@ frame per keystroke:
 ### Persisted brightness
 
 SimAppPro saves a panel's dimmers to device flash. The offset differs per part
-and the layout is one byte per dimmer, in index order:
+and the layout is one byte per dimmer, in index order everywhere except the
+rudder pedals, which store theirs in slider order:
 
 | Part     | Offset  | Byte 0               | Byte 1         |
 | -------- | ------- | -------------------- | -------------- |
 | `0xbf05` | `0x114` | `Backlight`          | `SL`           |
 | `0xbed0` | `0x0d8` | `INST_PNL_Backlight` | `LCDBacklight` |
 | `0xbe0e` | `0x0c8` | `INST_PNL_Backlight` |                |
+| `0xbe0d` | `0x0c8` | `INST_PNL_Backlight` |                |
+| `0xbef0` | `0x0e8` | `Backlight_L`        | `Backlight_R`  |
 
 ```text
 WRITE_CFG_DATA  offset 0x114  <- 00 de 00 00     after PTO2 SL = 222
@@ -131,6 +143,8 @@ WRITE_CFG_DATA  offset 0x114  <- 6f de 00 00     after PTO2 Backlight = 111
 WRITE_CFG_DATA  offset 0x0d8  <- 0f 7b ff ff     after UFC LCDBacklight = 123
 WRITE_CFG_DATA  offset 0x0d8  <- d3 7b ff ff     after UFC panel = 211
 WRITE_CFG_DATA  offset 0x0c8  <- fb ff ff ff     after HUD panel = 251
+WRITE_CFG_DATA  offset 0x0c8  <- 89 ff ff ff     after MFD panel = 137
+WRITE_CFG_DATA  offset 0x0e8  <- 0b de 65 ff     after pedals L 11, R 222, logo 101
 ```
 
 **Never write these.** `WRITE_CFG_DATA` is persistent and is on the forbidden
@@ -259,6 +273,82 @@ transcription slip and is not: nothing addressed index 0 in a capture, and the
 vendor table declares only the one entry.
 
 The UFC also carries a segment display, which is a different command entirely.
+
+### CarrierAce MFD part `0xbe0d`
+
+| Index | LED                |
+| ----- | ------------------ |
+| 0     | INST_PNL_Backlight |
+
+One dimmer, the bezel legends, seen taking every value from `0x00` to `0xff` as
+the slider moved and 1, 13 and 137 when typed. Captured 2026-09-18.
+
+**One MFD has three identities, and each is its own PID.** SimAppPro renames it
+so a user with several keeps their bindings apart, and the rename changes the
+USB product id. Part, serial and lamp stay the same:
+
+| Name | PID      | Config `0xd8` |
+| ---- | -------- | ------------- |
+| C    | `0xbee0` | `0`           |
+| L    | `0xbee1` | `1`           |
+| R    | `0xbee2` | `2`           |
+
+```text
+WRITE_CFG_DATA  offset 0x0d8  <- 00 00 00 00     rename to C
+WRITE_CFG_DATA  offset 0x0d8  <- 01 00 00 00     rename to L
+WRITE_CFG_DATA  offset 0x0d8  <- 02 00 00 00     rename to R
+```
+
+The device drops off USB and comes back under the new PID about a second
+later. All three renames captured 2026-09-18.
+
+**"1 Split 3" mode** is config `0xd0`: `2` on, `0` off. PID and name are kept,
+and the device re-enumerates as three collections (see Transport). The side
+switch picks which of them the buttons report on. The switch itself is a
+button: input byte 5 reads `0x10` at the bottom, `0x20` in the middle and
+`0x40` at the top, in either mode. Flipping it sends no config write, causes no
+re-enumeration and carries no lamp traffic, so a split MFD still has one
+backlight, on `col01`.
+
+The name and the mode are independent. Split was checked under R and again
+under L: the same three collections and descriptors, `col01` alone writable,
+under whichever PID the name gives. Read back from the device under L, with
+`READ_CFG_DATA`: `0xd0` = `2`, `0xd8` = `1`, `0xc8` = `0x89`.
+
+Both offsets are `WRITE_CFG_DATA`, so neither can be sent from here, and a
+rename is the user's business in SimAppPro.
+
+### Orion Combat Rudder Pedals part `0xbef0`
+
+| Index | LED         | Lights                     |
+| ----- | ----------- | -------------------------- |
+| 0     | Backlight_L | the left pedal sensor      |
+| 1     | Backlight_R | the right pedal sensor     |
+| 2     | *(none)*    | writes both 0 and 1        |
+| 3     | Logo        | the WinWing logo           |
+
+All three lamps are dimmers, captured 2026-09-18 from SimAppPro's three sliders
+taking 1 and 11, 2, 22 and 222, and 1, 10 and 101. The vendor table lists only
+`Backlight1` 0 and `Backlight2` 1. **The logo is on index 3 and is missing from
+it**, and the saved-brightness record at `0xe8` puts the logo's byte third, in
+slider order rather than index order.
+
+**Index 2 is a shortcut, not a lamp and not a gate.** A write to it goes through
+to both pedal lights, and whichever write came last wins. Worked out on
+hardware with `wctrl led`, with 1 and 2 starting at 0:
+
+1. 1 = 255 lit the right light alone, so 2 at 0 does not hold it off.
+2. 2 = 255 lit both, with 1 still at 0, so 2 drives them directly.
+3. 1 = 0 put the right light out with 2 still at 255, so 2 leaves nothing
+   latched beneath it.
+4. 2 = 0 put both out.
+
+Index 0 alone, from all dark, lit only the left light, which makes index 2 a
+fourth control SimAppPro does not show: 0 and 1 together. SimAppPro never
+writes it. A profile that wants the lights together uses `same_as` instead,
+which every shipped default does, and a user can still split them. It is left out of the inventory on purpose: a sweep
+that owned it would overwrite L and R with whatever it wrote, depending on
+order.
 
 ## Driving a segment display
 

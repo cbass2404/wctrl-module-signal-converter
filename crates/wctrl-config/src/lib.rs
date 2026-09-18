@@ -280,6 +280,11 @@ pub struct Led {
     /// profiles and the editor rather than left as a way to lose the screen.
     #[serde(default, skip_serializing_if = "is_false")]
     pub lights_display: bool,
+    /// A panel backlight: legends or a lit feature, not an indicator and not a
+    /// gate. Every shipped default drives all of these from one cockpit knob,
+    /// and `tests/shipped_defaults.rs` holds them to it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub backlight: bool,
 }
 
 impl Led {
@@ -1441,6 +1446,7 @@ mod tests {
             note: String::new(),
             governs: Vec::new(),
             lights_display: false,
+            backlight: false,
         }
     }
 

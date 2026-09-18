@@ -254,6 +254,12 @@ pub struct Led {
     /// not have to rediscover it.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+    /// Lamps this dimmer hides when it is at 0, by name. The PTO2's SL gates
+    /// every indicator and FLAG gates the flag lamps, so a profile that drives
+    /// either to 0 with the cockpit dark blanks them in daylight. Empty for a
+    /// dimmer that governs nothing, such as a backlight.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub governs: Vec<String>,
 }
 
 impl Led {
@@ -661,21 +667,34 @@ impl Profile {
     /// user fills them in over time. Starting from a complete list of their
     /// hardware beats starting from an empty file, because the question the
     /// editor asks is "what should this lamp do", not "which lamps exist".
+    ///
+    /// The one exception is a gate, a dimmer that hides other lamps at 0. Left
+    /// unassigned it is swept to 0, and every lamp the user then binds beneath
+    /// it stays dark with nothing to say why. So a gate starts held at full,
+    /// and carries its daylight floor already, so that switching it to follow
+    /// a cockpit dimmer later does not blank the panel by day.
     pub fn stub(name: &str, aircraft: &str, module: &str, devices: &DeviceInventory) -> Self {
         let bindings = devices
             .devices
             .iter()
             .flat_map(|d| {
-                d.leds().map(|(_, led)| Binding {
-                    device: d.key.clone(),
-                    led: led.name.clone(),
-                    conditions: Vec::new(),
-                    always: false,
-                    any_of: Vec::new(),
-                    same_as: None,
-                    on: None,
-                    off: 0,
-                    note: String::new(),
+                d.leds().map(|(_, led)| {
+                    let gate = !led.governs.is_empty();
+                    Binding {
+                        device: d.key.clone(),
+                        led: led.name.clone(),
+                        conditions: Vec::new(),
+                        always: gate,
+                        any_of: Vec::new(),
+                        same_as: None,
+                        on: None,
+                        off: if gate { led.max_value() } else { 0 },
+                        note: if gate {
+                            "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight.".to_string()
+                        } else {
+                            String::new()
+                        },
+                    }
                 })
             })
             .collect();
@@ -895,6 +914,37 @@ impl Profile {
         out
     }
 
+    /// Gates that go to 0 with the cockpit dark, and so hide the lamps beneath
+    /// them in daylight. Not an error: the profile loads and does what it says.
+    /// But it is the fault that left the flap lamps invisible once and blanked
+    /// every indicator on the A-10C later, and nothing on the panel says why.
+    ///
+    /// "Dark" is every signal reading 0, which is every lighting knob down.
+    /// The fix is the binding's `off`, which applies whenever it resolves to 0.
+    pub fn cautions(&self, devices: &DeviceInventory) -> Vec<String> {
+        let mut out = Vec::new();
+        for b in &self.bindings {
+            if b.is_placeholder() || self.disabled_devices.contains(&b.device) {
+                continue;
+            }
+            let Some((_, led)) = devices.device(&b.device).and_then(|d| d.led(&b.led)) else {
+                continue;
+            };
+            if led.governs.is_empty() {
+                continue;
+            }
+            if self.resolve_binding(b, led, |_| Some(0)) == Some(0) {
+                let name = if led.label.is_empty() { &led.name } else { &led.label };
+                out.push(format!(
+                    "{name} goes to 0 with the cockpit lighting off, which in daylight hides the {} lamps it governs. Set its value at zero, usually {}, to keep them readable.",
+                    led.governs.len(),
+                    led.max_value()
+                ));
+            }
+        }
+        out
+    }
+
     /// Check the display fields: that they name real glass, sit inside it, do
     /// not fight over cells, and read a source that can actually fill them.
     ///
@@ -1064,12 +1114,80 @@ pub struct Profiles {
     pub active: PathBuf,
 }
 
+/// The file name, without `.json`, for a profile named after `name`.
+///
+/// Lowercase, with each run of anything else collapsed to one dash and none at
+/// either end: `A-10C_2` becomes `a-10c-2`, `F/A-18C Hornet` `f-a-18c-hornet`.
+/// The one rule for every generated profile, whether the daemon names it after
+/// the aircraft it saw, the editor after the module, or a copy after its name.
+/// Two rules had drifted apart once, so there is one.
+///
+/// Empty for a name with nothing alphanumeric in it, which callers must refuse
+/// rather than write `.json`.
+pub fn file_stem(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    for c in name.chars() {
+        if c.is_ascii_alphanumeric() {
+            out.push(c.to_ascii_lowercase());
+        } else if !out.ends_with('-') {
+            out.push('-');
+        }
+    }
+    out.trim_matches('-').to_string()
+}
+
+/// What DCS-BIOS reports as the aircraft when the player has none of their
+/// own: it takes the name from `LoGetSelfData()` and falls back to this when
+/// that returns nothing, logging "unloaded aircraft". Not an unsupported
+/// module, which is reported under its real name, and not the main menu,
+/// where nothing is exported at all. DCS-BIOS files it under its FC3 module
+/// only because that is where its extras go.
+pub const NO_AIRCRAFT: &str = "NONE";
+
+/// The name to give a profile made for `aircraft`, for a person to read.
+///
+/// The aircraft name itself, except [`NO_AIRCRAFT`], which reads as a mistake
+/// in a profile list. File names follow from this through [`file_stem`].
+pub fn profile_name_for(aircraft: &str) -> &str {
+    if aircraft == NO_AIRCRAFT {
+        "No aircraft"
+    } else {
+        aircraft
+    }
+}
+
 impl Profiles {
     pub fn new(defaults: impl Into<PathBuf>, active: impl Into<PathBuf>) -> Self {
         Profiles {
             defaults: defaults.into(),
             active: active.into(),
         }
+    }
+
+    /// Every aircraft an active profile already claims, with the name of the
+    /// profile that claims it.
+    ///
+    /// Two profiles for one aircraft is the conflict worth preventing, not two
+    /// on one module: the F/A-18C and F/A-18E profiles share a module and
+    /// claim different aircraft, which is fine. A profile that will not parse
+    /// claims nothing, since it cannot be loaded to fly either.
+    pub fn claimed_aircraft(&self) -> HashMap<String, String> {
+        let mut out = HashMap::new();
+        let Ok(entries) = std::fs::read_dir(&self.active) else {
+            return out;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.extension().and_then(|e| e.to_str()) != Some("json") {
+                continue;
+            }
+            if let Ok(p) = Profile::load(&path) {
+                for a in &p.aircraft {
+                    out.entry(a.clone()).or_insert_with(|| p.name.clone());
+                }
+            }
+        }
+        out
     }
 
     /// Copy in every default the active folder does not already have, returning
@@ -1228,6 +1346,29 @@ impl Profiles {
 mod tests {
     use super::*;
 
+    #[test]
+    fn no_aircraft_gets_a_name_a_person_can_read() {
+        assert_eq!(profile_name_for(NO_AIRCRAFT), "No aircraft");
+        assert_eq!(file_stem(profile_name_for(NO_AIRCRAFT)), "no-aircraft");
+        assert_eq!(profile_name_for("A-10C_2"), "A-10C_2");
+    }
+
+    #[test]
+    fn file_stems_match_the_names_already_shipped() {
+        // Aircraft names, which is how the daemon names what it writes.
+        assert_eq!(file_stem("A-10C_2"), "a-10c-2");
+        assert_eq!(file_stem("F-14BU"), "f-14bu");
+        assert_eq!(file_stem("NONE"), "none");
+        // Module keys, which is how the editor names a new profile.
+        assert_eq!(file_stem("FA-18C_hornet"), "fa-18c-hornet");
+        assert_eq!(file_stem("Christen Eagle II"), "christen-eagle-ii");
+        // Profile names, which is how a copy is named.
+        assert_eq!(file_stem("FA-18E"), "fa-18e");
+        assert_eq!(file_stem("F/A-18C Hornet copy"), "f-a-18c-hornet-copy");
+        // Nothing usable, so nothing: callers refuse rather than write ".json".
+        assert_eq!(file_stem("   "), "");
+    }
+
     fn lamp(kind: LedKind, max: u8) -> Led {
         Led {
             index: 4,
@@ -1238,6 +1379,7 @@ mod tests {
             on_value: None,
             verified: true,
             note: String::new(),
+            governs: Vec::new(),
         }
     }
 

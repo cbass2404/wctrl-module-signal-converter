@@ -6,6 +6,7 @@
 // because the flaps travel through that window on the way to DN and the lamp
 // would otherwise flash on the way past.
 
+import { confirmAction } from "./confirm";
 import { hintFor, signalPicker } from "./typeahead";
 import type { Binding, Branch, Condition, Led, OnWhen, SignalView } from "./types";
 
@@ -425,13 +426,14 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
           const consequence = last
             ? `\n\n${led.name} will be left unassigned, which means it is driven off.`
             : `\n\n${led.name} will still need its other condition(s) to light.`;
-          if (!window.confirm(`Delete this condition?\n\n${what}${consequence}`)) return;
-
-          const at = group.conditions.indexOf(condition);
-          if (at >= 0) group.conditions.splice(at, 1);
-          editing.delete(condition);
-          normalise();
-          changed();
+          void confirmAction(`Delete this condition?\n\n${what}${consequence}`, "Delete").then((ok) => {
+            if (!ok) return;
+            const at = group.conditions.indexOf(condition);
+            if (at >= 0) group.conditions.splice(at, 1);
+            editing.delete(condition);
+            normalise();
+            changed();
+          });
         }),
       ),
     );
@@ -483,9 +485,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
           el(
             "span",
             { class: "test" },
-            binding.off > 0
-              ? `follows it, but sits at ${binding.off} when it is off`
-              : "follows it exactly",
+            "follows it",
           ),
         ),
       );

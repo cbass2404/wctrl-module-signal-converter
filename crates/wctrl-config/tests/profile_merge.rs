@@ -209,3 +209,30 @@ fn rows_for_an_unplugged_panel_are_kept() {
     );
     assert_eq!(kept.unwrap().off, 7);
 }
+
+#[test]
+fn claimed_aircraft_is_keyed_by_aircraft_not_module() {
+    // Two profiles on one module, claiming different aircraft, is how the
+    // F/A-18E rides the Hornet's outputs. Both claims must show, and neither
+    // must hide the other behind the shared module.
+    let dir = scratch("claimed");
+    let active = dir.join("active");
+    let write = |file: &str, name: &str, aircraft: &str| {
+        std::fs::write(
+            active.join(file),
+            format!(
+                r#"{{"name": "{name}", "aircraft": [{aircraft}], "module": "FA-18C_hornet", "bindings": []}}"#
+            ),
+        )
+        .unwrap();
+    };
+    write("fa-18c-hornet.json", "Hornet", r#""FA-18C_hornet""#);
+    write("fa-18e.json", "Super Hornet", r#""FA-18E""#);
+    // A broken file claims nothing, since it could not be flown either.
+    std::fs::write(active.join("broken.json"), "{ not json").unwrap();
+
+    let claimed = Profiles::new(dir.join("defaults"), &active).claimed_aircraft();
+    assert_eq!(claimed.len(), 2, "{claimed:?}");
+    assert_eq!(claimed.get("FA-18C_hornet").map(String::as_str), Some("Hornet"));
+    assert_eq!(claimed.get("FA-18E").map(String::as_str), Some("Super Hornet"));
+}

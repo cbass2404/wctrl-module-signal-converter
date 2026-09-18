@@ -42,7 +42,8 @@
               "label": "SL",
               "kind": "dimmer",
               "max": 255,
-              "verified": true
+              "verified": true,
+              "governs": ["Master_Caution", "JETT", "CTR", "LI", "LO", "RO", "RI", "FLAPS", "NOSE", "FULL", "RIGHT", "LEFT", "HALF", "HOOK"]
             },
             {
               "index": 3,
@@ -50,7 +51,8 @@
               "label": "Flag lamp brightness",
               "kind": "dimmer",
               "max": 255,
-              "verified": true
+              "verified": true,
+              "governs": ["FLAPS", "NOSE", "FULL", "RIGHT", "LEFT", "HALF", "HOOK"]
             },
             {
               "index": 4,

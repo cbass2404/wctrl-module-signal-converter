@@ -28,6 +28,9 @@ pub struct LedView {
     pub verified: bool,
     /// Hardware notes, where any were recorded.
     pub note: String,
+    /// Lamps this dimmer hides at 0. Non-empty marks a gate, whose value at
+    /// zero is its daylight floor.
+    pub governs: Vec<String>,
     pub part_id: u32,
     pub index: u8,
 }
@@ -43,6 +46,7 @@ impl LedView {
             dimmable: led.is_dimmable(),
             verified: led.verified,
             note: led.note.clone(),
+            governs: led.governs.clone(),
             part_id,
             index: led.index,
         }

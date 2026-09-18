@@ -8,6 +8,7 @@
 //! the editor produces cannot be one the daemon rejects.
 
 mod check;
+mod claims;
 mod learn;
 mod paths;
 mod view;
@@ -135,34 +136,60 @@ fn default_profile(file: String) -> Reply<Option<Profile>> {
         .map_err(|e| fail(&format!("reading the shipped {file}"), e))
 }
 
-/// Create a profile for one module, populated with every lamp and none assigned.
+/// Create a profile for some of one module's aircraft, blank or copied.
 ///
-/// The name and the aircraft list come from the catalogue rather than from the
-/// user: a module can serve several runtime aircraft names, `A-10C` covering
-/// both `A-10C_2` and `A-10C`, and a typed list would be a silent way to build a
-/// profile DCS never matches.
+/// The aircraft come from the catalogue rather than from typing: a module can
+/// serve several runtime names, `A-10C` covering both `A-10C_2` and `A-10C`,
+/// and a typed list would be a silent way to build a profile DCS never matches.
+/// Which of them this profile is for is the user's choice, because sharing
+/// DCS-BIOS outputs does not mean wanting the same lamps.
+///
+/// `from` names an existing profile to copy instead of starting blank. Any
+/// chosen aircraft another profile claims moves to this one; see `claims`.
 #[tauri::command]
-fn create_profile(module: String) -> Reply<String> {
+fn create_profile(
+    module: String,
+    name: String,
+    aircraft: Vec<String>,
+    from: Option<String>,
+) -> Reply<String> {
     let paths = Paths::resolve();
     let choices = ModuleChoice::read_index(&paths.catalogue.join("index.json"))?;
     let choice = choices
         .iter()
         .find(|m| m.key == module)
         .ok_or_else(|| format!("{module} is not in the catalogue"))?;
-
-    let inv = inventory(&paths)?;
-    let first = choice.aircraft.first().map(String::as_str).unwrap_or(&module);
-    let mut profile = Profile::stub(&module, first, &module, &inv);
-    profile.aircraft = choice.aircraft.clone();
-
-    let file = format!("{}.json", slug(&module));
-    let path = paths.profiles.active.join(&file);
-    if path.exists() {
-        return Err(format!("{file} already exists"));
+    // A module with no runtime name is offered under its key, which is then
+    // the one thing it can be chosen for.
+    let known: Vec<String> = if choice.aircraft.is_empty() {
+        vec![module.clone()]
+    } else {
+        choice.aircraft.clone()
+    };
+    if let Some(stray) = aircraft.iter().find(|a| !known.contains(a)) {
+        return Err(format!("{stray} is not an aircraft {module} covers"));
     }
-    std::fs::create_dir_all(&paths.profiles.active).map_err(|e| fail("creating the profile folder", e))?;
-    profile.save(&path).map_err(|e| fail(&format!("writing {file}"), e))?;
-    Ok(file)
+
+    let mut profile = match &from {
+        Some(file) => {
+            let p = Profile::load(&paths.profiles.active.join(file))
+                .map_err(|e| fail(&format!("reading {file}"), e))?;
+            // Copied bindings name signals by id, so they only mean something
+            // against the catalogue they were written for.
+            if p.module != module {
+                return Err(format!("{} reads {}, not {module}, so it cannot be copied here", p.name, p.module));
+            }
+            p
+        }
+        None => {
+            let inv = inventory(&paths)?;
+            let first = aircraft.first().map(String::as_str).unwrap_or(&module);
+            Profile::stub(&name, first, &module, &inv)
+        }
+    };
+    profile.name = name;
+    profile.aircraft = aircraft;
+    claims::write_new(&paths.profiles.active, profile)
 }
 
 /// Copy an existing profile to a new aircraft.
@@ -175,37 +202,21 @@ fn create_profile(module: String) -> Reply<String> {
 ///
 /// `module` is deliberately carried over rather than asked for. A copy whose
 /// signal ids resolve against a different catalogue is not a copy, it is a
-/// profile full of unknown signals.
+/// profile full of unknown signals. Aircraft another profile claims move to
+/// the copy, as they do for a new profile; see `claims`.
 #[tauri::command]
 fn clone_profile(file: String, name: String, aircraft: Vec<String>) -> Reply<String> {
     let paths = Paths::resolve();
-    let name = name.trim();
-    if name.is_empty() {
-        return Err("a profile needs a name".into());
-    }
     let aircraft: Vec<String> = aircraft
         .into_iter()
         .map(|a| a.trim().to_string())
         .filter(|a| !a.is_empty())
         .collect();
-    if aircraft.is_empty() {
-        return Err("a profile needs at least one aircraft name, as DCS reports it".into());
-    }
-
     let mut profile = Profile::load(&paths.profiles.active.join(&file))
         .map_err(|e| fail(&format!("reading {file}"), e))?;
-    profile.name = name.to_string();
+    profile.name = name;
     profile.aircraft = aircraft;
-
-    let out = format!("{}.json", slug(name));
-    let path = paths.profiles.active.join(&out);
-    if path.exists() {
-        return Err(format!("{out} already exists"));
-    }
-    std::fs::create_dir_all(&paths.profiles.active)
-        .map_err(|e| fail("creating the profile folder", e))?;
-    profile.save(&path).map_err(|e| fail(&format!("writing {out}"), e))?;
-    Ok(out)
+    claims::write_new(&paths.profiles.active, profile)
 }
 
 /// Start watching the export stream for one module.
@@ -248,15 +259,27 @@ fn learn_stop(learn: tauri::State<learn::State>) -> Reply<()> {
     Ok(())
 }
 
-/// Every reason the daemon would refuse this profile, for the window to show.
+/// What a check found: faults that stop the profile loading, and cautions
+/// about ones that load but probably do not do what was meant.
+#[derive(serde::Serialize)]
+struct Findings {
+    problems: Vec<String>,
+    cautions: Vec<String>,
+}
+
+/// Every reason the daemon would refuse this profile, for the window to show,
+/// and every caution it would log.
 ///
 /// Called after each edit rather than on save. A fault found where it was made
 /// costs one click to undo; the same fault found by the daemon costs a flight,
 /// because it skips the whole profile and every lamp in it stays dark.
 #[tauri::command]
-fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<Vec<String>> {
+fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<Findings> {
     let paths = Paths::resolve();
-    Ok(cache.problems(&paths, &profile))
+    Ok(Findings {
+        problems: cache.problems(&paths, &profile),
+        cautions: cache.cautions(&paths, &profile),
+    })
 }
 
 /// Write a profile, refusing one the daemon would not load.
@@ -293,20 +316,6 @@ fn reset_profile(file: String) -> Reply<()> {
         .map_err(|e| fail(&format!("resetting {file}"), e))
 }
 
-/// Lowercase, non-alphanumerics collapsed to single dashes: `FA-18C_hornet`
-/// becomes `fa-18c-hornet`, matching the profiles already shipped.
-fn slug(name: &str) -> String {
-    let mut out = String::with_capacity(name.len());
-    for c in name.chars() {
-        if c.is_ascii_alphanumeric() {
-            out.push(c.to_ascii_lowercase());
-        } else if !out.ends_with('-') {
-            out.push('-');
-        }
-    }
-    out.trim_matches('-').to_string()
-}
-
 fn main() {
     tauri::Builder::default()
         .manage(learn::State::default())
@@ -330,28 +339,4 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("starting the editor window");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::slug;
-
-    #[test]
-    fn a_copied_profile_is_named_after_what_it_was_called() {
-        // The file name comes from the profile name, not the module, because a
-        // copy is by definition a second profile on the same module: naming it
-        // after the module would collide with the one it came from.
-        assert_eq!(slug("FA-18E"), "fa-18e");
-        assert_eq!(slug("F/A-18C Hornet copy"), "f-a-18c-hornet-copy");
-        // A name that slugs to nothing would write ".json", so the command
-        // rejects an empty name before it reaches here.
-        assert_eq!(slug("   "), "");
-    }
-
-    #[test]
-    fn module_keys_slug_to_the_names_already_shipped() {
-        assert_eq!(slug("FA-18C_hornet"), "fa-18c-hornet");
-        assert_eq!(slug("A-10C_2"), "a-10c-2");
-        assert_eq!(slug("Christen Eagle II"), "christen-eagle-ii");
-    }
 }

@@ -9,6 +9,7 @@
   --muted: #646c78;
   --accent: #1f6feb;
   --danger: #b4232c;
+  --caution: #9a6700;
   color-scheme: light dark;
 }
 
@@ -21,6 +22,7 @@
     --muted: #949daa;
     --accent: #58a6ff;
     --danger: #f0716f;
+    --caution: #d29922;
   }
 }
 
@@ -108,6 +110,20 @@ h2 {
   margin-top: 6px;
 }
 
+/* Loads, but probably not as meant. Quieter than a problem, and Save stays. */
+.cautions {
+  background: color-mix(in srgb, var(--caution) 12%, transparent);
+  border: 1px solid var(--caution);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.cautions .caution {
+  font-size: 13px;
+  margin-top: 6px;
+}
+
 button {
   font: inherit;
   padding: 5px 12px;
@@ -130,6 +146,17 @@ button.primary {
 
 button.danger {
   color: var(--danger);
+}
+
+/* Confirmation before a destructive action. A picker dialog otherwise, kept
+   narrow because it holds a question and a sentence, not a form. */
+dialog.confirm {
+  min-width: 0;
+  max-width: 460px;
+}
+
+dialog.confirm .actions {
+  margin-top: 16px;
 }
 
 .actions {
@@ -164,6 +191,9 @@ dialog.picker {
   color: var(--text);
   padding: 18px;
   min-width: 460px;
+  /* Without a cap the module list, at width 100%, stretched the dialog across
+     the whole window. */
+  width: min(560px, calc(100vw - 32px));
 }
 
 dialog.picker select {
@@ -175,6 +205,30 @@ dialog.picker select {
   color: var(--text);
   border: 1px solid var(--line);
   border-radius: 6px;
+}
+
+/* The aircraft a new profile is for. Styled as the module list above it, so
+   the two steps of one dialog read as one thing. */
+dialog.picker .checklist {
+  margin: 10px 0 14px;
+  padding: 4px;
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+dialog.picker .checklist label {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 1px 4px;
+}
+
+/* A dropdown inside a field takes the field's spacing, not the list's. */
+dialog.picker label.field select {
+  margin: 0;
 }
 
 /* A labelled text input in a dialog. Stacked rather than inline: the hint
@@ -657,6 +711,27 @@ button.add {
 /* The Output column holds a number input for lamps that can dim. */
 td.num input.value {
   width: 62px;
+}
+
+/* The output column's "when lit" and "at zero" values, labelled like a dialog
+   field so the column never widens to fit a label beside its input. */
+td.num label.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+td.num label.field + label.field {
+  margin-top: 6px;
+}
+
+/* The column leaves 58px inside its padding, so a fixed 62px box overhangs it. */
+td.num label.field input.value {
+  width: 100%;
+  max-width: 62px;
 }
 
 /* Shown only where a lamp differs from the shipped profile, so it is never a

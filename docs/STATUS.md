@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-18. Enough context to resume cold.
 
 ## Resume here
 
@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 130 passing
+cargo test --workspace            # expect 149 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -49,11 +49,11 @@ updates it is stamped with the version it came from.
    1 and 2 (A/A, A/G) are binary. Backlight dims them but does not gate them.
    Details under Verified facts.
 
-4. **Inventory the three devices.** `wctrl devices` reports an MCDU
-   CAPTAIN (`0xbb36`), Orion Combat Rudder Pedals Metal (`0xbef0`) and a
-   CarrierAce UFC + HUD (`0xbede`) that `devices.json` knows nothing about. The
-   UFC and MCDU in particular are display devices, so they may not use `SET_LEDX`
-   at all. Same method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
+4. **Inventory the remaining devices.** The CarrierAce UFC + HUD (`0xbede`) is
+   done, see below. `wctrl devices` also reports an MCDU CAPTAIN (`0xbb36`) and
+   Orion Combat Rudder Pedals Metal (`0xbef0`) that `devices.json` knows nothing
+   about. The MCDU is a display device and may not use `SET_LEDX` at all. Same
+   method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
 
 5. **The Tauri editor.** Scaffolded 2026-09-16, see below. Shape is specified
    in `CONFIG.md`.
@@ -73,9 +73,31 @@ npm install
 npm run tauri dev
 ```
 
-**Working:** the profile library (list, create, reset), the module picker fed
-from the catalogue index, and one collapsible section per device, collapsed on
-open with an expand/collapse-all control whose label follows the sections.
+**Working:** the profile library (list, create, copy, reset), the new profile
+flow (module, then which of its aircraft, blank or copied), and one collapsible
+section per device, collapsed on open with an expand/collapse-all control whose
+label follows the sections.
+
+**Added 2026-09-18:**
+
+* **The daylight floor is editable.** A dimmer's `off` is the **at zero** field
+  in the Output column, beside **when lit** (`on`). It was reachable only by
+  editing the file, which is how the A-10C shipped with `SL` tied to the
+  backlight and no floor, blanking every indicator in daylight.
+* **Cautions.** `devices.json` marks `SL` and `FLAG` with `governs`, and
+  `Profile::cautions` reports a gate that resolves to 0 with every signal at 0.
+  Shown in the editor without blocking Save, and logged by the daemon.
+* **Generated profiles start with the gates held at full** and `off: 255`, so a
+  new profile's indicators light and switching a gate to a dimmer keeps the
+  floor. Every shipped default now meets the same rule.
+* **One aircraft, one profile.** New profile and Copy to... move a claimed
+  aircraft to the new profile and refuse a move that would empty another.
+  `editor/src-tauri/src/claims.rs` holds the rule.
+* **One naming rule.** `file_stem` in `wctrl-config` names every generated file,
+  from the daemon, New profile and Copy to... alike. `NONE`, which DCS-BIOS
+  reports when the player has no aircraft of their own, gets "No aircraft".
+* **Confirmations are drawn in the window.** `window.confirm` showed nothing in
+  the webview and answered yes, so Reset replaced a profile unasked.
 
 Bindings are fully editable. A condition reads as a sentence until its pencil is
 clicked, and an open condition carries keep, cancel and delete: cancel restores
@@ -120,19 +142,18 @@ nothing else. It listens only while the panel is open, which is deliberate, and
 
 **Not built yet:**
 
-1. **Renaming a profile, and editing its aircraft list.** Both are fixed at
-   creation right now. **Copying one is not**, as of 2026-09-17: "Copy to..."
-   on a profile row takes a name and an aircraft list and carries everything
-   else over, module included. The module is not offered, because a copy whose
+1. **Renaming a profile, and editing its aircraft list in place.** Both are
+   fixed at creation. An aircraft can be moved to another profile through New
+   profile or Copy to..., which is the workaround. "Copy to..." on a profile row
+   takes a name and an aircraft list and carries everything else over, module
+   included. The module is not offered, because a copy whose
    signal ids resolve against a different catalogue is not a copy, it is a
    profile full of signals that do not exist. This is the FA-18E case made into
    a feature: the Super Hornet community mod reads the Hornet's DCS-BIOS
    definitions, so the Hornet profile drives it with only those two fields
    changed.
-2. **Validation before save.** `Profile::validate` exists and is not called from
-   the editor, so a binding it would reject still saves quietly. The four forms
-   are mutually exclusive and the editor keeps them that way by construction,
-   but a hand-edited file is only caught when the daemon loads it.
+2. ~~**Validation before save.**~~ Done: the editor runs `Profile::problems`
+   after every edit and withholds Save until there are none. See `CONFIG.md`.
 
 **Confirmed in the window 2026-09-16:** profile list, create with the module
 picker, collapsible sections, and the signal search. Three faults found by using
@@ -157,8 +178,10 @@ at the window edge, and dropdown rows losing clicks to a focus race.
 The daemon exiting when `DCS.exe` disappears was proven from the command line
 rather than through the hook, which is not installed yet.
 
-**Still not exercised:** `always` and `same_as` are used by no profile, so they
-pass their tests but have never driven a real lamp.
+**Still not confirmed on hardware:** `always` and `same_as`. Shipped profiles now
+use both, `always` for the PTO2 gates in the F-14, Mi-24P, FC3 and No aircraft
+profiles and `same_as` for both gates in the AH-64D, but neither has been
+watched driving a real lamp.
 
 ## The UFC, and the first device with a display
 
@@ -310,8 +333,9 @@ by device display name, then part in declared order, then hardware index.
    * **Hind.** Cells 34 and 35 pointed at `PLT_R828_CHAN_S` and
      `PLT_R863_CHAN_S` drew two-digit presets correctly, from the editor.
 
-   Neither profile ships. `data/profiles` is the user's own directory and is
-   not tracked; `data/defaults` has the A-10C, Apache and Hornet only.
+   Both now ship in `data/defaults`, along with the A-10C, Apache, F-14,
+   Mi-24P, FC3 and No aircraft profiles. `data/profiles` is the user's own
+   directory and is not tracked.
 3. ~~**A numeric source has never been flown.**~~ **Flown 2026-09-17.** The
    Hind radar altimeter, `PLT_RV5_ALT`, on cells 30 to 33 with
    `"reads": [0, 750]`, read consistently with the gauge in the cockpit.
@@ -364,9 +388,9 @@ already there. Seeding adds and never replaces. Reset is the only overwrite.
 `Profiles` in `wctrl-config` owns this, and both the CLI and the editor call it,
 so there is one implementation of the rule rather than two.
 
-**Housekeeping:** the repo is initialised and `.gitignore` is written 19 files,
-~126 KB, with `target/` and the generated `data/catalogue/` excluded and the
-reasons recorded in the file itself. SimAppPro's `HIDLog` is **off** again as of
+**Housekeeping:** `.gitignore` excludes `target/`, the generated
+`data/catalogue/` and the user's `data/profiles/`, with the reasons recorded in
+the file itself. SimAppPro's `HIDLog` is **off** again as of
 2026-09-16. Turn it back on in `%APPDATA%\SimAppPro\config.json` only while
 capturing a device, since it grows `WWTHID.log` by ~5 MB per session.
 
@@ -419,9 +443,10 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
   after the A-10C flap lamps appeared dead: the engine was right, the writes
   acked, and `FLAG` sat near 0 where SimAppPro had left it. **A dimmer nothing
   writes is invisible state**, so the sweep must own every dimmer on the device.
-- **Console lights off means daylight, not lamps off.** `FLAG` scales with the
-  cockpit console dimmer and takes `off: 255`, so it goes full bright when the
-  console reads zero. `scale` of a zero source resolves to zero and a binding
+- **Console lights off means daylight, not lamps off.** A gate that scales with
+  the cockpit console dimmer takes `off: 255`, so it goes full bright when the
+  console reads zero. `FLAG` needs it for its seven lamps and `SL`, harder, for
+  all fourteen. `scale` of a zero source resolves to zero and a binding
   that resolves to zero takes its `off` value, so the floor needs no new field.
 - Config offset `0x114` persists both PTO2 dimmers to flash. **Never write it.**
 - **A DCS-BIOS description's position order does not give the value order.**
@@ -458,7 +483,8 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 - **Nothing aborts the daemon.** A profile that fails to parse, names a module
   with no catalogue entry, or references an unknown signal is reported and
   skipped; the other profiles still run. An aircraft with no profile gets a stub
-  written with every lamp listed and none assigned.
+  written with every lamp listed and none assigned, except the PTO2 gates, which
+  start held at full.
 - Orion II part `0xbe60`: index 0 Backlight is a dimmer (0255); indices 1 (A/A)
   and 2 (A/G) are **binary** SimAppPro only ever sends 0 or 1. Backlight sets
   how bright they burn but does **not** gate them: at Backlight 0 they are still
@@ -482,15 +508,16 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 ```text
 crates/wctrl-hid      frame building, part discovery, SET_LEDX   (5 tests)
 crates/wctrl-bios     export-stream decoder + address space      (10 tests)
-crates/wctrl-config   catalogue, inventory, profiles, displays    (63 tests)
-crates/wctrl-engine   aircraft detection, sweep, writes, learn    (43 tests)
-editor/src-tauri      profile editor backend, learn listener      (4 tests)
+crates/wctrl-config   catalogue, inventory, profiles, displays    (78 tests)
+crates/wctrl-engine   aircraft detection, sweep, writes, learn    (44 tests)
+crates/wctrl-cli      the wctrl binary                            (5 tests)
+editor/src-tauri      editor backend, learn listener, claims      (7 tests)
 data/defaults         shipped profiles, tracked in git
 data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
 crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
-data/devices.json     PTO2 and Orion II both verified
+data/devices.json     PTO2, Orion II and CarrierAce UFC + HUD verified
 tools/                catalogue builder, HID probe, WWTHID log parser
 ```
 
@@ -516,14 +543,15 @@ Tauri renders through WebView2, which ships with Windows.
 
 ## Next steps
 
-1. **Engine crate** aircraft-change detection from `_ACFT_NAME` (address 0,
-   24-byte string), the single-sweep sync, then incremental writes. Needs no
-   hardware.
-2. **Prove the stream** against live DCS.
+1. ~~**Engine crate.**~~ Done 2026-09-16.
+2. ~~**Prove the stream** against live DCS.~~ Done 2026-09-16.
 3. ~~**Tauri editor** scaffold.~~ Done 2026-09-16. Remaining work is listed
-   under "Where the editor stands": renaming a profile, and validation before
-   save. The binding editor, typeahead, conditions, hint box and learn mode are
-   done.
+   under "Where the editor stands": renaming a profile and editing its aircraft
+   list in place.
+4. **Seeding by aircraft, not file name.** Seeding copies any default whose file
+   name is missing, so renaming a shipped profile leaves existing installs with
+   two profiles claiming one aircraft. Skip a default whose aircraft are
+   already claimed.
 
 ## Method note
 

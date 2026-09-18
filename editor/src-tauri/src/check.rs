@@ -68,6 +68,19 @@ impl Cache {
             .map(|e| e.to_string())
             .collect()
     }
+
+    /// What will load but probably not do what was meant, such as a gate that
+    /// follows the console to 0 and hides its lamps by day. Shown without
+    /// withholding Save, because the profile runs and may be exactly what the
+    /// user wants.
+    ///
+    /// Empty when the inventory cannot be read. `problems` already says so, and
+    /// saying it twice would only lengthen the list.
+    pub fn cautions(&self, paths: &Paths, profile: &Profile) -> Vec<String> {
+        DeviceInventory::load(&paths.devices)
+            .map(|devices| profile.cautions(&devices))
+            .unwrap_or_default()
+    }
 }
 
 #[cfg(test)]

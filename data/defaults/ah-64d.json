@@ -62,13 +62,17 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "SL",
       "conditions": [],
-      "same_as": "Backlight"
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Follows the console dimmer at night, and goes full bright when the console is off. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark console, which means daylight, blanked every lamp on the panel. Same daylight floor as FLAG."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "FLAG",
       "conditions": [],
-      "same_as": "Backlight"
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the interior lighting at night, and goes full bright when it is off, because off means daylight and a dim flag lamp is unreadable then."
     },
     {
       "device": "TAKEOFF_PLANEL_2",

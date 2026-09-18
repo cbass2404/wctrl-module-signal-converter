@@ -101,6 +101,12 @@ export interface Readout {
   note?: string;
 }
 
+/** What a check found. Problems stop the profile loading; cautions do not. */
+export interface Findings {
+  problems: string[];
+  cautions: string[];
+}
+
 export interface Profile {
   schema_version: number;
   name: string;
@@ -132,6 +138,11 @@ export interface Led {
   verified: boolean;
   /** Anything worth knowing that the name does not say. Often empty. */
   note: string;
+  /**
+   * Lamps this dimmer hides at 0, by name. Non-empty marks a gate, such as the
+   * PTO2's SL and FLAG, whose value at zero is its daylight floor.
+   */
+  governs: string[];
   part_id: number;
   index: number;
 }

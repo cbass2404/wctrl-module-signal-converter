@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   Device,
+  Findings,
   LearnReport,
   ModuleChoice,
   Profile,
@@ -19,14 +20,20 @@ export const listSignals = (module: string) => invoke<SignalView[]>("signals", {
 
 export const openProfile = (file: string) => invoke<Profile>("open_profile", { file });
 export const defaultProfile = (file: string) => invoke<Profile | null>("default_profile", { file });
-export const createProfile = (module: string) => invoke<string>("create_profile", { module });
+/**
+ * A new profile for some of a module's aircraft, blank or copied from `from`.
+ * Chosen aircraft another profile claims move to the new one.
+ */
+export const createProfile = (module: string, name: string, aircraft: string[], from: string | null) =>
+  invoke<string>("create_profile", { module, name, aircraft, from });
 export const saveProfile = (file: string, profile: Profile) =>
   invoke<void>("save_profile", { file, profile });
 /**
- * Everything the daemon would refuse this profile for, in its own words. An
- * empty list means it will load. Run after each edit, not only on save.
+ * Everything the daemon would refuse this profile for, in its own words, and
+ * everything it would caution about. No problems means it will load. Run after
+ * each edit, not only on save.
  */
-export const checkProfile = (profile: Profile) => invoke<string[]>("check_profile", { profile });
+export const checkProfile = (profile: Profile) => invoke<Findings>("check_profile", { profile });
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
 export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });

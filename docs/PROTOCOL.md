@@ -141,27 +141,21 @@ The UFC sets that trap twice. A dark `INST_PNL_Backlight` hides the legends, and
 a dark `LCDBacklight` hides the entire segment display while every cell is being
 driven correctly.
 
-### Value ranges differ per LED and are not yet settled
+### Value ranges differ per LED
 
-`Backlight` (0), `Landing_gear_lights` (1) and `SL` (2) are dimmers: SimAppPro
-drives them with sliders and they were observed taking values across the whole
-`0-255` span.
+`Backlight` (0), `Landing_gear_lights` (1), `SL` (2) and `FLAG` (3) are dimmers:
+SimAppPro drives them with sliders and they were observed taking values across
+the whole `0-255` span.
 
-The fourteen indicators at indices 4-17 are **not** understood yet. What is known:
+The fourteen indicators at indices 4-17 take **`0` or `1` only**, verified on
+hardware 2026-09-16. `1` lights, `0` clears, and `255` is out of range: it acks
+and lights nothing, so it is not truthy. `data/devices.json` records them as
+`kind: indicator` with `max: 1`. Index 17 (HOOK) is a physically dim lamp,
+visibly weaker than its neighbours at full brightness, and not a protocol
+difference.
 
-- SimAppPro only ever sends them `0` or `1`.
-- Writing `1` to index 17 lit it very faintly; writing `255` appeared to leave it
-  dark; writing `0` extinguished the faint light.
-
-That ordering argues against "boolean lamp" if the value were a flag, `255`
-would be truthy and light it. The likelier reading is that the value is a
-brightness with a ceiling well below `255`, and that out-of-range writes are
-rejected. Whether index 17 is also simply a dimmer lamp than its neighbours is
-being checked separately.
-
-Until measured, `data/devices.json` records these as `kind: indicator` with **no
-`max`**. Do not default it to 255; that assumption already sent us down a blind
-alley where every write acked and nothing visibly happened.
+The lesson stays: never default a range to 255. That assumption sent us down a
+blind alley where every write acked and nothing visibly happened.
 
 SimAppPro's own DCS path computes brightness as `value * 255` from the DCS
 argument (`DCSAPULight.js`), which is consistent with the dimmers but tells us
@@ -231,8 +225,8 @@ and RI stay lit; raising `FLAG` brings all seven back with no rewrite of the
 lamps, the same latch-beneath-the-governor behaviour `SL` shows.
 
 Index 1 carries the vendor's name `Landing_gear_lights`, but setting it to 0 with
-every indicator lit changed nothing visible. What it drives is still
-unidentified, and it is marked unverified in `data/devices.json`.
+every indicator lit changed nothing visible. It is verified as a dimmer taking
+0-255, but what it drives is still unidentified, so the name is not evidence.
 
 This cost a full debugging session. The engine resolved the A-10C flap lamps
 correctly, every write acked, and the lamps were invisible because `FLAG` sat

@@ -36,7 +36,8 @@
           }
         }
       ],
-      "note": "Held at full. SL gates indices 4-17 entirely, so tying it to a cockpit dimmer would blank every lamp in daylight. Same reasoning as the Hornet profile."
+      "off": 255,
+      "note": "Held at full. SL gates indices 4-17 entirely, so tying it to a cockpit dimmer with no floor would blank every lamp in daylight. The off value is that floor, set now so that changing on_when to a scale keeps the panel lit by day."
     },
     {
       "device": "TAKEOFF_PLANEL_2",

@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use wctrl_bios::{BiosState, Listener, Write as BiosWrite};
-use wctrl_config::{Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout};
+use wctrl_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout};
 use wctrl_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
@@ -1421,6 +1421,9 @@ fn load_profiles(
         for note in p.inert() {
             out.messages.push(format!("note     {name}: {note}"));
         }
+        for caution in p.cautions(inventory) {
+            out.messages.push(format!("caution  {name}: {caution}"));
+        }
         let unset = p.bindings.iter().filter(|b| b.is_placeholder()).count();
         out.messages.push(format!(
             "profile  {:<22} {:>2} set, {:>2} unset  for {}",
@@ -1904,17 +1907,21 @@ fn write_stub(
         return Ok(());
     };
 
-    let slug: String = aircraft
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
-        .collect();
-    let path = profiles_dir.join(format!("{slug}.json"));
+    // Named for a person, so NONE becomes "No aircraft"; the aircraft it claims
+    // stays what DCS-BIOS reports, since that is what gets matched.
+    let name = profile_name_for(aircraft);
+    let stem = file_stem(name);
+    if stem.is_empty() {
+        println!("  {aircraft:?} gives no usable file name, so no starter profile was written.");
+        return Ok(());
+    }
+    let path = profiles_dir.join(format!("{stem}.json"));
     if path.exists() {
         return Ok(());
     }
 
     std::fs::create_dir_all(profiles_dir)?;
-    let profile = Profile::stub(aircraft, aircraft, &module.module, devices);
+    let profile = Profile::stub(name, aircraft, &module.module, devices);
     let lamps = profile.bindings.len();
     profile.save(&path)?;
     println!("  wrote {} with {lamps} unassigned lamp(s)", path.display());

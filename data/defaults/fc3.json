@@ -1,0 +1,227 @@
+{
+  "schema_version": 1,
+  "name": "FC3",
+  "author": "",
+  "profile_version": "0.1.0",
+  "aircraft": [
+    "A-10A",
+    "AC_130",
+    "Bronco-OV-10A",
+    "Cessna_210N",
+    "DC3",
+    "F-117A",
+    "F-15C",
+    "F-16A",
+    "F-2A",
+    "F-2B",
+    "F-5E-3_FC",
+    "F-86F_FC",
+    "F4e",
+    "FA_18D",
+    "FlankerEx",
+    "Flyer1",
+    "J-11A",
+    "J-20A",
+    "MB-339PAN",
+    "MQ9_PREDATOR",
+    "MiG-15bis_FC",
+    "MiG-29A",
+    "MiG-29G",
+    "MiG-29S",
+    "Mig-23UB",
+    "MirageF1",
+    "MirageF1CT",
+    "REISEN52",
+    "RST_Eurofighter",
+    "RST_Eurofighter_AG",
+    "Rafale_A_S",
+    "Rafale_B",
+    "Rafale_C",
+    "Rafale_M",
+    "Su-25",
+    "Su-25T",
+    "Su-27",
+    "Su-30M",
+    "Su-30MK",
+    "Su-30SM",
+    "Su-33",
+    "Su-57",
+    "Super_Etendard",
+    "T-4",
+    "VSN_AJS37Viggen",
+    "VSN_C17A",
+    "VSN_C5_Galaxy",
+    "VSN_E2D",
+    "VSN_Eurofighter",
+    "VSN_Eurofighter_AG",
+    "VSN_F104G",
+    "VSN_F104G_AG",
+    "VSN_F104S",
+    "VSN_F104S_AG",
+    "VSN_F105D",
+    "VSN_F105G",
+    "VSN_F14A",
+    "VSN_F14B",
+    "VSN_F15E",
+    "VSN_F15E_AA",
+    "VSN_F16A",
+    "VSN_F16AMLU",
+    "VSN_F16CBL50",
+    "VSN_F16CBL52D",
+    "VSN_F16CMBL50",
+    "VSN_F22",
+    "VSN_F35A",
+    "VSN_F35A_AG",
+    "VSN_F35B",
+    "VSN_F35B_AG",
+    "VSN_F4E",
+    "VSN_F4E_AG",
+    "VSN_F5E",
+    "VSN_F5N",
+    "VSN_FA18C",
+    "VSN_FA18C_AG",
+    "VSN_FA18C_Lot20",
+    "VSN_FA18F",
+    "VSN_FA18F_AG",
+    "VSN_Harrier",
+    "VSN_M2000",
+    "VSN_P3C",
+    "VSN_Su47",
+    "VSN_TornadoGR4",
+    "VSN_TornadoIDS",
+    "VSN_UFO"
+  ],
+  "module": "FC3",
+  "bindings": [
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Backlight",
+      "conditions": [],
+      "always": true
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Landing_gear_lights",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "SL",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAG",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Master_Caution",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "JETT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "CTR",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LI",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LO",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RO",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RI",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAPS",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "NOSE",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FULL",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RIGHT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LEFT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HALF",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HOOK",
+      "conditions": []
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "Backlight",
+      "conditions": [],
+      "always": true
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/A",
+      "conditions": []
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/G",
+      "conditions": []
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "INST_PNL_Backlight",
+      "conditions": [],
+      "always": true
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "LCDBacklight",
+      "conditions": []
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "HUD_INST_PNL_Backlight",
+      "conditions": [],
+      "always": true
+    }
+  ]
+}

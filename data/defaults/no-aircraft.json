@@ -1,0 +1,138 @@
+{
+  "schema_version": 1,
+  "name": "No aircraft",
+  "author": "",
+  "profile_version": "0.1.0",
+  "aircraft": [
+    "NONE"
+  ],
+  "module": "FC3",
+  "bindings": [
+    {
+      "device": "CarrierAce_UFC",
+      "led": "INST_PNL_Backlight",
+      "conditions": []
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "LCDBacklight",
+      "conditions": []
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "HUD_INST_PNL_Backlight",
+      "conditions": []
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "Backlight",
+      "conditions": []
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/A",
+      "conditions": []
+    },
+    {
+      "device": "Orion_Throttle_Base_II",
+      "led": "A/G",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Backlight",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Landing_gear_lights",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "SL",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAG",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Master_Caution",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "JETT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "CTR",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LI",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LO",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RO",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RI",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAPS",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "NOSE",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FULL",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "RIGHT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "LEFT",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HALF",
+      "conditions": []
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "HOOK",
+      "conditions": []
+    }
+  ]
+}

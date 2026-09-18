@@ -3,9 +3,7 @@
   "name": "F/A-18C Hornet",
   "author": "coryb",
   "profile_version": "0.1.0",
-  "aircraft": [
-    "FA-18C_hornet"
-  ],
+  "aircraft": ["FA-18C_hornet"],
   "module": "FA-18C_hornet",
   "bindings": [
     {
@@ -15,10 +13,7 @@
         {
           "source": "INST_PNL_DIMMER",
           "on_when": {
-            "scale": [
-              0,
-              65535
-            ]
+            "scale": [0, 65535]
           }
         }
       ]
@@ -30,10 +25,7 @@
         {
           "source": "UFC_BRT",
           "on_when": {
-            "scale": [
-              0,
-              65535
-            ]
+            "scale": [0, 65535]
           }
         }
       ]
@@ -45,10 +37,7 @@
         {
           "source": "INST_PNL_DIMMER",
           "on_when": {
-            "scale": [
-              0,
-              65535
-            ]
+            "scale": [0, 65535]
           }
         }
       ]
@@ -60,10 +49,7 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [
-              0,
-              65535
-            ]
+            "scale": [0, 65535]
           }
         }
       ],
@@ -102,10 +88,7 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [
-              0,
-              65535
-            ]
+            "scale": [0, 65535]
           }
         }
       ],
@@ -131,11 +114,12 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "gte": 0
+            "scale": [0, 65535]
           }
         }
       ],
-      "note": "Held at full. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so tying it to a cockpit dimmer would blank every lamp in daylight. Change on_when to {\"scale\": [0, 65535]} to make indicator brightness track the console lighting instead."
+      "off": 255,
+      "note": "Follows the console dimmer at night, and goes full bright when the console is off. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark console, which means daylight, would blank every lamp on the panel. Same daylight floor as FLAG."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -144,10 +128,7 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [
-              0,
-              65535
-            ]
+            "scale": [0, 65535]
           }
         }
       ],

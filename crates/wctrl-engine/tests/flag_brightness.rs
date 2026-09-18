@@ -185,6 +185,43 @@ fn every_shipped_profile_binds_both_gates() {
     let _ = SL;
 }
 
+#[test]
+fn every_shipped_gate_survives_a_dark_cockpit() {
+    // Bound is not enough. A gate that follows a cockpit dimmer down to zero
+    // blanks its lamps in daylight exactly as an unbound one does. The AH-64D
+    // shipped that way for both gates, and SL is the worse of the two: it
+    // takes every indicator on the panel with it.
+    //
+    // Every signal reads zero here, which is the daylight cockpit: knobs down
+    // and the seat position at its first value.
+    let devices = devices();
+    let pto2 = devices.device(PTO2).expect("PTO2 is in the inventory");
+    let dir = root().join("data/defaults");
+    let mut checked = 0;
+    for entry in std::fs::read_dir(&dir).expect("data/defaults should exist") {
+        let path = entry.expect("readable entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let name = path.file_name().unwrap_or_default().to_string_lossy().to_string();
+        let p = Profile::load(&path).unwrap_or_else(|e| panic!("{name} should parse: {e}"));
+
+        for gate in ["SL", "FLAG"] {
+            let Some(b) = p.bindings.iter().find(|b| b.device == PTO2 && b.led == gate) else {
+                continue;
+            };
+            let (_, led) = pto2.led(gate).expect("gate is in the inventory");
+            let value = p.resolve_binding(b, led, |_| Some(0));
+            assert!(
+                value.is_some_and(|v| v > 0),
+                "{name}: {gate} resolves to {value:?} with the cockpit dark, which blanks its lamps in daylight"
+            );
+            checked += 1;
+        }
+    }
+    assert!(checked > 0, "no shipped gates were checked, so this proves nothing");
+}
+
 fn spec(file: &str) -> (&'static str, &'static str, &'static str) {
     match file {
         "a-10c-2.json" => ("A-10C", "A-10C_2", "LCP_CONSOLE"),

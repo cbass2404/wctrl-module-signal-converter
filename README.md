@@ -4,8 +4,7 @@ Middleware that reads DCS-BIOS signals from whatever DCS aircraft is loaded and
 lights the matching LEDs on WinCtrl (WinWing) panels, driven by a per-aircraft
 profile.
 
-SimAppPro is not required and should be closed while this runs. DCS-BIOS is
-required; it is the only signal source.
+SimAppPro is not required. DCS-BIOS is required; it is the only signal source.
 
 This README covers running the daemon. Everything else is in `docs/`:
 `STATUS.md` to resume work, `CONFIG.md` for the profile format, `PROTOCOL.md`
@@ -67,7 +66,7 @@ flying.
 
 ```
 profile  A-10C II               15 set,  6 unset  for A-10C_2, A-10C
-profile  F/A-18C Hornet         20 set,  0 unset  for FA-18C_hornet
+profile  F/A-18C Hornet         23 set,  1 unset  for FA-18C_hornet
 device   PTO2                   pid 0xbf05
 device   Orion Throttle Base II pid 0xbd64
 Running. Ctrl-C to stop and clear the panels.
@@ -81,6 +80,10 @@ only lamps whose signals change.
 
 `n set, n unset` counts configured lamps against ones still to be decided. An
 unset lamp is a normal state, not an error; it is simply driven off.
+
+A `caution` line under a profile means it loads but probably does not do what
+was meant, such as a PTO2 gate that goes dark with the cockpit lighting off. The
+same caution shows in the editor.
 
 ### Seeing what it is doing
 
@@ -239,6 +242,31 @@ Each condition reads as a sentence until you click its pencil. An open condition
 has keep, cancel and delete: cancel puts it back the way it was before you
 started, and delete asks first.
 
+A lamp that dims shows its values in the Output column. **when lit** is its
+brightness when a threshold condition holds. **at zero** is what it takes when
+its binding resolves to 0: the lamp it follows is dark, the scaled source is at
+the bottom, or no condition holds. On the PTO2's `SL` and `FLAG` that is the
+daylight floor; see "A lamp is configured but dark" below.
+
+Problems the daemon would refuse the profile for are listed in red above the
+lamps, and Save waits until they are fixed. Cautions, in yellow, are about a
+profile that loads but probably does not do what was meant, and never block
+Save.
+
+#### New profiles and copies
+
+**New profile** asks for the module, then which of its aircraft the profile is
+for, as DCS reports them. One module often serves several aircraft, and sharing
+DCS-BIOS outputs does not mean wanting the same lamps: the A-10C and A-10C II
+read one module. It starts blank, or as a copy of a related profile.
+
+**Copy to...** on a profile does the same from the other end: a copy under a new
+name, for aircraft you type.
+
+An aircraft belongs to one profile. Taking one that another profile already
+claims moves it, and the dialog says so before you confirm. A move that would
+leave a profile with no aircraft at all is refused.
+
 #### Learn mode
 
 Beside every signal box is a **Learn** button. Press it, flip the switch in the
@@ -273,10 +301,10 @@ It reads and writes `data/profiles`, the same folder the daemon reads, and the
 daemon reloads a profile about a second after it is saved. Edit a lamp, save, and
 watch it change on the panel without leaving the cockpit.
 
-**Reset** replaces a profile with the copy that shipped in `data/defaults`.
-**Reset this lamp** does the same for one lamp, leaving the rest of your profile
-alone. Those are the only two things in the editor that discard your work, and
-both ask first.
+**Reset** replaces a profile with the copy that shipped in `data/defaults`, and
+asks first. **Reset this lamp** does the same for one lamp in the open profile,
+leaving the rest alone; it is not saved until you save, so leaving without saving
+undoes it.
 
 To build a standalone installer instead of running from source:
 
@@ -296,16 +324,20 @@ confirm which in fifteen seconds.
 is printed next to its filename. One bad profile never stops the others.
 
 **An aircraft has no profile.** It writes a starter one to `--profiles` with
-every lamp listed and none assigned, then clears the panels. It never
-overwrites a file that already exists.
+every lamp listed and none assigned, except the PTO2 gates, which start held at
+full, then clears the panels. It never overwrites a file that already exists.
+An aircraft DCS-BIOS has no module for gets no starter profile, since there is
+nothing to bind. `NONE`, which DCS-BIOS reports when you have no aircraft of
+your own, gets one named "No aircraft".
 
 **A lamp is configured but dark.** The PTO2 has two gates above its lamps, and
 an unbound gate is swept to 0 like any other unbound LED, so the lamp beneath it
 acks normally and stays dark. `SL` gates all 14 indicators. `FLAG` governs seven
-of them: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Both shipped profiles
-bind both. A lamp that is lit but too dim to see in daylight is the same fault
-wearing a different hat, which is why `FLAG` goes to full bright when the
-cockpit console dimmer reads zero.
+of them: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Every shipped profile
+binds both. A gate tied to a cockpit dimmer with no floor is the same fault in
+daylight: console lighting off reads as zero, so the gate goes to 0. Every
+shipped gate that follows a dimmer carries an **at zero** of 255, and the
+daemon and the editor both caution about one that does not.
 
 ## Other commands
 

@@ -399,13 +399,29 @@ fn an_unassigned_lamp_is_swept_off_and_never_driven() {
 }
 
 #[test]
-fn a_stub_profile_covers_every_lamp_and_binds_none_of_them() {
+fn a_stub_profile_covers_every_lamp_and_binds_none_but_the_gates() {
     let devs = devices();
     let stub = Profile::stub("A-10C II", "A-10C_2", "TEST", &devs);
 
     let lamps: usize = devs.devices.iter().flat_map(|d| d.leds()).count();
     assert_eq!(stub.bindings.len(), lamps, "one row per lamp on the hardware");
-    assert!(stub.bindings.iter().all(|b| b.is_placeholder()));
+
+    // A gate left unassigned is swept to 0 and hides every lamp the user binds
+    // beneath it, so the gates start held at full with their daylight floor
+    // already set. Everything else is left for the user to decide.
+    for b in &stub.bindings {
+        let (_, led) = devs
+            .device(&b.device)
+            .and_then(|d| d.led(&b.led))
+            .expect("stub rows name real lamps");
+        if led.governs.is_empty() {
+            assert!(b.is_placeholder(), "{} should be unassigned", b.led);
+        } else {
+            assert!(b.always, "{} is a gate and should be held at full", b.led);
+            assert_eq!(b.off, led.max_value(), "{} should carry its daylight floor", b.led);
+        }
+    }
+    assert!(stub.cautions(&devs).is_empty(), "{:?}", stub.cautions(&devs));
 
     // And it must survive the same validation a hand-written profile gets,
     // or auto-generating one would produce a file the loader then rejects.

@@ -19,6 +19,7 @@ import {
   saveProfile,
 } from "./api";
 import { bindingEditor } from "./binding";
+import { confirmAction } from "./confirm";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
 import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView } from "./types";
@@ -126,9 +127,10 @@ async function showLibrary(): Promise<void> {
 
 /** Reset discards the user's work, so it asks first and says exactly what it does. */
 async function resetOne(row: ProfileSummary): Promise<void> {
-  const ok = window.confirm(
+  const ok = await confirmAction(
     `Replace ${row.name} with the profile that shipped with wctrl?\n\n` +
       `Any changes you have made to it will be lost. Profiles you created yourself are not affected.`,
+    "Reset",
   );
   if (!ok) return;
   try {
@@ -152,10 +154,22 @@ async function resetOne(row: ProfileSummary): Promise<void> {
  * signals that do not exist.
  */
 async function showCloneProfile(row: ProfileSummary): Promise<void> {
+  // Needed to say which aircraft the copy would take from other profiles.
+  let existing: ProfileSummary[];
+  try {
+    existing = await listProfiles();
+  } catch (e) {
+    showError("Loading profiles", e);
+    return;
+  }
+
   const name = el("input", { type: "text", value: `${row.name} copy` });
   // Prefilled with what it came from, because the common case is one aircraft
   // name away from the original and the exact spelling is easy to get wrong.
+  // Left as it is, the copy would take every aircraft from the original, which
+  // the move note below says and Copy refuses.
   const aircraft = el("input", { type: "text", value: row.aircraft.join(", ") });
+  const moves = el("p", { class: "meta" });
 
   const dialog = el(
     "dialog",
@@ -180,6 +194,7 @@ async function showCloneProfile(row: ProfileSummary): Promise<void> {
           "Separate several with commas.",
       ),
     ),
+    moves,
     el(
       "div",
       { class: "actions" },
@@ -190,6 +205,22 @@ async function showCloneProfile(row: ProfileSummary): Promise<void> {
   app.append(dialog);
   dialog.showModal();
   name.select();
+
+  const make = dialog.querySelector("#make") as HTMLButtonElement;
+  const typed = (): string[] =>
+    aircraft.value
+      .split(",")
+      .map((a) => a.trim())
+      .filter((a) => a !== "");
+  const sync = (): void => {
+    const { text, emptied } = describeMoves(typed(), existing);
+    moves.textContent = text;
+    moves.className = emptied.length > 0 ? "bad" : "meta";
+    if (emptied.length === 0 && typed().length > 0) make.removeAttribute("disabled");
+    else make.setAttribute("disabled", "");
+  };
+  aircraft.addEventListener("input", sync);
+  sync();
 
   dialog.querySelector("#cancel")?.addEventListener("click", () => dialog.close());
   dialog.querySelector("#make")?.addEventListener("click", () => {
@@ -210,11 +241,42 @@ async function showCloneProfile(row: ProfileSummary): Promise<void> {
 }
 
 /**
- * New profiles pick a module from a list, never a typed name.
+ * What giving `aircraft` to a new profile would take from existing ones.
  *
- * The list is the catalogue built from the user's own DCS-BIOS, so it cannot
- * offer a module they do not have, and the aircraft names come with it because
- * one module often serves several and the mapping is not guessable.
+ * One aircraft, one profile: an aircraft another profile claims moves to the
+ * new one, and the backend refuses a move that leaves a profile claiming
+ * nothing. Worked out here too so the dialog can say it before the click.
+ */
+function describeMoves(
+  aircraft: string[],
+  existing: ProfileSummary[],
+): { text: string; emptied: string[] } {
+  const moves: string[] = [];
+  const emptied: string[] = [];
+  for (const p of existing) {
+    if (p.error) continue;
+    const taken = p.aircraft.filter((a) => aircraft.includes(a));
+    if (taken.length === 0) continue;
+    if (taken.length === p.aircraft.length) emptied.push(p.name);
+    else moves.push(`${taken.join(", ")} out of ${p.name}`);
+  }
+  if (emptied.length > 0) {
+    return {
+      text: `${emptied.join(", ")} would be left with no aircraft. Leave at least one of its aircraft unselected, or edit that profile instead.`,
+      emptied,
+    };
+  }
+  return { text: moves.length > 0 ? `Moves ${moves.join("; ")}.` : "", emptied };
+}
+
+/**
+ * New profiles pick a module, then which of its aircraft they are for.
+ *
+ * Both lists come from the catalogue built from the user's own DCS-BIOS, so
+ * neither can offer something they do not have, and the aircraft names come
+ * from it because one module often serves several and the mapping is not
+ * guessable. The aircraft step exists because sharing DCS-BIOS outputs does
+ * not mean wanting the same lamps: the A-10C and A-10C II read one module.
  */
 async function showNewProfile(): Promise<void> {
   if (modules.length === 0) {
@@ -225,41 +287,163 @@ async function showNewProfile(): Promise<void> {
     return;
   }
 
-  const select = el("select", { id: "module", size: "12" });
-  for (const m of modules) {
-    const names = m.aircraft.length > 0 ? m.aircraft.join(", ") : "no runtime aircraft name";
-    select.append(el("option", { value: m.key }, `${m.key}  ·  ${names}`));
+  let existing: ProfileSummary[];
+  try {
+    existing = await listProfiles();
+  } catch (e) {
+    showError("Loading profiles", e);
+    return;
+  }
+  const claimedBy = new Map<string, ProfileSummary>();
+  for (const p of existing) {
+    if (p.error) continue;
+    for (const a of p.aircraft) if (!claimedBy.has(a)) claimedBy.set(a, p);
   }
 
-  const dialog = el(
-    "dialog",
-    { class: "picker" },
-    el("h2", {}, "Which module?"),
-    el("p", { class: "meta" }, `${modules.length} modules in your DCS-BIOS install.`),
-    select,
-    el(
-      "div",
-      { class: "actions" },
-      el("button", { id: "cancel" }, "Cancel"),
-      el("button", { class: "primary", id: "make" }, "Create"),
-    ),
-  );
+  const dialog = el("dialog", { class: "picker" });
   app.append(dialog);
-  dialog.showModal();
+  dialog.addEventListener("close", () => dialog.remove());
 
-  dialog.querySelector("#cancel")?.addEventListener("click", () => dialog.close());
-  dialog.querySelector("#make")?.addEventListener("click", () => {
-    const key = select.value;
-    dialog.close();
-    void (async () => {
-      try {
-        const file = await createProfile(key);
-        await showProfile(file);
-      } catch (e) {
-        showError("Creating the profile", e);
+  /** Step one: the module. Every one is offered; step two handles claims. */
+  const pickModule = (chosen?: string): void => {
+    const select = el("select", { id: "module", size: "12" });
+    for (const m of modules) {
+      const names = m.aircraft.length > 0 ? m.aircraft.join(", ") : "no runtime aircraft name";
+      const claimed = m.aircraft.filter((a) => claimedBy.has(a)).length;
+      const note =
+        claimed === 0
+          ? ""
+          : claimed === m.aircraft.length
+            ? "  ·  every aircraft has a profile"
+            : `  ·  ${claimed} of ${m.aircraft.length} aircraft have a profile`;
+      select.append(el("option", { value: m.key }, `${m.key}  ·  ${names}${note}`));
+    }
+    if (chosen) select.value = chosen;
+
+    const next = el("button", { class: "primary" }, "Next");
+    // Nothing is selected when the list opens, so Next waits for a choice.
+    const sync = (): void => {
+      if (select.value) next.removeAttribute("disabled");
+      else next.setAttribute("disabled", "");
+    };
+    sync();
+    select.addEventListener("change", sync);
+    const go = (): void => {
+      const m = modules.find((x) => x.key === select.value);
+      if (m) pickAircraft(m);
+    };
+    next.addEventListener("click", go);
+    select.addEventListener("dblclick", go);
+
+    const cancel = el("button", {}, "Cancel");
+    cancel.addEventListener("click", () => dialog.close());
+
+    dialog.replaceChildren(
+      el("h2", {}, "Which module?"),
+      el("p", { class: "meta" }, `${modules.length} modules in your DCS-BIOS install.`),
+      select,
+      el("div", { class: "actions" }, cancel, next),
+    );
+    select.focus();
+  };
+
+  /** Step two: which of the module's aircraft, and what to start from. */
+  const pickAircraft = (m: ModuleChoice): void => {
+    // A module with no runtime name is offered under its key.
+    const names = m.aircraft.length > 0 ? m.aircraft : [m.key];
+
+    const boxes: HTMLInputElement[] = [];
+    const list = el("div", { class: "checklist" });
+    for (const a of names) {
+      const owner = claimedBy.get(a);
+      const box = el("input", { type: "checkbox", value: a });
+      // Free aircraft start chosen. Claimed ones are there to be taken, not
+      // taken by default.
+      box.checked = owner === undefined;
+      boxes.push(box);
+      const row = el("label", {}, box, el("span", {}, a));
+      if (owner) row.append(el("span", { class: "meta" }, `in ${owner.name}`));
+      list.append(row);
+    }
+    const chosen = (): string[] => boxes.filter((b) => b.checked).map((b) => b.value);
+
+    // Anything this could sensibly be copied from: a profile on the same
+    // module, or one that claims an aircraft listed here.
+    const sources = existing.filter(
+      (p) => !p.error && (p.module === m.key || p.aircraft.some((a) => names.includes(a))),
+    );
+    const from = el("select", {});
+    from.append(el("option", { value: "" }, "Blank: every lamp unassigned"));
+    for (const p of sources) from.append(el("option", { value: p.file }, `Copy of ${p.name}`));
+    let fromTouched = false;
+    from.addEventListener("change", () => {
+      fromTouched = true;
+    });
+
+    const name = el("input", { type: "text" });
+    let nameTouched = false;
+
+    const moves = el("p", { class: "meta" });
+    const make = el("button", { class: "primary" }, "Create");
+
+    const sync = (): void => {
+      const picked = chosen();
+      // Named after the one aircraft when there is one, else the module.
+      if (!nameTouched) name.value = picked.length === 1 ? (picked[0] ?? m.key) : m.key;
+      // Taking a claimed aircraft suggests copying the profile it comes from,
+      // until the user picks a starting point themselves.
+      if (!fromTouched) {
+        const owners = [...new Set(picked.map((a) => claimedBy.get(a)))].filter(
+          (p): p is ProfileSummary => p !== undefined,
+        );
+        from.value = owners.length === 1 ? (owners[0]?.file ?? "") : "";
       }
-    })();
-  });
+      const { text, emptied } = describeMoves(picked, existing);
+      moves.textContent = text;
+      moves.className = emptied.length > 0 ? "bad" : "meta";
+      const ok = picked.length > 0 && name.value.trim() !== "" && emptied.length === 0;
+      if (ok) make.removeAttribute("disabled");
+      else make.setAttribute("disabled", "");
+    };
+    name.addEventListener("input", () => {
+      nameTouched = true;
+      sync();
+    });
+    for (const b of boxes) b.addEventListener("change", sync);
+    sync();
+
+    const back = el("button", {}, "Back");
+    back.addEventListener("click", () => pickModule(m.key));
+    const cancel = el("button", {}, "Cancel");
+    cancel.addEventListener("click", () => dialog.close());
+    make.addEventListener("click", () => {
+      const picked = chosen();
+      const source = from.value || null;
+      const title = name.value;
+      dialog.close();
+      void (async () => {
+        try {
+          const file = await createProfile(m.key, title, picked, source);
+          await showProfile(file);
+        } catch (e) {
+          showError("Creating the profile", e);
+        }
+      })();
+    });
+
+    dialog.replaceChildren(
+      el("h2", {}, `New ${m.key} profile`),
+      el("p", { class: "meta" }, "Which aircraft is it for? These are the names DCS reports for this module."),
+      list,
+      el("label", { class: "field" }, "Start from", from),
+      el("label", { class: "field" }, "Name", name),
+      moves,
+      el("div", { class: "actions" }, back, el("div", { class: "spacer" }), cancel, make),
+    );
+  };
+
+  dialog.showModal();
+  pickModule();
 }
 
 // -------------------------------------------------------------------- editor
@@ -344,6 +528,10 @@ async function showProfile(file: string): Promise<void> {
   // the profile is whatever it was on disk.
   let problems: string[] = [];
   const problemList = el("div", { class: "problems", hidden: "" });
+  // Cautions are about a profile that loads but probably does not do what was
+  // meant. Shown beside the problems, and never a reason to withhold Save.
+  let cautions: string[] = [];
+  const cautionList = el("div", { class: "cautions", hidden: "" });
 
   /**
    * The header's state line, and whether Save is offered.
@@ -373,6 +561,17 @@ async function showProfile(file: string): Promise<void> {
    * never many: the window prevents most of them from being made at all.
    */
   const drawProblems = (): void => {
+    cautionList.replaceChildren();
+    cautionList.hidden = cautions.length === 0;
+    if (cautions.length > 0) {
+      cautionList.append(
+        el("strong", {}, cautions.length === 1 ? "This will load, but check it:" : "These will load, but check them:"),
+      );
+      for (const caution of cautions) {
+        cautionList.append(el("div", { class: "caution" }, caution));
+      }
+    }
+
     problemList.replaceChildren();
     if (problems.length === 0) {
       problemList.hidden = true;
@@ -419,7 +618,8 @@ async function showProfile(file: string): Promise<void> {
         void checkProfile(session.profile)
           .then((found) => {
             if (JSON.stringify(session.profile) !== asked) return;
-            problems = found;
+            problems = found.problems;
+            cautions = found.cautions;
             drawProblems();
             refreshSave();
           })
@@ -427,6 +627,7 @@ async function showProfile(file: string): Promise<void> {
             // A check that cannot run must not read as a profile with nothing
             // wrong, so the failure takes the same place the problems do.
             problems = [`The profile could not be checked: ${e instanceof Error ? e.message : String(e)}`];
+            cautions = [];
             drawProblems();
             refreshSave();
           });
@@ -437,8 +638,10 @@ async function showProfile(file: string): Promise<void> {
 
   const back = el("button", {}, "← Profiles");
   back.addEventListener("click", () => {
-    if (session.dirty && !window.confirm("Leave without saving? Your changes will be lost.")) return;
-    void showLibrary();
+    void (async () => {
+      if (session.dirty && !(await confirmAction("Leave without saving? Your changes will be lost.", "Leave"))) return;
+      await showLibrary();
+    })();
   });
 
   save.addEventListener("click", () => {
@@ -472,7 +675,7 @@ async function showProfile(file: string): Promise<void> {
       save,
     ),
   );
-  app.append(problemList);
+  app.append(problemList, cautionList);
 
   if (signalError) {
     app.append(
@@ -545,7 +748,11 @@ function bindingFor(device: Device, led: Led, byLamp: Map<string, Binding>, sess
   const key = lampKey(device.key, led.name);
   const existing = byLamp.get(key);
   if (existing) return existing;
-  const fresh: Binding = { device: device.key, led: led.name, conditions: [], on: null, off: 0 };
+  // A gate starts with its daylight floor. Unassigned it does nothing yet, but
+  // the floor is what the user almost always wants once they give it a dimmer
+  // to follow, and a floor they have to know to add is one they will not.
+  const off = led.governs.length > 0 ? led.max : 0;
+  const fresh: Binding = { device: device.key, led: led.name, conditions: [], on: null, off };
   byLamp.set(key, fresh);
   session.profile.bindings.push(fresh);
   return fresh;
@@ -685,6 +892,11 @@ function lampHint(led: Led): HTMLElement {
  * A mirror takes its value from the lamp it follows, so `on` is unused there
  * too; only `off` still applies.
  */
+/** Names a lamp but drives nothing yet. Mirrors `Binding::is_placeholder`. */
+function isPlaceholder(binding: Binding): boolean {
+  return !binding.conditions.length && !binding.any_of?.length && !binding.always && !binding.same_as;
+}
+
 function onValueMatters(binding: Binding): boolean {
   if (binding.same_as) return false;
   if (binding.always) return true;
@@ -719,27 +931,15 @@ function lampRow(
   if (!led.verified) name.append(el("span", { class: "unverified" }, "unverified"));
 
   const output = el("td", { class: "num" });
-  const renderOutput = (): void => {
-    output.replaceChildren();
 
-    // An indicator acks 255 and lights nothing, which is not "off" and cost a
-    // long detour once. There is no brightness to offer, only its on value.
-    if (!led.dimmable) {
-      output.append(el("span", { class: "meta" }, String(led.on_value)));
-      return;
-    }
-    if (binding.same_as) {
-      output.append(el("span", { class: "meta" }, "matched"));
-      return;
-    }
+  /** The brightness when lit, or why there is none to set. */
+  const litCell = (): HTMLElement => {
+    if (binding.same_as) return el("span", { class: "meta" }, "matched");
     if (!onValueMatters(binding)) {
       // Either nothing is assigned yet, or every test is a scale. A scale
       // ignores `on` and spreads the source across the lamp's own range, so an
       // input here would be a control that quietly does nothing.
-      output.append(
-        el("span", { class: "meta" }, binding.conditions.length || binding.any_of?.length ? `0..${led.max}` : ""),
-      );
-      return;
+      return el("span", { class: "meta" }, binding.conditions.length || binding.any_of?.length ? `0..${led.max}` : "");
     }
 
     const input = el("input", {
@@ -756,7 +956,55 @@ function lampRow(
       input.value = String(binding.on);
       session.refreshDirty();
     });
-    output.append(input);
+    return el("label", { class: "field" }, "when lit", input);
+  };
+
+  /**
+   * The value when the binding resolves to 0: the lamp it follows is dark, or
+   * the scaled source is at the bottom, or no condition holds.
+   *
+   * On a gate this is the daylight floor. Console lighting off means daylight,
+   * not lamps off, and SL at 0 hides every indicator on the PTO2. It was only
+   * reachable by editing the file, which is how the A-10C shipped without it.
+   *
+   * Not offered where it cannot apply: an unassigned lamp resolves to nothing,
+   * and an always-on one never resolves to 0.
+   */
+  const atZeroCell = (): HTMLElement | null => {
+    if (isPlaceholder(binding) || binding.always) return null;
+    const input = el("input", {
+      type: "number",
+      class: "value",
+      min: "0",
+      max: String(led.max),
+      // Absent in the file when it is 0, which the profile writer leaves out.
+      value: String(binding.off ?? 0),
+    });
+    input.title =
+      led.governs.length > 0
+        ? `Value when the cockpit lighting is off. At 0 this hides the ${led.governs.length} lamps it governs, so ${led.max} keeps them readable in daylight.`
+        : "Value when what this lamp follows is at zero, or none of its conditions hold.";
+    input.addEventListener("change", () => {
+      const n = Number(input.value);
+      binding.off = Number.isFinite(n) ? Math.min(Math.max(Math.round(n), 0), led.max) : 0;
+      input.value = String(binding.off);
+      session.refreshDirty();
+    });
+    return el("label", { class: "field" }, "at zero", input);
+  };
+
+  const renderOutput = (): void => {
+    output.replaceChildren();
+
+    // An indicator acks 255 and lights nothing, which is not "off" and cost a
+    // long detour once. There is no brightness to offer, only its on value.
+    if (!led.dimmable) {
+      output.append(el("span", { class: "meta" }, String(led.on_value)));
+      return;
+    }
+    output.append(litCell());
+    const atZero = atZeroCell();
+    if (atZero) output.append(atZero);
   };
   renderOutput();
 

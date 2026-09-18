@@ -8,7 +8,8 @@ happen to drive lamps; it is the device's lamp inventory, each with an answer to
 hardware has, and the user fills in the ones they care about.
 
 One profile per aircraft. Aircraft are matched on the names DCS reports at
-runtime, so a single profile can serve variants.
+runtime, so a single profile can serve variants, and an aircraft belongs to at
+most one profile.
 
 Any readable signal may be a source, **not only lamps**. In the AH-64D, 400 of its
 708 signals are switch selectors against 49 lamps. A user binding the A/G lamp to
@@ -198,8 +199,8 @@ resolves a zero source to zero, and a binding that resolves to zero takes its
 }
 ```
 
-Both shipped profiles use exactly that for `FLAG`, the dimmer over the PTO2's
-seven flag lamps. Console lights off means daylight, not lamps off, so the flags
+Every shipped profile that ties `FLAG` to a dimmer uses exactly that. `FLAG` is
+the dimmer over the PTO2's seven flag lamps. Console lights off means daylight, not lamps off, so the flags
 go full bright rather than dark. `Backlight` deliberately does not get the same
 treatment: unlit panel labels in daylight are correct.
 
@@ -254,6 +255,14 @@ indicators, so pointing it at the backlight with no `off` means every lamp on th
 panel goes out whenever the console knob is down, which in daylight is always.
 Give it a floor, or leave it at `"always": true`.
 
+In the editor the floor is the **at zero** field under a dimmer's output, shown
+whenever the lamp is assigned and not always on. A lamp that hides others at 0
+is marked in `devices.json` with `governs`, the names of the lamps beneath it.
+For those the check cautions, without blocking Save, when the lamp resolves to 0
+with every signal at 0, and the daemon logs the same caution on load. A newly
+generated profile starts both gates held at full with the floor already set, so
+switching one to follow a dimmer does not blank the panel by day.
+
 **Chains are not allowed.** The target must read signals of its own, which rules
 out cycles with no cycle detection to get wrong. A mirroring lamp reads nothing
 directly, so the engine indexes it under its target's addresses; otherwise it
@@ -273,15 +282,25 @@ later addition, not part of v1.
 
 ## The editor window
 
-Nothing fancy. A profile list with new, edit and reset, and one profile open at
-a time.
+Nothing fancy. A profile list with new, edit, copy and reset, and one profile
+open at a time.
 
-**New profile asks for a module from a dropdown, never a typed name.** The list
-comes from the catalogue index, so it offers only what the user's own DCS-BIOS
-supports. A module can cover several runtime aircraft names, `A-10C` covering
-both `A-10C_2` and `A-10C`, so the entry shows the names underneath it. The new
-profile is then populated with every LED of every inventoried device, all
-unassigned, which is the same starter the CLI writes.
+**New profile asks for a module, then its aircraft, never a typed name.** Both
+lists come from the catalogue index, so they offer only what the user's own
+DCS-BIOS supports. A module can cover several runtime aircraft names, `A-10C`
+covering both `A-10C_2` and `A-10C`, and sharing DCS-BIOS outputs does not mean
+wanting the same lamps, so the user picks which of them the profile is for. It
+starts blank, with every LED of every inventoried device listed and unassigned
+except the PTO2 gates, which is the same starter the CLI writes, or as a copy of
+a related profile. **Copy to...** makes a copy for aircraft the user types.
+
+**An aircraft belongs to one profile.** A new profile or copy that takes an
+aircraft another profile claims moves it: the new one gains it and the old one
+gives it up, and the dialog says so before it happens. A move that would leave
+a profile with no aircraft is refused before anything is written. The file name
+is not the guard: it comes from the profile's name through `file_stem`, the one
+rule the daemon and the editor share, and says nothing about which aircraft a
+profile claims.
 
 **One collapsible section per device**, ordered alphabetically by `display_name`
 and all collapsed on open, with a single control to expand and collapse
@@ -324,11 +343,17 @@ the version already on disk is very likely one that flies. `save_profile`
 refuses the same way, so the guarantee holds even if the window is wrong about
 it.
 
+**Cautions** sit beside problems, for a profile that loads but probably does not
+do what was meant. They come from `Profile::cautions` and never withhold Save.
+The one so far is a gate, a dimmer marked in `devices.json` with `governs`, that
+resolves to 0 with every signal at 0, which hides its lamps in daylight. The
+daemon logs the same cautions on load.
+
 ## Where profiles live
 
-Shipped profiles are a product, not a sample. They live read-only in `DEFAULT/`
-beside the executable. The folder the daemon and editor actually read is a
-separate, writable one, and it starts as a copy of `DEFAULT/`.
+Shipped profiles are a product, not a sample. They live read-only in
+`data/defaults`. The folder the daemon and editor actually read, `data/profiles`,
+is a separate, writable one, and it starts as a copy of `data/defaults`.
 
 - **Install** copies every default in.
 - **Update** copies in only the names that are not already there. A profile the
@@ -342,6 +367,10 @@ The cost, accepted deliberately: a correction shipped to a default never reaches
 a user who already has that profile, including one who never opened it. Reset is
 the manual remedy. A profile the user deletes reappears on the next update
 unless the seeded names are tracked.
+
+Seeding goes by file name, so renaming a shipped profile leaves a user with the
+old file and the new one, both claiming the same aircraft. Rename a default only
+before it has shipped, or delete the old copy by hand.
 
 ## The source dropdown
 
@@ -360,7 +389,7 @@ Each row is two lines plus a dim identifier:
 ```
 
 The second line is not decoration. Descriptions are human-readable but far from
-unique: every one of the 21,644 signals across the 51 catalogued modules has a
+unique: every one of the 21,644 signals across the 50 catalogued modules has a
 description, yet CH-47F alone has 696 signals that share one with another signal
 in the same module. `Call Button Light (Yellow)` occurs six times there,
 separated only by category: PLT, CPLT, Gunner (L), Gunner (R), Ramp and TC.
@@ -633,9 +662,3 @@ because it looks correct.
    generic "gear and flaps" profile can be specialised per module? Powerful for
    sharing, but it complicates the editor and conflict resolution. Leaning no for
    v1.
-2. **Unbound LEDs.** Clearing everything at mission start is proposed above. The
-   alternative is leaving unbound LEDs untouched so another tool can own them.
-   Clearing is more predictable; leaving alone is more cooperative.
-3. **Per-LED ranges.** `Master_Caution` is treated as 0/1 because SimAppPro
-   presents it as a toggle rather than a slider. Whether the firmware accepts
-   intermediate values is untested see `data/devices.json`.

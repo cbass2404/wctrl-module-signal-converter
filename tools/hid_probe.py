@@ -8,6 +8,7 @@
   python tools/hid_probe.py blink  [--pid 0xbf05] [--part 0xbf05] --index 1
   python tools/hid_probe.py lcd    [--pid 0xbede] [--part 0xbed0] --text HELLO --at 10
   python tools/hid_probe.py lcd    --clear
+  python tools/hid_probe.py cfg    [--pid 0xbf06] [--part 0xbf06] --offset 0xc8
 
 Wire protocol (14-byte reports, see docs/PROTOCOL.md):
 
@@ -299,6 +300,34 @@ def cmd_parts(args):
         k32.CloseHandle(C.c_void_p(handle))
 
 
+def cmd_cfg(args):
+    """Read four bytes of a part's saved configuration. Read only: the write
+    command is on the forbidden list and cannot be built here."""
+    path, caps = find(args.pid)
+    inn, outn = caps.InputReportByteLength, caps.OutputReportByteLength
+    off = args.offset
+    frame = build(args.part, [READ_CFG_DATA, off & 0xff, off >> 8 & 0xff, off >> 16 & 0xff], outn)
+    print("READ_CFG_DATA part 0x%04x offset 0x%03x" % (args.part, off))
+    print("  " + " ".join("%02x" % b for b in frame))
+    handle = open_rw(path)
+    try:
+        drain(handle, inn)
+        ok, detail = write_report(handle, frame)
+        if not ok:
+            sys.exit("write failed: %s" % detail)
+        seen = False
+        for r in replies(handle, inn, args.seconds):
+            raw, part, length, data = decode(r)
+            if data and data[0] == READ_CFG_DATA:
+                seen = True
+                print("  part 0x%04x  len=%d  data=%s"
+                      % (part, length, " ".join("%02x" % b for b in data)))
+        if not seen:
+            print("No READ_CFG_DATA reply.")
+    finally:
+        k32.CloseHandle(C.c_void_p(handle))
+
+
 def cmd_led(args):
     path, caps = find(args.pid)
     inn, outn = caps.InputReportByteLength, caps.OutputReportByteLength
@@ -431,6 +460,13 @@ p = sub.add_parser("parts")
 p.set_defaults(func=cmd_parts)
 p.add_argument("--pid", type=lambda s: int(s, 0), default=0xBF05)
 p.add_argument("--seconds", type=float, default=1.5)
+
+p = sub.add_parser("cfg")
+p.set_defaults(func=cmd_cfg)
+p.add_argument("--pid", type=lambda s: int(s, 0), default=0xBF06)
+p.add_argument("--part", type=lambda s: int(s, 0), default=0xBF06)
+p.add_argument("--offset", type=lambda s: int(s, 0), required=True)
+p.add_argument("--seconds", type=float, default=0.5)
 
 p = sub.add_parser("led")
 p.set_defaults(func=cmd_led)

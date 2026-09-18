@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 pub mod display;
 
 pub use display::{
-    Align, Cell, CellRange, Display, DisplayCatalogue, Readout, Region, Screen, SEAT_SIGNAL,
+    Align, Cell, CellRange, Display, DisplayCatalogue, Grid, Readout, Region, Screen, Transport,
+    SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -35,6 +36,10 @@ pub enum Error {
     OutOfRange(String, u8, u8),
     #[error("no shipped default named {0:?} to reset from")]
     NoDefault(String),
+    #[error("{0:?} shipped with wctrl, so it cannot be deleted; reset it instead")]
+    ShippedProfile(String),
+    #[error("{0:?} is not a profile file name")]
+    NotAProfileFile(String),
     #[error("LED {0:?} is set to always on but also carries conditions; it can have one or the other")]
     AlwaysWithConditions(String),
     #[error("LED {0:?} carries both conditions and any_of; put every alternative in any_of")]
@@ -49,6 +54,8 @@ pub enum Error {
     MirrorWithConditions(String),
     #[error("LED {0:?} and {1:?} cannot mirror each other; only lamps that dim can, because an on/off lamp has no level to follow")]
     MirrorNotDimmable(String, String),
+    #[error("display {0:?} is malformed: {1}")]
+    BadDisplay(String, String),
     #[error("display {0:?} has no cell {1}")]
     NoSuchCell(String, usize),
     #[error("{0:?} cannot be drawn on a {1} cell of display {2:?}")]
@@ -71,6 +78,10 @@ pub enum Error {
     SeatNotReported(u32, String, &'static str),
     #[error("seat {0} is not one this module has; {1} reports 0 to {2}")]
     NoSuchSeat(u32, &'static str, u32),
+    #[error("display {0:?} cannot draw inverse characters, so the format signal on {1} would do nothing")]
+    FormatNotDrawn(String, String),
+    #[error("{0:?} is a number; a format signal has to be characters, one per cell")]
+    FormatNotText(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -260,6 +271,15 @@ pub struct Led {
     /// dimmer that governs nothing, such as a backlight.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub governs: Vec<String>,
+    /// This lamp lights its part's display, and the engine drives it with the
+    /// display rather than from a profile: full while a profile puts fields on
+    /// that display, 0 when the display is blanked.
+    ///
+    /// The ICP's DED backlight is the case. At 0 a correctly drawn page is
+    /// invisible, so it is not a choice worth offering, and it is hidden from
+    /// profiles and the editor rather than left as a way to lose the screen.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub lights_display: bool,
 }
 
 impl Led {
@@ -318,15 +338,26 @@ impl DeviceSpec {
     /// both the UFC part and the HUD part, and the second was simply
     /// unreachable, with no error anywhere. `every_lamp_name_is_unique_within_its_device`
     /// keeps that from happening again.
+    ///
+    /// A lamp that [lights a display](Led::lights_display) is not found here,
+    /// because no profile may bind it.
     pub fn led(&self, name: &str) -> Option<(&Part, &Led)> {
-        self.parts
-            .iter()
-            .find_map(|p| p.leds.iter().find(|l| l.name == name).map(|l| (p, l)))
+        self.leds().find(|(_, l)| l.name == name)
     }
 
-    /// Every LED on the device, with its owning part.
+    /// Every LED a profile can bind, with its owning part. Leaves out the lamps
+    /// that light a display, which the engine drives itself.
     pub fn leds(&self) -> impl Iterator<Item = (&Part, &Led)> {
-        self.parts.iter().flat_map(|p| p.leds.iter().map(move |l| (p, l)))
+        self.parts
+            .iter()
+            .flat_map(|p| p.leds.iter().filter(|l| !l.lights_display).map(move |l| (p, l)))
+    }
+
+    /// The lamps that light a display, with their owning part.
+    pub fn display_lamps(&self) -> impl Iterator<Item = (&Part, &Led)> {
+        self.parts
+            .iter()
+            .flat_map(|p| p.leds.iter().filter(|l| l.lights_display).map(move |l| (p, l)))
     }
 
     /// The part carrying a named display.
@@ -1052,6 +1083,17 @@ impl Profile {
             } else if r.reads.is_none() {
                 out.push(Error::RangeMissing(r.source.clone()));
             }
+
+            if let Some(format) = &r.format {
+                if !display.draws_inverse() {
+                    out.push(Error::FormatNotDrawn(r.display.clone(), r.cells.to_string()));
+                }
+                match module.signal(format).and_then(|s| s.primary()) {
+                    None => out.push(Error::UnknownSignal(format.clone())),
+                    Some(o) if o.r#type != "string" => out.push(Error::FormatNotText(format.clone())),
+                    Some(_) => {}
+                }
+            }
         }
     }
 }
@@ -1327,10 +1369,28 @@ impl Profiles {
         Ok(notes)
     }
 
+    /// Delete a profile the user made.
+    ///
+    /// Refused for one that shipped: it would be seeded straight back on the
+    /// next start, so deleting it only looks like it worked. Reset is the way
+    /// back for those. What this is for is the profile left over from splitting
+    /// one aircraft list in two, which nothing else can remove.
+    pub fn delete(&self, file: &str) -> Result<()> {
+        // A bare file name, so nothing outside the active folder is reachable.
+        if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
+            return Err(Error::NotAProfileFile(file.to_string()));
+        }
+        if self.has_default(file) {
+            return Err(Error::ShippedProfile(file.to_string()));
+        }
+        std::fs::remove_file(self.active.join(file))?;
+        Ok(())
+    }
+
     /// Overwrite one active profile with its shipped default.
     ///
-    /// The only call that destroys user work, so it is never reached except by
-    /// someone clicking reset.
+    /// Destroys user work, so it is never reached except by someone clicking
+    /// reset.
     pub fn reset_to_default(&self, file: &str) -> Result<()> {
         let from = self.defaults.join(file);
         if !from.is_file() {
@@ -1380,6 +1440,7 @@ mod tests {
             verified: true,
             note: String::new(),
             governs: Vec::new(),
+            lights_display: false,
         }
     }
 

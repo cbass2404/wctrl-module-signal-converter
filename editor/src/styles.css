@@ -795,6 +795,11 @@ details.device.off table {
   opacity: 0.45;
 }
 
+/* It will not open, so it should not look like it will. */
+details.device.off > summary {
+  cursor: default;
+}
+
 .drive {
   margin-left: auto;
   display: flex;

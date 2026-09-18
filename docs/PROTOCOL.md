@@ -20,8 +20,10 @@ vendor report pair:
 | `0x02` | device → host | 0xff00 / usage 0x01 | 13 bytes, vendor channel                |
 | `0x02` | host → device | 0xff00 / usage 0x02 | 13 bytes, vendor channel                |
 
-`0x02` is the only declared output report ID; Windows rejects any other in the HID
-stack before it reaches the device. Handles open `GENERIC_READ | GENERIC_WRITE`
+On the 14-byte panels `0x02` is the only declared output report ID; Windows
+rejects any other in the HID stack before it reaches the device. Panels with a
+pixel screen (ViperAce ICP, MCDU) declare 64-byte reports and add a second
+channel, `0xf0`, described under "Driving a pixel display". Handles open `GENERIC_READ | GENERIC_WRITE`
 with `FILE_SHARE_READ | FILE_SHARE_WRITE` even while SimAppPro is running HID
 access is shared and input reports reach every open handle. **No admin rights
 required.**
@@ -363,6 +365,129 @@ all land in the same write. Captured between two keypresses:
 So a display must be repainted on a settled state, not per write. Batching by
 datagram is the natural place to do it.
 
+## Driving a pixel display
+
+The ViperAce ICP (PID `0xbf06`, one part, `0xbf06`) carries the F-16 DED as a
+monochrome pixel screen. It is not driven by `SET_LCDS` or by report `0x02` at
+all. Decoded 2026-09-18 from a SimAppPro capture of a live F-16 and then
+**confirmed on hardware** by drawing with frames we built ourselves: a solid
+bar, a multi-report write, a full clear, and "UHF" in captured glyphs, legible
+and the right way round. **Flown the same day:** the daemon drove the DED from
+DCS-BIOS in a live F-16 through every page tried, inverse fields included.
+
+### Wire format
+
+Every report is 64 bytes on report `0xf0`:
+
+```text
+byte  0      0xf0    report id
+byte  1      0x00    host to device
+byte  2      seq     host counter, wraps at 256
+byte  3      n       bytes of logical frame in this report, 1..60
+bytes 4..    chunk   the next n bytes of the logical frame, zero padded to 64
+```
+
+A logical frame longer than 60 bytes is split into consecutive 60-byte chunks,
+each in its own report with its own header. Nothing else marks a continuation.
+
+**`WWTHID.log` hides this header.** Its `Hiddata:` lines print `f0` followed
+directly by the logical frame, so a frame replayed from the log as printed is
+acknowledged by the device and then ignored. That cost one round of testing.
+
+The logical frame:
+
+```text
+bytes 0..3    uint32  part id, 06 bf 00 00
+byte  4       cmd
+bytes 5..7    01 00 00, constant in every capture, meaning unknown
+bytes 8..11   uint32  host milliseconds clock
+byte  12      00, constant, meaning unknown
+bytes 13..16  uint32  payload length
+bytes 17..    payload
+```
+
+The clock is not checked for continuity: frames stamped from our own clock,
+starting near zero, were accepted straight after SimAppPro's.
+
+The device answers **each report** with `f0 01 <nn> 00`, where `nn` is the
+device's own counter and carries on across processes. So a 96-byte frame draws
+two acks.
+
+### Pixel display commands
+
+| cmd    | Payload                   | Effect                                              |
+| ------ | ------------------------- | --------------------------------------------------- |
+| `0x02` | `u32 address`, then bytes | write into the framebuffer, not yet shown           |
+| `0x03` | `00`                      | commit: show what has been written                  |
+| `0x04` | one byte, 1..6            | factory self-test pattern, see below                |
+
+Self-test values, matching SimAppPro's buttons in order: 1 ALL LCD ON, 2 ALL LCD
+OFF, 3 to 6 HALF LCD ON 1 to 4. These are stored in the firmware and need no
+framebuffer writes.
+
+### The framebuffer
+
+1 bit per pixel, **200 pixels wide**, 25 bytes per row, rows top to bottom.
+64 rows, 1600 bytes: SimAppPro's highest write ends at byte 1597, in row 63,
+and it inks row 63 with the bottom of an inverse box on line 5.
+
+- **The write address is in pixels, not bytes**: `y * 200 + x`, with `x` a
+  multiple of 8. Row 2, column 8 is address 408.
+- **The least significant bit is the leftmost pixel.** Read MSB first, every
+  glyph comes out mirrored.
+- Written bytes run on across row ends, so one write can cover several rows.
+- The largest single write SimAppPro sent carried 270 data bytes. Ours stayed
+  at 225. Larger may work and has not been tried.
+
+### Layout of the DED
+
+SimAppPro draws a character cell at `x * 8, y * 13 + 1` (`F16_ICP.js`): 24
+columns of 8 pixels and 5 lines on a 13-pixel pitch, glyph ink starting at rows
+2, 15, 28, 41 and 54. That is DCS-BIOS's `DED_L1` to `DED_L5` grid, 24
+characters each, one to one. Five 13-row lines would be 65 rows, so line 5's
+cell has no bottom row; it is margin and never inked.
+
+Every captured glyph sits in columns 1 to 6 and rows 2 to 10 of its cell, with
+2-pixel strokes.
+
+Inverse is not a device feature. SimAppPro draws a cell flagged `i` in
+`DED_Ln_FORMAT` by filling rows 1 to 11 of the cell and knocking the glyph out,
+and the device shows those bytes like any others. Drawing `DED_L3` from the TCN
+page that way reproduces SimAppPro's frame byte for byte.
+
+The font is host side. `WWTHID_JSAPI.node` loads `config/ICP/ICP_font_0..2.png`
+and indexes them through `textfont_config_new.json`, 66 characters.
+
+### SimAppPro does not use DCS-BIOS for this
+
+It calls `list_indication(6)` through its own export script and places each
+named element using `config/ICP/ded_dcs.xlsx`. DCS-BIOS reads the same
+indication and has already laid it out as five 24-character lines plus a format
+string per line, so we need neither the spreadsheet nor the element names.
+
+SimAppPro repaints about once a second and sends only the byte ranges that
+changed. The CNI clock ticking over is one 1-byte write and a commit.
+
+### It latches
+
+The screen kept "UHF" after the writing process exited, so it needs the same
+blank-on-end discipline as the lamps and the UFC.
+
+### A page change flashes
+
+A large update shows a brief full-bright flash on the glass between the old
+page and the new one. SimAppPro does exactly the same on the same panel
+(observed 2026-09-18), and its page changes are a burst of about 21 to 25
+reports in 1 to 2 ms without waiting for acknowledgements, much as ours are. So
+this is the device, not the host, and not worth chasing.
+
+### The screen backlight is separate
+
+With the ICP's screen backlight at zero a correct frame shows nothing at all.
+Seen during the test above, where the bar only appeared once the backlight was
+turned up. That dimmer is ordinary lamp state, and a profile has to own it, or
+a working DED looks dead.
+
 ## Capturing SimAppPro's own traffic
 
 1. Set `"HIDLog": true` in `%APPDATA%\SimAppPro\config.json` (read at startup only).
@@ -379,6 +504,15 @@ HidData:<device>,<COMMAND>,<send|accept>,channel:2,id: 05 bf 00 00,len:3,data: 4
 ```
 
 `tools/parse_wwthid_log.py` decodes these and reconstructs the 14-byte frames.
+
+The 64-byte channel is logged separately, as `Hiddata: send` and
+`Hiddata: accpet` (sic) lines, with the report header removed. See "Driving a
+pixel display".
+
+**The log is capped at about 24 MB and then stops.** With six panels polling,
+that is roughly 25 seconds of traffic. On 2026-09-18 a five-minute capture
+kept only 13:05:42 to 13:06:08. Keep captures short, or restart SimAppPro just
+before the part that matters.
 
 The setting survived a SimAppPro update on 2026-09-16, but that is not guaranteed;
 re-check it after any update.
@@ -425,9 +559,13 @@ not alias the source: DCS-BIOS exports at 30 Hz, comfortably above a 2-4 Hz lamp
 1. Are LEDs on parts behind a throttle base addressed via the base's part id or
    their own?
 2. What does `SET_LEDX_WITH_DURATION` (`0x4b`) take as arguments?
-3. The MCDU Captain (`0xbb36`) enumerates with 64-byte reports in both
-   directions, unlike every other panel here at 14. Its screen is presumably
-   not driven by `SET_LCDS` in this form.
+3. The MCDU Captain (`0xbb36`) enumerates with 64-byte reports like the ICP,
+   and one frame it sent, `f0 00 c6 12 | 32 cb 00 00 05 01 ...`, has the same
+   header and logical frame layout. Its screen is presumably on the same
+   channel. Unconfirmed, and deliberately left so: this project drives only
+   the MCDU's lamps (see `STATUS.md`).
+4. The ICP's constant header bytes (`01 00 00` after the command, `00` before
+   the length) and whether a write can exceed 270 bytes.
 
 ## Tools
 

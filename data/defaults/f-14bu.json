@@ -15,11 +15,6 @@
     },
     {
       "device": "CarrierAce_UFC",
-      "led": "LCDBacklight",
-      "conditions": []
-    },
-    {
-      "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": []
     },

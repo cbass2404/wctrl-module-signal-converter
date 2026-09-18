@@ -12,15 +12,21 @@
 //! Replies use the same layout with `PART_REPLY_BIAS` added to the part id.
 //! LED state is latched in the device, so there is no keepalive to maintain and
 //! writes happen only when a value changes.
+//!
+//! Panels with a pixel screen add a second channel, report `0xf0`, carrying a
+//! longer frame split across 64-byte reports. See [`pixel_write_frame`].
 
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::{Duration, Instant};
 
 use hidapi::{HidApi, HidDevice};
 
 /// Assigned to the vendor, unchanged across the WinWing/WinUSA/WinCtrl rebrands.
 pub const VENDOR_ID: u16 = 0x4098;
-/// The only output report id the descriptor declares.
+/// The command channel's report id, and the only one on the 14-byte panels.
 pub const REPORT_ID: u8 = 0x02;
+/// The pixel screen channel, declared only by panels with 64-byte reports.
+pub const PIXEL_REPORT_ID: u8 = 0xf0;
 /// Addressing this part id makes every sub-part answer.
 pub const BROADCAST_PART: u32 = 1;
 /// Replies carry the responding part's id with this added.
@@ -96,6 +102,81 @@ pub fn build_frame(part_id: u32, data: &[u8]) -> Result<[u8; FRAME_LEN]> {
     Ok(frame)
 }
 
+// ------------------------------------------------------------- pixel channel
+//
+// Confirmed on a ViperAce ICP 2026-09-18 (docs/PROTOCOL.md, "Driving a pixel
+// display"). A logical frame is
+//
+//   part id u32 | cmd | 01 00 00 | clock u32 ms | 00 | payload len u32 | payload
+//
+// and goes out as consecutive 64-byte reports, each `f0 00 <seq> <n>` and then
+// n (1..=60) bytes of the frame, zero padded. WWTHID.log prints the frame
+// without those four header bytes, which is why the first attempt to replay it
+// was acknowledged and drew nothing.
+
+const PIXEL_REPORT_LEN: usize = 64;
+const PIXEL_REPORT_DATA: usize = 60;
+const PIXEL_WRITE: u8 = 0x02;
+const PIXEL_COMMIT: u8 = 0x03;
+
+/// The most data bytes put in one pixel write.
+///
+/// 225 is nine rows of a 200 pixel screen, the largest write confirmed on
+/// hardware. SimAppPro was seen sending up to 270, so this is a margin rather
+/// than the device's limit, which is not known.
+pub const PIXEL_WRITE_MAX: usize = 225;
+
+/// Only write and commit can be built. `0x04` is the vendor's self-test
+/// pattern, which has no use here.
+fn pixel_frame(part_id: u32, cmd: u8, clock_ms: u32, payload: &[u8]) -> Vec<u8> {
+    let mut out = Vec::with_capacity(17 + payload.len());
+    out.extend_from_slice(&part_id.to_le_bytes());
+    // Constant in every captured frame; what it means is not known.
+    out.extend_from_slice(&[cmd, 0x01, 0x00, 0x00]);
+    // SimAppPro's millisecond clock. The device does not check its continuity.
+    out.extend_from_slice(&clock_ms.to_le_bytes());
+    out.push(0x00);
+    out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
+    out.extend_from_slice(payload);
+    out
+}
+
+/// A write into the screen's framebuffer, not shown until a commit.
+///
+/// `address` is in pixels, `y * width + x`, and must be a multiple of 8,
+/// because each byte is 8 pixels with the least significant bit leftmost. The
+/// bytes run on across the end of a row.
+pub fn pixel_write_frame(part_id: u32, clock_ms: u32, address: u32, bytes: &[u8]) -> Vec<u8> {
+    let mut payload = Vec::with_capacity(4 + bytes.len());
+    payload.extend_from_slice(&address.to_le_bytes());
+    payload.extend_from_slice(bytes);
+    pixel_frame(part_id, PIXEL_WRITE, clock_ms, &payload)
+}
+
+/// Show what the writes since the last commit put in the framebuffer.
+pub fn pixel_commit_frame(part_id: u32, clock_ms: u32) -> Vec<u8> {
+    pixel_frame(part_id, PIXEL_COMMIT, clock_ms, &[0x00])
+}
+
+/// Split a logical frame into the reports that carry it.
+///
+/// `seq` is the host's report counter, advanced once per report and wrapping.
+/// The device acknowledges each report with its own counter, not ours.
+pub fn pixel_reports(frame: &[u8], seq: &mut u8) -> Vec<[u8; PIXEL_REPORT_LEN]> {
+    frame
+        .chunks(PIXEL_REPORT_DATA)
+        .map(|chunk| {
+            *seq = seq.wrapping_add(1);
+            let mut report = [0u8; PIXEL_REPORT_LEN];
+            report[0] = PIXEL_REPORT_ID;
+            report[2] = *seq;
+            report[3] = chunk.len() as u8;
+            report[4..4 + chunk.len()].copy_from_slice(chunk);
+            report
+        })
+        .collect()
+}
+
 /// A decoded vendor-channel report.
 #[derive(Debug, Clone)]
 pub struct Reply {
@@ -134,6 +215,10 @@ pub fn enumerate(api: &HidApi) -> Vec<DeviceInfo> {
 pub struct Device {
     handle: HidDevice,
     pub info: DeviceInfo,
+    /// Pixel channel report counter.
+    seq: AtomicU8,
+    /// Zero point of the pixel channel's millisecond clock.
+    opened: Instant,
 }
 
 impl Device {
@@ -144,7 +229,12 @@ impl Device {
             .ok_or(Error::NotFound(product_id))?;
         let path = std::ffi::CString::new(info.path.clone()).expect("hid path has no interior nul");
         let handle = api.open_path(&path)?;
-        Ok(Device { handle, info })
+        Ok(Device {
+            handle,
+            info,
+            seq: AtomicU8::new(0),
+            opened: Instant::now(),
+        })
     }
 
     fn send(&self, part_id: u32, data: &[u8]) -> Result<()> {
@@ -171,6 +261,38 @@ impl Device {
         data.push(group);
         data.extend_from_slice(bytes);
         self.send(part_id, &data)
+    }
+
+    /// Write bytes into a pixel screen's framebuffer, starting `offset` bytes
+    /// in. Nothing changes on the glass until [`commit_pixels`](Self::commit_pixels).
+    ///
+    /// Split into writes of at most [`PIXEL_WRITE_MAX`] bytes. Each report is
+    /// acknowledged, but the acknowledgements are not read: as with a segment
+    /// display, a bad write is corrected by the next repaint, not a retry.
+    pub fn write_pixels(&self, part_id: u32, offset: usize, bytes: &[u8]) -> Result<()> {
+        for (i, run) in bytes.chunks(PIXEL_WRITE_MAX).enumerate() {
+            let address = ((offset + i * PIXEL_WRITE_MAX) * 8) as u32;
+            self.send_pixel_frame(&pixel_write_frame(part_id, self.clock_ms(), address, run))?;
+        }
+        Ok(())
+    }
+
+    /// Show the framebuffer. The screen keeps it after the process exits.
+    pub fn commit_pixels(&self, part_id: u32) -> Result<()> {
+        self.send_pixel_frame(&pixel_commit_frame(part_id, self.clock_ms()))
+    }
+
+    fn clock_ms(&self) -> u32 {
+        self.opened.elapsed().as_millis() as u32
+    }
+
+    fn send_pixel_frame(&self, frame: &[u8]) -> Result<()> {
+        let mut seq = self.seq.load(Ordering::Relaxed);
+        let result = pixel_reports(frame, &mut seq)
+            .iter()
+            .try_for_each(|report| self.handle.write(report).map(|_| ()));
+        self.seq.store(seq, Ordering::Relaxed);
+        Ok(result?)
     }
 
     /// Collect vendor-channel replies until `window` elapses with nothing new.
@@ -247,6 +369,75 @@ mod tests {
         let reply = Reply::parse(&raw).unwrap();
         assert_eq!(reply.part_id, 0xbf05);
         assert_eq!(reply.data, vec![0x49, 0x01, 0xff]);
+    }
+
+    /// One line of SimAppPro's ICP traffic as WWTHID.log prints it: the report
+    /// id, then the logical frame with the rest of the report header dropped.
+    fn captured(line: &str) -> Vec<u8> {
+        let open = line.find("[f0 ").expect("an f0 frame") + 1;
+        let close = open + line[open..].find(']').unwrap();
+        line[open..close]
+            .split_whitespace()
+            .map(|h| u8::from_str_radix(h, 16).unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn pixel_frames_match_every_captured_write() {
+        let log = include_str!("../../wctrl-config/tests/fixtures/ded_simapppro_frames.txt");
+        let mut writes = 0;
+        for line in log.lines().filter(|l| l.contains("[f0 ")) {
+            let raw = captured(line);
+            let frame = &raw[1..];
+            let part = u32::from_le_bytes(frame[0..4].try_into().unwrap());
+            let clock = u32::from_le_bytes(frame[8..12].try_into().unwrap());
+            let rebuilt = match frame[4] {
+                PIXEL_WRITE => {
+                    writes += 1;
+                    let address = u32::from_le_bytes(frame[17..21].try_into().unwrap());
+                    pixel_write_frame(part, clock, address, &frame[21..])
+                }
+                PIXEL_COMMIT => pixel_commit_frame(part, clock),
+                other => panic!("unexpected command 0x{other:02x}"),
+            };
+            assert_eq!(rebuilt, frame, "{line}");
+        }
+        assert!(writes > 50, "only {writes} writes in the fixture");
+    }
+
+    #[test]
+    fn a_frame_is_split_across_reports_with_a_header_each() {
+        let frame: Vec<u8> = (0..247u32).map(|i| i as u8).collect();
+        let mut seq = 0xfe;
+        let reports = pixel_reports(&frame, &mut seq);
+        let lens: Vec<u8> = reports.iter().map(|r| r[3]).collect();
+        assert_eq!(lens, [60, 60, 60, 60, 7]);
+        let seqs: Vec<u8> = reports.iter().map(|r| r[2]).collect();
+        assert_eq!(seqs, [0xff, 0x00, 0x01, 0x02, 0x03], "the counter wraps");
+        assert_eq!(seq, 0x03);
+        for (i, r) in reports.iter().enumerate() {
+            assert_eq!(&r[..2], &[0xf0, 0x00]);
+            let n = r[3] as usize;
+            assert_eq!(&r[4..4 + n], &frame[i * 60..i * 60 + n]);
+            assert!(r[4 + n..].iter().all(|b| *b == 0), "zero padded");
+        }
+    }
+
+    #[test]
+    fn a_commit_is_one_report() {
+        let mut seq = 0;
+        let reports = pixel_reports(&pixel_commit_frame(0xbf06, 0x0003_ad2b), &mut seq);
+        assert_eq!(reports.len(), 1);
+        assert_eq!(
+            &reports[0][..24],
+            &[
+                0xf0, 0x00, 0x01, 18, // report header
+                0x06, 0xbf, 0x00, 0x00, 0x03, 0x01, 0x00, 0x00, // part, commit
+                0x2b, 0xad, 0x03, 0x00, 0x00, // clock
+                0x01, 0x00, 0x00, 0x00, 0x00, // one byte of payload, zero
+                0x00, 0x00, // padding
+            ]
+        );
     }
 
     #[test]

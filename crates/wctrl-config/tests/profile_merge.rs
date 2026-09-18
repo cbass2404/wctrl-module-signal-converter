@@ -66,12 +66,14 @@ fn a_profile_written_before_a_device_existed_gains_rows_for_it() {
         .collect();
     assert_eq!(
         ufc.len(),
-        3,
-        "all three UFC lamps appear, including the two that share the vendor's \
-         name across parts: {ufc:?}"
+        2,
+        "both UFC lamps appear, the two that share the vendor's name across \
+         parts: {ufc:?}"
     );
-    assert!(ufc.contains(&"LCDBacklight"));
+    assert!(ufc.contains(&"INST_PNL_Backlight"));
     assert!(ufc.contains(&"HUD_INST_PNL_Backlight"));
+    // The LCD backlight follows the display, so it is not a row at all.
+    assert!(!ufc.contains(&"LCDBacklight"));
 }
 
 #[test]
@@ -129,8 +131,8 @@ fn bindings_a_shipped_default_gained_are_carried_across() {
           "bindings": [
             { "device": "TAKEOFF_PLANEL_2", "led": "Backlight",
               "conditions": [], "off": 99, "note": "shipped" },
-            { "device": "CarrierAce_UFC", "led": "LCDBacklight",
-              "conditions": [{ "source": "UFC_BRT",
+            { "device": "CarrierAce_UFC", "led": "INST_PNL_Backlight",
+              "conditions": [{ "source": "INST_PNL_DIMMER",
                                "on_when": { "scale": [0, 65535] } }] }
           ]
         }"#,
@@ -142,12 +144,12 @@ fn bindings_a_shipped_default_gained_are_carried_across() {
         .unwrap();
     let after = Profile::load(&dir.join("active/old.json")).unwrap();
 
-    let lcd = after
+    let ufc = after
         .bindings
         .iter()
-        .find(|b| b.led == "LCDBacklight")
+        .find(|b| b.device == "CarrierAce_UFC" && b.led == "INST_PNL_Backlight")
         .unwrap();
-    assert_eq!(lcd.conditions.len(), 1, "the shipped binding came across");
+    assert_eq!(ufc.conditions.len(), 1, "the shipped binding came across");
 
     let backlight = after
         .bindings
@@ -235,4 +237,24 @@ fn claimed_aircraft_is_keyed_by_aircraft_not_module() {
     assert_eq!(claimed.len(), 2, "{claimed:?}");
     assert_eq!(claimed.get("FA-18C_hornet").map(String::as_str), Some("Hornet"));
     assert_eq!(claimed.get("FA-18E").map(String::as_str), Some("Super Hornet"));
+}
+
+#[test]
+fn only_a_profile_the_user_made_can_be_deleted() {
+    let dir = scratch("delete");
+    std::fs::write(dir.join("defaults/old.json"), old_profile()).unwrap();
+    std::fs::write(dir.join("active/old.json"), old_profile()).unwrap();
+    std::fs::write(dir.join("active/mine.json"), old_profile()).unwrap();
+    let profiles = Profiles::new(dir.join("defaults"), dir.join("active"));
+
+    // A shipped one would be seeded straight back, so it is refused.
+    assert!(profiles.delete("old.json").is_err());
+    assert!(dir.join("active/old.json").is_file());
+
+    // Nothing outside the active folder is reachable.
+    assert!(profiles.delete("../defaults/old.json").is_err());
+    assert!(dir.join("defaults/old.json").is_file());
+
+    profiles.delete("mine.json").expect("a profile the user made deletes");
+    assert!(!dir.join("active/mine.json").exists());
 }

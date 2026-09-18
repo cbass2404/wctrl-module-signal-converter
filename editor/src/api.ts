@@ -35,6 +35,8 @@ export const saveProfile = (file: string, profile: Profile) =>
  */
 export const checkProfile = (profile: Profile) => invoke<Findings>("check_profile", { profile });
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
+/** Only for a profile with no shipped default; the backend refuses the rest. */
+export const deleteProfile = (file: string) => invoke<void>("delete_profile", { file });
 export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });
 

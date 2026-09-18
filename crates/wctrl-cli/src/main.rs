@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use wctrl_bios::{BiosState, Listener, Write as BiosWrite};
-use wctrl_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout};
+use wctrl_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout, Transport};
 use wctrl_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
@@ -944,7 +944,7 @@ impl Trace {
     fn lamp_names(inventory: &DeviceInventory) -> HashMap<(String, u32, u8), String> {
         let mut out = HashMap::new();
         for spec in &inventory.devices {
-            for (part, led) in spec.leds() {
+            for (part, led) in spec.leds().chain(spec.display_lamps()) {
                 out.insert(
                     (spec.key.clone(), part.part_id, led.index),
                     format!("{}.{}", spec.key, led.name),
@@ -1849,9 +1849,9 @@ fn apply(
         }
     }
 
-    // Segment displays. A group is four bytes of a device-side bitmap, so it is
-    // not readable as text here; the engine has already decided what the glass
-    // should say and this only carries it.
+    // Displays. A write is a piece of a device-side bitmap, segments or pixels,
+    // so it is not readable as text here; the engine has already decided what
+    // the glass should say and this only carries it.
     for w in &batch.lcd {
         let hex = || {
             w.bytes
@@ -1883,8 +1883,30 @@ fn apply(
             continue;
         }
         if let Some(dev) = handles.get(&w.device) {
-            dev.set_lcd(w.part_id, w.group, &w.bytes)
-                .with_context(|| format!("writing {} display group {}", w.device, w.group))?;
+            match w.transport {
+                Transport::Segment => dev
+                    .set_lcd(w.part_id, w.group, &w.bytes)
+                    .with_context(|| format!("writing {} display group {}", w.device, w.group))?,
+                Transport::Pixel => dev
+                    .write_pixels(w.part_id, w.offset, &w.bytes)
+                    .with_context(|| format!("writing {} screen from row {}", w.device, w.group))?,
+            }
+        }
+    }
+
+    // A pixel screen shows nothing written until it is committed, so each one
+    // written to in this batch is committed once, after all its writes.
+    if !dry_run {
+        let mut committed: Vec<(&str, u32)> = Vec::new();
+        for w in batch.lcd.iter().filter(|w| w.transport == Transport::Pixel) {
+            if committed.contains(&(w.device.as_str(), w.part_id)) {
+                continue;
+            }
+            committed.push((w.device.as_str(), w.part_id));
+            if let Some(dev) = handles.get(&w.device) {
+                dev.commit_pixels(w.part_id)
+                    .with_context(|| format!("committing {} screen", w.device))?;
+            }
         }
     }
     Ok(())

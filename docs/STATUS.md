@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 165 passing
+cargo test --workspace            # expect 170 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -20,6 +20,12 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Rebuild it after cloning, and again whenever DCS-BIOS
 updates it is stamped with the version it came from.
+
+**Next session, first:** start the daemon and the editor with the MFD unplugged
+while profiles bind it, and watch what each does. Expected from the code: the
+daemon lists only enumerated panels and skips the MFD without error; the editor
+keeps the MFD rows, since the merge never drops rows for an unplugged panel.
+Unknown: whether the editor shows that the panel is absent.
 
 **Then, in order:**
 
@@ -69,7 +75,7 @@ updates it is stamped with the version it came from.
      same style and listed in the file. `tests/ded_render.rs` reproduces every
      captured frame's lines from the DCS-BIOS text, including an inverse one.
    * `data/defaults/f-16c-50.json` maps `DED_L1..5` to the five lines, and the
-     panel backlight follows `PRI_INST_PNL_BRT_KNB`.
+     panel backlight follows `PRI_CONSOLES_BRT_KNB`.
    * The DED backlight (`Screen_Backlight`, index 1, capture-verified) is not a
      profile lamp. It is marked `lights_display` and the engine drives it with
      the screen: 255 while a profile has fields on the DED, 0 when the DED is
@@ -80,15 +86,35 @@ updates it is stamped with the version it came from.
    The brief flash on a page change is the panel's own; SimAppPro does it too.
 
    Both ICP lamps are verified on hardware: `Backlight` (0) followed the
-   PRIMARY INST PNL knob in the jet.
+   PRIMARY CONSOLES knob in the jet.
 
    Left to do: give the editor a way to pick a readout's `format`; replace
    drawn glyphs as captures turn up.
 
 5. **Inventory the remaining devices.** The CarrierAce UFC + HUD (`0xbede`) is
-   done, see below. `wctrl devices` also reports an MCDU CAPTAIN (`0xbb36`) and
-   Orion Combat Rudder Pedals Metal (`0xbef0`) that `devices.json` knows nothing
-   about. Same method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
+   done, see below. So is the **CarrierAce MFD**, 2026-09-18: one dimmer,
+   `INST_PNL_Backlight` at index 0 on part `0xbe0d`, captured across 0-255.
+   SimAppPro renames an MFD L, C or R so several can be told apart, and each
+   name is its own PID (C `0xbee0`, L `0xbee1`, R `0xbee2`), so
+   `devices.json` carries three entries that differ only in PID and name, and
+   every shipped profile binds all three. "1 Split 3" mode keeps the PID but
+   enumerates three collections with only the first writable, which is why
+   `Device::open` now chooses by report descriptor. Details in `PROTOCOL.md`.
+   **Verified on hardware 2026-09-18** in the hardest case, split mode under
+   the L name: `wctrl led` wrote 0, 255, 20 and 137 through `col01`, each
+   acked, and the backlight went dark, full and dim as sent. Not yet flown
+   from a profile in a mission.
+
+   The **Orion Combat Rudder Pedals** (`0xbef0`) went in alongside, same day:
+   `Backlight_L` 0, `Backlight_R` 1 and `Logo` 3, all dimmers from a capture.
+   The logo is missing from the vendor table, and index 2, which nothing
+   documents, turned out to write both pedal lights at once, last write wins.
+   It is left out of the inventory so nothing ever writes it. Every default
+   binds `Backlight_L` to the throttle's knob with the other two `same_as` it.
+   Details in `PROTOCOL.md`.
+
+   Left: the MCDU CAPTAIN (`0xbb36`), which `devices.json` knows nothing about.
+   Same method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
 
    **The MCDU is lamps only, by decision.** Its screen belongs to an existing,
    mature utility that drives it across many modules, and this project
@@ -436,6 +462,23 @@ the glass at another module without a code change.
 ## Profiles ship from `data/defaults`
 
 Changed 2026-09-16. `data/defaults` holds the profiles we ship, tracked in git.
+
+**A new device lands in every default at once**, 2026-09-18. The ICP had gone
+into `devices.json` and into only the F-16's default, and the startup merge
+hid it by adding blank rows, so nothing failed and the lamp simply never lit
+anywhere else. `tests/shipped_defaults.rs` now fails when any default lacks a
+row for a profile lamp, and when the startup merge would add or reorder
+anything, so a shipped file is already what a user's copy becomes.
+
+**Every backlight in a default follows one knob**, by decision the same day,
+so the whole pit dims together until a user splits it. `devices.json` marks
+panel backlights with `backlight: true` (not the PTO2's gates, nor its
+unidentified `Landing_gear_lights`), and the same test file fails when a
+default's backlights resolve to different bindings, following `same_as`. The
+Hornet and Super Hornet moved their UFC, MFDs and ICP from `INST_PNL_DIMMER`
+to `CONSOLES_DIMMER` for it. **The Mi-24P is exempt, by name and with its
+reason, until the Hind's backlight knob is found with learn mode**; remove
+the exemption then. A new panel's backlight goes on that knob too.
 `data/profiles` is the active folder the daemon reads and the editor writes; it
 is gitignored and seeded from `data/defaults` on every start for any name not
 already there. Seeding adds and never replaces. Reset is the only overwrite.
@@ -561,7 +604,7 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 ## Where the code is
 
 ```text
-crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0      (8 tests)
+crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0     (10 tests)
 crates/wctrl-bios     export-stream decoder + address space      (10 tests)
 crates/wctrl-config   catalogue, inventory, profiles, displays    (83 tests)
 crates/wctrl-engine   aircraft detection, sweep, writes, learn    (48 tests)
@@ -572,7 +615,7 @@ data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
 crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
-data/devices.json     PTO2, Orion II, CarrierAce UFC + HUD and ViperAce ICP verified
+data/devices.json     every connected panel verified except the MCDU
 tools/                catalogue builder, HID probe, WWTHID log parser
 ```
 

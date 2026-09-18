@@ -1,6 +1,6 @@
 {
   "_comment": "Device and LED inventory. Indices and names come from SimAppPro's www/js/DeviceConfig.js; part ids come from a broadcast ONLINE_HEARTBEAT. See docs/PROTOCOL.md.",
-  "_status": "PTO2 and Orion Throttle Base II both fully verified 2026-09-16. Indices 0/1/2 are dimmers taking 0-255. Indices 4-17 are indicators taking 0 or 1 only; a value of 255 is out of range and is silently ignored (it acks, and nothing lights). CarrierAce UFC + HUD verified 2026-09-17: three dimmers and a segment display, no indicators.",
+  "_status": "PTO2 and Orion Throttle Base II both fully verified 2026-09-16. Indices 0/1/2 are dimmers taking 0-255. Indices 4-17 are indicators taking 0 or 1 only; a value of 255 is out of range and is silently ignored (it acks, and nothing lights). CarrierAce UFC + HUD verified 2026-09-17: three dimmers and a segment display, no indicators. CarrierAce MFD verified 2026-09-18: one dimmer, under three names and PIDs. Orion Combat Rudder Pedals verified 2026-09-18: three dimmers at 0, 1 and 3; index 2 writes both pedal lights and is left alone.",
   "_evidence": {
     "dimmer": "Indices 0, 1 and 2 observed taking 1, 2, 11, 13, 20, 22, 111, 137, 200, 222 and 255 from SimAppPro's sliders.",
     "indicator": "SimAppPro only ever sends 0 or 1 to indices 4..17. Confirmed on hardware: 1 lights, 0 clears, 255 does nothing.",
@@ -26,7 +26,8 @@
               "label": "Panel backlight",
               "kind": "dimmer",
               "max": 255,
-              "verified": true
+              "verified": true,
+              "backlight": true
             },
             {
               "index": 1,
@@ -210,7 +211,8 @@
               "label": "Panel backlight",
               "kind": "dimmer",
               "max": 255,
-              "verified": true
+              "verified": true,
+              "backlight": true
             },
             {
               "index": 1,
@@ -269,6 +271,7 @@
               "kind": "dimmer",
               "max": 255,
               "verified": true,
+              "backlight": true,
               "note": "Lights the legends only. The glass has its own dimmer."
             },
             {
@@ -295,6 +298,7 @@
               "kind": "dimmer",
               "max": 255,
               "verified": true,
+              "backlight": true,
               "note": "Index 1 on part 0xbe0e, not 0. There is no index 0 on this part as far as SimAppPro is concerned, and it was never addressed in a capture. This looks like a transcription slip and is not. Renamed from the vendor's INST_PNL_Backlight because the UFC part carries a lamp of that name too, and a profile names a lamp by device and name."
             }
           ]
@@ -327,7 +331,8 @@
               "kind": "dimmer",
               "max": 255,
               "verified": true,
-              "note": "Lights the ICP legends. Verified on hardware 2026-09-18: driven from the F-16's PRIMARY INST PNL knob, the legends dimmed and brightened with it."
+              "backlight": true,
+              "note": "Lights the ICP legends. Verified on hardware 2026-09-18: driven from the F-16's PRIMARY CONSOLES knob, the legends dimmed and brightened with it."
             },
             {
               "index": 1,
@@ -350,10 +355,142 @@
         "A PAGE CHANGE FLASHES, observed 2026-09-18: the DED shows a brief full-bright flash between the old page and the new one. SimAppPro driving the same panel does exactly the same, so it is the device, not our writes, and there is nothing to fix.",
         "The lamp indices are SimAppPro's (www/js/DeviceConfig.js, AllDevice[PIDByName.ICP]): Backlight 0, Screen_Backlight 1. Both verified on hardware 2026-09-18."
       ]
+    },
+    {
+      "key": "CarrierAce_MFD_L",
+      "display_name": "CarrierAce MFD L",
+      "product_name": "WINCTRL CarrierAce MFD L",
+      "usb_pid": 48865,
+      "parts": [
+        {
+          "part_id": 48653,
+          "name": "MFD1",
+          "leds": [
+            {
+              "index": 0,
+              "name": "INST_PNL_Backlight",
+              "label": "Panel backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "Lights the bezel legends. Verified 2026-09-18 by capturing the SimAppPro slider with the unit named C: SET_LEDX index 0 took every value from 0x00 to 0xff, and typed values 1, 13 and 137 went out as sent. The part and index do not change with the name."
+            }
+          ]
+        }
+      ],
+      "_notes": [
+        "One physical MFD, three possible identities. SimAppPro renames it L, C or R so a user with several keeps stable bindings, and each name is its own USB PID: C 0xbee0, L 0xbee1, R 0xbee2, all measured 2026-09-18. Same part 0xbe0d and same serial under every name, so this entry and CarrierAce_MFD_C and CarrierAce_MFD_R differ only in PID and name.",
+        "The name lives in config offset 0xd8: C 0, L 1, R 2, all captured. Writing it drops the device off USB and it re-enumerates about a second later under the new PID. We never write it; WRITE_CFG_DATA is forbidden.",
+        "\"1 Split 3\" mode (config offset 0xd0: 2 on, 0 off) keeps this PID and name but enumerates as three collections, col01 to col03, with the side switch choosing which one the buttons report on. Only col01 has an output report, so Device::open picks the collection that declares one. The switch is a button (input byte 5: 0x10 bottom, 0x20 middle, 0x40 top) and sends no config write, no re-enumeration and no lamp traffic, so there is still one backlight."
+      ]
+    },
+    {
+      "key": "CarrierAce_MFD_C",
+      "display_name": "CarrierAce MFD C",
+      "product_name": "WINCTRL CarrierAce MFD C",
+      "usb_pid": 48864,
+      "parts": [
+        {
+          "part_id": 48653,
+          "name": "MFD1",
+          "leds": [
+            {
+              "index": 0,
+              "name": "INST_PNL_Backlight",
+              "label": "Panel backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "Lights the bezel legends. Verified 2026-09-18 by capturing the SimAppPro slider with the unit named C: SET_LEDX index 0 took every value from 0x00 to 0xff."
+            }
+          ]
+        }
+      ],
+      "_notes": [
+        "The same hardware as CarrierAce_MFD_L under its C name, PID 0xbee0. See that entry's notes for the rename and \"1 Split 3\" mode."
+      ]
+    },
+    {
+      "key": "CarrierAce_MFD_R",
+      "display_name": "CarrierAce MFD R",
+      "product_name": "WINCTRL CarrierAce MFD R",
+      "usb_pid": 48866,
+      "parts": [
+        {
+          "part_id": 48653,
+          "name": "MFD1",
+          "leds": [
+            {
+              "index": 0,
+              "name": "INST_PNL_Backlight",
+              "label": "Panel backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "Lights the bezel legends. Same lamp as under the C name, which is where the slider was captured; the part and index do not change with the name."
+            }
+          ]
+        }
+      ],
+      "_notes": [
+        "The same hardware as CarrierAce_MFD_L under its R name, PID 0xbee2. See that entry's notes for the rename and \"1 Split 3\" mode."
+      ]
+    },
+    {
+      "key": "Orion_Combat_Rudder_Pedals",
+      "display_name": "Orion Combat Rudder Pedals",
+      "product_name": "WINCTRL Orion Combat Rudder Pedals Metal",
+      "usb_pid": 48880,
+      "parts": [
+        {
+          "part_id": 48880,
+          "name": "R1",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight_L",
+              "label": "Left pedal light",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "SimAppPro's \"Backlight L\" slider, the light on the left pedal sensor. The vendor table calls it Backlight1. Captured 2026-09-18 taking 1 and 11, and confirmed on hardware the same day: with 0, 1 and 2 at 0, index 0 = 255 lit the left light alone."
+            },
+            {
+              "index": 1,
+              "name": "Backlight_R",
+              "label": "Right pedal light",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "SimAppPro's \"Backlight R\" slider, the light on the right pedal sensor. The vendor table calls it Backlight2. Captured 2026-09-18 taking 2, 22 and 222."
+            },
+            {
+              "index": 3,
+              "name": "Logo",
+              "label": "WinWing logo",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "SimAppPro's third slider, which lights the logo. Index 3, not 2, and absent from the vendor table entirely. Captured 2026-09-18 taking 1, 10 and 101. Kept as a lamp so a profile can hold it in step with the pedal lights."
+            }
+          ]
+        }
+      ],
+      "_notes": [
+        "One USB interface at PID 0xbef0 answering as part 0xbef0. SimAppPro's name for it is R1.",
+        "The vendor table (www/js/DeviceConfig.js, AllDevice[PIDByName.R1]) lists Backlight1 0 and Backlight2 1 only. SimAppPro's own UI has a third slider, and the capture put it on index 3. A vendor table is a hypothesis, as the PTO2's FLAG already showed.",
+        "INDEX 2 IS DELIBERATELY ABSENT. It is not a lamp and not a gate: a write to it goes through to both pedal lights, and whichever write came last wins. Measured on hardware 2026-09-18 with wctrl led: with 1 and 2 at 0, 1=255 lit the right light alone, so 2 does not gate; 2=255 lit both with 1 at 0, so it drives them directly; then 1=0 put the right light out with 2 still at 255, so nothing of it stays latched; and 2=0 put both out. Index 0 alone lights only the left light, so 2 is a hidden fourth control over 0 and 1 together. SimAppPro never writes it. A profile keeps the lights together with same_as instead, which leaves each one addressable. Owning it would let a sweep overwrite L and R depending on write order, so nothing here addresses it."
+      ]
     }
   ],
   "_persisted_brightness": {
-    "comment": "SimAppPro saves panel brightness to device flash. Each part has its own config offset, and the layout is one byte per dimmer in index order. Observed by watching WRITE_CFG_DATA while moving the sliders.",
+    "comment": "SimAppPro saves panel brightness to device flash. Each part has its own config offset, and the layout is one byte per dimmer, in index order on every panel but the rudder pedals, which store theirs in SimAppPro's slider order. Observed by watching WRITE_CFG_DATA while moving the sliders.",
     "parts": {
       "0xbf05": {
         "offset": 276,
@@ -391,6 +528,26 @@
           null,
           null
         ]
+      },
+      "0xbe0d": {
+        "offset": 200,
+        "layout": [
+          "INST_PNL_Backlight",
+          null,
+          null,
+          null
+        ],
+        "note": "CarrierAce MFD, every name. Seen 2026-09-18: 06 c8 00 00 89 ff ff ff about a second after the slider settled on 137."
+      },
+      "0xbef0": {
+        "offset": 232,
+        "layout": [
+          "Backlight_L",
+          "Backlight_R",
+          "Logo",
+          null
+        ],
+        "note": "Orion Combat Rudder Pedals. Slider order, not index order: byte 2 is Logo at index 3. Seen 2026-09-18 ending 06 e8 00 00 0b de 65 ff after L 11, R 222, logo 101."
       }
     },
     "warning": "We must never write these. WRITE_CFG_DATA is persistent and is on the forbidden list. Reading them with READ_CFG_DATA is safe and is how the daemon can warn when a user's stored brightness would make correctly driven output invisible. The UFC has two such traps, not one: a dark LCDBacklight hides the whole display."

@@ -212,6 +212,28 @@ pub fn enumerate(api: &HidApi) -> Vec<DeviceInfo> {
         .collect()
 }
 
+/// Whether a report descriptor declares an Output main item, which is what
+/// makes an interface writable. Walks items by their size bits rather than
+/// scanning bytes, so a data byte that happens to look like a prefix is never
+/// read as one.
+fn declares_output(desc: &[u8]) -> bool {
+    let mut i = 0;
+    while i < desc.len() {
+        let prefix = desc[i];
+        if prefix == 0xfe {
+            // Long item: bDataSize follows the prefix, then bLongItemTag.
+            let size = desc.get(i + 1).copied().unwrap_or(0) as usize;
+            i += 3 + size;
+            continue;
+        }
+        if prefix & 0xfc == 0x90 {
+            return true;
+        }
+        i += 1 + [0, 1, 2, 4][(prefix & 0x03) as usize];
+    }
+    false
+}
+
 pub struct Device {
     handle: HidDevice,
     pub info: DeviceInfo,
@@ -222,19 +244,53 @@ pub struct Device {
 }
 
 impl Device {
+    /// Open the interface of `product_id` that can take a command.
+    ///
+    /// A PID can enumerate as several collections. The CarrierAce MFD in
+    /// "1 Split 3" mode is three joysticks under one PID, and only the first
+    /// declares the vendor channel; the other two have no output report, so a
+    /// write to them fails. Windows' listing order is not a promise, so the
+    /// collection with an Output item is chosen on purpose. When no descriptor
+    /// can be read, the first interface is kept, which is what every
+    /// single-collection panel gets either way.
     pub fn open(api: &HidApi, product_id: u16) -> Result<Self> {
-        let info = enumerate(api)
+        let candidates: Vec<DeviceInfo> = enumerate(api)
             .into_iter()
-            .find(|d| d.product_id == product_id)
-            .ok_or(Error::NotFound(product_id))?;
-        let path = std::ffi::CString::new(info.path.clone()).expect("hid path has no interior nul");
-        let handle = api.open_path(&path)?;
-        Ok(Device {
+            .filter(|d| d.product_id == product_id)
+            .collect();
+        let mut fallback = None;
+        let mut failed = None;
+        for info in candidates {
+            let path = std::ffi::CString::new(info.path.clone()).expect("hid path has no interior nul");
+            let handle = match api.open_path(&path) {
+                Ok(h) => h,
+                Err(e) => {
+                    failed.get_or_insert(e);
+                    continue;
+                }
+            };
+            let mut desc = [0u8; 4096];
+            if let Ok(n) = handle.get_report_descriptor(&mut desc) {
+                if declares_output(&desc[..n]) {
+                    return Ok(Self::wrap(handle, info));
+                }
+            }
+            fallback.get_or_insert((handle, info));
+        }
+        match (fallback, failed) {
+            (Some((handle, info)), _) => Ok(Self::wrap(handle, info)),
+            (None, Some(e)) => Err(e.into()),
+            (None, None) => Err(Error::NotFound(product_id)),
+        }
+    }
+
+    fn wrap(handle: HidDevice, info: DeviceInfo) -> Self {
+        Device {
             handle,
             info,
             seq: AtomicU8::new(0),
             opened: Instant::now(),
-        })
+        }
     }
 
     fn send(&self, part_id: u32, data: &[u8]) -> Result<()> {
@@ -444,5 +500,38 @@ mod tests {
     fn joystick_reports_are_not_replies() {
         let raw = [0x01, 0x44, 0x2b, 0x02, 0xa0, 0x08, 0, 0, 0, 0, 0, 0, 0, 0];
         assert!(Reply::parse(&raw).is_none());
+    }
+
+    fn hex(s: &str) -> Vec<u8> {
+        s.split_whitespace().map(|b| u8::from_str_radix(b, 16).unwrap()).collect()
+    }
+
+    /// The three collections a CarrierAce MFD (PID 0xbee2) presents in
+    /// "1 Split 3" mode, read from Windows 2026-09-18. Only col01 carries the
+    /// vendor channel, report 2 on page 0xff, and only it can be written.
+    #[test]
+    fn only_the_split_mfd_command_collection_declares_output() {
+        let col01 = hex(
+            "05 01 09 04 a1 01 85 01 05 09 19 01 29 32 15 00 25 01 75 01 95 32 81 02 75 06 95 01 81 03 \
+             05 01 09 36 15 00 27 ff ff 00 00 35 00 47 ff ff 00 00 75 10 95 01 81 02 85 02 05 ff 09 01 \
+             15 00 26 ff 00 35 00 46 ff 00 75 08 95 0d 81 02 09 02 15 00 26 ff 00 75 08 95 0d 91 02 c0",
+        );
+        let joystick = |id: &str| {
+            hex(&format!(
+                "05 01 09 04 a1 01 85 {id} 05 09 19 01 29 32 15 00 25 01 75 01 95 32 81 02 75 06 95 01 \
+                 81 03 05 01 09 36 15 00 27 ff ff 00 00 35 00 47 ff ff 00 00 75 10 95 01 81 02 c0"
+            ))
+        };
+        assert!(declares_output(&col01));
+        assert!(!declares_output(&joystick("03")));
+        assert!(!declares_output(&joystick("04")));
+    }
+
+    #[test]
+    fn a_data_byte_that_looks_like_output_is_not_one() {
+        // Logical Maximum 0x91, then Input. Scanning bytes would see 0x91.
+        assert!(!declares_output(&hex("25 91 81 02")));
+        // Long item whose payload holds 0x91.
+        assert!(!declares_output(&hex("fe 02 00 91 91 81 02")));
     }
 }

@@ -7,11 +7,47 @@
   "module": "FA-18C_hornet",
   "bindings": [
     {
+      "device": "CarrierAce_MFD_C",
+      "led": "INST_PNL_Backlight",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
+    },
+    {
+      "device": "CarrierAce_MFD_L",
+      "led": "INST_PNL_Backlight",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
+    },
+    {
+      "device": "CarrierAce_MFD_R",
+      "led": "INST_PNL_Backlight",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
+    },
+    {
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
       "conditions": [
         {
-          "source": "INST_PNL_DIMMER",
+          "source": "CONSOLES_DIMMER",
           "on_when": {
             "scale": [0, 65535]
           }
@@ -23,12 +59,36 @@
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [
         {
-          "source": "INST_PNL_DIMMER",
+          "source": "CONSOLES_DIMMER",
           "on_when": {
             "scale": [0, 65535]
           }
         }
       ]
+    },
+    {
+      "device": "Orion_Combat_Rudder_Pedals",
+      "led": "Backlight_L",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
+    },
+    {
+      "device": "Orion_Combat_Rudder_Pedals",
+      "led": "Backlight_R",
+      "conditions": [],
+      "same_as": "Backlight_L"
+    },
+    {
+      "device": "Orion_Combat_Rudder_Pedals",
+      "led": "Logo",
+      "conditions": [],
+      "same_as": "Backlight_L"
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -296,6 +356,18 @@
         }
       ],
       "note": "Arresting hook down. Physically the dimmest lamp on the panel; that is the hardware, not this mapping."
+    },
+    {
+      "device": "ViperAce_ICP",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
     }
   ],
   "readouts": [

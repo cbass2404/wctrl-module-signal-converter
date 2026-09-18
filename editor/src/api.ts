@@ -22,6 +22,11 @@ export const defaultProfile = (file: string) => invoke<Profile | null>("default_
 export const createProfile = (module: string) => invoke<string>("create_profile", { module });
 export const saveProfile = (file: string, profile: Profile) =>
   invoke<void>("save_profile", { file, profile });
+/**
+ * Everything the daemon would refuse this profile for, in its own words. An
+ * empty list means it will load. Run after each edit, not only on save.
+ */
+export const checkProfile = (profile: Profile) => invoke<string[]>("check_profile", { profile });
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
 export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });

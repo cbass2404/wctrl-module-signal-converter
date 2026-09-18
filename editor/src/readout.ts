@@ -50,6 +50,11 @@ export function cellProblem(
   }
   for (const other of others) {
     if (other === self || other.display !== self.display || other.device !== self.device) continue;
+    // Two different seats are the one case where sharing is the point: they
+    // cannot both be occupied, so they cannot both be painting, and a window
+    // shared between them is the whole reason the seat field exists. Refusing
+    // it here would block the arrangement the daemon is built to allow.
+    if (self.seat !== undefined && other.seat !== undefined && self.seat !== other.seat) continue;
     const r = parseCells(other.cells);
     if (r && first <= r[1] && r[0] <= last) {
       return `${describe(other.cells, display)} is already taken by ${other.source || "another field"}.`;

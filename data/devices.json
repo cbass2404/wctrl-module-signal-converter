@@ -278,7 +278,8 @@
               "kind": "dimmer",
               "max": 255,
               "verified": true,
-              "note": "Governs the segment display. At 0 the glass is dark even when the cells are being driven correctly."
+              "lights_display": true,
+              "note": "Driven with the segment display, not from a profile: 255 while a profile puts fields on the UFC, 0 when it is blanked. At 0 the glass is dark even when the cells are being driven correctly."
             }
           ],
           "display": "UFC1"
@@ -308,6 +309,47 @@
         "THE DISPLAY LATCHES, verified on hardware 2026-09-17: a pattern written with SET_LCDS was still on the glass minutes later with the writing process exited and no handle open. It must be blanked on mission end and on shutdown exactly as the lamps are. Writing zeros to all 24 groups clears it.",
         "SET_LCDS is not acknowledged. 24 frames drew 0 replies from the same read window that had just taken an immediate echo from a SET_LEDX write to this device, so a display write cannot be confirmed the way a lamp write can."
       ]
+    },
+    {
+      "key": "ViperAce_ICP",
+      "display_name": "ViperAce ICP",
+      "product_name": "WINCTRL ViperAce ICP",
+      "usb_pid": 48902,
+      "parts": [
+        {
+          "part_id": 48902,
+          "name": "ICP",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Panel backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "note": "Lights the ICP legends. Verified on hardware 2026-09-18: driven from the F-16's PRIMARY INST PNL knob, the legends dimmed and brightened with it."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "DED backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "lights_display": true,
+              "note": "Driven with the DED, not from a profile: 255 while a profile puts fields on the DED, 0 when it is blanked. At 0 a correctly drawn page is invisible. Verified 2026-09-18 by capturing the SimAppPro slider: SET_LEDX index 1 took values from 0x00 to 0x70 as it moved, and the DED followed. While SimAppPro is streaming to the DED it raises this to about 60 if the user has it lower, and puts the user's value back when the stream stops (observed on the panel, not captured)."
+            }
+          ],
+          "display": "DED"
+        }
+      ],
+      "_notes": [
+        "One USB interface at PID 0xbf06 answering as part 0xbf06. It declares 64-byte reports and a second output channel, 0xf0, for the screen.",
+        "The DED is a 200x64 pixel screen, not a segment display. Its map is data/displays/ded.json and its protocol is in docs/PROTOCOL.md under \"Driving a pixel display\".",
+        "THE SCREEN LATCHES, verified on hardware 2026-09-18: a page stays on the glass after the writing process exits. It must be blanked on mission end and on shutdown exactly as the lamps are.",
+        "A PAGE CHANGE FLASHES, observed 2026-09-18: the DED shows a brief full-bright flash between the old page and the new one. SimAppPro driving the same panel does exactly the same, so it is the device, not our writes, and there is nothing to fix.",
+        "The lamp indices are SimAppPro's (www/js/DeviceConfig.js, AllDevice[PIDByName.ICP]): Backlight 0, Screen_Backlight 1. Both verified on hardware 2026-09-18."
+      ]
     }
   ],
   "_persisted_brightness": {
@@ -330,6 +372,16 @@
           null,
           null
         ]
+      },
+      "0xbf06": {
+        "offset": 200,
+        "layout": [
+          "Backlight",
+          "Screen_Backlight",
+          null,
+          null
+        ],
+        "note": "Screen_Backlight's byte seen tracking the slider, 2026-09-18. Backlight's slot follows the index-order rule; its byte has not been seen changing."
       },
       "0xbe0e": {
         "offset": 200,

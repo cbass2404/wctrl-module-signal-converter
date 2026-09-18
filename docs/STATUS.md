@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 149 passing
+cargo test --workspace            # expect 165 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -49,13 +49,55 @@ updates it is stamped with the version it came from.
    1 and 2 (A/A, A/G) are binary. Backlight dims them but does not gate them.
    Details under Verified facts.
 
-4. **Inventory the remaining devices.** The CarrierAce UFC + HUD (`0xbede`) is
+4. **The ViperAce ICP (`0xbf06`).** Its DED screen protocol is decoded and
+   confirmed on hardware 2026-09-18, see "Driving a pixel display" in
+   `PROTOCOL.md`: report `0xf0`, a 200x64 1-bit framebuffer, write then commit.
+   **Built and flown 2026-09-18.** Every page drew correctly, inverse fields
+   included, and a disabled UFC was confirmed left alone in the jet.
+
+   * `wctrl-hid` builds `0xf0` frames and splits them into 64-byte reports.
+     Every write in SimAppPro's capture rebuilds byte for byte.
+   * The DED is an ordinary display (`data/displays/ded.json`) with
+     `"transport": "pixel"`. A pixel is a bit index, `y * 200 + x`, so the
+     segment model fits unchanged: 120 cells generated from a `grid`, a font
+     drawn as rows of `#`, and the usual screen diff, now per row. Changed rows
+     go out as one write per contiguous run, then one commit.
+   * A readout takes a `format` signal: `i` in `DED_Ln_FORMAT` draws that cell
+     inverse, host side, as SimAppPro does. `exact_case` stops `a` (the arrow)
+     being looked up as `A`.
+   * 39 of 66 glyphs are captured from SimAppPro's frames; 27 are drawn in the
+     same style and listed in the file. `tests/ded_render.rs` reproduces every
+     captured frame's lines from the DCS-BIOS text, including an inverse one.
+   * `data/defaults/f-16c-50.json` maps `DED_L1..5` to the five lines, and the
+     panel backlight follows `PRI_INST_PNL_BRT_KNB`.
+   * The DED backlight (`Screen_Backlight`, index 1, capture-verified) is not a
+     profile lamp. It is marked `lights_display` and the engine drives it with
+     the screen: 255 while a profile has fields on the DED, 0 when the DED is
+     blanked. Hidden from profiles and the editor by decision, 2026-09-18.
+     The UFC's `LCDBacklight` works the same way, and its rows were removed
+     from every profile.
+
+   The brief flash on a page change is the panel's own; SimAppPro does it too.
+
+   Both ICP lamps are verified on hardware: `Backlight` (0) followed the
+   PRIMARY INST PNL knob in the jet.
+
+   Left to do: give the editor a way to pick a readout's `format`; replace
+   drawn glyphs as captures turn up.
+
+5. **Inventory the remaining devices.** The CarrierAce UFC + HUD (`0xbede`) is
    done, see below. `wctrl devices` also reports an MCDU CAPTAIN (`0xbb36`) and
    Orion Combat Rudder Pedals Metal (`0xbef0`) that `devices.json` knows nothing
-   about. The MCDU is a display device and may not use `SET_LEDX` at all. Same
-   method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
+   about. Same method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
 
-5. **The Tauri editor.** Scaffolded 2026-09-16, see below. Shape is specified
+   **The MCDU is lamps only, by decision.** Its screen belongs to an existing,
+   mature utility that drives it across many modules, and this project
+   complements it rather than competing. So nothing here writes to the MCDU's
+   `0xf0` display channel, not even to blank it on exit. Revisit only if that
+   utility is abandoned or stops being updated. SimAppPro was seen
+   sending it `SET_LEDX`, so its lamps are on the ordinary path.
+
+6. **The Tauri editor.** Scaffolded 2026-09-16, see below. Shape is specified
    in `CONFIG.md`.
 
 The engine came first on purpose: every layer was exercised on real hardware
@@ -98,6 +140,19 @@ label follows the sections.
   reports when the player has no aircraft of their own, gets "No aircraft".
 * **Confirmations are drawn in the window.** `window.confirm` showed nothing in
   the webview and answered yes, so Reset replaced a profile unasked.
+* **Delete, for a profile the user made.** Offered where Reset is not, confirmed
+  the same way, and refused by `Profiles::delete` for anything shipped, which
+  would only be seeded back. It is how the leftover half of a split aircraft
+  list is removed.
+* **Long aircraft lists are cut at whole names** with a count, "+81 more" for
+  FC3, and the full list on hover.
+* **A panel the profile does not drive stays closed.** Its header click is
+  cancelled, so it cannot flash open. Its lamps and fields are kept for when it
+  is turned back on.
+* **A disabled panel is never written.** The sweep and the paint honoured
+  `disabled_devices` but the per-change path did not, so a bound lamp on a
+  disabled panel moved with its signal. Fixed and confirmed in the jet with the
+  UFC disabled under the F-16; `tests/disabled_device.rs` pins it.
 
 Bindings are fully editable. A condition reads as a sentence until its pencil is
 clicked, and an open condition carries keep, cancel and delete: cancel restores
@@ -506,10 +561,10 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 ## Where the code is
 
 ```text
-crates/wctrl-hid      frame building, part discovery, SET_LEDX   (5 tests)
+crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0      (8 tests)
 crates/wctrl-bios     export-stream decoder + address space      (10 tests)
-crates/wctrl-config   catalogue, inventory, profiles, displays    (78 tests)
-crates/wctrl-engine   aircraft detection, sweep, writes, learn    (44 tests)
+crates/wctrl-config   catalogue, inventory, profiles, displays    (83 tests)
+crates/wctrl-engine   aircraft detection, sweep, writes, learn    (48 tests)
 crates/wctrl-cli      the wctrl binary                            (5 tests)
 editor/src-tauri      editor backend, learn listener, claims      (7 tests)
 data/defaults         shipped profiles, tracked in git
@@ -517,7 +572,7 @@ data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
 crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
-data/devices.json     PTO2, Orion II and CarrierAce UFC + HUD verified
+data/devices.json     PTO2, Orion II, CarrierAce UFC + HUD and ViperAce ICP verified
 tools/                catalogue builder, HID probe, WWTHID log parser
 ```
 

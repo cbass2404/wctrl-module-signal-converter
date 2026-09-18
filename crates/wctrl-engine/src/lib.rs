@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 
 use wctrl_bios::{BiosState, Write};
 use wctrl_config::{
-    Binding, Catalogue, DeviceInventory, DisplayCatalogue, Module, Profile, Screen,
-    SEAT_SIGNAL,
+    Binding, Catalogue, DeviceInventory, Display, DisplayCatalogue, Module, Profile, Screen,
+    Transport, SEAT_SIGNAL,
 };
 
 pub mod learn;
@@ -49,13 +49,46 @@ pub struct LedId {
     pub index: u8,
 }
 
-/// One write to a segment display's buffer, four bytes at a time.
+/// One write to a display's buffer.
+///
+/// On a segment display this is one group, four bytes on the UFC. On a pixel
+/// display it is a run of consecutive changed rows, starting at row `group`,
+/// and the caller commits once the batch's writes to that part are out.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LcdWrite {
     pub device: String,
     pub part_id: u32,
+    pub transport: Transport,
     pub group: u8,
+    /// Where `bytes` start in the display's buffer.
+    pub offset: usize,
     pub bytes: Vec<u8>,
+}
+
+/// Turn changed groups into writes. A pixel screen takes a write of any length,
+/// so consecutive rows go out as one, which is what SimAppPro does too.
+fn lcd_writes(device: &str, part_id: u32, map: &Display, groups: Vec<(u8, Vec<u8>)>) -> Vec<LcdWrite> {
+    let mut out: Vec<LcdWrite> = Vec::new();
+    for (group, bytes) in groups {
+        let offset = usize::from(group) * map.group_bytes;
+        if map.transport == Transport::Pixel {
+            if let Some(last) = out.last_mut() {
+                if last.offset + last.bytes.len() == offset {
+                    last.bytes.extend_from_slice(&bytes);
+                    continue;
+                }
+            }
+        }
+        out.push(LcdWrite {
+            device: device.to_string(),
+            part_id,
+            transport: map.transport,
+            group,
+            offset,
+            bytes,
+        });
+    }
+    out
 }
 
 /// One LED write for the caller to send.
@@ -185,10 +218,13 @@ impl Engine {
             return Batch::empty(Cause::ProfileReload);
         }
 
+        let mut writes = self.sweep();
+        let (lamps, lcd) = self.paint();
+        writes.extend(lamps);
         Batch {
             cause: Cause::ProfileReload,
-            writes: self.sweep(),
-            lcd: self.paint(),
+            writes,
+            lcd,
         }
     }
 
@@ -275,10 +311,13 @@ impl Engine {
             let waited = now.saturating_duration_since(p.since);
             if quiet_for >= self.settle_quiet || waited >= self.settle_max {
                 self.pending = None;
+                let mut writes = self.sweep();
+                let (lamps, lcd) = self.paint();
+                writes.extend(lamps);
                 return Batch {
                     cause: Cause::ModuleLoad,
-                    writes: self.sweep(),
-                    lcd: self.paint(),
+                    writes,
+                    lcd,
                 };
             }
             return Batch::empty(Cause::ModuleLoad);
@@ -287,10 +326,13 @@ impl Engine {
         // The lamps only revisit bindings whose signals moved, but the glass
         // is repainted whole: a display field is cheap to rebuild and a torn
         // one is worse than a late one.
+        let mut writes = self.incremental(&touched);
+        let (lamps, lcd) = self.paint();
+        writes.extend(lamps);
         Batch {
             cause: Cause::SignalChange,
-            writes: self.incremental(&touched),
-            lcd: self.paint(),
+            writes,
+            lcd,
         }
     }
 
@@ -339,8 +381,8 @@ impl Engine {
 
     // ------------------------------------------------------------- internals
 
-    /// Attach the segment display maps. Panels without glass need none, so
-    /// this is opt-in rather than a constructor argument.
+    /// Attach the display maps. Panels without glass need none, so this is
+    /// opt-in rather than a constructor argument.
     pub fn with_displays(mut self, displays: DisplayCatalogue) -> Self {
         self.displays = displays;
         self
@@ -358,9 +400,13 @@ impl Engine {
     /// A value the glyph table cannot draw leaves its cell blank rather than
     /// failing the batch. A profile is user-authored and the stream is live:
     /// one unexpected character must not stop the other 35 cells updating.
-    fn paint(&mut self) -> Vec<LcdWrite> {
+    ///
+    /// Also returns writes for the lamps that light a display: full while the
+    /// profile puts fields on it, 0 while it does not. Blanking on the way out
+    /// needs nothing extra, because `shutdown` zeroes every lamp we lit.
+    fn paint(&mut self) -> (Vec<LedWrite>, Vec<LcdWrite>) {
         let Some(profile) = self.active.map(|i| &self.profiles[i]) else {
-            return Vec::new();
+            return (Vec::new(), Vec::new());
         };
 
         // Which crew station the player is in, where the module says. Read once
@@ -380,6 +426,7 @@ impl Engine {
             .map(u32::from);
 
         let mut out = Vec::new();
+        let mut lamps = Vec::new();
         for device in &self.devices.devices {
             if !self.connected.iter().any(|k| k == &device.key) || !profile.drives(&device.key) {
                 continue;
@@ -388,6 +435,22 @@ impl Engine {
                 let Some(map) = self.displays.get(key) else {
                     continue;
                 };
+                let used = profile
+                    .readouts
+                    .iter()
+                    .any(|r| r.device == device.key && r.display == key);
+                for led in part.leds.iter().filter(|l| l.lights_display) {
+                    let id = LedId {
+                        device: device.key.clone(),
+                        part_id: part.part_id,
+                        index: led.index,
+                    };
+                    let value = if used { led.max_value() } else { 0 };
+                    if self.shadow.get(&id) != Some(&value) {
+                        self.shadow.insert(id.clone(), value);
+                        lamps.push(LedWrite { id, value });
+                    }
+                }
                 let mut next = Screen::new(map);
                 for r in profile.readouts.iter().filter(|r| {
                     r.device == device.key && r.display == key
@@ -411,6 +474,15 @@ impl Engine {
                     let Some(output) = signal.primary() else {
                         continue;
                     };
+                    // Which cells draw inverse. A format that has not arrived
+                    // yet draws the field plainly rather than holding it back.
+                    let inverse = r
+                        .format
+                        .as_ref()
+                        .and_then(|f| self.catalogue.module(&profile.module)?.signal(f)?.primary())
+                        .and_then(|o| self.state.text(o.address, o.max_length.unwrap_or(0)))
+                        .map(|t| r.inverse_cells(&t))
+                        .unwrap_or_default();
                     let text = if output.r#type == "string" {
                         match self.state.text(output.address, output.max_length.unwrap_or(0)) {
                             Some(t) => t,
@@ -426,10 +498,11 @@ impl Engine {
                             None => continue,
                         }
                     };
+                    let value = r.lay_out(&text);
                     for (offset, cell) in r.cells.cells().enumerate() {
-                        let value = r.lay_out(&text);
                         let Some(glyph) = value.get(offset) else { continue };
-                        let _ = next.draw(map, cell, r.alias(glyph));
+                        let flip = inverse.get(offset).copied().unwrap_or(false);
+                        let _ = next.draw_styled(map, cell, r.alias(glyph), flip);
                     }
                 }
 
@@ -442,18 +515,11 @@ impl Engine {
                     Some(previous) => next.changes_from(previous),
                     None => next.all_groups(),
                 };
-                for (group, bytes) in groups {
-                    out.push(LcdWrite {
-                        device: device.key.clone(),
-                        part_id: part.part_id,
-                        group,
-                        bytes,
-                    });
-                }
+                out.extend(lcd_writes(&device.key, part.part_id, map, groups));
                 self.screens.insert(id, next);
             }
         }
-        out
+        (lamps, out)
     }
 
     /// Blank every display we have driven, for shutdown and mission end.
@@ -477,14 +543,7 @@ impl Engine {
                 Some(p) => blank.changes_from(&p),
                 None => blank.all_groups(),
             };
-            for (group, bytes) in groups {
-                out.push(LcdWrite {
-                    device: id.0.clone(),
-                    part_id: part.part_id,
-                    group,
-                    bytes,
-                });
-            }
+            out.extend(lcd_writes(&id.0, part.part_id, map, groups));
         }
         out
     }
@@ -520,6 +579,13 @@ impl Engine {
 
         let mut index: HashMap<u16, Vec<usize>> = HashMap::new();
         for (bi, b) in profile.bindings.iter().enumerate() {
+            // A panel this profile does not drive is never written, so its
+            // bindings are kept out of the index rather than filtered on every
+            // write. The sweep and the paint already leave it alone; this is
+            // the incremental path's half of the same promise.
+            if !profile.drives(&b.device) {
+                continue;
+            }
             // A binding is re-evaluated when *any* signal it reads moves, so it
             // is indexed under every address it reads, wherever in the binding
             // that signal is named. Rows that read nothing appear nowhere: a

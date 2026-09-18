@@ -316,6 +316,16 @@ fn reset_profile(file: String) -> Reply<()> {
         .map_err(|e| fail(&format!("resetting {file}"), e))
 }
 
+/// Delete a profile the user made. A shipped one is refused; it has reset.
+#[tauri::command]
+fn delete_profile(file: String) -> Reply<()> {
+    let paths = Paths::resolve();
+    paths
+        .profiles
+        .delete(&file)
+        .map_err(|e| fail(&format!("deleting {file}"), e))
+}
+
 fn main() {
     tauri::Builder::default()
         .manage(learn::State::default())
@@ -332,6 +342,7 @@ fn main() {
             check_profile,
             save_profile,
             reset_profile,
+            delete_profile,
             learn_start,
             learn_poll,
             learn_again,

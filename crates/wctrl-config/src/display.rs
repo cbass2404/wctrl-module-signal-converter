@@ -1,10 +1,15 @@
-//! Segment displays: the cell and glyph map, and a host-side screen buffer.
+//! Displays: the cell and glyph map, and a host-side screen buffer.
 //!
 //! A WinCtrl panel with glass does not take text. It takes a bitmap of
 //! segments, written a few bytes at a time, and a character position is a set
 //! of bit indices scattered through that bitmap. `data/displays/*.json` holds
 //! the map, transcribed from SimAppPro's tables and confirmed against captured
 //! hardware traffic. See `docs/PROTOCOL.md`.
+//!
+//! A pixel screen is the same model with a regular layout. Its bit index is a
+//! pixel, `y * width + x`, so a character cell is the pixels of its box and a
+//! glyph is the pixels it lights. The ICP's DED is 120 such cells, generated
+//! from a [`Grid`] rather than listed, with the font drawn as rows of `#`.
 //!
 //! Two things here are correctness requirements rather than optimisations:
 //!
@@ -48,6 +53,46 @@ pub struct Cell {
 
 fn one() -> usize {
     1
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
+}
+
+/// How a display's buffer reaches the device.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Transport {
+    /// `SET_LCDS` on the command channel, one group of `group_bytes` at a time.
+    /// Never acknowledged.
+    #[default]
+    Segment,
+    /// Report `0xf0`: writes of any length into a framebuffer, then a commit
+    /// to show them. A bit index is a pixel.
+    Pixel,
+}
+
+/// A regular grid of character cells over a pixel framebuffer.
+///
+/// Spares a pixel display from listing a bit index for every pixel of every
+/// cell, which for the DED would be 12,480 numbers. The cells are generated
+/// from this at load, row by row, left to right.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Grid {
+    pub columns: usize,
+    pub rows: usize,
+    pub cell_width: usize,
+    pub cell_height: usize,
+    /// Pixels in one framebuffer row.
+    pub width: usize,
+    /// The glyph table every generated cell draws from.
+    pub shape: String,
+    /// How far below the top of its cell a font bitmap starts.
+    #[serde(default)]
+    pub ink_top: usize,
+    /// First and last row of a cell that an inverse character fills, counted
+    /// from the top of the cell.
+    pub inverse_rows: [usize; 2],
 }
 
 /// How DCS-BIOS reports which crew station the player is in.
@@ -98,15 +143,40 @@ fn fit(value: &str, width: usize) -> String {
 pub struct Display {
     pub key: String,
     pub part_id: u32,
+    #[serde(default)]
+    pub transport: Transport,
     pub buffer_bytes: usize,
+    /// The unit a change is found and written in. For a segment display that
+    /// is the device's write group; for a pixel display it is one row.
     pub group_bytes: usize,
+    /// Generates `cells` when they are not listed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid: Option<Grid>,
+    #[serde(default)]
     pub cells: Vec<Cell>,
     /// Shape name, then glyph, then which of a cell's slots that glyph lights.
     ///
     /// Keyed by the whole field value, not by character. A two-character field
     /// can occupy one cell, and those glyphs are not the union of their parts:
     /// `'0'` and `' 0'` share almost no segments.
+    #[serde(default)]
     pub glyphs: HashMap<String, HashMap<String, Vec<u8>>>,
+    /// Glyphs drawn as rows of `#` and `.`, per shape, added to `glyphs` at
+    /// load. Only on a display with a `grid`, which says how wide a row is and
+    /// where in the cell the first one goes.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub fonts: HashMap<String, HashMap<String, Vec<String>>>,
+    /// Look glyphs up only as sent, never uppercased first.
+    ///
+    /// The DED needs it: DCS-BIOS spells its arrow `a` and its degree sign
+    /// `o`, so trying `A` and `O` first would draw the wrong character with
+    /// no error anywhere.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub exact_case: bool,
+    /// Per shape, the slots an inverse character flips. Generated from the
+    /// grid; a shape with none cannot be drawn inverse.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub inverse: HashMap<String, Vec<u8>>,
     /// Named areas of the glass, for choosing where a field goes.
     ///
     /// A cell run says nothing to someone deciding what to put on a panel, and
@@ -139,6 +209,96 @@ pub struct Display {
 impl Display {
     pub fn cell(&self, index: usize) -> Option<&Cell> {
         self.cells.get(index)
+    }
+
+    /// Whether any cell here can be drawn inverse.
+    pub fn draws_inverse(&self) -> bool {
+        self.inverse.values().any(|slots| !slots.is_empty())
+    }
+
+    /// Build the cells, glyphs and inverse slots a `grid` implies. Called at
+    /// load; a display without a grid is left as it is.
+    pub fn expand(&mut self) -> Result<()> {
+        let key = self.key.clone();
+        let bad = |why: String| Error::BadDisplay(key.clone(), why);
+        let Some(g) = self.grid.clone() else {
+            if !self.fonts.is_empty() {
+                return Err(bad("a font needs a grid to say where its rows go".into()));
+            }
+            return Ok(());
+        };
+        let slots = g.cell_width * g.cell_height;
+        if slots > 256 {
+            return Err(bad(format!("a {}x{} cell has more pixels than a glyph can name", g.cell_width, g.cell_height)));
+        }
+        if g.columns * g.cell_width > g.width {
+            return Err(bad(format!("{} columns of {} pixels do not fit in {}", g.columns, g.cell_width, g.width)));
+        }
+        // The last line may hang off the bottom of the buffer. The DED does:
+        // five 13 row lines on a 64 row screen, so line 5 has no bottom row.
+        // That row is margin, so it is dropped rather than refused, as long as
+        // everything a character can light is still on the screen.
+        let bits = (self.buffer_bytes * 8).min(usize::from(u16::MAX) + 1);
+        let lowest = (g.rows - 1) * g.cell_height + g.inverse_rows[1].max(g.ink_top);
+        if (lowest + 1) * g.width > bits {
+            return Err(bad(format!("row {lowest} of the grid is past the end of a {bits} bit buffer")));
+        }
+        if self.cells.is_empty() {
+            for row in 0..g.rows {
+                for col in 0..g.columns {
+                    // Row by row, so a clipped cell loses only its last slots
+                    // and every slot a glyph names still means the same pixel.
+                    let mut segments = Vec::with_capacity(slots);
+                    'rows: for y in 0..g.cell_height {
+                        for x in 0..g.cell_width {
+                            let pixel = (row * g.cell_height + y) * g.width + col * g.cell_width + x;
+                            if pixel >= bits {
+                                break 'rows;
+                            }
+                            segments.push(pixel as u16);
+                        }
+                    }
+                    self.cells.push(Cell {
+                        index: self.cells.len(),
+                        shape: g.shape.clone(),
+                        width: 1,
+                        segments,
+                    });
+                }
+            }
+        }
+        for (shape, font) in &self.fonts {
+            let table = self.glyphs.entry(shape.clone()).or_default();
+            for (value, rows) in font {
+                if g.ink_top + rows.len() > g.cell_height {
+                    return Err(bad(format!("glyph {value:?} is {} rows and the cell has room for {}", rows.len(), g.cell_height - g.ink_top)));
+                }
+                let mut lit = Vec::new();
+                for (y, row) in rows.iter().enumerate() {
+                    if row.chars().count() > g.cell_width {
+                        return Err(bad(format!("glyph {value:?} has a row wider than {} pixels", g.cell_width)));
+                    }
+                    for (x, c) in row.chars().enumerate() {
+                        match c {
+                            '#' => lit.push(((g.ink_top + y) * g.cell_width + x) as u8),
+                            '.' => {}
+                            other => {
+                                return Err(bad(format!("glyph {value:?} has {other:?} in it; a row is # and . only")))
+                            }
+                        }
+                    }
+                }
+                table.insert(value.clone(), lit);
+            }
+        }
+        let [top, bottom] = g.inverse_rows;
+        if top > bottom || bottom >= g.cell_height {
+            return Err(bad(format!("inverse rows {top} to {bottom} are not inside a {} row cell", g.cell_height)));
+        }
+        self.inverse
+            .entry(g.shape.clone())
+            .or_insert_with(|| (top * g.cell_width..(bottom + 1) * g.cell_width).map(|s| s as u8).collect());
+        Ok(())
     }
 
     /// The glyph for `value` on `cell`, if that cell's shape can draw it.
@@ -186,7 +346,12 @@ impl Display {
         };
         let bare = value.trim();
         let upper = bare.to_uppercase();
-        for candidate in [upper.as_str(), bare] {
+        let passes: &[&str] = if self.exact_case {
+            &[bare]
+        } else {
+            &[upper.as_str(), bare]
+        };
+        for &candidate in passes {
             let preferred = if cell.width > 1 {
                 fit(candidate, cell.width)
             } else if candidate.chars().count() <= 1 {
@@ -229,7 +394,10 @@ impl DisplayCatalogue {
             .collect();
         paths.sort();
         for path in paths {
-            let one: DisplayCatalogue = read_json(&path)?;
+            let mut one: DisplayCatalogue = read_json(&path)?;
+            for display in &mut one.displays {
+                display.expand()?;
+            }
             out.displays.extend(one.displays);
         }
         Ok(out)
@@ -277,15 +445,42 @@ impl Screen {
     /// Every one of the cell's segments is written, lit or not, so a cell never
     /// keeps a stroke from the character before it.
     pub fn draw(&mut self, display: &Display, index: usize, value: &str) -> Result<()> {
+        self.draw_styled(display, index, value, false)
+    }
+
+    /// Draw `value`, optionally inverse: the glyph knocked out of a filled box.
+    ///
+    /// Inverse is drawn here, not by the device. SimAppPro does the same; the
+    /// screen has no such mode. On a shape with no inverse slots the flag does
+    /// nothing, which validation reports before it gets this far.
+    pub fn draw_styled(
+        &mut self,
+        display: &Display,
+        index: usize,
+        value: &str,
+        inverse: bool,
+    ) -> Result<()> {
         let cell = display
             .cell(index)
             .ok_or_else(|| Error::NoSuchCell(display.key.clone(), index))?;
         let lit = display.glyph(cell, value).ok_or_else(|| {
             Error::NoSuchGlyph(value.to_string(), cell.shape.clone(), display.key.clone())
         })?;
+        // A slot is a u8, so 256 covers every slot a glyph can name. A lookup
+        // table rather than `contains`, because a DED cell is 104 slots and
+        // the whole screen is repainted on every batch.
+        let mut on = [false; 256];
+        for &slot in lit {
+            on[slot as usize] = true;
+        }
+        if inverse {
+            for &slot in display.inverse.get(&cell.shape).into_iter().flatten() {
+                on[slot as usize] ^= true;
+            }
+        }
         for (slot, &bit) in cell.segments.iter().enumerate() {
             let (byte, mask) = (bit as usize / 8, 1u8 << (bit % 8));
-            if lit.contains(&(slot as u8)) {
+            if on.get(slot).copied().unwrap_or(false) {
                 self.bytes[byte] |= mask;
             } else {
                 self.bytes[byte] &= !mask;
@@ -458,6 +653,15 @@ pub struct Readout {
     /// so it is recorded with the module's mapping rather than in the engine.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub aliases: HashMap<String, String>,
+    /// A second string signal, laid out like `source`, whose `i` marks the
+    /// characters to draw inverse.
+    ///
+    /// The F-16 DED is the case: DCS-BIOS sends each line as `DED_Ln` and its
+    /// highlighting as `DED_Ln_FORMAT`, one character for one. Any other mark
+    /// draws normally; `b`, for big, is sent too and this screen has no large
+    /// font.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
 }
@@ -512,6 +716,11 @@ impl Readout {
             }
         }
         out
+    }
+
+    /// Which cells of the run draw inverse, given the format signal's text.
+    pub fn inverse_cells(&self, format: &str) -> Vec<bool> {
+        self.lay_out(format).iter().map(|m| m == "i").collect()
     }
 
     /// Apply this module's wording fixes.

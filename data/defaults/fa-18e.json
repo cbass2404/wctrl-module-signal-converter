@@ -20,18 +20,6 @@
     },
     {
       "device": "CarrierAce_UFC",
-      "led": "LCDBacklight",
-      "conditions": [
-        {
-          "source": "UFC_BRT",
-          "on_when": {
-            "scale": [0, 65535]
-          }
-        }
-      ]
-    },
-    {
-      "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [
         {

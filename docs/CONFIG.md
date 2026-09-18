@@ -359,6 +359,8 @@ is a separate, writable one, and it starts as a copy of `data/defaults`.
 - **Update** copies in only the names that are not already there. A profile the
   user has is theirs, and an update never rewrites it.
 - **Reset** copies one default back over the active file.
+- **Delete** removes a profile the user made. A shipped one is refused, since
+  it would be seeded straight back; Reset is the way back for those.
 
 There is exactly one folder in use, so what a user sees in it is what runs.
 Nothing is shadowed at load time and `--profiles` keeps pointing at one place.
@@ -369,8 +371,9 @@ the manual remedy. A profile the user deletes reappears on the next update
 unless the seeded names are tracked.
 
 Seeding goes by file name, so renaming a shipped profile leaves a user with the
-old file and the new one, both claiming the same aircraft. Rename a default only
-before it has shipped, or delete the old copy by hand.
+old file and the new one, both claiming the same aircraft. The old copy then has
+no shipped default, so the editor offers Delete on it. The A-10C default was
+renamed from `a-10c-2.json` to `a-10c.json` this way, after the DCS-BIOS module.
 
 ## The source dropdown
 
@@ -583,6 +586,24 @@ other deliberately reads none, so a binding carrying both is rejected by
 `validate` rather than silently resolved one way, and the editor offers
 whichever the lamp does not already have.
 
+## Panels a profile leaves alone
+
+`disabled_devices` lists panels this aircraft should not drive at all:
+
+```jsonc
+"disabled_devices": ["CarrierAce_UFC"]
+```
+
+That is not the same as binding nothing. An unbound panel is still swept, so
+its lamps go dark and its glass blank, which is right for a panel you can see.
+A disabled one is never written by any path, and keeps whatever was last on
+it. The case is physical: the ICP and UFC share a swing arm, and whichever is in
+use covers the other.
+
+Its lamps and fields stay in the profile and are simply ignored, so turning the
+panel back on restores exactly what was set up. In the editor the panel's
+section stays closed while it is not driven.
+
 ## Display fields
 
 A panel with glass carries `readouts` alongside `bindings`. They have almost
@@ -601,6 +622,7 @@ brightness, a field asks "which cells, fed by what" and resolves to characters.
     "align": "right",        // only means something across several cells
     "seat": 0,               // only where the module reports one
     "aliases": { "--": "_" },
+    "format": "DED_L1_FORMAT", // text marking inverse cells, where the glass has them
     "note": "",
   },
 ]
@@ -629,6 +651,13 @@ scratchpad cursor as `--` where the cockpit shows `_`, and `--` is not a glyph,
 so without the substitution that cell goes dark. Nothing can guess this, which
 is why it is per profile rather than in the display map: the map describes the
 hardware, the alias describes what one module calls something.
+
+**`format` marks characters to draw inverse.** It names a second text signal,
+laid out across the run the same way as `source`, and a cell whose mark is `i`
+is drawn as a filled box with the character knocked out. The F-16 DED is the
+case: DCS-BIOS sends each line as `DED_Ln` and its highlighting as
+`DED_Ln_FORMAT`. Only a display that can draw inverse accepts it, which today
+is the ICP's DED, and any other mark draws normally.
 
 ### Crew stations
 

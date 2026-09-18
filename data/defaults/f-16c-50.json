@@ -1,29 +1,50 @@
 {
   "schema_version": 1,
-  "name": "Mi-24P",
-  "author": "",
+  "name": "F-16C Viper",
+  "author": "coryb",
   "profile_version": "0.1.0",
   "aircraft": [
-    "Mi-24P"
+    "F-16C_50"
   ],
-  "module": "Mi-24P",
+  "module": "F-16C_50",
   "bindings": [
     {
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
-      "conditions": [],
-      "always": true
+      "conditions": [
+        {
+          "source": "PRI_CONSOLES_BRT_KNB",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ],
+      "note": "Test only: bound to the same knob as the ICP backlight so a disabled UFC can be seen staying put."
     },
     {
       "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
-      "always": true
+      "same_as": "INST_PNL_Backlight",
+      "note": "Test only: bound to the same knob as the ICP backlight so a disabled UFC can be seen staying put."
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "PRI_CONSOLES_BRT_KNB",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ]
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -38,18 +59,35 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "PRI_CONSOLES_BRT_KNB",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Landing_gear_lights",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "LIGHT_GEAR_WARN",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "SL",
       "conditions": [],
-      "always": true,
+      "same_as": "Backlight",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -57,14 +95,21 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "FLAG",
       "conditions": [],
-      "always": true,
+      "same_as": "Backlight",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Master_Caution",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "LIGHT_MASTER_CAUTION",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -130,30 +175,63 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "HOOK",
       "conditions": []
+    },
+    {
+      "device": "ViperAce_ICP",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "PRI_CONSOLES_BRT_KNB",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ],
+      "note": "The ICP sits on the instrument panel, so its legends follow the PRIMARY INST PNL knob."
     }
   ],
   "readouts": [
     {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "35",
-      "source": "PLT_R828_CHAN_S"
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "0-23",
+      "source": "DED_L1",
+      "format": "DED_L1_FORMAT",
+      "note": "One DCS-BIOS line per DED line, 24 characters for 24 cells. The format line marks the highlighted field, drawn inverse."
     },
     {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "34",
-      "source": "PLT_R863_CHAN_S"
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "24-47",
+      "source": "DED_L2",
+      "format": "DED_L2_FORMAT"
     },
     {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "30-33",
-      "source": "PLT_RV5_ALT",
-      "reads": [
-        0.0,
-        750.0
-      ]
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "48-71",
+      "source": "DED_L3",
+      "format": "DED_L3_FORMAT"
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "72-95",
+      "source": "DED_L4",
+      "format": "DED_L4_FORMAT"
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "96-119",
+      "source": "DED_L5",
+      "format": "DED_L5_FORMAT"
     }
+  ],
+  "disabled_devices": [
+    "CarrierAce_UFC"
   ]
 }

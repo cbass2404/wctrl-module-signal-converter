@@ -141,6 +141,14 @@ fn a_mission_ending_blanks_the_glass() {
         batch = e.tick(t0 + Duration::from_secs(5));
     }
     assert!(batch.lcd.iter().any(|w| w.bytes.iter().any(|b| *b != 0)));
+    // LCDBacklight follows the glass: full while it is painted.
+    let lcd_backlight = |b: &wctrl_engine::Batch| {
+        b.writes
+            .iter()
+            .find(|w| w.id.part_id == 0xbed0 && w.id.index == 1)
+            .map(|w| w.value)
+    };
+    assert_eq!(lcd_backlight(&batch), Some(255));
 
     let ended = e.mission_ended();
     assert!(!ended.lcd.is_empty(), "the glass must be blanked");
@@ -148,4 +156,5 @@ fn a_mission_ending_blanks_the_glass() {
         ended.lcd.iter().all(|w| w.bytes.iter().all(|b| *b == 0)),
         "every group written on mission end must be zeros"
     );
+    assert_eq!(lcd_backlight(&ended), Some(0), "and its backlight goes off with it");
 }

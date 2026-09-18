@@ -16,6 +16,7 @@ import {
   listSignals,
   openProfile,
   resetProfile,
+  deleteProfile,
   saveProfile,
 } from "./api";
 import { bindingEditor } from "./binding";
@@ -42,6 +43,29 @@ function el<K extends keyof HTMLElementTagNameMap>(
   }
   node.append(...children);
   return node;
+}
+
+/**
+ * An aircraft list short enough to read at a glance, and the whole list for a
+ * tooltip.
+ *
+ * FC3 covers over a hundred aircraft, and printed in full it buries the line
+ * it sits in. Whole names are kept up to about `limit` characters and the rest
+ * are counted rather than cut mid-name, so it is plain that the list goes on.
+ * At least one name is always shown, however long.
+ */
+function aircraftSummary(names: string[], limit = 50): { text: string; title: Record<string, string> } {
+  const full = names.join(", ");
+  if (full.length <= limit) return { text: full, title: {} };
+  const shown: string[] = [];
+  for (const name of names) {
+    if (shown.length > 0 && [...shown, name].join(", ").length > limit) break;
+    shown.push(name);
+  }
+  return {
+    text: `${shown.join(", ")} +${names.length - shown.length} more`,
+    title: { title: full },
+  };
 }
 
 function clear(): void {
@@ -93,12 +117,13 @@ async function showLibrary(): Promise<void> {
 
   const list = el("ul", { class: "profiles" });
   for (const row of rows) {
+    const aircraft = aircraftSummary(row.aircraft);
     const meta = row.error
       ? el("span", { class: "bad" }, row.error)
       : el(
           "span",
-          { class: "meta" },
-          `${row.module} · ${row.aircraft.join(", ")} · ${row.bound} of ${row.total} lamps assigned`,
+          { class: "meta", ...aircraft.title },
+          `${row.module} · ${aircraft.text} · ${row.bound} of ${row.total} lamps assigned`,
         );
 
     const actions = el("div", { class: "actions" });
@@ -116,6 +141,11 @@ async function showLibrary(): Promise<void> {
       const reset = el("button", { class: "danger" }, "Reset");
       reset.addEventListener("click", () => void resetOne(row));
       actions.append(reset);
+    } else {
+      // One the user made. A shipped profile would only be seeded back.
+      const remove = el("button", { class: "danger" }, "Delete");
+      remove.addEventListener("click", () => void deleteOne(row));
+      actions.append(remove);
     }
 
     list.append(
@@ -138,6 +168,23 @@ async function resetOne(row: ProfileSummary): Promise<void> {
     await showLibrary();
   } catch (e) {
     showError("Resetting the profile", e);
+  }
+}
+
+/** Delete cannot be undone, so it asks first, the same way Reset does. */
+async function deleteOne(row: ProfileSummary): Promise<void> {
+  const ok = await confirmAction(
+    `Delete ${row.name}?\n\n` +
+      `The file is removed and cannot be recovered. Any other profile that lists ` +
+      `the same aircraft takes over from it.`,
+    "Delete",
+  );
+  if (!ok) return;
+  try {
+    await deleteProfile(row.file);
+    await showLibrary();
+  } catch (e) {
+    showError("Deleting the profile", e);
   }
 }
 
@@ -308,7 +355,8 @@ async function showNewProfile(): Promise<void> {
   const pickModule = (chosen?: string): void => {
     const select = el("select", { id: "module", size: "12" });
     for (const m of modules) {
-      const names = m.aircraft.length > 0 ? m.aircraft.join(", ") : "no runtime aircraft name";
+      const summary = aircraftSummary(m.aircraft);
+      const names = m.aircraft.length > 0 ? summary.text : "no runtime aircraft name";
       const claimed = m.aircraft.filter((a) => claimedBy.has(a)).length;
       const note =
         claimed === 0
@@ -316,7 +364,7 @@ async function showNewProfile(): Promise<void> {
           : claimed === m.aircraft.length
             ? "  ·  every aircraft has a profile"
             : `  ·  ${claimed} of ${m.aircraft.length} aircraft have a profile`;
-      select.append(el("option", { value: m.key }, `${m.key}  ·  ${names}${note}`));
+      select.append(el("option", { value: m.key, ...summary.title }, `${m.key}  ·  ${names}${note}`));
     }
     if (chosen) select.value = chosen;
 
@@ -659,6 +707,7 @@ async function showProfile(file: string): Promise<void> {
   });
 
   const toggle = el("button", {}, "Expand all");
+  const aircraft = aircraftSummary(profile.aircraft);
   app.append(
     el(
       "header",
@@ -668,7 +717,7 @@ async function showProfile(file: string): Promise<void> {
         "div",
         { class: "grow" },
         el("h1", {}, profile.name),
-        el("span", { class: "meta block" }, `${profile.module} · ${profile.aircraft.join(", ")}`),
+        el("span", { class: "meta block", ...aircraft.title }, `${profile.module} · ${aircraft.text}`),
       ),
       state,
       toggle,
@@ -723,9 +772,12 @@ async function showProfile(file: string): Promise<void> {
     offersCollapse = collapse;
     toggle.textContent = collapse ? "Collapse all" : "Expand all";
   };
+  // Only panels this profile drives can open, so only they count.
+  const live = (): HTMLDetailsElement[] => sections.filter((s) => !s.classList.contains("off"));
   const syncToggle = (): void => {
-    if (sections.every((s) => s.open)) setLabel(true);
-    else if (sections.every((s) => !s.open)) setLabel(false);
+    const open = live();
+    if (open.length > 0 && open.every((s) => s.open)) setLabel(true);
+    else if (open.every((s) => !s.open)) setLabel(false);
   };
   for (const s of sections) s.addEventListener("toggle", syncToggle);
   syncToggle();
@@ -735,7 +787,7 @@ async function showProfile(file: string): Promise<void> {
     // button reading "Collapse all" expand everything as soon as one section
     // had been closed by hand.
     const expand = !offersCollapse;
-    for (const section of sections) section.open = expand;
+    for (const section of live()) section.open = expand;
     syncToggle();
   });
 }
@@ -803,9 +855,31 @@ function deviceSection(
   const drive = el("input", { type: "checkbox" }) as HTMLInputElement;
   drive.checked = !disabled.includes(device.key);
   const section = el("details", { class: "device" });
+  // A panel left alone does not open. Its lamps and fields are kept, so ticking
+  // it again brings back exactly what was set up, but there is nothing to edit
+  // on a panel that will not be driven.
   const applyDriveState = (): void => {
     section.classList.toggle("off", !drive.checked);
+    if (!drive.checked) section.open = false;
   };
+  // Stopped before it opens rather than closed after, which flashed the panel
+  // open for a frame. The click is cancelled at the summary, which also covers
+  // Enter and Space. The drive label is let through, since it is how the panel
+  // is turned back on.
+  const summary = el(
+    "summary",
+    {},
+    el("span", { class: "name" }, device.display_name),
+    count,
+    el("label", { class: "drive meta" }, drive, " drive this panel"),
+  );
+  summary.addEventListener("click", (e) => {
+    if (!drive.checked && !(e.target as Element).closest("label")) e.preventDefault();
+  });
+  // Anything that opens it some other way is closed again.
+  section.addEventListener("toggle", () => {
+    if (section.open && !drive.checked) section.open = false;
+  });
   drive.addEventListener("click", (e) => e.stopPropagation());
   drive.addEventListener("change", () => {
     const list = session.profile.disabled_devices ?? [];
@@ -830,16 +904,7 @@ function deviceSection(
     session.refreshDirty,
   );
 
-  section.append(
-    el(
-      "summary",
-      {},
-      el("span", { class: "name" }, device.display_name),
-      count,
-      el("label", { class: "drive meta" }, drive, " drive this panel"),
-    ),
-    table,
-  );
+  section.append(summary, table);
   if (glass) section.append(glass);
   return section;
 }

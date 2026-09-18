@@ -481,6 +481,7 @@ fn readout(cells: &str, source: &str) -> Readout {
         decimals: 0,
         align: Align::Left,
         aliases: Default::default(),
+        format: None,
         note: String::new(),
     }
 }

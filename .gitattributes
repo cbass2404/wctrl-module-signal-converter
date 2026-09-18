@@ -1,0 +1,20 @@
+# Line endings are git's problem, not the editor's.
+#
+# Every file here was committed with CRLF in the blob itself, so any tool that
+# rewrote one with LF turned a small edit into a whole-file diff and buried the
+# actual change. Normalising means git stores LF and hands out CRLF on checkout,
+# so what a tool writes stops mattering and endings stop appearing in reviews.
+#
+# `eol=crlf` rather than leaving it to each machine's `core.autocrlf`: this
+# drives Windows panels and is built and run on Windows, so there is one right
+# answer and no reason to make it a per-clone setting that can be wrong.
+* text=auto eol=crlf
+
+# Marked rather than left to detection, which only reads the first 8000 bytes.
+# A misdetected icon is corrupted on checkout, not merely noisy.
+*.png binary
+*.ico binary
+
+# The Windows script that launches the daemon. WSH is fussy about its input, so
+# this one is CRLF because it has to be, not because of the rule above.
+*.vbs text eol=crlf

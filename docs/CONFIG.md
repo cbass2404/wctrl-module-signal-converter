@@ -296,6 +296,34 @@ them.
 connected ones marked. A profile has to be editable with the panels unplugged,
 which is most of the time.
 
+### Checked while it is being edited, not when it is flown
+
+The daemon's answer to a profile it cannot load is to skip the whole file, so a
+single bad row costs every lamp in that profile, and it costs them on the ramp
+with a mission loaded. The editor therefore runs the daemon's own checks after
+every edit, through `Profile::problems`, which is `validate` collecting instead
+of stopping at the first fault. Same rules, same words, one implementation.
+
+Most faults are unreachable by construction and stay that way: the window
+offers `always`, `conditions` and `same_as` as alternatives rather than fields,
+clamps `on` to the lamp's range, collapses a lone `any_of` branch, builds the
+mirror list from dimmers that are not already mirroring something, and derives
+the seat list from the module's own `SEAT_POSITION`. What the checks catch is
+everything construction cannot:
+
+- Work that is simply unfinished. A condition or a field with no signal chosen
+  is the common one, and it has its own wording rather than being reported as
+  an unknown signal named `""`.
+- Faults that arrived in the file. A profile shared by someone with different
+  panels, or written before a DCS-BIOS update moved the catalogue under it.
+
+Outstanding problems are listed above the rows, in full and naming the lamp or
+the cells, and **Save is withheld until there are none**. The trade is
+deliberate: refusing costs the time to finish, allowing it costs a sortie, and
+the version already on disk is very likely one that flies. `save_profile`
+refuses the same way, so the guarantee holds even if the window is wrong about
+it.
+
 ## Where profiles live
 
 Shipped profiles are a product, not a sample. They live read-only in `DEFAULT/`

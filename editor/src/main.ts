@@ -6,6 +6,7 @@
 
 import { displaySection } from "./readout";
 import {
+  checkProfile,
   cloneProfile,
   createProfile,
   defaultProfile,
@@ -281,6 +282,14 @@ interface Session {
   baseline: string;
   dirty: boolean;
   refreshDirty: () => void;
+  /**
+   * Re-run the daemon's own checks over the profile as it stands.
+   *
+   * Called from `refreshDirty`, so every edit is checked without each call
+   * site having to remember to. Debounced, because it crosses into the backend
+   * and an edit can be a keystroke.
+   */
+  recheck: () => void;
 }
 
 /**
@@ -328,6 +337,63 @@ async function showProfile(file: string): Promise<void> {
 
   const save = el("button", { class: "primary" }, "Save");
   const state = el("span", { class: "meta" }, "");
+
+  // Outstanding problems, kept between checks so the Save button can consult
+  // them without waiting for one. The list starts empty rather than unknown:
+  // the first check runs as soon as the rows are built, and until it answers
+  // the profile is whatever it was on disk.
+  let problems: string[] = [];
+  const problemList = el("div", { class: "problems", hidden: "" });
+
+  /**
+   * The header's state line, and whether Save is offered.
+   *
+   * Save is withheld while anything is outstanding. The daemon skips a profile
+   * it will not load, whole, so writing one would darken every lamp in it, and
+   * the version already on disk is very likely one that flies. Refusing costs
+   * the user the time to finish; allowing it costs them the sortie.
+   */
+  const refreshSave = (): void => {
+    state.textContent = session.dirty ? "unsaved changes" : "";
+    if (problems.length > 0) {
+      save.setAttribute("disabled", "");
+      save.title = `${problems.length} problem${problems.length === 1 ? "" : "s"} to fix first.`;
+      return;
+    }
+    save.title = "";
+    if (session.dirty) save.removeAttribute("disabled");
+    else save.setAttribute("disabled", "");
+  };
+
+  /**
+   * What is wrong, in the daemon's own words, above the rows it is about.
+   *
+   * Shown in full rather than counted. Every one of these names a lamp or a
+   * field, which is the only thing that makes it actionable, and there are
+   * never many: the window prevents most of them from being made at all.
+   */
+  const drawProblems = (): void => {
+    problemList.replaceChildren();
+    if (problems.length === 0) {
+      problemList.hidden = true;
+      return;
+    }
+    problemList.hidden = false;
+    problemList.append(
+      el(
+        "strong",
+        {},
+        problems.length === 1
+          ? "This profile will not load until this is fixed:"
+          : `This profile will not load until these ${problems.length} are fixed:`,
+      ),
+    );
+    for (const problem of problems) {
+      problemList.append(el("div", { class: "problem" }, problem));
+    }
+  };
+
+  let pending: number | undefined;
   const session: Session = {
     file,
     profile,
@@ -337,9 +403,34 @@ async function showProfile(file: string): Promise<void> {
     dirty: false,
     refreshDirty: () => {
       session.dirty = JSON.stringify(session.profile) !== session.baseline;
-      state.textContent = session.dirty ? "unsaved changes" : "";
-      if (session.dirty) save.removeAttribute("disabled");
-      else save.setAttribute("disabled", "");
+      refreshSave();
+      session.recheck();
+    },
+    recheck: () => {
+      // Coalesced, so holding a key down is one check rather than one per
+      // character. Long enough to skip the middle of a word, short enough that
+      // the answer is there by the time the user looks up from the row.
+      window.clearTimeout(pending);
+      pending = window.setTimeout(() => {
+        // Snapshotted before the call: the user keeps typing while it is in
+        // flight, and a late answer about an older profile must not be shown
+        // as though it were about this one.
+        const asked = JSON.stringify(session.profile);
+        void checkProfile(session.profile)
+          .then((found) => {
+            if (JSON.stringify(session.profile) !== asked) return;
+            problems = found;
+            drawProblems();
+            refreshSave();
+          })
+          .catch((e: unknown) => {
+            // A check that cannot run must not read as a profile with nothing
+            // wrong, so the failure takes the same place the problems do.
+            problems = [`The profile could not be checked: ${e instanceof Error ? e.message : String(e)}`];
+            drawProblems();
+            refreshSave();
+          });
+      }, 250);
     },
   };
   save.setAttribute("disabled", "");
@@ -381,6 +472,7 @@ async function showProfile(file: string): Promise<void> {
       save,
     ),
   );
+  app.append(problemList);
 
   if (signalError) {
     app.append(
@@ -406,6 +498,12 @@ async function showProfile(file: string): Promise<void> {
   // any lamp the file did not already list. Measuring before that would have
   // every profile arrive already dirty.
   session.baseline = JSON.stringify(session.profile);
+
+  // Checked on open as well as on edit. A profile can be invalid without
+  // anyone touching it here: the catalogue is rebuilt when DCS-BIOS updates
+  // and a signal can leave it, and profiles are shared between people whose
+  // panels differ. Saying so on arrival beats saying it on the ramp.
+  session.recheck();
 
   // Collapsed on open, so a profile with several panels does not arrive as a
   // wall of lamps. One control opens and closes all of them.
@@ -670,8 +768,19 @@ function lampRow(
       signals: session.signals,
       // Only dimmers, and never the lamp itself: an on/off lamp has no level to
       // follow, which is what the mirror copies.
+      //
+      // A lamp that mirrors something itself is not offered either. Pointing at
+      // one would build a chain, and a chain has no value to resolve: the
+      // daemon rejects the profile rather than following it. The one already
+      // chosen stays in the list whatever it is, so a chain that arrived in the
+      // file can still be seen and changed rather than silently reassigned.
       siblings: led.dimmable
-        ? device.leds.filter((l) => l.dimmable && l.name !== led.name)
+        ? device.leds.filter(
+            (l) =>
+              l.dimmable &&
+              l.name !== led.name &&
+              (l.name === binding.same_as || !byLamp.get(lampKey(device.key, l.name))?.same_as),
+          )
         : [],
       shipped: session.shipped.get(lampKey(device.key, led.name)),
       onChange: () => {

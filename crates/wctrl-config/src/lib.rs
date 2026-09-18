@@ -25,6 +25,10 @@ pub enum Error {
     UnknownAircraft(String),
     #[error("profile references unknown signal {0:?}")]
     UnknownSignal(String),
+    #[error("LED {0:?} has a condition with no signal chosen yet; pick one or delete the condition")]
+    UnfinishedCondition(String),
+    #[error("the field on {1} of display {0:?} has no signal chosen yet; pick one or remove the field")]
+    UnfinishedField(String, String),
     #[error("profile references unknown LED {0:?} on device {1:?}")]
     UnknownLed(String, String),
     #[error("LED {0:?} was given on={1}, above its maximum of {2}")]
@@ -757,76 +761,120 @@ impl Profile {
     /// Worth doing on load rather than at evaluation time: a profile shared by
     /// someone with different hardware, or built against a newer DCS-BIOS,
     /// should fail loudly once instead of silently never lighting a lamp.
+    ///
+    /// Stops at the first fault, because the daemon's answer to any of them is
+    /// the same: skip the profile. The editor wants the whole list instead, so
+    /// the work lives in [`problems`](Self::problems) and this picks the first.
     pub fn validate(
         &self,
         module: &Module,
         devices: &DeviceInventory,
         displays: &DisplayCatalogue,
     ) -> Result<()> {
+        match self.problems(module, devices, displays).into_iter().next() {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
+    }
+
+    /// Every reason this profile would be rejected, rather than just the first.
+    ///
+    /// The editor checks after each edit and shows the list, so a fault is
+    /// found where it was made rather than on the ramp with the panels dark.
+    /// One fault must not hide another: a user who fixes the only problem shown
+    /// and gets a second one has been told the same bad news twice.
+    ///
+    /// Each binding and each field is checked independently and a fault in one
+    /// does not stop the rest, so the count reported is the real count.
+    pub fn problems(
+        &self,
+        module: &Module,
+        devices: &DeviceInventory,
+        displays: &DisplayCatalogue,
+    ) -> Vec<Error> {
+        let mut out = Vec::new();
         for b in &self.bindings {
             if b.same_as.is_some()
                 && !(b.conditions.is_empty() && b.any_of.is_empty() && !b.always)
             {
-                return Err(Error::MirrorWithConditions(b.led.clone()));
+                out.push(Error::MirrorWithConditions(b.led.clone()));
             }
             if let Some(target) = &b.same_as {
-                let other = self
+                match self
                     .bindings
                     .iter()
                     .find(|o| o.device == b.device && &o.led == target)
-                    .ok_or_else(|| {
-                        Error::UnknownMirror(b.led.clone(), target.clone(), b.device.clone())
-                    })?;
-                if other.same_as.is_some() {
-                    return Err(Error::MirrorChain(b.led.clone(), target.clone()));
-                }
-                // Only lamps that dim, on both ends. An indicator takes 0 or 1,
-                // so it has no level to follow and none to offer: mirroring one
-                // either way would be a setting that cannot mean what it says.
-                let device = devices
-                    .device(&b.device)
-                    .ok_or_else(|| Error::UnknownLed(b.led.clone(), b.device.clone()))?;
-                let dims = |name: &str| {
-                    device
-                        .led(name)
-                        .map(|(_, led)| led.is_dimmable())
-                        .unwrap_or(false)
-                };
-                if !dims(&b.led) || !dims(target) {
-                    return Err(Error::MirrorNotDimmable(b.led.clone(), target.clone()));
+                {
+                    None => out.push(Error::UnknownMirror(
+                        b.led.clone(),
+                        target.clone(),
+                        b.device.clone(),
+                    )),
+                    Some(other) => {
+                        if other.same_as.is_some() {
+                            out.push(Error::MirrorChain(b.led.clone(), target.clone()));
+                        }
+                        // Only lamps that dim, on both ends. An indicator takes
+                        // 0 or 1, so it has no level to follow and none to
+                        // offer: mirroring one either way would be a setting
+                        // that cannot mean what it says.
+                        if let Some(device) = devices.device(&b.device) {
+                            let dims = |name: &str| {
+                                device
+                                    .led(name)
+                                    .map(|(_, led)| led.is_dimmable())
+                                    .unwrap_or(false)
+                            };
+                            if !dims(&b.led) || !dims(target) {
+                                out.push(Error::MirrorNotDimmable(b.led.clone(), target.clone()));
+                            }
+                        }
+                    }
                 }
             }
             if b.always && !(b.conditions.is_empty() && b.any_of.is_empty()) {
-                return Err(Error::AlwaysWithConditions(b.led.clone()));
+                out.push(Error::AlwaysWithConditions(b.led.clone()));
             }
             if !b.conditions.is_empty() && !b.any_of.is_empty() {
-                return Err(Error::ConditionsWithAnyOf(b.led.clone()));
+                out.push(Error::ConditionsWithAnyOf(b.led.clone()));
             }
             if b.any_of.iter().any(|branch| branch.conditions.is_empty()) {
-                return Err(Error::EmptyBranch(b.led.clone()));
+                out.push(Error::EmptyBranch(b.led.clone()));
             }
             // The lamp must exist even on a placeholder row: it names real
             // hardware. Only the conditions are allowed to be undecided.
+            //
+            // A condition with no signal chosen is reported once however many
+            // there are, because it is one thing to go and finish.
+            let mut unfinished = false;
             for source in b.sources() {
-                if module.signal(source).is_none() {
-                    return Err(Error::UnknownSignal(source.to_string()));
+                if source.is_empty() {
+                    if !unfinished {
+                        unfinished = true;
+                        out.push(Error::UnfinishedCondition(b.led.clone()));
+                    }
+                } else if module.signal(source).is_none() {
+                    out.push(Error::UnknownSignal(source.to_string()));
                 }
             }
-            let device = devices
-                .device(&b.device)
-                .ok_or_else(|| Error::UnknownLed(b.led.clone(), b.device.clone()))?;
-            let (_, led) = device
-                .led(&b.led)
-                .ok_or_else(|| Error::UnknownLed(b.led.clone(), b.device.clone()))?;
+            let Some(device) = devices.device(&b.device) else {
+                out.push(Error::UnknownLed(b.led.clone(), b.device.clone()));
+                continue;
+            };
+            let Some((_, led)) = device.led(&b.led) else {
+                out.push(Error::UnknownLed(b.led.clone(), b.device.clone()));
+                continue;
+            };
             // A profile asking for a brightness an indicator cannot produce is
             // a real authoring error, not something to silently clamp away.
             if let Some(on) = b.on {
                 if on > led.max_value() {
-                    return Err(Error::OutOfRange(b.led.clone(), on, led.max_value()));
+                    out.push(Error::OutOfRange(b.led.clone(), on, led.max_value()));
                 }
             }
         }
-        self.validate_readouts(module, devices, displays)
+        self.readout_problems(module, devices, displays, &mut out);
+        out
     }
 
     /// Bindings and readouts that will never run, because their device is
@@ -849,29 +897,36 @@ impl Profile {
 
     /// Check the display fields: that they name real glass, sit inside it, do
     /// not fight over cells, and read a source that can actually fill them.
-    fn validate_readouts(
+    ///
+    /// Appends rather than returning, for the reason given on
+    /// [`problems`](Self::problems): one fault must not hide another.
+    fn readout_problems(
         &self,
         module: &Module,
         devices: &DeviceInventory,
         displays: &DisplayCatalogue,
-    ) -> Result<()> {
+        out: &mut Vec<Error>,
+    ) {
         for name in &self.disabled_devices {
             if devices.device(name).is_none() {
-                return Err(Error::DisablesUnknownDevice(name.clone()));
+                out.push(Error::DisablesUnknownDevice(name.clone()));
             }
         }
         for (i, r) in self.readouts.iter().enumerate() {
-            let device = devices
-                .device(&r.device)
-                .ok_or_else(|| Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()))?;
+            let Some(device) = devices.device(&r.device) else {
+                out.push(Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()));
+                continue;
+            };
             if device.part_with_display(&r.display).is_none() {
-                return Err(Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()));
+                out.push(Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()));
+                continue;
             }
-            let display = displays
-                .get(&r.display)
-                .ok_or_else(|| Error::UnknownDisplay(r.display.clone()))?;
+            let Some(display) = displays.get(&r.display) else {
+                out.push(Error::UnknownDisplay(r.display.clone()));
+                continue;
+            };
             if r.cells.last >= display.cells.len() {
-                return Err(Error::CellsOutOfRange(
+                out.push(Error::CellsOutOfRange(
                     r.display.clone(),
                     display.cells.len(),
                     r.cells.to_string(),
@@ -882,15 +937,18 @@ impl Profile {
             // of the 50 catalogued modules. Saying so beats accepting the field
             // and never painting it.
             if let Some(seat) = r.seat {
-                let reported = module
-                    .signal(SEAT_SIGNAL)
-                    .and_then(|s| s.primary())
-                    .ok_or_else(|| {
-                        Error::SeatNotReported(seat, module.module.clone(), SEAT_SIGNAL)
-                    })?;
-                let highest = reported.max_value.unwrap_or(0);
-                if seat > highest {
-                    return Err(Error::NoSuchSeat(seat, SEAT_SIGNAL, highest));
+                match module.signal(SEAT_SIGNAL).and_then(|s| s.primary()) {
+                    None => out.push(Error::SeatNotReported(
+                        seat,
+                        module.module.clone(),
+                        SEAT_SIGNAL,
+                    )),
+                    Some(reported) => {
+                        let highest = reported.max_value.unwrap_or(0);
+                        if seat > highest {
+                            out.push(Error::NoSuchSeat(seat, SEAT_SIGNAL, highest));
+                        }
+                    }
                 }
             }
 
@@ -901,10 +959,10 @@ impl Profile {
             // Two seats are the exception, and the only one. They cannot both
             // be occupied, so they cannot both be painting, and sharing a
             // window between them is the whole reason the field exists.
-            for (j, other) in self.readouts.iter().enumerate() {
-                if i == j {
-                    continue;
-                }
+            //
+            // Each pair is looked at once, from the earlier field, so an
+            // overlap is one problem rather than the same one said twice.
+            for other in self.readouts.iter().skip(i + 1) {
                 let both_live = match (r.seat, other.seat) {
                     (Some(a), Some(b)) => a == b,
                     _ => true,
@@ -914,7 +972,7 @@ impl Profile {
                     && other.display == r.display
                     && other.cells.overlaps(&r.cells)
                 {
-                    return Err(Error::CellsOverlap(
+                    out.push(Error::CellsOverlap(
                         r.cells.to_string(),
                         other.cells.to_string(),
                         r.display.clone(),
@@ -922,25 +980,29 @@ impl Profile {
                 }
             }
 
-            let signal = module
-                .signal(&r.source)
-                .ok_or_else(|| Error::UnknownSignal(r.source.clone()))?;
-            let output = signal
-                .primary()
-                .ok_or_else(|| Error::UnknownSignal(r.source.clone()))?;
+            // A field with nothing chosen yet is unfinished work rather than a
+            // mistake, but it still stops the profile loading, so it is said
+            // plainly and in those terms.
+            if r.source.is_empty() {
+                out.push(Error::UnfinishedField(r.display.clone(), r.cells.to_string()));
+                continue;
+            }
+            let Some(output) = module.signal(&r.source).and_then(|s| s.primary()) else {
+                out.push(Error::UnknownSignal(r.source.clone()));
+                continue;
+            };
             // A needle reports a position, not a quantity, and nothing in the
             // catalogue says what its face is marked with. So the range is the
             // user's to give, and asking for it beats printing 0 to 65535 and
             // letting them wonder what broke.
             if output.r#type == "string" {
                 if r.reads.is_some() {
-                    return Err(Error::RangeOnText(r.source.clone()));
+                    out.push(Error::RangeOnText(r.source.clone()));
                 }
             } else if r.reads.is_none() {
-                return Err(Error::RangeMissing(r.source.clone()));
+                out.push(Error::RangeMissing(r.source.clone()));
             }
         }
-        Ok(())
     }
 }
 

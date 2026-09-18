@@ -7,6 +7,7 @@
 //! daemon read and write profiles through exactly the same code, so a profile
 //! the editor produces cannot be one the daemon rejects.
 
+mod check;
 mod learn;
 mod paths;
 mod view;
@@ -247,9 +248,35 @@ fn learn_stop(learn: tauri::State<learn::State>) -> Reply<()> {
     Ok(())
 }
 
+/// Every reason the daemon would refuse this profile, for the window to show.
+///
+/// Called after each edit rather than on save. A fault found where it was made
+/// costs one click to undo; the same fault found by the daemon costs a flight,
+/// because it skips the whole profile and every lamp in it stays dark.
 #[tauri::command]
-fn save_profile(file: String, profile: Profile) -> Reply<()> {
+fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<Vec<String>> {
     let paths = Paths::resolve();
+    Ok(cache.problems(&paths, &profile))
+}
+
+/// Write a profile, refusing one the daemon would not load.
+///
+/// The window checks as the user types and will not offer Save while anything
+/// is outstanding, so this is the guarantee rather than the message: the file
+/// on disk is one that runs. Refusing also protects what is already there,
+/// since the previous save is very likely a profile that flies.
+#[tauri::command]
+fn save_profile(file: String, profile: Profile, cache: tauri::State<check::Cache>) -> Reply<()> {
+    let paths = Paths::resolve();
+    let problems = cache.problems(&paths, &profile);
+    if !problems.is_empty() {
+        return Err(format!(
+            "{file} was not written, because the daemon would refuse it:
+{}",
+            problems.join("
+")
+        ));
+    }
     profile
         .save(&paths.profiles.active.join(&file))
         .map_err(|e| fail(&format!("writing {file}"), e))
@@ -283,6 +310,7 @@ fn slug(name: &str) -> String {
 fn main() {
     tauri::Builder::default()
         .manage(learn::State::default())
+        .manage(check::Cache::default())
         .invoke_handler(tauri::generate_handler![
             devices,
             modules,
@@ -292,6 +320,7 @@ fn main() {
             default_profile,
             create_profile,
             clone_profile,
+            check_profile,
             save_profile,
             reset_profile,
             learn_start,

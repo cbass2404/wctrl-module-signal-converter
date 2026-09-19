@@ -151,7 +151,8 @@ catalogue's lock and rename. Decide there whether a dev run uses it too.
 Decided 2026-09-19:
 
 * Dev runs keep using the checkout's `data/`.
-* Install per user (`%LOCALAPPDATA%\Programs`, no admin prompt), in the stock
+* Install per user (`%LOCALAPPDATA%\DCS Signal Converter`, Tauri's per-user
+  default, so no admin prompt; confirmed 2026-09-19 over Program Files), in the stock
   NSIS look: no custom pages or theming. Where a question has to be asked it
   is a plain message box and the Windows folder picker.
 * The installer places the DCS hook and removes it on uninstall, but only

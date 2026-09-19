@@ -126,6 +126,20 @@ h2 {
   margin-top: 6px;
 }
 
+/* Which DCS-BIOS the signals came from, under the profiles heading. */
+.catalogue {
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* A row this DCS-BIOS cannot back. It loads and stays off, so the caution
+   colour rather than the danger one, and Save stays. */
+.flag {
+  color: var(--caution);
+  font-size: 12.5px;
+  margin-top: 3px;
+}
+
 button {
   font: inherit;
   padding: 5px 12px;

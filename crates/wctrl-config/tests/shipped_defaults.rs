@@ -144,7 +144,9 @@ fn every_default_drives_all_backlights_from_one_source() {
 }
 
 /// A shipped default passes the same checks the editor puts a user's profile
-/// through: every signal exists in its module, every field fits its cells.
+/// through, and against the nightly it is written for, flags nothing: every
+/// signal exists in its module and every value is in range. A user's DCS-BIOS
+/// may flag some, which is what flags are for; the defaults' own may not.
 /// Skipped where `data/catalogue` has not been generated.
 #[test]
 fn every_default_passes_the_editors_checks() {
@@ -163,6 +165,9 @@ fn every_default_passes_the_editors_checks() {
         };
         for problem in profile.problems(module, &inventory, &displays) {
             found.push(format!("{name}: {problem}"));
+        }
+        for flag in profile.flags(module) {
+            found.push(format!("{name}: {} {} reads {} ({:?})", flag.device, flag.target, flag.source, flag.why));
         }
     }
     assert!(found.is_empty(), "shipped defaults fail the editor's checks:\n  {}", found.join("\n  "));

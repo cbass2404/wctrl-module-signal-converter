@@ -13,14 +13,18 @@ for the HID protocol.
 ## Before the first run
 
 The signal catalogue is generated from the DCS-BIOS installed on this machine
-and is not in git, so build it once after cloning, and again whenever DCS-BIOS
-updates:
+and is not in git. Nothing needs doing: the daemon and the editor build it on
+startup, and again whenever the installed DCS-BIOS changes, whether to a new
+version or by its files being replaced. The editor's profiles page says which
+DCS-BIOS the signals came from and whether it just rebuilt them. To force a
+rebuild, or to point at DCS-BIOS outside `Saved Games\DCS\Scripts`:
 
 ```powershell
-python tools/build_catalogue.py
+cargo run --bin wctrl -- catalogue --rebuild
+cargo run --bin wctrl -- catalogue --rebuild --bios "D:\DCS-BIOS\doc\json"
 ```
 
-Skipping this gives `loading data/catalogue ...` on startup.
+The folder given with `--bios` is remembered, so it is needed only once.
 
 If `cargo` is not found inside VS Code but works in a standalone PowerShell
 window, VS Code is holding a stale environment. Quit it completely, not "Reload

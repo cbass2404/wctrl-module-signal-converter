@@ -9,7 +9,7 @@ reproduced here because they require it.
 The MCDU keeps no font of its own: one has to be uploaded after every power
 cycle before the screen draws anything. The code that drives the screen and
 makes that upload is ported from WwDevicesDotnet, and the files it sends are
-copied unchanged into `data/mcdu`.
+copied into `data/mcdu` unchanged except where the table says otherwise.
 
 | In wctrl | From | License |
 | --- | --- | --- |
@@ -19,7 +19,7 @@ copied unchanged into `data/mcdu`.
 | `data/mcdu/font-packet-map-3x31.json` | WwDevicesDotnet, `Resources/WinctrlFontPacketMap-3x31.json`, commit `2bf28fa` | BSD-3-Clause |
 | `data/mcdu/a10c-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/a10c-font-21x31.json`, commit `dd8e87b` | MIT |
 | `data/mcdu/ah64d-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/ah64d-font-21x31.json`, commit `2d34b12` | MIT |
-| `data/mcdu/ch47f-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/ch47f-font-21x31.json`, commit `586cdac` | MIT |
+| `data/mcdu/ch47f-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/ch47f-font-21x31.json`, commit `586cdac`, `Name` changed from `A10C` to `CH47F` | MIT |
 | `data/mcdu/f14bu-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/f14bu-font-21x31.json`, commit `dd8e87b` | MIT |
 
 * WwDevicesDotnet: <https://github.com/landre-cerp/WwDevicesDotnet>, a fork of

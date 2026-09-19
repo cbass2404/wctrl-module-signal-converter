@@ -6,6 +6,7 @@
 // that drives its own glass the cockpit has already decided what belongs there,
 // and on any other the user has.
 
+import { flagSlot } from "./flags";
 import { signalPicker } from "./typeahead";
 import type { Device, DisplayInfo, Readout, RegionInfo, SignalView } from "./types";
 
@@ -483,7 +484,7 @@ function row(opts: RowOptions): HTMLTableRowElement {
     },
   });
   drawExtras();
-  tr.append(el("td", {}, picker, extras));
+  tr.append(el("td", {}, picker, flagSlot(readout), extras));
 
   // --- remove --------------------------------------------------------------
   const remove = el("button", { class: "icon danger", title: "Remove this field" }, "\u{1F5D1}");

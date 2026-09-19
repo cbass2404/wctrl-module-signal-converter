@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-18. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-19. Enough context to resume cold.
 
 ## Resume here
 
@@ -9,8 +9,7 @@ Everything below is background. This is what to actually do next.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 207 passing
+cargo test --workspace            # expect 235 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -18,53 +17,128 @@ cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 `data/catalogue/` is **not in git**. It is generated from the DCS-BIOS installed
 on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
-controls are defined. Rebuild it after cloning, and again whenever DCS-BIOS
-updates it is stamped with the version it came from.
+controls are defined. Nothing needs doing after a clone: every command that
+reads the catalogue builds it first if it is missing or out of date (see below).
 
-**Next session, first:** start the daemon and the editor with the MFD unplugged
-while profiles bind it, and watch what each does. Expected from the code: the
-daemon lists only enumerated panels and skips the MFD without error; the editor
-keeps the MFD rows, since the merge never drops rows for an unplugged panel.
-Unknown: whether the editor shows that the panel is absent.
+**Verified 2026-09-19: an unplugged panel is harmless.** With the MFDs unplugged
+while profiles bound them, the daemon and the editor both ran and everything
+else worked as normal.
 
-**Then: DCS-BIOS version mismatch.** The shipped defaults were written against
-DCS-BIOS `2026.09.18-nightly`. A user on another release, a stable one in
-particular, may have signals the defaults name missing, renamed or changed.
-Today that is all or nothing: `validate` reports `UnknownSignal` and
-`load_profiles` skips the whole profile, so one renamed signal costs every lamp
-in that aircraft.
+**Done 2026-09-19: DCS-BIOS version mismatch, all 5 steps.** Only a flight
+against live DCS is left, to see the per-mission version check stay quiet. The
+shipped defaults were written against DCS-BIOS `2026.09.18-nightly`. A user on
+another release, a stable one in particular, may have signals the defaults
+name missing, renamed or changed. Before this work that was all or nothing: `validate` reports
+`UnknownSignal` and `load_profiles` skips the whole profile, so one renamed
+signal costs every lamp in that aircraft.
 
-Wanted: a default that names signals the installed DCS-BIOS lacks still loads.
-The rows that can't resolve are left inert and every other row works. The user
-gets one warning saying which rows are affected and which DCS-BIOS version gives
-full functionality.
+Decided 2026-09-19:
 
-There are two different mismatches, and only one of them can degrade gracefully:
+- **One rule for every profile**, shipped or the user's. Exceptions get hard to
+  maintain.
+- **A bad condition** is one whose signal is not in the catalogue, or whose
+  value is outside the signal's range. Either way the source is not what the
+  profile was written for, and could fire the lamp when nobody meant it to.
+- **A bad condition kills its AND chain.** In an `any_of`, each branch is its
+  own chain: a branch with a bad condition is dropped and the valid
+  alternatives still work. A lamp with no chain left is skipped and stays at
+  its swept value, the same as an unset row.
+- **Flag it, don't block it.** The editor puts a hazard mark on the condition
+  block itself, with the reason; Save stays available and the row stays in the
+  file, so it comes back once the source is fixed. The daemon logs one warning
+  per profile.
+- **Only nightly-only signals are worth a word.** The defaults target the
+  nightly; most users run stable. Profiles carry no version. Instead each wctrl
+  release ships `data/nightly-only.json`: the signals the defaults read that the
+  latest stable lacks or reports with a different range, and nothing older.
+  A flagged condition on that list says it needs the nightly, and the profile
+  page shows one line naming the lamps only when the user's DCS-BIOS is
+  actually missing some of them.
 
-- **Defaults vs the installed DCS-BIOS.** The catalogue is built on the user's
-  machine, so its addresses are correct for their DCS-BIOS. The only risk is a
-  signal the defaults use that their DCS-BIOS doesn't have. This is the case to
-  degrade gracefully. The defaults need to record the version they were
-  written against, and profiles carry no version today.
-- **Catalogue vs the installed DCS-BIOS.** This happens when DCS-BIOS updates
-  and the catalogue isn't rebuilt. Every address can be silently wrong, and no
-  per-row fallback can detect it. The catalogue already carries `bios_version`,
-  but nothing reads it. Compare it at startup with the installed version (the
-  one `build_catalogue.py` reads from `BIOSConfig.lua`) and refuse to run, or
-  rebuild, when they differ.
+The plan:
 
-To decide:
+1. ~~**The catalogue follows the installed DCS-BIOS.**~~ **Done 2026-09-19.**
+   The Python builder is ported to Rust (`wctrl-config::catalogue_build`) and
+   deleted; the output matched it byte for byte on all 50 modules, line
+   endings aside. The daemon, the editor and every CLI command that reads the
+   catalogue call `ensure` first, which rebuilds only when the version in
+   `BIOSConfig.lua` or the stamp of the `doc/json` files differs from the
+   catalogue's (see step 4 for why the stamp), so whichever app starts second
+   finds the work done. A lock file stops two builds at once, and a build goes
+   into `catalogue.building` and is renamed into place, so nothing reads half a
+   catalogue. `wctrl catalogue --rebuild` forces one; `--bios` points at an
+   install outside Saved Games and is remembered in `index.json`.
 
-- Defaults only, or user profiles too? Skipping a user's whole profile over one
-  signal is just as harsh.
-- A signal can still exist but have changed meaning, for example a selector
-  that gained a position. The name check won't catch that. Comparing
-  `max_value` against the version the defaults were written for would.
-- An `any_of` binding with one dead branch: drop the branch or the whole
-  binding?
-- The editor has to show inert rows as unavailable without removing them from
-  the file, so they come back once DCS-BIOS is updated. This follows the same
-  rule as the merge, which never drops rows.
+   The index now records where `CommonData` puts `VERSION` (address 1126, 24
+   characters), so at each mission start the daemon asks the DCS-BIOS that DCS
+   actually loaded which release it is. `Export.lua` loads DCS-BIOS fresh each
+   mission (hooks load once, at game launch), so the release on disk at mission
+   start is what runs. If the catalogue is behind the installed release, the
+   daemon rebuilds and carries on. If DCS runs a release that is not installed,
+   which is an update made mid-mission, it clears the panels and exits, and the
+   next mission starts it clean. **Not yet seen against live DCS:** the next
+   flight should show no version message at all.
+2. ~~**The nightly-only list.**~~ **Done 2026-09-19.**
+   `wctrl-config::nightly_only` compares what the defaults read in the local
+   nightly catalogue against a stable one; `wctrl nightly-only --stable <json>`
+   writes `data/nightly-only.json`; `python tools/nightly_only.py` fetches the
+   latest stable from GitHub and runs it. **This is a release step** and belongs
+   in the release process when it is written. Against stable v0.11.7 it lists 8
+   signals, all the F-14's `RIO_CDNU_LINE1` to `8`, which is the F-14BU CDNU.
+3. ~~**Bad conditions in the daemon.**~~ **Done 2026-09-19.** `UnknownSignal`
+   is gone from `problems()`: `Profile::flags` reports each condition or field
+   reading a signal the catalogue lacks or a value above its range, and
+   `Profile::runnable` is the copy the daemon runs (a flagged condition clears
+   its lamp's chain, a flagged `any_of` branch is dropped and the others kept,
+   a flagged field is left out). One grouped warning per profile, naming the
+   nightly where `data/nightly-only.json` knows. Checked against a catalogue
+   built from stable 0.11.7: the F-14BU default, skipped outright before, now
+   loads with only the 24 RIO CDNU fields blank, reported in two lines. The
+   defaults test now fails on any flag against the local nightly, so a typo in
+   a default is still caught.
+4. ~~**Bad conditions in the editor.**~~ **Done and verified 2026-09-19** in
+   the window against stable 0.11.7: the profiles page reported the rebuild,
+   and the F-14BU profile showed the CDNU fields flagged with the nightly
+   notice above them. The editor's check now returns each flag, placed by index,
+   with a sentence that follows what the row already says: why, where the
+   nightly-only list knows more ("Needs the DCS-BIOS nightly; stable 0.11.7
+   does not have it."), then what it costs ("The lamp stays off.", "This
+   alternative is left out; the others still work.", "The field stays
+   blank."). The window resolves each flag to the condition or field object it
+   names (`editor/src/flags.ts`) and shows it under that row with a hazard
+   mark, in the caution colour. A one-line notice sits at the top of the page
+   only when a flagged row is on the nightly-only list. Save was already
+   allowed, since flags are not problems.
+
+   Found while trying that (2026-09-19): the version alone cannot say the
+   catalogue matches. `tauri dev` restarted the editor while stable 0.11.7 was
+   being copied over the nightly, and it built from the new `BIOSConfig.lua`
+   beside the old nightly `doc/json`: a catalogue labelled 0.11.7 holding the
+   nightly's signals, which no later start would rebuild. So `index.json` now
+   also carries a `stamp` of every `doc/json` file's name, size and modified
+   time, taken before the build reads anything, and a catalogue is current
+   only when both match. And because no user will ever see a console, the
+   profiles page now says what the startup check found: up to date, built,
+   rebuilt and why, or DCS-BIOS not found and where it looked.
+5. ~~**Tests and docs.**~~ **Done 2026-09-19.** Tests: `flags.rs` (the chain,
+   branch and field rules), `catalogue_build.rs` (rebuild on a new version or
+   changed files, the lock, the swap), the editor's flag wording and the
+   fields the window places it by, and a CLI test that a profile reading a
+   missing signal loads with that row off. Docs: "Rows this DCS-BIOS cannot
+   back" in `CONFIG.md`, and the catalogue section of the README.
+
+**Next: the installer, the release process and a CI pipeline**, so the
+whole flow (first-run catalogue build, rebuild on a DCS-BIOS update, the
+nightly-only list) can be tested as a user would meet it. There is no release
+process yet: `VERSION.md` holds `1.0.0-alpha.001` and there are no workflows.
+The release process must run `tools/nightly_only.py`. Worth knowing for the
+installer: the editor finds `data` beside the executable once installed, and
+it writes the catalogue and profiles there, which Program Files does not allow.
+Leaning: read-only data stays with the program, and what is written (profiles,
+catalogue, its lock) goes to `Saved Games\wctrl`, found through the Saved
+Games known folder rather than assumed under `%USERPROFILE%`, since users move
+it. Chosen over Documents, which OneDrive often syncs, and that fights the
+catalogue's lock and rename. Decide there whether a dev run uses it too.
 
 **Then, in order:**
 

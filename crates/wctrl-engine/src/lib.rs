@@ -265,6 +265,16 @@ impl Engine {
         }
     }
 
+    /// Swap in a rebuilt catalogue, with the profiles checked against it.
+    ///
+    /// For DCS-BIOS changing under a running daemon: every address may have
+    /// moved, so the catalogue and the profiles resolved through it go
+    /// together, and the panels are resynced exactly as for a profile reload.
+    pub fn set_catalogue(&mut self, catalogue: Catalogue, profiles: Vec<Profile>) -> Batch {
+        self.catalogue = catalogue;
+        self.set_profiles(profiles)
+    }
+
     /// The mission has ended, but DCS is still running.
     ///
     /// Clears the panels and forgets the cockpit entirely, so the next mission

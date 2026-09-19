@@ -5,16 +5,21 @@
 
 # Generated signal catalogue - NOT committed on purpose.
 #
-# tools/build_catalogue.py builds this from the DCS-BIOS installed on the local
-# machine. It must not be shared, because:
+# The daemon and the editor build this from the DCS-BIOS installed on the local
+# machine, on startup, whenever the installed version differs from the one it
+# was built from. It must not be shared, because:
 #   * DCS-BIOS allocates addresses sequentially as controls are defined, so a
 #     catalogue built against a different release reads the wrong addresses,
 #     silently and with no runtime error
 #   * index.json records the absolute path it was generated from
-#   * it is ~11 MB and regenerates in about two seconds
+#   * it is ~11 MB and regenerates in about a second
 #
-# Rebuild with:  python tools/build_catalogue.py
+# Force a rebuild with:  cargo run --bin wctrl -- catalogue --rebuild
 /data/catalogue/
+# A build in progress, the one it replaces, and the lock between them.
+/data/catalogue.building/
+/data/catalogue.old/
+/data/catalogue.lock
 
 # Shipped profiles live in data/defaults and ARE tracked. They are the product:
 # a baseline every user starts from, and the reference for the format.

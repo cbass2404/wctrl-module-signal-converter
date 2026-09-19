@@ -259,12 +259,17 @@ fn learn_stop(learn: tauri::State<learn::State>) -> Reply<()> {
     Ok(())
 }
 
-/// What a check found: faults that stop the profile loading, and cautions
-/// about ones that load but probably do not do what was meant.
+/// What a check found: faults that stop the profile loading, cautions about
+/// ones that load but probably do not do what was meant, and rows this
+/// DCS-BIOS cannot back, which load and stay off.
 #[derive(serde::Serialize)]
 struct Findings {
     problems: Vec<String>,
     cautions: Vec<String>,
+    flags: Vec<check::FlagView>,
+    /// One line for the top of the page, only when a flagged row reads
+    /// something the DCS-BIOS nightly has.
+    notice: Option<String>,
 }
 
 /// Every reason the daemon would refuse this profile, for the window to show,
@@ -276,9 +281,12 @@ struct Findings {
 #[tauri::command]
 fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<Findings> {
     let paths = Paths::resolve();
+    let (flags, notice) = cache.flags(&paths, &profile);
     Ok(Findings {
         problems: cache.problems(&paths, &profile),
         cautions: cache.cautions(&paths, &profile),
+        flags,
+        notice,
     })
 }
 
@@ -326,11 +334,75 @@ fn delete_profile(file: String) -> Reply<()> {
         .map_err(|e| fail(&format!("deleting {file}"), e))
 }
 
+/// What the startup check on the catalogue found, for the profiles page.
+///
+/// Shown in the window because nobody installing this will ever see a
+/// console. Without it a catalogue that did not match, or a DCS-BIOS that
+/// was not found, would only show as lamps that do nothing.
+#[derive(Clone, serde::Serialize)]
+struct CatalogueStatus {
+    /// `"ok"`, `"caution"` or `"error"`: how loudly the window says it.
+    level: &'static str,
+    text: String,
+}
+
+/// Bring the catalogue up to date with the installed DCS-BIOS before the
+/// window reads any of it.
+///
+/// The daemon does the same on its own start. Whichever runs first rebuilds,
+/// and the other finds the catalogue already matching, so the two never build
+/// twice or read each other's half-written files.
+fn refresh_catalogue(paths: &Paths) -> CatalogueStatus {
+    use wctrl_config::catalogue_build::{self, Freshness};
+    let bios_json = catalogue_build::locate_bios_json(&paths.catalogue, None);
+    let fresh = catalogue_build::ensure(&bios_json, &paths.catalogue);
+    match &fresh {
+        Ok(f) => eprintln!("{f}"),
+        Err(e) => eprintln!("could not update the catalogue: {e}"),
+    }
+    let (level, text) = match fresh {
+        Ok(Freshness::Current { version }) => ("ok", format!("Signals from DCS-BIOS {version}, up to date.")),
+        Ok(Freshness::Built { was: None, now, .. }) => ("ok", format!("Signals built from DCS-BIOS {now}.")),
+        Ok(Freshness::Built { was: Some(was), now, .. }) if was == now => (
+            "ok",
+            format!("Signals rebuilt from DCS-BIOS {now}, whose files changed since the last build."),
+        ),
+        Ok(Freshness::Built { was: Some(was), now, .. }) => {
+            ("ok", format!("Signals rebuilt for DCS-BIOS {now}, replacing {was}."))
+        }
+        Ok(Freshness::NoBios { bios_json, have_catalogue: true }) => (
+            "caution",
+            format!(
+                "DCS-BIOS was not found at {}. Using the signals from the last time it was, which may not match what DCS runs.",
+                bios_json.display()
+            ),
+        ),
+        Ok(Freshness::NoBios { bios_json, have_catalogue: false }) => (
+            "error",
+            format!(
+                "DCS-BIOS was not found at {}, so there are no signals to assign. Install DCS-BIOS, then restart the editor.",
+                bios_json.display()
+            ),
+        ),
+        Err(e) => ("error", format!("The signals could not be updated from DCS-BIOS: {e}")),
+    };
+    CatalogueStatus { level, text }
+}
+
+/// What `refresh_catalogue` found when the editor started.
+#[tauri::command]
+fn catalogue_status(status: tauri::State<CatalogueStatus>) -> Reply<CatalogueStatus> {
+    Ok(status.inner().clone())
+}
+
 fn main() {
+    let status = refresh_catalogue(&Paths::resolve());
     tauri::Builder::default()
+        .manage(status)
         .manage(learn::State::default())
         .manage(check::Cache::default())
         .invoke_handler(tauri::generate_handler![
+            catalogue_status,
             devices,
             modules,
             profiles,

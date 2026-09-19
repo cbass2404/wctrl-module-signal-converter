@@ -1,6 +1,6 @@
 //! Catalogue, device inventory and profile types.
 //!
-//! The catalogue is generated from DCS-BIOS by `tools/build_catalogue.py`; the
+//! The catalogue is generated from DCS-BIOS by [`catalogue_build`]; the
 //! device inventory is `data/devices.json`. Profiles are authored by the user,
 //! keyed by LED rather than by signal  see docs/CONFIG.md.
 
@@ -9,8 +9,10 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod catalogue_build;
 pub mod display;
 pub mod mcdu_font;
+pub mod nightly_only;
 
 pub use display::{
     text_cells, Align, Cell, CellRange, Colour, ColourSource, Display, DisplayCatalogue, Grid,
@@ -25,8 +27,6 @@ pub enum Error {
     Json(serde_json::Error, String),
     #[error("no catalogue entry for aircraft {0:?}")]
     UnknownAircraft(String),
-    #[error("profile references unknown signal {0:?}")]
-    UnknownSignal(String),
     #[error("LED {0:?} has a condition with no signal chosen yet; pick one or delete the condition")]
     UnfinishedCondition(String),
     #[error("the field on {1} of display {0:?} has no signal chosen yet; pick one or remove the field")]
@@ -97,6 +97,10 @@ pub enum Error {
     FormatNotDrawn(String, String),
     #[error("{0:?} is a number; a format signal has to be characters, one per cell")]
     FormatNotText(String),
+    #[error("DCS-BIOS not found at {0}, so there is nothing to build a catalogue from")]
+    NoBios(PathBuf),
+    #[error("another wctrl is building the catalogue and has not finished; if none is running, delete {0}")]
+    CatalogueBusy(PathBuf),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -190,6 +194,10 @@ impl Module {
 pub struct Catalogue {
     modules: HashMap<String, Module>,
     by_aircraft: HashMap<String, String>,
+    /// The DCS-BIOS release this was built from, from `index.json`.
+    bios_version: Option<String>,
+    /// Where the running DCS-BIOS reports its release in the stream.
+    version_signal: Option<catalogue_build::VersionSignal>,
 }
 
 impl Catalogue {
@@ -209,6 +217,10 @@ impl Catalogue {
                     .insert(aircraft.clone(), module.module.clone());
             }
             cat.modules.insert(module.module.clone(), module);
+        }
+        if let Some(index) = catalogue_build::read_index(dir) {
+            cat.bios_version = index.bios_version;
+            cat.version_signal = index.version_signal;
         }
         Ok(cat)
     }
@@ -243,6 +255,18 @@ impl Catalogue {
 
     pub fn modules(&self) -> impl Iterator<Item = &Module> {
         self.modules.values()
+    }
+
+    /// The DCS-BIOS release this catalogue was built from. `None` for one
+    /// built in memory, or read from a folder with no index.
+    pub fn bios_version(&self) -> Option<&str> {
+        self.bios_version.as_deref()
+    }
+
+    /// Where DCS-BIOS reports its own release in the export stream, as an
+    /// address and a length, when the catalogue recorded it.
+    pub fn version_signal(&self) -> Option<(u16, u16)> {
+        self.version_signal.map(|v| (v.address, v.max_length))
     }
 }
 
@@ -424,6 +448,15 @@ pub enum OnWhen {
 }
 
 impl OnWhen {
+    /// The highest source value this condition tests or scales against.
+    pub fn highest(&self) -> Option<u32> {
+        match self {
+            OnWhen::Equals(v) | OnWhen::Gte(v) | OnWhen::Lte(v) => Some(*v),
+            OnWhen::In(vs) => vs.iter().max().copied(),
+            OnWhen::Between([lo, hi]) | OnWhen::Scale([lo, hi]) => Some((*lo).max(*hi)),
+        }
+    }
+
     /// Resolve a raw signal value to a lamp value in `0..=led_max`.
     pub fn resolve(&self, value: u32, on: u8, off: u8, led_max: u8) -> u8 {
         let lit = match self {
@@ -573,6 +606,75 @@ where
         }
     }
     Some(value)
+}
+
+/// Why a condition or display field cannot be trusted with the installed
+/// DCS-BIOS.
+///
+/// Either way the source is not what the profile was written for, and a lamp
+/// reading it could light when nobody meant it to. So the chain it belongs to
+/// is turned off rather than run on a guess.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Unsound {
+    /// The catalogue has no signal by that name.
+    Missing,
+    /// The condition tests or scales against `value`, above the signal's
+    /// highest, `max`.
+    AboveRange { value: u32, max: u32 },
+}
+
+/// Where in a profile a flagged source sits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "at", rename_all = "snake_case")]
+pub enum Place {
+    /// `bindings[binding].conditions[index]`: the whole lamp is off.
+    Condition { binding: usize, index: usize },
+    /// `bindings[binding].any_of[branch].conditions[index]`: that alternative
+    /// is dropped, and the others still work.
+    Branch { binding: usize, branch: usize, index: usize },
+    /// `readouts[readout]`, through its text, format or colours: the field is
+    /// left blank.
+    Field { readout: usize },
+}
+
+/// One condition or display field that reads something the installed
+/// DCS-BIOS does not give it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Flag {
+    pub device: String,
+    /// The lamp, or for a display field, its display and cells.
+    pub target: String,
+    pub place: Place,
+    pub source: String,
+    pub why: Unsound,
+}
+
+/// Whether one condition can be trusted. Unfinished conditions, with no
+/// signal chosen, are `problems` to finish rather than flags.
+fn unsound(module: &Module, c: &Condition) -> Option<Unsound> {
+    if c.source.is_empty() {
+        return None;
+    }
+    let Some(signal) = module.signal(&c.source) else {
+        return Some(Unsound::Missing);
+    };
+    let output = signal.primary()?;
+    if output.r#type != "integer" {
+        return None;
+    }
+    let max = output.max_value?;
+    let value = c.on_when.highest()?;
+    (value > max).then_some(Unsound::AboveRange { value, max })
+}
+
+/// Every source a display field reads that this module lacks.
+fn missing_in_field<'a>(module: &Module, r: &'a Readout) -> Vec<&'a str> {
+    std::iter::once(r.source.as_str())
+        .chain(r.format.as_deref())
+        .chain(r.colours.as_ref().map(|c| c.source.as_str()))
+        .filter(|s| !s.is_empty() && module.signal(s).is_none())
+        .collect()
 }
 
 /// How a lamp's alternatives combine into one value.
@@ -878,6 +980,22 @@ impl Profile {
         }
     }
 
+    /// Every signal this profile names, once each: in lamp conditions, and in
+    /// display fields as the text, its format and its colours. Unfinished
+    /// conditions and fields, which name nothing yet, are left out.
+    pub fn signals_read(&self) -> Vec<&str> {
+        let lamps = self.bindings.iter().flat_map(|b| b.sources());
+        let fields = self.readouts.iter().flat_map(|r| {
+            std::iter::once(r.source.as_str())
+                .chain(r.format.as_deref())
+                .chain(r.colours.as_ref().map(|c| c.source.as_str()))
+        });
+        let mut out: Vec<&str> = lamps.chain(fields).filter(|s| !s.is_empty()).collect();
+        out.sort_unstable();
+        out.dedup();
+        out
+    }
+
     /// Resolve one binding, following a mirror to the lamp it copies.
     ///
     /// The mirrored value is taken as-is and then clamped to what *this* lamp
@@ -1016,9 +1134,10 @@ impl Profile {
                         unfinished = true;
                         out.push(Error::UnfinishedCondition(b.led.clone()));
                     }
-                } else if module.signal(source).is_none() {
-                    out.push(Error::UnknownSignal(source.to_string()));
                 }
+                // A signal this DCS-BIOS lacks is not a fault in the profile,
+                // which may be written for another release: `flags` reports it
+                // and `runnable` turns off what depends on it.
             }
             let Some(device) = devices.device(&b.device) else {
                 out.push(Error::UnknownLed(b.led.clone(), b.device.clone()));
@@ -1040,6 +1159,83 @@ impl Profile {
         out
     }
 
+    /// Every condition and display field that reads what this DCS-BIOS does
+    /// not give it: a signal it lacks, or a value above the signal's range.
+    ///
+    /// Not a reason to refuse the profile. It may be written for another
+    /// release, and everything else in it still works. [`runnable`] is what
+    /// runs instead, and this is what to tell the user about it.
+    ///
+    /// [`runnable`]: Self::runnable
+    pub fn flags(&self, module: &Module) -> Vec<Flag> {
+        let mut out = Vec::new();
+        for (bi, b) in self.bindings.iter().enumerate() {
+            let flag = |place, c: &Condition, why| Flag {
+                device: b.device.clone(),
+                target: b.led.clone(),
+                place,
+                source: c.source.clone(),
+                why,
+            };
+            for (ci, c) in b.conditions.iter().enumerate() {
+                if let Some(why) = unsound(module, c) {
+                    out.push(flag(Place::Condition { binding: bi, index: ci }, c, why));
+                }
+            }
+            for (ri, branch) in b.any_of.iter().enumerate() {
+                for (ci, c) in branch.conditions.iter().enumerate() {
+                    if let Some(why) = unsound(module, c) {
+                        let place = Place::Branch { binding: bi, branch: ri, index: ci };
+                        out.push(flag(place, c, why));
+                    }
+                }
+            }
+        }
+        for (ri, r) in self.readouts.iter().enumerate() {
+            for source in missing_in_field(module, r) {
+                out.push(Flag {
+                    device: r.device.clone(),
+                    target: format!("{} cells {}", r.display, r.cells),
+                    place: Place::Field { readout: ri },
+                    source: source.to_string(),
+                    why: Unsound::Missing,
+                });
+            }
+        }
+        out
+    }
+
+    /// The profile as it can safely run on this DCS-BIOS.
+    ///
+    /// A flagged condition takes its whole AND chain with it: running the rest
+    /// of the chain without it could light the lamp under circumstances the
+    /// chain was written to exclude. So a lamp's own conditions are cleared,
+    /// leaving it unset and swept dark, and in an `any_of` only the branch
+    /// holding the flag goes, since the other alternatives stand on their own.
+    /// A display field reading a missing signal is left out, so its cells
+    /// stay blank.
+    ///
+    /// Only this copy changes. The file keeps every row, so they work again
+    /// once the source is fixed, the same rule the merge follows.
+    pub fn runnable(&self, module: &Module) -> Profile {
+        let bad = |conditions: &[Condition]| conditions.iter().any(|c| unsound(module, c).is_some());
+        let mut p = self.clone();
+        for b in &mut p.bindings {
+            if bad(&b.conditions) {
+                b.conditions.clear();
+            }
+            if !b.any_of.is_empty() {
+                b.any_of.retain(|branch| !bad(&branch.conditions));
+                if b.any_of.is_empty() {
+                    // Nothing left to pick between.
+                    b.pick = Pick::Brightest;
+                }
+            }
+        }
+        p.readouts.retain(|r| missing_in_field(module, r).is_empty());
+        p
+    }
+
     /// Bindings and readouts that will never run, because their device is
     /// disabled. Not an error: turning a panel off should not mean deleting
     /// the work of configuring it. But silence would be a trap, so the caller
@@ -1051,7 +1247,7 @@ impl Profile {
             let fields = self.readouts.iter().filter(|r| &r.device == device).count();
             if lamps + fields > 0 {
                 out.push(format!(
-                    "{device} is disabled in this profile, so {lamps} lamp                      binding(s) and {fields} display field(s) on it do nothing"
+                    "{device} is disabled in this profile, so {lamps} lamp binding(s) and {fields} display field(s) on it do nothing"
                 ));
             }
         }
@@ -1181,8 +1377,8 @@ impl Profile {
                 out.push(Error::UnfinishedField(r.display.clone(), r.cells.to_string()));
                 continue;
             }
+            // Flagged rather than refused, as for a lamp condition.
             let Some(output) = module.signal(&r.source).and_then(|s| s.primary()) else {
-                out.push(Error::UnknownSignal(r.source.clone()));
                 continue;
             };
             // A needle reports a position, not a quantity, and nothing in the
@@ -1201,20 +1397,18 @@ impl Profile {
                 if !display.draws_inverse() {
                     out.push(Error::FormatNotDrawn(r.display.clone(), r.cells.to_string()));
                 }
-                match module.signal(format).and_then(|s| s.primary()) {
-                    None => out.push(Error::UnknownSignal(format.clone())),
-                    Some(o) if o.r#type != "string" => out.push(Error::FormatNotText(format.clone())),
-                    Some(_) => {}
+                if let Some(o) = module.signal(format).and_then(|s| s.primary()) {
+                    if o.r#type != "string" {
+                        out.push(Error::FormatNotText(format.clone()));
+                    }
                 }
             }
 
             if let Some(colours) = &r.colours {
-                match module.signal(&colours.source).and_then(|s| s.primary()) {
-                    None => out.push(Error::UnknownSignal(colours.source.clone())),
-                    Some(o) if o.r#type != "string" => {
-                        out.push(Error::FormatNotText(colours.source.clone()))
+                if let Some(o) = module.signal(&colours.source).and_then(|s| s.primary()) {
+                    if o.r#type != "string" {
+                        out.push(Error::FormatNotText(colours.source.clone()));
                     }
-                    Some(_) => {}
                 }
                 for code in colours.codes.keys() {
                     if code.chars().count() != 1 {

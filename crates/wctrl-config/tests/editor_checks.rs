@@ -71,8 +71,8 @@ fn every_fault_is_reported_not_just_the_first() {
     // and is handed the next, has been made to do the work three times.
     let p = profile(
         r#""bindings": [
-            {"device": "TAKEOFF_PLANEL_2", "led": "Backlight", "off": 0,
-             "conditions": [{"source": "NOT_A_SIGNAL", "on_when": {"equals": 1}}]},
+            {"device": "TAKEOFF_PLANEL_2", "led": "NOT_A_LAMP", "off": 0,
+             "conditions": [{"source": "GEAR", "on_when": {"equals": 1}}]},
             {"device": "TAKEOFF_PLANEL_2", "led": "SL", "off": 0, "always": true,
              "conditions": [{"source": "GEAR", "on_when": {"equals": 1}}]},
             {"device": "TAKEOFF_PLANEL_2", "led": "Master_Caution", "off": 0, "on": 200,
@@ -81,7 +81,7 @@ fn every_fault_is_reported_not_just_the_first() {
     );
     let problems = found(&p);
     assert_eq!(problems.len(), 3, "{problems:?}");
-    assert!(problems.iter().any(|m| m.contains("NOT_A_SIGNAL")), "{problems:?}");
+    assert!(problems.iter().any(|m| m.contains("NOT_A_LAMP")), "{problems:?}");
     assert!(problems.iter().any(|m| m.contains("SL")), "{problems:?}");
     assert!(problems.iter().any(|m| m.contains("200")), "{problems:?}");
 }
@@ -93,12 +93,23 @@ fn validate_still_stops_at_the_first_one() {
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
     let p = profile(
         r#""bindings": [
-            {"device": "TAKEOFF_PLANEL_2", "led": "Backlight", "off": 0,
-             "conditions": [{"source": "NOT_A_SIGNAL", "on_when": {"equals": 1}}]}
+            {"device": "TAKEOFF_PLANEL_2", "led": "NOT_A_LAMP", "off": 0,
+             "conditions": [{"source": "GEAR", "on_when": {"equals": 1}}]}
         ]"#,
     );
     p.validate(&module(), &devices, &displays)
         .expect_err("a bad profile is still an error");
+
+    // A signal this DCS-BIOS lacks is not one: the profile loads, flagged.
+    let other_release = profile(
+        r#""bindings": [
+            {"device": "TAKEOFF_PLANEL_2", "led": "Backlight", "off": 0,
+             "conditions": [{"source": "NOT_A_SIGNAL", "on_when": {"equals": 1}}]}
+        ]"#,
+    );
+    other_release
+        .validate(&module(), &devices, &displays)
+        .expect("a missing signal flags the row rather than refusing the profile");
 
     let clean = profile(
         r#""bindings": [

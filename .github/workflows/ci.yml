@@ -7,10 +7,19 @@
 
 name: CI
 
+# Prose only is not tested: README.md and docs/ feed no build. Other .md files
+# do, so they are not listed: VERSION.md is the version, and
+# THIRD_PARTY_NOTICES.md ships in the installer.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - README.md
+      - docs/**
   pull_request:
+    paths-ignore:
+      - README.md
+      - docs/**
   workflow_call:
     inputs:
       build_installer:

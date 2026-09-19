@@ -10,6 +10,7 @@
 mod check;
 mod claims;
 mod learn;
+mod share;
 mod update;
 mod view;
 
@@ -411,6 +412,7 @@ fn catalogue_status(status: tauri::State<CatalogueStatus>) -> Reply<CatalogueSta
 fn main() {
     let status = refresh_catalogue(&Paths::resolve());
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(status)
         .manage(learn::State::default())
         .manage(check::Cache::default())
@@ -429,6 +431,9 @@ fn main() {
             save_profile,
             reset_profile,
             delete_profile,
+            share::export_profile,
+            share::import_pick,
+            share::import_profile,
             learn_start,
             learn_poll,
             learn_again,

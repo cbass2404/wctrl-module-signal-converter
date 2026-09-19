@@ -7,6 +7,7 @@ import type {
   CatalogueStatus,
   Device,
   Findings,
+  ImportPreview,
   LearnReport,
   ModuleChoice,
   Profile,
@@ -48,6 +49,19 @@ export const deleteProfile = (file: string, giveTo: string | null) =>
   invoke<void>("delete_profile", { file, giveTo });
 export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });
+
+// Sharing. The backend runs the file dialogs; the window is allowed none.
+/** Where the profile was saved, or null if the dialog was cancelled. */
+export const exportProfile = (file: string) => invoke<string | null>("export_profile", { file });
+/** Asks for a file and checks it. Null if the dialog was cancelled; refused if it would not load. */
+export const importPick = () => invoke<ImportPreview | null>("import_pick");
+/**
+ * Write the picked profile under `name` for `aircraft`, which must be some of
+ * those it came with. Aircraft other profiles fly move to it. A profile left
+ * with none is deleted only if `remove` names it, which the user confirms first.
+ */
+export const importProfile = (path: string, name: string, aircraft: string[], remove: string[]) =>
+  invoke<string>("import_profile", { path, name, aircraft, delete: remove });
 
 // Learn mode. The only commands that touch the DCS-BIOS stream, and the only
 // ones that leave anything running in the backend between calls.

@@ -8,7 +8,8 @@
 //!
 //! What a move must not do is leave a profile claiming nothing, because a
 //! profile with no aircraft can never be flown and would sit in the list
-//! looking fine. That is refused before anything is written.
+//! looking fine. That is refused before anything is written, unless the user
+//! has confirmed deleting that profile, which only an import asks.
 
 use std::path::Path;
 
@@ -21,12 +22,14 @@ pub struct Release {
 }
 
 /// Every active profile that would give up one of `aircraft`, with its list
-/// already trimmed. Refused, naming each one, if any would be left empty.
-pub fn plan(active: &Path, aircraft: &[String]) -> Result<Vec<Release>, String> {
+/// already trimmed, and the files of those left empty. Refused, naming each
+/// one, if any would be left empty that `deletable` does not name.
+pub fn plan(active: &Path, aircraft: &[String], deletable: &[String]) -> Result<(Vec<Release>, Vec<String>), String> {
     let mut out = Vec::new();
+    let mut gone = Vec::new();
     let mut emptied = Vec::new();
     let Ok(entries) = std::fs::read_dir(active) else {
-        return Ok(out);
+        return Ok((out, gone));
     };
     for entry in entries.flatten() {
         let path = entry.path();
@@ -38,11 +41,15 @@ pub fn plan(active: &Path, aircraft: &[String]) -> Result<Vec<Release>, String> 
             continue;
         }
         profile.aircraft.retain(|a| !aircraft.contains(a));
+        let file = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
         if profile.aircraft.is_empty() {
-            emptied.push(profile.name.clone());
+            if deletable.contains(&file) {
+                gone.push(file);
+            } else {
+                emptied.push(profile.name.clone());
+            }
             continue;
         }
-        let file = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
         out.push(Release { file, profile });
     }
     if !emptied.is_empty() {
@@ -51,16 +58,27 @@ pub fn plan(active: &Path, aircraft: &[String]) -> Result<Vec<Release>, String> 
             emptied.join(", ")
         ));
     }
-    Ok(out)
+    Ok((out, gone))
 }
 
 /// Write `profile` as a new file named after it, then move its aircraft out of
 /// every profile that claimed them. Returns the new file name.
 ///
-/// The new file is written first. If a release then fails, the aircraft is
-/// claimed twice until the user fixes it, which the error says; the other
-/// order would drop the aircraft from its old profile with nowhere to go.
-pub fn write_new(active: &Path, mut profile: Profile) -> Result<String, String> {
+/// All or nothing. The new file is written first, so an aircraft always has a
+/// profile, and if anything after it fails, every file touched is put back as
+/// it was and the new one removed.
+pub fn write_new(active: &Path, profile: Profile) -> Result<String, String> {
+    write_new_deleting(active, profile, &[])
+}
+
+/// [`write_new`], deleting any of the files in `delete` that the move leaves
+/// with no aircraft. The user has confirmed each one; a profile left empty
+/// that is not named is still refused.
+///
+/// A shipped profile deleted this way stays deleted, because the new profile
+/// now claims every aircraft it had, and seeding brings a default back only
+/// for aircraft nothing claims.
+pub fn write_new_deleting(active: &Path, mut profile: Profile, delete: &[String]) -> Result<String, String> {
     profile.name = profile.name.trim().to_string();
     if profile.name.is_empty() {
         return Err("a profile needs a name".into());
@@ -78,16 +96,39 @@ pub fn write_new(active: &Path, mut profile: Profile) -> Result<String, String> 
         return Err(format!("{file} already exists. Give the profile another name."));
     }
 
-    let releases = plan(active, &profile.aircraft)?;
+    let (releases, gone) = plan(active, &profile.aircraft, delete)?;
+    // Everything this may change, as it is now, to put back on a failure.
+    let mut before = Vec::new();
+    for f in releases.iter().map(|r| &r.file).chain(&gone) {
+        let bytes = std::fs::read(active.join(f)).map_err(|e| format!("reading {f}: {e}"))?;
+        before.push((f.clone(), bytes));
+    }
     std::fs::create_dir_all(active).map_err(|e| format!("creating the profile folder: {e}"))?;
     profile.save(&path).map_err(|e| format!("writing {file}: {e}"))?;
-    for r in releases {
-        r.profile.save(&active.join(&r.file)).map_err(|e| {
-            format!(
-                "{file} was written, but {} could not give up its aircraft ({e}). Remove them from it by hand.",
-                r.file
-            )
-        })?;
+
+    let moved = || -> Result<(), String> {
+        for r in &releases {
+            r.profile
+                .save(&active.join(&r.file))
+                .map_err(|e| format!("{} could not give up its aircraft: {e}", r.file))?;
+        }
+        for g in &gone {
+            std::fs::remove_file(active.join(g)).map_err(|e| format!("{g} could not be deleted: {e}"))?;
+        }
+        Ok(())
+    };
+    if let Err(why) = moved() {
+        let _ = std::fs::remove_file(&path);
+        let unrestored: Vec<&str> = before
+            .iter()
+            .filter(|(f, bytes)| std::fs::write(active.join(f), bytes).is_err())
+            .map(|(f, _)| f.as_str())
+            .collect();
+        return Err(if unrestored.is_empty() {
+            format!("{why}. Nothing was changed.")
+        } else {
+            format!("{why}, and {} could not be put back as it was.", unrestored.join(", "))
+        });
     }
     Ok(file)
 }
@@ -151,7 +192,24 @@ pub fn delete_giving(profiles: &Profiles, file: &str, to: Option<&str>) -> Resul
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> std::path::PathBuf {
+    /// A folder of its own for one test, removed when the test ends, pass or
+    /// fail, so a run leaves nothing in the temp folder.
+    struct Scratch(std::path::PathBuf);
+
+    impl std::ops::Deref for Scratch {
+        type Target = std::path::Path;
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn scratch(name: &str) -> Scratch {
         let dir = std::env::temp_dir().join(format!(
             "dsc-claims-{name}-{}",
             std::time::SystemTime::now()
@@ -160,7 +218,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        dir
+        Scratch(dir)
     }
 
     fn profile(name: &str, aircraft: &[&str]) -> Profile {
@@ -198,6 +256,20 @@ mod tests {
     }
 
     #[test]
+    fn a_profile_left_empty_is_deleted_only_when_named() {
+        let dir = scratch("emptied");
+        profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-2.json")).unwrap();
+
+        let err = write_new_deleting(&dir, profile("Shared", &["A-10C_2"]), &["other.json".into()]).unwrap_err();
+        assert!(err.contains("A-10C II"), "{err}");
+        assert!(dir.join("a-10c-2.json").exists());
+
+        write_new_deleting(&dir, profile("Shared", &["A-10C_2"]), &["a-10c-2.json".into()]).unwrap();
+        assert!(!dir.join("a-10c-2.json").exists(), "the emptied profile went");
+        assert!(dir.join("shared.json").exists());
+    }
+
+    #[test]
     fn an_unclaimed_aircraft_touches_no_other_profile() {
         let dir = scratch("free");
         profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-2.json")).unwrap();
@@ -212,7 +284,7 @@ mod tests {
         let dir = scratch("give");
         profile("A-10C", &["A-10C"]).save(&dir.join("a-10c.json")).unwrap();
         profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-ii.json")).unwrap();
-        let profiles = Profiles::new(dir.join("none"), &dir);
+        let profiles = Profiles::new(dir.join("none"), &*dir);
 
         delete_giving(&profiles, "a-10c-ii.json", Some("a-10c.json")).unwrap();
         assert!(!dir.join("a-10c-ii.json").exists());
@@ -270,7 +342,7 @@ mod tests {
         let mut viper = profile("Viper", &["F-16C_50"]);
         viper.module = "F-16C_50".into();
         viper.save(&dir.join("viper.json")).unwrap();
-        let profiles = Profiles::new(dir.join("none"), &dir);
+        let profiles = Profiles::new(dir.join("none"), &*dir);
 
         let err = delete_giving(&profiles, "a-10c-ii.json", Some("viper.json")).unwrap_err();
         assert!(err.contains("Viper cannot fly A-10C_2"), "{err}");

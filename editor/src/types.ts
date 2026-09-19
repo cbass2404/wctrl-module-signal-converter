@@ -195,6 +195,21 @@ export interface Device {
   displays: DisplayInfo[];
 }
 
+/** A profile picked for import, before anything is written. */
+export interface ImportPreview {
+  /** Where it was picked from, handed back to `importProfile`. */
+  path: string;
+  name: string;
+  author: string;
+  module: string;
+  aircraft: string[];
+  bound: number;
+  total: number;
+  /** Rows reading something this DCS-BIOS cannot back. They load and stay off. */
+  flagged: number;
+  cautions: string[];
+}
+
 export interface ProfileSummary {
   file: string;
   name: string;

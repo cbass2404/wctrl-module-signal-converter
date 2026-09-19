@@ -19,6 +19,9 @@ import {
   openUpdate,
   resetProfile,
   deleteProfile,
+  exportProfile,
+  importPick,
+  importProfile,
   saveProfile,
   updateCheck,
 } from "./api";
@@ -27,7 +30,17 @@ import { confirmAction } from "./confirm";
 import { showFlags } from "./flags";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
-import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView, Update } from "./types";
+import type {
+  Binding,
+  Device,
+  ImportPreview,
+  Led,
+  ModuleChoice,
+  Profile,
+  ProfileSummary,
+  SignalView,
+  Update,
+} from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
 
@@ -118,6 +131,7 @@ async function showLibrary(): Promise<void> {
     el("div", { class: "spacer" }),
     filter,
     el("div", { class: "spacer" }),
+    el("button", { id: "import" }, "Import..."),
     el("button", { class: "primary", id: "new" }, "New profile"),
   );
   app.append(header);
@@ -142,6 +156,7 @@ async function showLibrary(): Promise<void> {
   }
 
   header.querySelector("#new")?.addEventListener("click", () => void showNewProfile());
+  header.querySelector("#import")?.addEventListener("click", () => void showImport());
 
   if (rows.length === 0) {
     app.append(
@@ -204,7 +219,9 @@ async function showLibrary(): Promise<void> {
     if (!row.error) {
       const copy = el("button", {}, "Copy to...");
       copy.addEventListener("click", () => void showCloneProfile(row));
-      actions.append(copy);
+      const share = el("button", {}, "Export...");
+      share.addEventListener("click", () => void exportOne(row));
+      actions.append(copy, share);
     }
     if (row.has_default) {
       const reset = el("button", { class: "danger" }, "Reset");
@@ -247,6 +264,180 @@ async function showLibrary(): Promise<void> {
     }
   });
   apply();
+}
+
+/** Save a copy of one profile where the user chooses, and say where it went. */
+async function exportOne(row: ProfileSummary): Promise<void> {
+  try {
+    const to = await exportProfile(row.file);
+    if (to === null) return;
+    app.querySelector("header")?.after(el("div", { class: "meta catalogue" }, `Exported ${row.name} to ${to}.`));
+  } catch (e) {
+    showError("Exporting the profile", e);
+  }
+}
+
+/**
+ * Import a profile someone shared.
+ *
+ * The backend asks for the file and refuses one that would not load here. The
+ * dialog then works like New profile's aircraft step: free aircraft start
+ * ticked, ones another profile flies start unticked with where they are. Taking
+ * one asks first. A profile that would be left with no aircraft is deleted, so
+ * that asks too, and saying no to it cancels the import outright.
+ */
+async function showImport(): Promise<void> {
+  let preview: ImportPreview | null;
+  let existing: ProfileSummary[];
+  try {
+    preview = await importPick();
+    if (preview === null) return;
+    existing = await listProfiles();
+  } catch (e) {
+    showError("Importing a profile", e);
+    return;
+  }
+  const picked: ImportPreview = preview;
+  const claimedBy = new Map<string, ProfileSummary>();
+  for (const p of existing) {
+    if (p.error) continue;
+    for (const a of p.aircraft) if (!claimedBy.has(a)) claimedBy.set(a, p);
+  }
+
+  const boxes: HTMLInputElement[] = [];
+  const list = el("div", { class: "checklist" });
+  for (const a of picked.aircraft) {
+    const owner = claimedBy.get(a);
+    const box = el("input", { type: "checkbox", value: a });
+    box.checked = owner === undefined;
+    boxes.push(box);
+    const row = el("label", {}, box, el("span", {}, a));
+    if (owner) row.append(el("span", { class: "meta" }, `in ${owner.name}`));
+    list.append(row);
+  }
+  const chosen = (): string[] => boxes.filter((b) => b.checked).map((b) => b.value);
+
+  const name = el("input", { type: "text", value: picked.name });
+  const moves = el("p", { class: "meta" });
+  const failed = el("p", { class: "bad" });
+  const make = el("button", { class: "primary" }, "Import");
+  const cancel = el("button", {}, "Cancel");
+
+  /** Each profile that would give up aircraft, and whether it would have none left. */
+  const takes = (): { from: ProfileSummary; taken: string[]; emptied: boolean }[] => {
+    const aircraft = chosen();
+    return existing
+      .filter((p) => !p.error)
+      .map((p) => {
+        const taken = p.aircraft.filter((a) => aircraft.includes(a));
+        return { from: p, taken, emptied: taken.length === p.aircraft.length };
+      })
+      .filter((t) => t.taken.length > 0);
+  };
+
+  const sync = (): void => {
+    const lines = takes().map((t) =>
+      t.emptied
+        ? `${t.taken.join(", ")} out of ${t.from.name}, which would then be deleted`
+        : `${t.taken.join(", ")} out of ${t.from.name}`,
+    );
+    moves.textContent = lines.length > 0 ? `Moves ${lines.join("; ")}.` : "";
+    if (chosen().length > 0 && name.value.trim() !== "") make.removeAttribute("disabled");
+    else make.setAttribute("disabled", "");
+  };
+  name.addEventListener("input", sync);
+  for (const b of boxes) b.addEventListener("change", sync);
+
+  const about = [`Reads ${picked.module}.`];
+  if (picked.author.trim() !== "") about.push(`Made by ${picked.author}.`);
+  about.push(`${picked.bound} of ${picked.total} lamps assigned.`);
+  const dialog = el(
+    "dialog",
+    { class: "picker" },
+    el("h2", {}, `Import ${picked.name}`),
+    el("p", { class: "meta" }, about.join(" ")),
+  );
+  // Neither stops the import. They are said here because the user is about
+  // to own the profile, and afterwards it looks like their own doing.
+  const notes = [...picked.cautions];
+  if (picked.flagged > 0) {
+    notes.unshift(
+      `${picked.flagged} ${picked.flagged === 1 ? "row reads a signal" : "rows read signals"} the DCS-BIOS installed here does not have, so ${picked.flagged === 1 ? "it stays" : "they stay"} off.`,
+    );
+  }
+  if (notes.length > 0) {
+    const box = el("div", { class: "cautions" });
+    for (const n of notes) box.append(el("div", { class: "caution" }, n));
+    dialog.append(box);
+  }
+  dialog.append(
+    el("p", { class: "meta" }, "Which aircraft is it for? These are the ones it was made for."),
+    list,
+    el("label", { class: "field" }, "Name", name),
+    moves,
+    failed,
+    el("div", { class: "actions" }, cancel, make),
+  );
+  app.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
+  sync();
+  name.select();
+
+  cancel.addEventListener("click", () => dialog.close());
+  make.addEventListener("click", () => {
+    void (async () => {
+      const plan = takes();
+      // Taking an aircraft from another profile changes what that one flies,
+      // so it is asked, not only listed.
+      if (plan.length > 0) {
+        const lines = plan.map((t) => `${t.taken.join(", ")} from ${t.from.name}`);
+        const take = await confirmAction(
+          `Take ${lines.join(" and ")}?
+
+` +
+            `${plan.length === 1 ? "That profile" : "Those profiles"} will no longer fly ` +
+            `${plan.reduce((n, t) => n + t.taken.length, 0) === 1 ? "it" : "them"}; ${name.value.trim()} will.`,
+          "Take",
+        );
+        if (!take) return;
+      }
+      // A profile with no aircraft can never fly, so it goes, but only if
+      // the user says so. No leaves nothing half done: the import is off.
+      const emptied = plan.filter((t) => t.emptied).map((t) => t.from);
+      if (emptied.length > 0) {
+        const names = emptied.map((p) => p.name).join(" and ");
+        const gone = await confirmAction(
+          `Delete ${names}?
+
+` +
+            `${emptied.length === 1 ? "It" : "They"} would be left with no aircraft. ` +
+            `The ${emptied.length === 1 ? "file is" : "files are"} removed and cannot be recovered.
+
+` +
+            `Cancel stops the import, and nothing is changed.`,
+          "Delete",
+        );
+        if (!gone) {
+          dialog.close();
+          return;
+        }
+      }
+      try {
+        const file = await importProfile(
+          picked.path,
+          name.value,
+          chosen(),
+          emptied.map((p) => p.file),
+        );
+        dialog.close();
+        await showProfile(file);
+      } catch (e) {
+        // Kept open, since the usual cause is a name already taken.
+        failed.textContent = e instanceof Error ? e.message : String(e);
+      }
+    })();
+  });
 }
 
 /** Reset discards the user's work, so it asks first and says exactly what it does. */

@@ -23,7 +23,7 @@ Aircraft: AH-64D_BLK_II                              Devices: PTO2, Orion II
   │ LED            │ Driven by                        │ When         │ Output │
   ├────────────────┼──────────────────────────────────┼──────────────┼────────┤
   │ Panel backlight│ PLT_INT_LIGHT_PRIMARY        ▾   │ scale        │ 0-255  │
-  │ A/A            │  none                      ▾   │              │        │
+  │ A/A            │ none                         ▾   │              │        │
   │ A/G            │ PLT_GROUND_OVERRIDE_BTN      ▾   │ = 1          │ 255    │
   └────────────────┴──────────────────────────────────┴──────────────┴────────┘
 ```
@@ -53,7 +53,10 @@ Aircraft: AH-64D_BLK_II                              Devices: PTO2, Orion II
       "device": "Orion_Throttle_Base_II",
       "led": "Backlight",
       "conditions": [
-        { "source": "PLT_INT_LIGHT_PRIMARY", "on_when": { "scale": [0, 65535] } },
+        {
+          "source": "PLT_INT_LIGHT_PRIMARY",
+          "on_when": { "scale": [0, 65535] },
+        },
       ],
     },
     {
@@ -194,7 +197,9 @@ resolves a zero source to zero, and a binding that resolves to zero takes its
 {
   "device": "TAKEOFF_PLANEL_2",
   "led": "FLAG",
-  "conditions": [{ "source": "LCP_CONSOLE", "on_when": { "scale": [0, 65535] } }],
+  "conditions": [
+    { "source": "LCP_CONSOLE", "on_when": { "scale": [0, 65535] } },
+  ],
   "off": 255,
 }
 ```
@@ -230,7 +235,12 @@ change; the point is that choosing a signal should usually be the only step.
 that lamp resolved to:
 
 ```jsonc
-{ "device": "TAKEOFF_PLANEL_2", "led": "FLAG", "same_as": "Backlight", "off": 255 }
+{
+  "device": "TAKEOFF_PLANEL_2",
+  "led": "FLAG",
+  "same_as": "Backlight",
+  "off": 255,
+}
 ```
 
 This is a link, not a copy. The PTO2 is the case it exists for: it carries three
@@ -408,6 +418,7 @@ is a separate, writable one, and it starts as a copy of `data/defaults`.
   purpose, so the F-14 and F-14BU, one module shipped as two, never take each
   other's aircraft, and "No aircraft", which rides on FC3, takes nothing and
   goes nowhere. An aircraft no default lists is grouped by its module.
+
 - **Rename** changes the name the list shows, never the file name. A name
   another profile already has is refused, ignoring case and surrounding space,
   since the name is the only thing that tells two profiles apart. Every path
@@ -598,16 +609,16 @@ whichever seat the player is actually in:
     {
       "conditions": [
         { "source": "SEAT_POSITION", "on_when": { "equals": 1 } },
-        { "source": "CPG_LIGHT_PANEL", "on_when": { "scale": [0, 65535] } }
-      ]
+        { "source": "CPG_LIGHT_PANEL", "on_when": { "scale": [0, 65535] } },
+      ],
     },
     {
       "conditions": [
         { "source": "SEAT_POSITION", "on_when": { "equals": 0 } },
-        { "source": "PLT_LIGHT_PANEL", "on_when": { "scale": [0, 65535] } }
-      ]
-    }
-  ]
+        { "source": "PLT_LIGHT_PANEL", "on_when": { "scale": [0, 65535] } },
+      ],
+    },
+  ],
 }
 ```
 
@@ -772,16 +783,17 @@ glyph bitmaps. `colour`, `small` and `colours` apply to a text grid only, and
 {
   "device": "MCDU_Captain",
   "display": "MCDU",
-  "cells": "313-334",           // row 14, one column in
+  "cells": "313-334", // row 14, one column in
   "source": "PLT_KU_DISPLAY",
   "seat": 0,
-  "colour": "green",            // white when left out
-  "small": false,               // the small font, for a CDU's labels
-  "replace": { "~": "█" },      // one character for one, inside the line
-  "colours": {                  // per character, where the module sends them
+  "colour": "green", // white when left out
+  "small": false, // the small font, for a CDU's labels
+  "replace": { "~": "█" }, // one character for one, inside the line
+  "colours": {
+    // per character, where the module sends them
     "source": "PLT_CDU_LINE1_COLOR",
-    "codes": { "g": "green", "p": "magenta" }
-  }
+    "codes": { "g": "green", "p": "magenta" },
+  },
 }
 ```
 
@@ -817,9 +829,9 @@ how a page that does not fill the screen gets an edge:
 {
   "device": "MCDU_Captain",
   "display": "MCDU",
-  "cells": "72-95",   // row 4, above the first CDU line
+  "cells": "72-95", // row 4, above the first CDU line
   "divider": true,
-  "colour": "green"
+  "colour": "green",
 }
 ```
 
@@ -835,7 +847,7 @@ new one starts on the colour the display's other fields agree on. Black is the
 screen's own background, so a rule drawn in it cannot be seen.
 
 **The rule is a blank cell at each end and an unbroken run of dashes between
-them**, ` ------- `. Spaced dashes were tried first and read as a dotted line on
+them**, `-------`. Spaced dashes were tried first and read as a dotted line on
 the glass rather than a rule. A run of fewer than three cells has no room for a
 dash between two margins and is refused. The editor shows the rule as the panel
 will draw it, asked of the same code that draws it.

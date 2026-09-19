@@ -1,9 +1,14 @@
 {
   "schema_version": 1,
-  "name": "FA-18E",
-  "author": "",
+  "name": "FA-18",
+  "author": "coryb",
   "profile_version": "0.1.0",
-  "aircraft": ["FA-18E"],
+  "aircraft": [
+    "EA-18G",
+    "FA-18C_hornet",
+    "FA-18E",
+    "FA-18F"
+  ],
   "module": "FA-18C_hornet",
   "bindings": [
     {
@@ -13,7 +18,10 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ]
@@ -25,7 +33,10 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ]
@@ -37,7 +48,10 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ]
@@ -49,22 +63,255 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ]
     },
     {
       "device": "CarrierAce_UFC",
+      "led": "LCDBacklight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight"
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Backlight",
       "conditions": [
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM2",
+      "conditions": []
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
@@ -73,7 +320,10 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ]
@@ -97,7 +347,10 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ],
@@ -136,7 +389,10 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ],
@@ -158,28 +414,16 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "SL",
-      "conditions": [
-        {
-          "source": "CONSOLES_DIMMER",
-          "on_when": {
-            "scale": [0, 65535]
-          }
-        }
-      ],
+      "conditions": [],
+      "same_as": "Backlight",
       "off": 255,
       "note": "Follows the console dimmer at night, and goes full bright when the console is off. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark console, which means daylight, would blank every lamp on the panel. Same daylight floor as FLAG."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "FLAG",
-      "conditions": [
-        {
-          "source": "CONSOLES_DIMMER",
-          "on_when": {
-            "scale": [0, 65535]
-          }
-        }
-      ],
+      "conditions": [],
+      "same_as": "Backlight",
       "off": 255,
       "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the console dimmer at night, and goes full bright when the console is off, because console off means daylight and a dim flag lamp is unreadable then. The daylight case is the off value: a scale of a zero source resolves to zero, and a binding that resolves to zero takes its off value."
     },
@@ -364,10 +608,21 @@
         {
           "source": "CONSOLES_DIMMER",
           "on_when": {
-            "scale": [0, 65535]
+            "scale": [
+              0,
+              65535
+            ]
           }
         }
       ]
+    },
+    {
+      "device": "ViperAce_ICP",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
   "readouts": [
@@ -376,7 +631,7 @@
       "display": "UFC1",
       "cells": "0",
       "source": "UFC_SCRATCHPAD_STRING_1_DISPLAY",
-      "note": "Two characters into one cell, looked up whole. The leading space selects the small-digit form, which is what the hardware was observed being sent."
+      "note": "Two characters into one cell. A digit keeps its leading space, which selects the small form the hardware was observed being sent. A letter has no spaced form, so ' G' falls back to 'G'."
     },
     {
       "device": "CarrierAce_UFC",
@@ -468,5 +723,8 @@
       "cells": "35",
       "source": "UFC_COMM2_DISPLAY"
     }
+  ],
+  "disabled_devices": [
+    "ViperAce_ICP"
   ]
 }

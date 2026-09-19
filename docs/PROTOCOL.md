@@ -129,13 +129,14 @@ SimAppPro saves a panel's dimmers to device flash. The offset differs per part
 and the layout is one byte per dimmer, in index order everywhere except the
 rudder pedals, which store theirs in slider order:
 
-| Part     | Offset  | Byte 0               | Byte 1         |
-| -------- | ------- | -------------------- | -------------- |
-| `0xbf05` | `0x114` | `Backlight`          | `SL`           |
-| `0xbed0` | `0x0d8` | `INST_PNL_Backlight` | `LCDBacklight` |
-| `0xbe0e` | `0x0c8` | `INST_PNL_Backlight` |                |
-| `0xbe0d` | `0x0c8` | `INST_PNL_Backlight` |                |
-| `0xbef0` | `0x0e8` | `Backlight_L`        | `Backlight_R`  |
+| Part     | Offset  | Byte 0               | Byte 1             | Byte 2         |
+| -------- | ------- | -------------------- | ------------------ | -------------- |
+| `0xbf05` | `0x114` | `Backlight`          | `SL`               |                |
+| `0xbed0` | `0x0d8` | `INST_PNL_Backlight` | `LCDBacklight`     |                |
+| `0xbe0e` | `0x0c8` | `INST_PNL_Backlight` |                    |                |
+| `0xbe0d` | `0x0c8` | `INST_PNL_Backlight` |                    |                |
+| `0xbef0` | `0x0e8` | `Backlight_L`        | `Backlight_R`      | `Logo`         |
+| `0xbb32` | `0x0d0` | `Backlight`          | `Screen Backlight` | `Marker Light` |
 
 ```text
 WRITE_CFG_DATA  offset 0x114  <- 00 de 00 00     after PTO2 SL = 222
@@ -145,6 +146,7 @@ WRITE_CFG_DATA  offset 0x0d8  <- d3 7b ff ff     after UFC panel = 211
 WRITE_CFG_DATA  offset 0x0c8  <- fb ff ff ff     after HUD panel = 251
 WRITE_CFG_DATA  offset 0x0c8  <- 89 ff ff ff     after MFD panel = 137
 WRITE_CFG_DATA  offset 0x0e8  <- 0b de 65 ff     after pedals L 11, R 222, logo 101
+WRITE_CFG_DATA  offset 0x0d0  <- 87 87 87 ff     after MCDU all three = 135
 ```
 
 **Never write these.** `WRITE_CFG_DATA` is persistent and is on the forbidden
@@ -190,7 +192,7 @@ id. Observed on this machine:
 | `0xbef0`           | Orion Combat Rudder Pedals Metal |
 | `0xbed0`           | CarrierAce UFC, the glass and its backlights |
 | `0xbe0e`           | CarrierAce HUD control panel     |
-| `0xbb32`           | MCDU Captain                     |
+| `0xbb32`           | MCDU, under every name           |
 
 A part id is not the USB product id: the Orion II enumerates under PID `0xbd64`
 as a composite device but answers as part `0xbe60`, with its handles as separate
@@ -350,6 +352,45 @@ which every shipped default does, and a user can still split them. It is left ou
 that owned it would overwrite L and R with whatever it wrote, depending on
 order.
 
+### MCDU Captain part `0xbb32`
+
+One part, `0xbb32`, under any of three names. Labels are SimAppPro's.
+
+**One MCDU has three identities, and each is its own PID**, as the MFD's do.
+SimAppPro renames it, and the panel drops off USB and comes back about three
+seconds later under the new name:
+
+| Name     | USB PID  | Config `0xcc`, byte 1 |
+| -------- | -------- | --------------------- |
+| CAPTAIN  | `0xbb36` | 0                     |
+| OBSERVER | `0xbb3a` | 1                     |
+| CO-PILOT | `0xbb3e` | 2                     |
+
+All three captured 2026-09-18 with the same serial and part under each, and
+CAPTAIN rechecked after the round trip. Byte 0 of the record was `01` every
+time; before the first rename byte 1 read `ff`, and the panel was CAPTAIN.
+Windows also remembers this serial under PID `0xbb32`, the part id, from before
+today. Which name or mode that was is unknown.
+
+| Index | LED              | Kind   |
+| ----- | ---------------- | ------ |
+| 0     | Backlight        | dimmer |
+| 1     | Screen Backlight | dimmer |
+| 2     | Marker Light     | dimmer |
+| 8     | Fail             | on/off |
+| 9     | FM               | on/off |
+| 10    | MCDU             | on/off |
+| 11    | MENU             | on/off |
+| 12    | FM1              | on/off |
+| 13    | IND              | on/off |
+| 14    | RDY              | on/off |
+| 15    | STATUS           | on/off |
+| 16    | FM2              | on/off |
+
+Captured 2026-09-18. Each dimmer was swept 0 to 255 to 0, then typed, and the
+nine indicators were switched on and back off in the order above, each only
+ever written 1 or 0. Indices 3 to 7 were never written.
+
 ## Driving a segment display
 
 `SET_LCDS` (`0x4c`) writes four bytes of a device-side bitmap. It is volatile,
@@ -488,13 +529,18 @@ The logical frame:
 
 ```text
 bytes 0..3    uint32  part id, 06 bf 00 00
-byte  4       cmd
-bytes 5..7    01 00 00, constant in every capture, meaning unknown
+bytes 4..7    uint32  function id: 0x102 write, 0x103 commit, 0x104 self-test
 bytes 8..11   uint32  host milliseconds clock
-byte  12      00, constant, meaning unknown
+byte  12      respond: 1 asks the device to answer
 bytes 13..16  uint32  payload length
 bytes 17..    payload
 ```
+
+This was first read as a one-byte `cmd` followed by a constant `01 00 00`.
+WwDevicesDotnet's notes on the same channel (see "Driving a text grid") show
+it is a 32-bit function id, and the names are SimAppPro's: `0x103` is
+`refreshLCD`. Several of these commands can share one stream and straddle
+reports; the device reassembles them.
 
 The clock is not checked for continuity: frames stamped from our own clock,
 starting near zero, were accepted straight after SimAppPro's.
@@ -514,6 +560,33 @@ two acks.
 Self-test values, matching SimAppPro's buttons in order: 1 ALL LCD ON, 2 ALL LCD
 OFF, 3 to 6 HALF LCD ON 1 to 4. These are stored in the firmware and need no
 framebuffer writes.
+
+**The MCDU uses the same frame.** SimAppPro's screen buttons for the MCDU
+Captain send exactly this logical frame, part id `32 bb 00 00`, cmd `0x04`,
+length 1, one byte of payload:
+
+```text
+32 bb 00 00 | 04 | 01 00 00 | ea 0f 01 00 | 00 | 01 00 00 00 | 0d
+```
+
+Its self-test values are 13 to 20 rather than 1 to 6, and its screen is color:
+
+| Value | Screen                                  |
+| ----- | --------------------------------------- |
+| 13    | white                                   |
+| 14    | black                                   |
+| 15    | red                                     |
+| 16    | green                                   |
+| 17    | blue                                    |
+| 18    | lime                                    |
+| 19    | purple                                  |
+| 20    | black with the WinWing logo, as at boot |
+
+Captured 2026-09-18, with the colors as seen on the panel. Each report drew the
+usual `f0 01 <nn>` ack. Whether `0x02` and `0x03` draw on the MCDU as they do on
+the ICP, and its framebuffer's size and pixel format, are not known yet:
+SimAppPro's device page sends only self-tests, so that needs a capture of a
+live module.
 
 ### The framebuffer
 
@@ -578,6 +651,64 @@ Seen during the test above, where the bar only appeared once the backlight was
 turned up. That dimmer is ordinary lamp state, and a profile has to own it, or
 a working DED looks dead.
 
+## Driving a text grid
+
+The MCDU's screen is driven as a grid of characters the panel draws itself,
+from a font it has been sent. None of this comes from a SimAppPro capture:
+SimAppPro never drives the MCDU from DCS. It is ported from WwDevicesDotnet
+(BSD-3-Clause, Andrew Whewell and Laurent André,
+<https://github.com/landre-cerp/WwDevicesDotnet>, `Winctrl/README.md`), which
+worked it out from SimAppPro's font upload, and it was **confirmed on our own
+panel 2026-09-18** with `wctrl mcdu-test`: the corners of the 24x14 grid, ten
+colours, the large font and an inverse cell all came out as sent.
+
+**Setup, on the pixel channel `0xf0`, as structured commands:**
+
+| Function               | Id      | Payload                                 |
+| ---------------------- | ------- | --------------------------------------- |
+| clearFeatureInfo       | `0x11e` | none                                    |
+| setScreenInfo          | `0x118` | `x u16, y u16, rows u16, columns u16`   |
+| setFeatureInfo         | `0x119` | `feature u16, value u32, format id u64` |
+| setCompositeIndexBytes | `0x11a` | `02`                                    |
+| buildFormatTable       | `0x11c` | none                                    |
+
+The feature declarations say what a cell can look like: font slot 5 or 6,
+eleven foreground colours, eleven background colours, and a first/last-cell
+marker. The device indexes the product of them, and a cell names its look by
+that index: `fg * 33 + bg * 3`, plus 363 for the small font, plus 1 on the
+first cell of the screen and 2 on the last. Our declarations are byte for byte
+the ones inside SimAppPro's own upload (`crates/wctrl-hid`, test
+`the_format_table_is_the_one_simapppro_declares`).
+
+**The screen, on report `0xf2`:** every cell in order, each its format index
+**low byte first** (WwDevicesDotnet's README says big-endian; its code and our
+panel say otherwise) followed by the character in UTF-8. The stream runs on
+across 64-byte reports after the `f2` report id, and the last is zero padded.
+A cell cannot be written alone: every write is the whole screen. A 24x14
+screen of plain characters is 16 reports. Sent too fast, screens can garble,
+so 40 ms follows each one.
+
+**The font is not the panel's.** Glyphs live in RAM and are lost on a power
+cycle, and until a font is sent the grid draws nothing. The upload is
+SimAppPro's, replayed from WwDevicesDotnet's packet map with the glyph bytes
+swapped in (`data/mcdu`, `crates/wctrl-config/src/mcdu_font.rs`): 603 reports
+of `0x106` downLoadFontHead for slots 5 and 6, `0x107` downLoadFontData,
+`0x105` getLastErrorString after each chunk, its own format table, and one
+`SET_LEDX` of the screen brightness. It sends nothing persistent. It resets
+the grid to 24x14, so the grid is declared again after it.
+
+**A font is an aircraft's, not a character set.** The A-10C font, from
+WCtrlDcsBiosBridge (MIT), draws the A-10C CDU's own symbols in slots named for
+other characters: `Δ` is an up-down arrow, `⬡` the cursor block, and `%` a
+question mark. It has no lower case and no `#`. So which font a screen needs
+is decided by the aircraft, recorded in `data/displays/mcdu.json` as
+`native_fonts`, and a profile swaps DCS-BIOS's stand-in characters for the
+slots it wants with `replace`.
+
+**DCS-BIOS sends those stand-ins as single bytes above ASCII**, Latin-1, not
+UTF-8: the A-10C module's `cdu_replace_map` makes its arrows `0xBB` and `0xAB`.
+A display field is therefore read one byte per character.
+
 ## Capturing SimAppPro's own traffic
 
 1. Set `"HIDLog": true` in `%APPDATA%\SimAppPro\config.json` (read at startup only).
@@ -599,10 +730,13 @@ The 64-byte channel is logged separately, as `Hiddata: send` and
 `Hiddata: accpet` (sic) lines, with the report header removed. See "Driving a
 pixel display".
 
-**The log is capped at about 24 MB and then stops.** With six panels polling,
-that is roughly 25 seconds of traffic. On 2026-09-18 a five-minute capture
-kept only 13:05:42 to 13:06:08. Keep captures short, or restart SimAppPro just
-before the part that matters.
+**The log wraps, so a long capture keeps only its tail.** On 2026-09-18 a
+five-minute capture kept only 13:05:42 to 13:06:08, and a later one with the
+MCDU connected kept only its last 49 seconds out of about 43 MB. When the file
+fills, SimAppPro truncates it in place and carries on, and almost all of it is
+`InputData`. Run `python tools/tail_wwthid.py <out>` for the whole capture: it
+follows the log, survives the truncation, and keeps every non-`InputData` line.
+It stops after an hour, or `--seconds N`.
 
 The setting survived a SimAppPro update on 2026-09-16, but that is not guaranteed;
 re-check it after any update.
@@ -649,11 +783,9 @@ not alias the source: DCS-BIOS exports at 30 Hz, comfortably above a 2-4 Hz lamp
 1. Are LEDs on parts behind a throttle base addressed via the base's part id or
    their own?
 2. What does `SET_LEDX_WITH_DURATION` (`0x4b`) take as arguments?
-3. The MCDU Captain (`0xbb36`) enumerates with 64-byte reports like the ICP,
-   and one frame it sent, `f0 00 c6 12 | 32 cb 00 00 05 01 ...`, has the same
-   header and logical frame layout. Its screen is presumably on the same
-   channel. Unconfirmed, and deliberately left so: this project drives only
-   the MCDU's lamps (see `STATUS.md`).
+3. The MCDU Captain takes the ICP's pixel-display frame (see "Driving a pixel
+   display"), but only self-tests have been seen. How it draws, and its
+   framebuffer's size and pixel format, need a capture of a live module.
 4. The ICP's constant header bytes (`01 00 00` after the command, `00` before
    the length) and whether a write can exceed 270 bytes.
 

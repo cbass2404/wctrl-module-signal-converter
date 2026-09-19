@@ -259,3 +259,60 @@ fn a_string_the_catalogue_could_not_size_is_left_alone() {
     watcher.ingest(&[w(400, 0x4241)], t0 + Duration::from_secs(1));
     assert!(watcher.changes().is_empty());
 }
+
+#[test]
+fn a_signal_shifted_past_its_word_is_watched_without_panicking() {
+    // DCS-BIOS ships entries like this: the Mi-24P's wiper selectors are
+    // mask 0, shift 16. Reading one took the listener thread down with it, and
+    // with it the editor, the moment the Hind's stream arrived.
+    let module: Module = serde_json::from_str(
+        r#"{
+          "module": "TEST_SHIFT",
+          "aircraft": ["TEST_SHIFT"],
+          "signals": [
+            {
+              "id": "PLT_WIPER_OFF",
+              "control_type": "selector",
+              "outputs": [{"address": 100, "mask": 0, "shift": 16, "max_value": 0, "max_length": null}]
+            }
+          ]
+        }"#,
+    )
+    .expect("the fixture module parses");
+    let t0 = Instant::now();
+    let mut watcher = Watcher::new(&module, t0);
+    watcher.ingest(&[w(100, 0)], t0);
+    watcher.ingest(&[w(100, 0xffff)], t0 + Duration::from_secs(1));
+    // It can never read anything but 0, so it never moves.
+    assert!(watcher.changes().is_empty());
+}
+
+/// Every module in the local catalogue, fed a stream that moves every word it
+/// publishes. Learn mode reads every signal a module has, so one bad entry
+/// anywhere in it is enough to crash the editor. Skipped where the catalogue
+/// has not been generated.
+#[test]
+fn every_catalogue_module_survives_being_watched() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/catalogue");
+    let Ok(catalogue) = wctrl_config::Catalogue::load_dir(&dir) else {
+        return;
+    };
+    let t0 = Instant::now();
+    for module in catalogue.modules() {
+        let addresses: Vec<u16> = module
+            .signals
+            .iter()
+            .flat_map(|s| &s.outputs)
+            .flat_map(|o| {
+                let words = o.max_length.map_or(1, |len| len.div_ceil(2).max(1));
+                (0..words).map(move |i| o.address.wrapping_add(i * 2))
+            })
+            .collect();
+        let mut watcher = Watcher::new(module, t0);
+        for (step, value) in [0u16, 0xffff, 0x5a5a, 0].into_iter().enumerate() {
+            let writes: Vec<BiosWrite> = addresses.iter().map(|&a| w(a, value)).collect();
+            watcher.ingest(&writes, t0 + Duration::from_secs(step as u64));
+        }
+        let _ = (watcher.changes(), watcher.aircraft(), watcher.ready());
+    }
+}

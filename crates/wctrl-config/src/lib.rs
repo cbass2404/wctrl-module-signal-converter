@@ -10,10 +10,11 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub mod display;
+pub mod mcdu_font;
 
 pub use display::{
-    Align, Cell, CellRange, Display, DisplayCatalogue, Grid, Readout, Region, Screen, Transport,
-    SEAT_SIGNAL,
+    text_cells, Align, Cell, CellRange, Colour, ColourSource, Display, DisplayCatalogue, Grid,
+    Readout, Region, Screen, TextCell, TextGrid, Transport, SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -46,6 +47,8 @@ pub enum Error {
     ConditionsWithAnyOf(String),
     #[error("LED {0:?} has an alternative in any_of with no conditions in it")]
     EmptyBranch(String),
+    #[error("LED {0:?} picks between alternatives but has none; pick applies only to any_of")]
+    PickWithoutAlternatives(String),
     #[error("LED {0:?} mirrors {1:?}, which is not a lamp on device {2:?}")]
     UnknownMirror(String, String, String),
     #[error("LED {0:?} mirrors {1:?}, which mirrors something itself; a mirror must point at a lamp that reads signals")]
@@ -56,6 +59,18 @@ pub enum Error {
     MirrorNotDimmable(String, String),
     #[error("display {0:?} is malformed: {1}")]
     BadDisplay(String, String),
+    #[error("MCDU font {0:?} does not fit its upload: {1}")]
+    BadFont(String, String),
+    #[error("{0:?} has no font for {1}: its screen follows the aircraft's own CDU, and this one has none that DCS-BIOS exports")]
+    NoNativeFont(String, String),
+    #[error("{0:?} is not a character the font {1} draws, but cells {2} are told to put it there")]
+    NotInFont(char, String, String),
+    #[error("a replacement swaps one character for one character; {0:?} to {1:?} is not that")]
+    ReplaceNotOneChar(String, String),
+    #[error("a colour code is one character; {0:?} is not")]
+    ColourCodeNotOneChar(String),
+    #[error("cells {1} of display {0:?} are given a colour or size, which only a text grid draws")]
+    StyleNotDrawn(String, String),
     #[error("display {0:?} has no cell {1}")]
     NoSuchCell(String, usize),
     #[error("{0:?} cannot be drawn on a {1} cell of display {2:?}")]
@@ -271,13 +286,14 @@ pub struct Led {
     /// dimmer that governs nothing, such as a backlight.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub governs: Vec<String>,
-    /// This lamp lights its part's display, and the engine drives it with the
-    /// display rather than from a profile: full while a profile puts fields on
-    /// that display, 0 when the display is blanked.
+    /// This lamp lights its part's display. A profile binds it like any other
+    /// lamp, but the binding only counts while the profile puts fields on that
+    /// display: with nothing drawn the screen is held at 0, so it is black
+    /// rather than lit and empty. A bound value not yet known is taken as full.
     ///
-    /// The ICP's DED backlight is the case. At 0 a correctly drawn page is
-    /// invisible, so it is not a choice worth offering, and it is hidden from
-    /// profiles and the editor rather than left as a way to lose the screen.
+    /// The ICP's DED backlight and the MCDU's screen are the cases. Both start
+    /// held at full ([`Binding::fresh`]), because at 0 a correctly drawn page
+    /// is invisible.
     #[serde(default, skip_serializing_if = "is_false")]
     pub lights_display: bool,
     /// A panel backlight: legends or a lit feature, not an indicator and not a
@@ -343,19 +359,14 @@ impl DeviceSpec {
     /// both the UFC part and the HUD part, and the second was simply
     /// unreachable, with no error anywhere. `every_lamp_name_is_unique_within_its_device`
     /// keeps that from happening again.
-    ///
-    /// A lamp that [lights a display](Led::lights_display) is not found here,
-    /// because no profile may bind it.
     pub fn led(&self, name: &str) -> Option<(&Part, &Led)> {
         self.leds().find(|(_, l)| l.name == name)
     }
 
-    /// Every LED a profile can bind, with its owning part. Leaves out the lamps
-    /// that light a display, which the engine drives itself.
+    /// Every LED a profile can bind, with its owning part, including the lamps
+    /// that light a display.
     pub fn leds(&self) -> impl Iterator<Item = (&Part, &Led)> {
-        self.parts
-            .iter()
-            .flat_map(|p| p.leds.iter().filter(|l| !l.lights_display).map(move |l| (p, l)))
+        self.parts.iter().flat_map(|p| p.leds.iter().map(move |l| (p, l)))
     }
 
     /// The lamps that light a display, with their owning part.
@@ -488,6 +499,9 @@ pub struct Binding {
     /// Mutually exclusive with `conditions` and with `always`.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub any_of: Vec<Branch>,
+    /// How the alternatives in `any_of` combine. See [`Pick`].
+    #[serde(default, skip_serializing_if = "Pick::is_brightest")]
+    pub pick: Pick,
     /// Mirror another lamp on the same device, by name.
     ///
     /// A link rather than a copy: change what the other lamp reads and this one
@@ -543,8 +557,15 @@ fn all_of<F>(conditions: &[Condition], on: u8, led_max: u8, read: &mut F) -> Opt
 where
     F: FnMut(&str) -> Option<u32>,
 {
+    // Tests before scales. A test (a seat, a power switch) is often zero and
+    // ends the loop, while a scale is only zero with its knob fully off, so a
+    // gated branch never reads the source behind the gate. The dimmest-value
+    // rule gives the same answer in any order; only the reads change, and with
+    // them whether an unseen source behind a closed gate can hold the lamp.
+    let is_scale = |c: &&Condition| matches!(c.on_when, OnWhen::Scale(_));
+    let tests = conditions.iter().filter(|c| !is_scale(c));
     let mut value = u8::MAX;
-    for condition in conditions {
+    for condition in tests.chain(conditions.iter().filter(is_scale)) {
         let raw = read(condition.source.as_str())?;
         value = value.min(condition.on_when.resolve(raw, on, 0, led_max));
         if value == 0 {
@@ -552,6 +573,35 @@ where
         }
     }
     Some(value)
+}
+
+/// How a lamp's alternatives combine into one value.
+///
+/// A general rule, not a per-aircraft one: it says nothing about what the
+/// signals are, only how their branches are chosen between.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Pick {
+    /// The brightest branch wins. Boolean OR for on/off tests, and for a
+    /// branch gated behind a seat test, the live seat supplies the value.
+    #[default]
+    Brightest,
+    /// The branch whose signals last changed value wins, falling back to the
+    /// brightest until one has.
+    ///
+    /// The case it exists for is a two-seat aircraft with a lighting knob per
+    /// seat and no signal saying which seat the player is in. Taking the
+    /// brightest would mean turning both knobs down to dim, and taking the
+    /// dimmest both up to brighten. The knob last turned is the one in the
+    /// player's hand; in multiplayer the other crew member can take it back by
+    /// turning theirs.
+    Latest,
+}
+
+impl Pick {
+    fn is_brightest(&self) -> bool {
+        *self == Pick::Brightest
+    }
 }
 
 /// One alternative within `any_of`: conditions that must all hold together.
@@ -569,6 +619,38 @@ pub struct Condition {
 }
 
 impl Binding {
+    /// The row a lamp starts with when a profile first meets it, in a stub or
+    /// in the merge that brings an old profile up to the hardware.
+    ///
+    /// Unassigned, except where unassigned means dark in a way the user cannot
+    /// trace. A gate at 0 hides every lamp beneath it, and a screen's lamp at 0
+    /// hides a correctly drawn page, so both start held at full. A gate also
+    /// carries its daylight floor, so switching it to follow a cockpit dimmer
+    /// later does not blank the panel by day.
+    pub fn fresh(device: &str, led: &Led) -> Self {
+        let gate = !led.governs.is_empty();
+        let held = gate || led.lights_display;
+        let note = if gate {
+            "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
+        } else if led.lights_display {
+            "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+        } else {
+            ""
+        };
+        Binding {
+            device: device.to_string(),
+            led: led.name.clone(),
+            conditions: Vec::new(),
+            always: held,
+            any_of: Vec::new(),
+            pick: Pick::default(),
+            same_as: None,
+            on: None,
+            off: if held { led.max_value() } else { 0 },
+            note: note.to_string(),
+        }
+    }
+
     /// A row that names a lamp but drives nothing.
     ///
     /// An always-on lamp is configured, not undecided, so it is not a
@@ -605,9 +687,22 @@ impl Binding {
     /// resolves to either `on` or zero, and it also lets a continuous source be
     /// gated: a scaled backlight behind a power switch yields the scaled value
     /// while the switch is on and zero while it is off.
-    pub fn resolve<F>(&self, led: &Led, mut read: F) -> Option<u8>
+    pub fn resolve<F>(&self, led: &Led, read: F) -> Option<u8>
     where
         F: FnMut(&str) -> Option<u32>,
+    {
+        self.resolve_with_moves(led, read, |_| None)
+    }
+
+    /// [`Binding::resolve`], told when each signal last changed value.
+    ///
+    /// `moved` answers with any number that grows with time, or `None` for a
+    /// signal that has not changed since it was first seen. Only
+    /// [`Pick::Latest`] asks it anything.
+    pub fn resolve_with_moves<F, M>(&self, led: &Led, mut read: F, mut moved: M) -> Option<u8>
+    where
+        F: FnMut(&str) -> Option<u32>,
+        M: FnMut(&str) -> Option<u64>,
     {
         let on = self.on.unwrap_or_else(|| led.on_value());
         let led_max = led.max_value();
@@ -621,15 +716,31 @@ impl Binding {
         // dimmest-condition rule within a branch. For on/off tests that is
         // boolean OR, and for a continuous source it means the branch that is
         // actually live supplies the value while the gated ones sit at zero.
+        //
+        // With `Pick::Latest` the branch whose signals changed most recently
+        // supplies the value instead, dark or not: the knob just turned down is
+        // the one the player means. A branch's time is the latest of any
+        // signal it reads.
         if !self.any_of.is_empty() {
             let mut best = 0u8;
+            let mut latest: Option<(u64, u8)> = None;
             for branch in &self.any_of {
                 if branch.conditions.is_empty() {
                     continue;
                 }
-                best = best.max(all_of(&branch.conditions, on, led_max, &mut read)?);
+                let value = all_of(&branch.conditions, on, led_max, &mut read)?;
+                best = best.max(value);
+                if self.pick == Pick::Latest {
+                    let at = branch.conditions.iter().filter_map(|c| moved(&c.source)).max();
+                    if let Some(at) = at {
+                        if latest.is_none_or(|(t, _)| at > t) {
+                            latest = Some((at, value));
+                        }
+                    }
+                }
             }
-            return Some(if best == 0 { self.off } else { best });
+            let value = latest.map_or(best, |(_, v)| v);
+            return Some(if value == 0 { self.off } else { value });
         }
 
         if self.conditions.is_empty() {
@@ -704,35 +815,13 @@ impl Profile {
     /// hardware beats starting from an empty file, because the question the
     /// editor asks is "what should this lamp do", not "which lamps exist".
     ///
-    /// The one exception is a gate, a dimmer that hides other lamps at 0. Left
-    /// unassigned it is swept to 0, and every lamp the user then binds beneath
-    /// it stays dark with nothing to say why. So a gate starts held at full,
-    /// and carries its daylight floor already, so that switching it to follow
-    /// a cockpit dimmer later does not blank the panel by day.
+    /// The exceptions are the lamps that are dark in a way the user cannot
+    /// trace when left unassigned: gates and screens, see [`Binding::fresh`].
     pub fn stub(name: &str, aircraft: &str, module: &str, devices: &DeviceInventory) -> Self {
         let bindings = devices
             .devices
             .iter()
-            .flat_map(|d| {
-                d.leds().map(|(_, led)| {
-                    let gate = !led.governs.is_empty();
-                    Binding {
-                        device: d.key.clone(),
-                        led: led.name.clone(),
-                        conditions: Vec::new(),
-                        always: gate,
-                        any_of: Vec::new(),
-                        same_as: None,
-                        on: None,
-                        off: if gate { led.max_value() } else { 0 },
-                        note: if gate {
-                            "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight.".to_string()
-                        } else {
-                            String::new()
-                        },
-                    }
-                })
-            })
+            .flat_map(|d| d.leds().map(|(_, led)| Binding::fresh(&d.key, led)))
             .collect();
 
         Profile {
@@ -798,12 +887,28 @@ impl Profile {
     where
         F: FnMut(&str) -> Option<u32>,
     {
+        self.resolve_binding_with_moves(b, led, read, |_| None)
+    }
+
+    /// [`Profile::resolve_binding`], told when each signal last changed value.
+    /// See [`Binding::resolve_with_moves`].
+    pub fn resolve_binding_with_moves<F, M>(
+        &self,
+        b: &Binding,
+        led: &Led,
+        read: F,
+        moved: M,
+    ) -> Option<u8>
+    where
+        F: FnMut(&str) -> Option<u32>,
+        M: FnMut(&str) -> Option<u64>,
+    {
         let Some(target) = self.mirrored(b) else {
-            return b.resolve(led, read);
+            return b.resolve_with_moves(led, read, moved);
         };
         // Resolved against the target's own lamp range, then brought into this
         // one. `validate` rejects chains, so this never recurses further.
-        let value = target.resolve(led, read)?;
+        let value = target.resolve_with_moves(led, read, moved)?;
         Some(if value == 0 {
             b.off
         } else {
@@ -895,6 +1000,9 @@ impl Profile {
             }
             if b.any_of.iter().any(|branch| branch.conditions.is_empty()) {
                 out.push(Error::EmptyBranch(b.led.clone()));
+            }
+            if b.pick != Pick::Brightest && b.any_of.is_empty() {
+                out.push(Error::PickWithoutAlternatives(b.led.clone()));
             }
             // The lamp must exist even on a placeholder row: it names real
             // hardware. Only the conditions are allowed to be undecided.
@@ -1097,6 +1205,63 @@ impl Profile {
                     None => out.push(Error::UnknownSignal(format.clone())),
                     Some(o) if o.r#type != "string" => out.push(Error::FormatNotText(format.clone())),
                     Some(_) => {}
+                }
+            }
+
+            if let Some(colours) = &r.colours {
+                match module.signal(&colours.source).and_then(|s| s.primary()) {
+                    None => out.push(Error::UnknownSignal(colours.source.clone())),
+                    Some(o) if o.r#type != "string" => {
+                        out.push(Error::FormatNotText(colours.source.clone()))
+                    }
+                    Some(_) => {}
+                }
+                for code in colours.codes.keys() {
+                    if code.chars().count() != 1 {
+                        out.push(Error::ColourCodeNotOneChar(code.clone()));
+                    }
+                }
+            }
+
+            for (from, to) in &r.replace {
+                if from.chars().count() != 1 || to.chars().count() != 1 {
+                    out.push(Error::ReplaceNotOneChar(from.clone(), to.clone()));
+                }
+            }
+            self.text_problems(r, display, out);
+        }
+    }
+
+    /// What only a text grid can take, and what a text grid needs.
+    ///
+    /// Its font is fixed by the aircraft, not chosen here: an aircraft with a
+    /// CDU of its own has glyphs drawn to match what DCS-BIOS sends for it. So
+    /// every aircraft this profile covers must have one, and every character
+    /// the field is told to substitute in must be one that font can draw.
+    fn text_problems(&self, r: &Readout, display: &Display, out: &mut Vec<Error>) {
+        let Some(text) = &display.text else {
+            if r.colour.is_some() || r.colours.is_some() || r.small {
+                out.push(Error::StyleNotDrawn(r.display.clone(), r.cells.to_string()));
+            }
+            return;
+        };
+        let mut fonts = Vec::new();
+        for aircraft in &self.aircraft {
+            match text.font_for(aircraft) {
+                Some(file) => fonts.push(file),
+                None => out.push(Error::NoNativeFont(r.display.clone(), aircraft.clone())),
+            }
+        }
+        fonts.sort_unstable();
+        fonts.dedup();
+        for file in fonts {
+            let Some(chars) = text.charsets.get(file) else {
+                continue;
+            };
+            let set = if r.small { &chars.small } else { &chars.large };
+            for to in r.replace.values() {
+                if let Some(c) = to.chars().next().filter(|c| !set.contains(c)) {
+                    out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
                 }
             }
         }
@@ -1342,17 +1507,7 @@ impl Profiles {
             for device in &devices.devices {
                 for (_, led) in device.leds() {
                     if have.insert((device.key.clone(), led.name.clone())) {
-                        profile.bindings.push(Binding {
-                            device: device.key.clone(),
-                            led: led.name.clone(),
-                            conditions: Vec::new(),
-                            always: false,
-                            any_of: Vec::new(),
-                            same_as: None,
-                            on: None,
-                            off: 0,
-                            note: String::new(),
-                        });
+                        profile.bindings.push(Binding::fresh(&device.key, led));
                     }
                 }
             }
@@ -1457,6 +1612,7 @@ mod tests {
             conditions: Vec::new(),
             always: true,
             any_of: Vec::new(),
+            pick: Pick::default(),
             same_as: None,
             on,
             off: 0,
@@ -1513,6 +1669,7 @@ mod tests {
             led: "TEST".into(),
             conditions: Vec::new(),
             always: false,
+            pick: Pick::default(),
             same_as: None,
             any_of: vec![
                 Branch {
@@ -1561,6 +1718,23 @@ mod tests {
     }
 
     #[test]
+    fn a_closed_gate_is_read_before_the_scale_behind_it() {
+        // Written scale first. The empty seat's dimmer has not arrived, yet the
+        // lamp resolves, because its seat test closes that branch first.
+        let mut binding = multicrew();
+        for branch in &mut binding.any_of {
+            branch.conditions.reverse();
+        }
+        let led = lamp(LedKind::Dimmer, 255);
+        let value = binding.resolve(&led, |s| match s {
+            "STATION" => Some(0),
+            "PLT_BRIGHT" => Some(65535),
+            _ => None,
+        });
+        assert_eq!(value, Some(255));
+    }
+
+    #[test]
     fn any_of_is_off_when_no_branch_holds() {
         let led = lamp(LedKind::Dimmer, 255);
         let value = multicrew().resolve(&led, |s| match s {
@@ -1601,6 +1775,88 @@ mod tests {
         assert_eq!(value, Some(255));
     }
 
+    /// Two seats with a lighting knob each, and no signal saying which seat
+    /// the player is in.
+    fn two_knobs(pick: Pick) -> Binding {
+        Binding {
+            device: "D".into(),
+            led: "TEST".into(),
+            conditions: Vec::new(),
+            always: false,
+            pick,
+            same_as: None,
+            any_of: vec![
+                Branch {
+                    conditions: vec![cond("PLT_KNOB", OnWhen::Scale([0, 8]))],
+                },
+                Branch {
+                    conditions: vec![cond("RIO_KNOB", OnWhen::Scale([0, 8]))],
+                },
+            ],
+            on: None,
+            off: 0,
+            note: String::new(),
+        }
+    }
+
+    fn knobs(s: &str) -> Option<u32> {
+        match s {
+            "PLT_KNOB" => Some(2),
+            "RIO_KNOB" => Some(8),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn latest_follows_the_knob_last_turned_even_when_it_is_the_dimmer_one() {
+        let led = lamp(LedKind::Dimmer, 255);
+        // The pilot just turned theirs down to 2; the RIO's sits at 8 from
+        // earlier. Brightest would ignore the pilot entirely.
+        let moved = |s: &str| match s {
+            "PLT_KNOB" => Some(5),
+            "RIO_KNOB" => Some(3),
+            _ => None,
+        };
+        let value = two_knobs(Pick::Latest).resolve_with_moves(&led, knobs, moved);
+        assert_eq!(value, Some(63));
+        let value = two_knobs(Pick::Brightest).resolve_with_moves(&led, knobs, moved);
+        assert_eq!(value, Some(255), "brightest does not ask when anything moved");
+    }
+
+    #[test]
+    fn latest_is_the_brightest_until_a_knob_has_moved() {
+        // Nothing turned since the mission loaded, so there is no one to
+        // follow yet, and a lit panel is the safer guess than a dark one.
+        let led = lamp(LedKind::Dimmer, 255);
+        let value = two_knobs(Pick::Latest).resolve_with_moves(&led, knobs, |_| None);
+        assert_eq!(value, Some(255));
+    }
+
+    #[test]
+    fn latest_turned_to_zero_takes_the_value_at_zero() {
+        // Turning your own knob fully off is a choice, not a reason to fall
+        // back to the other seat's.
+        let led = lamp(LedKind::Dimmer, 255);
+        let mut binding = two_knobs(Pick::Latest);
+        binding.off = 40;
+        let read = |s: &str| match s {
+            "PLT_KNOB" => Some(0),
+            _ => Some(8),
+        };
+        let moved = |s: &str| (s == "PLT_KNOB").then_some(9);
+        assert_eq!(binding.resolve_with_moves(&led, read, moved), Some(40));
+    }
+
+    #[test]
+    fn pick_is_left_out_of_the_file_unless_it_is_latest() {
+        let plain = serde_json::to_value(two_knobs(Pick::Brightest)).unwrap();
+        assert!(plain.get("pick").is_none(), "every existing profile stays byte for byte");
+        let latest = serde_json::to_value(two_knobs(Pick::Latest)).unwrap();
+        assert_eq!(latest["pick"], "latest");
+        let back: Binding = serde_json::from_value(latest).unwrap();
+        assert_eq!(back.pick, Pick::Latest);
+    }
+
     /// The engine indexes a binding by every address it reads, so a signal
     /// named only inside a branch still has to be reported.
     #[test]
@@ -1627,6 +1883,7 @@ mod tests {
                     conditions: vec![cond("DIM", OnWhen::Scale([0, 65535]))],
                     always: false,
                     any_of: Vec::new(),
+                    pick: Pick::default(),
                     same_as: None,
                     on: None,
                     off: 0,
@@ -1638,6 +1895,7 @@ mod tests {
                     conditions: Vec::new(),
                     always: false,
                     any_of: Vec::new(),
+                    pick: Pick::default(),
                     same_as: same_as.map(str::to_string),
                     on: None,
                     off: 255,

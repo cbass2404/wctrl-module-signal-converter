@@ -12,51 +12,655 @@
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "always": true
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "note": "Every backlight follows the red-lights transformer of whoever is seated: the pilot's Transformer 1 Right, the operator's Transformer 2 Left. The door gunner seat has neither, so the panels are dark there."
     },
     {
       "device": "CarrierAce_MFD_L",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "always": true
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "CarrierAce_MFD_R",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "always": true
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "always": true
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "CarrierAce_UFC",
+      "led": "LCDBacklight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     },
     {
       "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
-      "always": true
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Marker_Light",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Marker_Light",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Marker_Light",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM2",
+      "conditions": []
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_L",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_R",
-      "conditions": []
+      "conditions": [],
+      "same_as": "Backlight_L"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Logo",
-      "conditions": []
+      "conditions": [],
+      "same_as": "Backlight_L"
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -71,7 +675,47 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -168,7 +812,54 @@
       "device": "ViperAce_ICP",
       "led": "Backlight",
       "conditions": [],
-      "always": true
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_TRANSFROM_1_R",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "OP_TRANSFROM_2_L",
+              "on_when": {
+                "scale": [
+                  0,
+                  10
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "ViperAce_ICP",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
   "readouts": [

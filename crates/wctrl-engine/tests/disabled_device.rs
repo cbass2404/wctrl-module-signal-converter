@@ -32,7 +32,7 @@ fn engine(drive_ufc: bool) -> Engine {
     let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
     let cat = Catalogue::load_dir(&r("data/catalogue")).expect("catalogue");
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
-    let mut profile = Profile::load(&r("data/defaults/fa-18c-hornet.json")).expect("hornet");
+    let mut profile = Profile::load(&r("data/defaults/fa-18.json")).expect("hornet");
     if !drive_ufc {
         profile.disabled_devices.push(UFC.into());
     }

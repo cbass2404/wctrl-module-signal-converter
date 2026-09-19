@@ -132,7 +132,7 @@ pub struct ProfileSummary {
     pub name: String,
     pub module: String,
     pub aircraft: Vec<String>,
-    /// Lamps with at least one condition, against the total listed.
+    /// Lamps assigned in any form (not placeholders), against the total listed.
     pub bound: usize,
     pub total: usize,
     /// Whether a shipped default exists to reset back to. A profile the user

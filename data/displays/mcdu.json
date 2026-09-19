@@ -1,0 +1,94 @@
+{
+  "_comment": "The MCDU's screen: a 24x14 character grid the panel draws itself, from a font uploaded to it, over report 0xf2 (docs/PROTOCOL.md, \"Driving a text grid\"). A cell is a character, a colour and a size, not a bitmap. Cell n is row n / 24, column n % 24.",
+  "_source": "Grid, origins and the font upload are WwDevicesDotnet's (BSD-3-Clause), which took them from SimAppPro; see THIRD_PARTY_NOTICES.md. Drawn on our own panel with wctrl mcdu-test 2026-09-18: all four corners, ten colours, the large font and inverse came out as sent.",
+  "_notes": [
+    "The panel holds no font across a power cycle. native_fonts says which font each aircraft's own CDU matches, keyed by runtime aircraft name; an aircraft with none cannot put fields here yet.",
+    "origin is where the grid starts on the 640x480 surface; font_origin is where the font upload puts it, which WwDevicesDotnet sets 4 pixels higher. Both are theirs, unchanged.",
+    "Rows 1 to 14 below are the grid's rows, top to bottom."
+  ],
+  "displays": [
+    {
+      "key": "MCDU",
+      "part_id": 47922,
+      "transport": "text",
+      "text": {
+        "columns": 24,
+        "rows": 14,
+        "origin": [
+          52,
+          24
+        ],
+        "font_origin": [
+          52,
+          20
+        ],
+        "upload": "../mcdu/font-packet-map-3x31.json",
+        "native_fonts": {
+          "A-10C": "../mcdu/a10c-font-21x31.json",
+          "A-10C_2": "../mcdu/a10c-font-21x31.json",
+          "AH-64D_BLK_II": "../mcdu/ah64d-font-21x31.json",
+          "CH-47Fbl1": "../mcdu/ch47f-font-21x31.json",
+          "F-14BU": "../mcdu/f14bu-font-21x31.json"
+        }
+      },
+      "regions": [
+        {
+          "name": "Row 1",
+          "cells": "0-23"
+        },
+        {
+          "name": "Row 2",
+          "cells": "24-47"
+        },
+        {
+          "name": "Row 3",
+          "cells": "48-71"
+        },
+        {
+          "name": "Row 4",
+          "cells": "72-95"
+        },
+        {
+          "name": "Row 5",
+          "cells": "96-119"
+        },
+        {
+          "name": "Row 6",
+          "cells": "120-143"
+        },
+        {
+          "name": "Row 7",
+          "cells": "144-167"
+        },
+        {
+          "name": "Row 8",
+          "cells": "168-191"
+        },
+        {
+          "name": "Row 9",
+          "cells": "192-215"
+        },
+        {
+          "name": "Row 10",
+          "cells": "216-239"
+        },
+        {
+          "name": "Row 11",
+          "cells": "240-263"
+        },
+        {
+          "name": "Row 12",
+          "cells": "264-287"
+        },
+        {
+          "name": "Row 13",
+          "cells": "288-311"
+        },
+        {
+          "name": "Row 14",
+          "cells": "312-335"
+        }
+      ]
+    }
+  ]
+}

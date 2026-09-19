@@ -30,7 +30,7 @@ fn engine() -> Engine {
     let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
     let cat = Catalogue::load_dir(&r("data/catalogue")).expect("catalogue");
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
-    let profile = Profile::load(&r("data/defaults/fa-18c-hornet.json")).expect("hornet profile");
+    let profile = Profile::load(&r("data/defaults/fa-18.json")).expect("hornet profile");
     let mut e = Engine::new(devices, cat, vec![profile]).with_displays(displays);
     e.set_connected(vec![
         "TAKEOFF_PLANEL_2".into(),

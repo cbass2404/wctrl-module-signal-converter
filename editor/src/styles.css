@@ -10,6 +10,7 @@
   --accent: #1f6feb;
   --danger: #b4232c;
   --caution: #9a6700;
+  --and: #c2410c;
   color-scheme: light dark;
 }
 
@@ -23,6 +24,7 @@
     --accent: #58a6ff;
     --danger: #f0716f;
     --caution: #d29922;
+    --and: #fb923c;
   }
 }
 
@@ -401,12 +403,15 @@ table.lamps tr:last-child td:last-child {
 }
 
 /* "and" between conditions, because that is what they mean. A stacked list
-   without it reads like a choice between them rather than all of them. */
+   without it reads like a choice between them rather than all of them. Its own
+   colour, not the muted grey of the conditions it sits between, where it blurred
+   in; and not the caution colour, since it is not a warning. */
 .and {
   font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--muted);
+  color: var(--and);
+  font-weight: 600;
 }
 
 .picker-field {

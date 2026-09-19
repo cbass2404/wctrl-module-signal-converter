@@ -449,7 +449,7 @@ fn the_shipped_hornet_fields_land_on_named_regions() {
     let (cat, _) = load();
     let ufc = cat.get("UFC1").unwrap();
     let text = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/defaults/fa-18c-hornet.json"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/defaults/fa-18.json"),
     )
     .expect("the shipped Hornet default is readable");
     let profile: serde_json::Value = serde_json::from_str(&text).expect("it parses");
@@ -482,6 +482,10 @@ fn readout(cells: &str, source: &str) -> Readout {
         align: Align::Left,
         aliases: Default::default(),
         format: None,
+        colour: None,
+        small: false,
+        replace: Default::default(),
+        colours: None,
         note: String::new(),
     }
 }

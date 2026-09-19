@@ -18,7 +18,7 @@ use std::time::{Duration, Instant};
 
 use wctrl_bios::{BiosState, Write};
 use wctrl_config::{
-    Binding, Catalogue, DeviceInventory, Display, DisplayCatalogue, Module, Profile, Screen,
+    Binding, Catalogue, DeviceInventory, Display, DisplayCatalogue, Module, Pick, Profile, Screen,
     Transport, SEAT_SIGNAL,
 };
 
@@ -53,21 +53,35 @@ pub struct LedId {
 ///
 /// On a segment display this is one group, four bytes on the UFC. On a pixel
 /// display it is a run of consecutive changed rows, starting at row `group`,
-/// and the caller commits once the batch's writes to that part are out.
+/// and the caller commits once the batch's writes to that part are out. On a
+/// text grid it is the whole screen.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LcdWrite {
     pub device: String,
     pub part_id: u32,
     pub transport: Transport,
+    /// Which display, a key in `data/displays`.
+    pub display: String,
     pub group: u8,
     /// Where `bytes` start in the display's buffer.
     pub offset: usize,
     pub bytes: Vec<u8>,
+    /// The font a text grid has to hold for these bytes to read right, as the
+    /// display names it. The caller uploads it when the panel does not already
+    /// have it. `None` on a blank screen, which needs no glyphs, and on every
+    /// other kind of display.
+    pub font: Option<String>,
 }
 
 /// Turn changed groups into writes. A pixel screen takes a write of any length,
 /// so consecutive rows go out as one, which is what SimAppPro does too.
-fn lcd_writes(device: &str, part_id: u32, map: &Display, groups: Vec<(u8, Vec<u8>)>) -> Vec<LcdWrite> {
+fn lcd_writes(
+    device: &str,
+    part_id: u32,
+    map: &Display,
+    font: Option<&str>,
+    groups: Vec<(u8, Vec<u8>)>,
+) -> Vec<LcdWrite> {
     let mut out: Vec<LcdWrite> = Vec::new();
     for (group, bytes) in groups {
         let offset = usize::from(group) * map.group_bytes;
@@ -83,9 +97,11 @@ fn lcd_writes(device: &str, part_id: u32, map: &Display, groups: Vec<(u8, Vec<u8
             device: device.to_string(),
             part_id,
             transport: map.transport,
+            display: map.key.clone(),
             group,
             offset,
             bytes,
+            font: font.map(str::to_string),
         });
     }
     out
@@ -137,6 +153,21 @@ impl Batch {
     }
 }
 
+/// One signal a [`Pick::Latest`] binding reads, and when its value last changed.
+///
+/// Tracked per signal rather than per word: DCS-BIOS packs several controls
+/// into one word, and a neighbour moving must not count as this knob moving.
+#[derive(Debug, Clone)]
+struct Move {
+    address: u16,
+    mask: u16,
+    shift: u8,
+    /// The value last seen. The first one is a baseline, not a movement.
+    last: Option<u16>,
+    /// When it last changed, on the engine's move clock. `None` until it has.
+    at: Option<u64>,
+}
+
 /// A pending module-load sweep, waiting for the post-load flood to settle.
 #[derive(Debug, Clone, Copy)]
 struct Pending {
@@ -168,6 +199,10 @@ pub struct Engine {
     pending: Option<Pending>,
     settle_quiet: Duration,
     settle_max: Duration,
+    /// Signals read by the active profile's `pick: latest` bindings, by id.
+    moves: HashMap<String, Move>,
+    /// Counts movements, so "which moved last" is a comparison of numbers.
+    move_clock: u64,
 }
 
 impl Engine {
@@ -187,6 +222,8 @@ impl Engine {
             pending: None,
             settle_quiet: DEFAULT_SETTLE_QUIET,
             settle_max: DEFAULT_SETTLE_MAX,
+            moves: HashMap::new(),
+            move_clock: 0,
         }
     }
 
@@ -243,6 +280,7 @@ impl Engine {
         self.aircraft = None;
         self.active = None;
         self.by_address.clear();
+        self.moves.clear();
         self.pending = None;
         batch
     }
@@ -302,6 +340,10 @@ impl Engine {
             });
             return Batch::empty(Cause::ModuleLoad);
         }
+
+        // Still loading: the flood re-sends every signal, and none of that is
+        // anyone turning a knob, so it only sets baselines.
+        self.note_moves(&touched, self.pending.is_none());
 
         if let Some(p) = self.pending.as_mut() {
             if !writes.is_empty() {
@@ -401,8 +443,8 @@ impl Engine {
     /// failing the batch. A profile is user-authored and the stream is live:
     /// one unexpected character must not stop the other 35 cells updating.
     ///
-    /// Also returns writes for the lamps that light a display: full while the
-    /// profile puts fields on it, 0 while it does not. Blanking on the way out
+    /// Also returns writes for the lamps that light a display: as bound while
+    /// the profile puts fields on it, 0 while it does not. Blanking on the way out
     /// needs nothing extra, because `shutdown` zeroes every lamp we lit.
     fn paint(&mut self) -> (Vec<LedWrite>, Vec<LcdWrite>) {
         let Some(profile) = self.active.map(|i| &self.profiles[i]) else {
@@ -435,26 +477,59 @@ impl Engine {
                 let Some(map) = self.displays.get(key) else {
                     continue;
                 };
-                let used = profile
-                    .readouts
-                    .iter()
-                    .any(|r| r.device == device.key && r.display == key);
+                // A text grid draws from the font the aircraft's own CDU
+                // matches, and one with none has nothing to draw with. The
+                // profile check says so; here the screen is blanked, so the
+                // last aircraft's page does not stay up under this one.
+                let font = map
+                    .text
+                    .as_ref()
+                    .and_then(|t| self.aircraft.as_deref().and_then(|a| t.font_for(a)));
+                let drawable = map.text.is_none() || font.is_some();
+                let used = drawable
+                    && profile
+                        .readouts
+                        .iter()
+                        .any(|r| r.device == device.key && r.display == key);
                 for led in part.leds.iter().filter(|l| l.lights_display) {
                     let id = LedId {
                         device: device.key.clone(),
                         part_id: part.part_id,
                         index: led.index,
                     };
-                    let value = if used { led.max_value() } else { 0 };
+                    // Bound like any lamp, but only while there is something
+                    // to see. Unbound, or bound to a signal not yet arrived,
+                    // it is full: a drawn page nobody can read helps no one.
+                    let bound = || {
+                        let b = profile
+                            .bindings
+                            .iter()
+                            .find(|b| b.device == device.key && b.led == led.name)?;
+                        let module = self.catalogue.module(&profile.module)?;
+                        profile.resolve_binding_with_moves(
+                            b,
+                            led,
+                            |source| {
+                                let output = module.signal(source)?.primary()?;
+                                self.state
+                                    .value(output.address, output.mask.unwrap_or(u16::MAX), output.shift)
+                                    .map(u32::from)
+                            },
+                            |source| self.moves.get(source)?.at,
+                        )
+                    };
+                    let value = if used { bound().unwrap_or(led.max_value()) } else { 0 };
                     if self.shadow.get(&id) != Some(&value) {
                         self.shadow.insert(id.clone(), value);
                         lamps.push(LedWrite { id, value });
                     }
                 }
                 let mut next = Screen::new(map);
-                for r in profile.readouts.iter().filter(|r| {
-                    r.device == device.key && r.display == key
-                }) {
+                for r in profile
+                    .readouts
+                    .iter()
+                    .filter(|r| drawable && r.device == device.key && r.display == key)
+                {
                     // A field bound to a seat paints only from that seat, and
                     // not at all until the seat is known. Guessing would put
                     // the other station's reading on the glass, which is worse
@@ -483,6 +558,20 @@ impl Engine {
                         .and_then(|o| self.state.text(o.address, o.max_length.unwrap_or(0)))
                         .map(|t| r.inverse_cells(&t))
                         .unwrap_or_default();
+                    // Each cell's colour, where the module sends one. Until it
+                    // arrives the field draws in its own colour, like format.
+                    let colours = r
+                        .colours
+                        .as_ref()
+                        .and_then(|c| {
+                            self.catalogue
+                                .module(&profile.module)?
+                                .signal(&c.source)?
+                                .primary()
+                        })
+                        .and_then(|o| self.state.text(o.address, o.max_length.unwrap_or(0)))
+                        .map(|t| r.colour_cells(&t))
+                        .unwrap_or_default();
                     let text = if output.r#type == "string" {
                         match self.state.text(output.address, output.max_length.unwrap_or(0)) {
                             Some(t) => t,
@@ -498,11 +587,23 @@ impl Engine {
                             None => continue,
                         }
                     };
-                    let value = r.lay_out(&text);
+                    let value = r.lay_out(&r.replace_chars(&text));
                     for (offset, cell) in r.cells.cells().enumerate() {
                         let Some(glyph) = value.get(offset) else { continue };
                         let flip = inverse.get(offset).copied().unwrap_or(false);
-                        let _ = next.draw_styled(map, cell, r.alias(glyph), flip);
+                        let glyph = r.alias(glyph);
+                        if map.transport == Transport::Text {
+                            let ch = glyph.chars().next().unwrap_or(' ');
+                            let colour = colours
+                                .get(offset)
+                                .copied()
+                                .flatten()
+                                .or(r.colour)
+                                .unwrap_or_default();
+                            let _ = next.draw_text(map, cell, ch, colour, r.small, flip);
+                        } else {
+                            let _ = next.draw_styled(map, cell, glyph, flip);
+                        }
                     }
                 }
 
@@ -515,7 +616,7 @@ impl Engine {
                     Some(previous) => next.changes_from(previous),
                     None => next.all_groups(),
                 };
-                out.extend(lcd_writes(&device.key, part.part_id, map, groups));
+                out.extend(lcd_writes(&device.key, part.part_id, map, font, groups));
                 self.screens.insert(id, next);
             }
         }
@@ -543,7 +644,7 @@ impl Engine {
                 Some(p) => blank.changes_from(&p),
                 None => blank.all_groups(),
             };
-            out.extend(lcd_writes(&id.0, part.part_id, map, groups));
+            out.extend(lcd_writes(&id.0, part.part_id, map, None, groups));
         }
         out
     }
@@ -560,6 +661,8 @@ impl Engine {
             return false;
         }
         self.aircraft = Some(name.clone());
+        // A knob in the last aircraft says nothing about this one.
+        self.moves.clear();
         self.select_profile(&name);
         true
     }
@@ -607,6 +710,55 @@ impl Engine {
             }
         }
         self.by_address = index;
+
+        // Kept across a profile reload, so saving in the editor does not
+        // forget which knob was turned last. Only what is still read is kept.
+        let mut old = std::mem::take(&mut self.moves);
+        for b in profile.bindings.iter().filter(|b| b.pick == Pick::Latest) {
+            for source in profile.sources_of(b) {
+                if self.moves.contains_key(source) {
+                    continue;
+                }
+                let track = old.remove(source).or_else(|| {
+                    let out = module.signal(source)?.primary()?;
+                    let mask = out.mask.unwrap_or(u16::MAX);
+                    Some(Move {
+                        address: out.address,
+                        mask,
+                        shift: out.shift,
+                        last: self.state.value(out.address, mask, out.shift),
+                        at: None,
+                    })
+                });
+                if let Some(track) = track {
+                    self.moves.insert(source.to_string(), track);
+                }
+            }
+        }
+    }
+
+    /// Bring every tracked signal up to date with the words that just moved.
+    ///
+    /// `record` false only takes baselines, which is what the module-load
+    /// flood is.
+    fn note_moves(&mut self, touched: &[u16], record: bool) {
+        if self.moves.is_empty() || touched.is_empty() {
+            return;
+        }
+        for track in self.moves.values_mut() {
+            if !touched.contains(&track.address) {
+                continue;
+            }
+            let now = self.state.value(track.address, track.mask, track.shift);
+            if now == track.last {
+                continue;
+            }
+            if record && track.last.is_some() {
+                self.move_clock += 1;
+                track.at = Some(self.move_clock);
+            }
+            track.last = now;
+        }
     }
 
     /// Every LED on every connected device, in a stable order.
@@ -625,7 +777,8 @@ impl Engine {
             let Some(dev) = self.devices.device(key) else {
                 continue;
             };
-            for (part, led) in dev.leds() {
+            // A screen's lamp is written with its screen, by `paint`.
+            for (part, led) in dev.leds().filter(|(_, l)| !l.lights_display) {
                 out.push(LedId {
                     device: key.clone(),
                     part_id: part.part_id,
@@ -678,7 +831,14 @@ impl Engine {
             };
             hit.iter()
                 .filter_map(|&bi| {
-                    resolve(&self.devices, module, &self.state, profile, &profile.bindings[bi])
+                    resolve(
+                        &self.devices,
+                        module,
+                        &self.state,
+                        &self.moves,
+                        profile,
+                        &profile.bindings[bi],
+                    )
                 })
                 .collect()
         };
@@ -702,7 +862,7 @@ impl Engine {
             return out;
         };
         for b in &profile.bindings {
-            if let Some((id, v)) = resolve(&self.devices, module, &self.state, profile, b) {
+            if let Some((id, v)) = resolve(&self.devices, module, &self.state, &self.moves, profile, b) {
                 out.insert(id, v);
             }
         }
@@ -720,20 +880,31 @@ fn resolve(
     devices: &DeviceInventory,
     module: &Module,
     state: &BiosState,
+    moves: &HashMap<String, Move>,
     profile: &Profile,
     b: &Binding,
 ) -> Option<(LedId, u8)> {
     let device = devices.device(&b.device)?;
     let (part, led) = device.led(&b.led)?;
+    // A screen's lamp is written with its screen, by `paint`, which gates it
+    // on whether anything is drawn there.
+    if led.lights_display {
+        return None;
+    }
 
     // Through the profile rather than the binding alone, because a lamp may
     // mirror another one and needs its sibling to resolve itself.
-    let value = profile.resolve_binding(b, led, |source| {
-        let output = module.signal(source)?.primary()?;
-        state
-            .value(output.address, output.mask.unwrap_or(u16::MAX), output.shift)
-            .map(u32::from)
-    })?;
+    let value = profile.resolve_binding_with_moves(
+        b,
+        led,
+        |source| {
+            let output = module.signal(source)?.primary()?;
+            state
+                .value(output.address, output.mask.unwrap_or(u16::MAX), output.shift)
+                .map(u32::from)
+        },
+        |source| moves.get(source)?.at,
+    )?;
 
     Some((
         LedId {

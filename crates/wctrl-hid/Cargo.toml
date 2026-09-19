@@ -14,3 +14,6 @@ hidapi = { version = "2.6", default-features = false, features = ["windows-nativ
 
 [target.'cfg(not(windows))'.dependencies]
 hidapi = { version = "2.6" }
+
+[dev-dependencies]
+serde_json.workspace = true

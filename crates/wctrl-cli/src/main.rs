@@ -96,6 +96,28 @@ enum Command {
         #[arg(long, default_value_t = 5)]
         hold: u64,
     },
+    /// Put a test page on an MCDU's screen.
+    ///
+    /// Declares the grid, uploads a font, and paints every colour, both font
+    /// sizes and the corners of the 24x14 grid. The screen keeps the page after
+    /// this exits, and a power cycle clears the font.
+    McduTest {
+        /// CAPTAIN 0xbb36, CO-PILOT 0xbb3e, OBSERVER 0xbb3a.
+        #[arg(long, value_parser = parse_hex16, default_value = "0xbb36")]
+        pid: u16,
+        /// Where `mcdu.json` is, which says the grid and the font upload.
+        #[arg(long, default_value = "data/displays")]
+        displays: PathBuf,
+        /// Which of the display's fonts to use, by aircraft.
+        #[arg(long, default_value = "A-10C_2")]
+        aircraft: String,
+        /// Screen brightness, 0..=255. Screen_Backlight, index 1.
+        #[arg(long, default_value_t = 255)]
+        brightness: u8,
+        /// Skip the font upload, to see what the grid does with no font.
+        #[arg(long)]
+        no_font: bool,
+    },
     /// Listen to the DCS-BIOS export stream and report what arrives.
     Listen {
         #[arg(long, default_value_t = 15)]
@@ -202,6 +224,86 @@ fn open(pid: u16) -> Result<Device> {
     Device::open(&api, pid).with_context(|| format!("opening device 0x{pid:04x}"))
 }
 
+fn mcdu_test(
+    pid: u16,
+    displays: &std::path::Path,
+    aircraft: &str,
+    brightness: u8,
+    no_font: bool,
+) -> Result<()> {
+    use wctrl_config::mcdu_font::{font_upload, McduFont, PacketMap, UploadStep};
+    use wctrl_hid::GridCell;
+
+    let catalogue = DisplayCatalogue::load_dir(displays)?;
+    let display = catalogue.get("MCDU").context("no MCDU display in that directory")?;
+    let grid = display.text.as_ref().context("the MCDU display has no text grid")?;
+    let part = display.part_id;
+    let origin = (grid.origin[0], grid.origin[1]);
+    let (rows, columns) = (grid.rows as u16, grid.columns as u16);
+    anyhow::ensure!((rows, columns) == (14, 24), "the test page is laid out for 24x14");
+
+    let device = open(pid)?;
+    device.declare_grid(part, origin, rows, columns)?;
+    device.paint_grid(&[GridCell::BLANK; 24 * 14])?;
+    println!("grid declared, screen blanked");
+
+    if no_font {
+        device.set_led(part, 1, brightness)?;
+    } else {
+        let file = grid
+            .font_for(aircraft)
+            .with_context(|| format!("no native font for {aircraft}"))?;
+        let map = PacketMap::load(&grid.path(&grid.upload))?;
+        let font = McduFont::load(&grid.path(file))?;
+        let at = (grid.font_origin[0], grid.font_origin[1]);
+        let mut reports = 0;
+        for step in font_upload(&map, &font, part, at, brightness)? {
+            match step {
+                UploadStep::Report(r) => {
+                    device.send_screen_reports(std::slice::from_ref(&r))?;
+                    reports += 1;
+                }
+                UploadStep::SetLed { index, value } => device.set_led(part, index, value)?,
+            }
+        }
+        println!("font {:?} uploaded in {reports} reports", font.name);
+        // The upload declares a grid of its own; put ours back before painting.
+        device.declare_grid(part, origin, rows, columns)?;
+    }
+
+    let mut cells = [GridCell::BLANK; 24 * 14];
+    let mut put = |row: usize, col: usize, text: &str, fg: u8, small: bool| {
+        for (i, ch) in text.chars().enumerate() {
+            if col + i < 24 {
+                cells[row * 24 + col + i] = GridCell { ch, fg, bg: 0, small };
+            }
+        }
+    };
+    put(0, 0, "A", 2, false);
+    put(0, 6, "WCTRL MCDU", 2, false);
+    put(0, 23, "B", 2, false);
+    let colours = ["AMBER", "WHITE", "CYAN", "GREEN", "MAGENTA", "RED", "YELLOW", "BROWN", "GREY", "KHAKI"];
+    for (n, name) in colours.iter().enumerate() {
+        let row = 1 + n / 2;
+        let col = (n % 2) * 12;
+        put(row, col, &format!("{} {name}", n + 1), (n + 1) as u8, false);
+    }
+    put(7, 0, "LARGE ABCDEFGHIJKLMNOPQR", 4, false);
+    put(8, 0, "small abcdefghijklmnopqr", 4, true);
+    put(9, 0, "0123456789 ./-+:()*#%", 3, false);
+    put(10, 0, "\u{2610}\u{2190}\u{2191}\u{2192}\u{2193}\u{0394}\u{2b21}\u{00b0}", 7, false);
+    put(12, 0, "INVERSE", 0, false);
+    put(13, 0, "C", 2, false);
+    put(13, 6, "ROW 14 OF 14", 1, false);
+    put(13, 23, "D", 2, false);
+    for c in &mut cells[12 * 24..12 * 24 + 7] {
+        c.bg = 4;
+    }
+    device.paint_grid(&cells)?;
+    println!("test page painted: corners A B C D, ten colours, both font sizes");
+    Ok(())
+}
+
 fn main() -> Result<()> {
     match Cli::parse().command {
         Command::Devices => {
@@ -258,6 +360,14 @@ fn main() -> Result<()> {
                 );
             }
         }
+
+        Command::McduTest {
+            pid,
+            displays,
+            aircraft,
+            brightness,
+            no_font,
+        } => mcdu_test(pid, &displays, &aircraft, brightness, no_font)?,
 
         Command::Blink {
             pid,
@@ -944,7 +1054,7 @@ impl Trace {
     fn lamp_names(inventory: &DeviceInventory) -> HashMap<(String, u32, u8), String> {
         let mut out = HashMap::new();
         for spec in &inventory.devices {
-            for (part, led) in spec.leds().chain(spec.display_lamps()) {
+            for (part, led) in spec.leds() {
                 out.insert(
                     (spec.key.clone(), part.part_id, led.index),
                     format!("{}.{}", spec.key, led.name),
@@ -1043,7 +1153,7 @@ impl Trace {
             for followed in signals {
                 let shown = match followed {
                     Followed::Number { name, mask, shift } => {
-                        let raw = (w.value & mask) >> shift;
+                        let raw = (w.value & mask).checked_shr(u32::from(*shift)).unwrap_or(0);
                         // Both numbers, because the raw one is checkable
                         // against the stream and the converted one against the
                         // gauge in the cockpit.
@@ -1599,6 +1709,7 @@ fn run(
         ..Trace::default()
     };
 
+    let mut panels = Panels { handles, displays: displays.clone(), fonts: HashMap::new() };
     let mut engine = Engine::new(inventory, cat, profiles).with_displays(displays.clone());
     engine.set_connected(connected);
 
@@ -1696,7 +1807,7 @@ fn run(
                 if !cleared_for_idle {
                     cleared_for_idle = true;
                     let batch = engine.mission_ended();
-                    apply(&batch, &handles, dry_run, verbose.then_some((&trace, elapsed)))?;
+                    apply(&batch, &mut panels, dry_run, verbose.then_some((&trace, elapsed)))?;
                     last_aircraft = None;
                     println!("stream quiet for {}s. Panels cleared.", limit.as_secs());
                 }
@@ -1732,7 +1843,7 @@ fn run(
                         }
                     }
                     let batch = engine.set_profiles(reloaded.profiles);
-                    apply(&batch, &handles, dry_run, verbose.then_some((&trace, elapsed)))?;
+                    apply(&batch, &mut panels, dry_run, verbose.then_some((&trace, elapsed)))?;
                     if let Some(name) = engine.aircraft() {
                         if let Some(p) = engine.active_profile() {
                             let p = p.clone();
@@ -1791,7 +1902,7 @@ fn run(
 
         apply(
             &batch,
-            &handles,
+            &mut panels,
             dry_run,
             verbose.then_some((&trace, elapsed)),
         )?;
@@ -1802,7 +1913,7 @@ fn run(
     let cleared = batch.writes.len();
     apply(
         &batch,
-        &handles,
+        &mut panels,
         dry_run,
         verbose.then(|| (&trace, started.elapsed().as_millis())),
     )?;
@@ -1810,9 +1921,72 @@ fn run(
     Ok(())
 }
 
+/// The open panels, and what each text grid has been sent this run.
+struct Panels {
+    handles: HashMap<String, Device>,
+    displays: DisplayCatalogue,
+    /// Per device, the font its text grid holds: absent until the grid has
+    /// been declared this run, `None` once declared with no font sent. The
+    /// panel keeps no font across a power cycle and we cannot ask it which it
+    /// has, so a run starts by assuming nothing.
+    fonts: HashMap<String, Option<String>>,
+}
+
+/// Get a text grid ready for `w`: declared, and holding the font it needs.
+///
+/// The font upload is the panel's whole glyph set, about 600 reports, so it
+/// goes out only when the font changes, not per paint. It resets the grid to
+/// the size SimAppPro uses, so the grid is declared again after it, exactly as
+/// WwDevicesDotnet does.
+fn prepare_text_grid(dev: &Device, w: &wctrl_engine::LcdWrite, panels: &mut Panels) -> Result<()> {
+    use wctrl_config::mcdu_font::{font_upload, McduFont, PacketMap, UploadStep};
+    let grid = panels
+        .displays
+        .get(&w.display)
+        .and_then(|d| d.text.as_ref())
+        .with_context(|| format!("display {} has no text grid", w.display))?;
+    let origin = (grid.origin[0], grid.origin[1]);
+    let (rows, columns) = (grid.rows as u16, grid.columns as u16);
+    let have = panels.fonts.get(&w.device);
+    let upload = match (&w.font, have) {
+        (Some(want), Some(Some(held))) if want == held => None,
+        (Some(want), _) => Some(want.clone()),
+        (None, Some(_)) => return Ok(()),
+        (None, None) => None,
+    };
+    dev.declare_grid(w.part_id, origin, rows, columns)?;
+    if let Some(file) = &upload {
+        dev.paint_grid(&vec![wctrl_hid::GridCell::BLANK; grid.rows * grid.columns])?;
+        let map = PacketMap::load(&grid.path(&grid.upload))?;
+        let font = McduFont::load(&grid.path(file))?;
+        let at = (grid.font_origin[0], grid.font_origin[1]);
+        for step in font_upload(&map, &font, w.part_id, at, 255)? {
+            match step {
+                UploadStep::Report(r) => dev.send_screen_reports(std::slice::from_ref(&r))?,
+                UploadStep::SetLed { index, value } => dev.set_led(w.part_id, index, value)?,
+            }
+        }
+        dev.declare_grid(w.part_id, origin, rows, columns)?;
+    }
+    panels.fonts.insert(w.device.clone(), upload.or_else(|| have.cloned().flatten()));
+    Ok(())
+}
+
+/// A text grid's buffer as the lines it shows, for the trace.
+fn text_rows(w: &wctrl_engine::LcdWrite, displays: &DisplayCatalogue) -> Vec<String> {
+    let columns = displays
+        .get(&w.display)
+        .and_then(|d| d.text.as_ref())
+        .map_or(24, |t| t.columns);
+    wctrl_config::text_cells(&w.bytes)
+        .chunks(columns)
+        .map(|row| row.iter().map(|c| c.ch).collect())
+        .collect()
+}
+
 fn apply(
     batch: &Batch,
-    handles: &HashMap<String, Device>,
+    panels: &mut Panels,
     dry_run: bool,
     trace: Option<(&Trace, u128)>,
 ) -> Result<()> {
@@ -1843,7 +2017,7 @@ fn apply(
         if dry_run {
             continue;
         }
-        if let Some(dev) = handles.get(&w.id.device) {
+        if let Some(dev) = panels.handles.get(&w.id.device) {
             dev.set_led(w.id.part_id, w.id.index, w.value)
                 .with_context(|| format!("writing {} index {}", w.id.device, w.id.index))?;
         }
@@ -1853,7 +2027,17 @@ fn apply(
     // so it is not readable as text here; the engine has already decided what
     // the glass should say and this only carries it.
     for w in &batch.lcd {
+        // A text grid is readable, so it is shown as its lines, blank ones
+        // left out. Everything else is a bitmap and prints as bytes.
         let hex = || {
+            if w.transport == Transport::Text {
+                return text_rows(w, &panels.displays)
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, row)| !row.trim().is_empty())
+                    .map(|(n, row)| format!("\n      row {:>2} |{row}|", n + 1))
+                    .collect::<String>();
+            }
             w.bytes
                 .iter()
                 .map(|b| format!("{b:02x}"))
@@ -1882,14 +2066,31 @@ fn apply(
         if dry_run {
             continue;
         }
-        if let Some(dev) = handles.get(&w.device) {
-            match w.transport {
-                Transport::Segment => dev
-                    .set_lcd(w.part_id, w.group, &w.bytes)
-                    .with_context(|| format!("writing {} display group {}", w.device, w.group))?,
-                Transport::Pixel => dev
-                    .write_pixels(w.part_id, w.offset, &w.bytes)
-                    .with_context(|| format!("writing {} screen from row {}", w.device, w.group))?,
+        let Some(dev) = panels.handles.get(&w.device) else { continue };
+        match w.transport {
+            Transport::Segment => dev
+                .set_lcd(w.part_id, w.group, &w.bytes)
+                .with_context(|| format!("writing {} display group {}", w.device, w.group))?,
+            Transport::Pixel => dev
+                .write_pixels(w.part_id, w.offset, &w.bytes)
+                .with_context(|| format!("writing {} screen from row {}", w.device, w.group))?,
+            Transport::Text => {
+                // Taken out and put back so the handle and the font record
+                // can both be used; nothing else touches `handles` meanwhile.
+                let dev = panels.handles.remove(&w.device).expect("present above");
+                let result = prepare_text_grid(&dev, w, panels).and_then(|()| {
+                    let cells: Vec<wctrl_hid::GridCell> = wctrl_config::text_cells(&w.bytes)
+                        .into_iter()
+                        .map(|c| wctrl_hid::GridCell { ch: c.ch, fg: c.fg, bg: c.bg, small: c.small })
+                        .collect();
+                    dev.paint_grid(&cells)?;
+                    Ok(())
+                });
+                panels.handles.insert(w.device.clone(), dev);
+                result.with_context(|| format!("writing {} text screen", w.device))?;
+                // Screens sent back to back can garble; WwDevicesDotnet
+                // pauses this long after each one for the same reason.
+                std::thread::sleep(Duration::from_millis(40));
             }
         }
     }
@@ -1903,7 +2104,7 @@ fn apply(
                 continue;
             }
             committed.push((w.device.as_str(), w.part_id));
-            if let Some(dev) = handles.get(&w.device) {
+            if let Some(dev) = panels.handles.get(&w.device) {
                 dev.commit_pixels(w.part_id)
                     .with_context(|| format!("committing {} screen", w.device))?;
             }

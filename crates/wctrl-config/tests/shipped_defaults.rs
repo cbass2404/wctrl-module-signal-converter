@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use wctrl_config::{Binding, DeviceInventory, Profile, Profiles};
+use wctrl_config::{Binding, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles};
 
 fn root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")
@@ -81,8 +81,8 @@ fn the_startup_merge_leaves_every_default_untouched() {
 /// Defaults whose backlights are not on one knob yet, each with its reason.
 /// Remove an entry once the knob is known; the test then holds it too.
 const ONE_KNOB_EXEMPT: &[(&str, &str)] = &[(
-    "mi-24p.json",
-    "which cockpit knob lights the Hind's panels is not yet identified (2026-09-18)",
+    "no-aircraft.json",
+    "no aircraft is loaded, so there is no cockpit knob to follow (2026-09-18)",
 )];
 
 /// A shipped default drives every panel backlight from the same cockpit
@@ -117,13 +117,21 @@ fn every_default_drives_all_backlights_from_one_source() {
                 hops += 1;
                 assert!(hops < 8, "{name}: same_as loop at {device} {led}");
             }
+            // Unbound is not a source. Without this, a default whose
+            // backlights are all left empty matches itself and passes.
+            if b.is_placeholder() {
+                split.push(format!("{name}: {device} {led} is not bound"));
+                continue;
+            }
             let mut plain = b.clone();
             plain.device.clear();
             plain.led.clear();
             plain.note.clear();
             sources.push((format!("{device} {led}"), serde_json::to_value(&plain).unwrap()));
         }
-        let first = &sources[0].1;
+        let Some((_, first)) = sources.first() else {
+            continue; // nothing bound, already reported lamp by lamp
+        };
         for (lamp, source) in &sources[1..] {
             if source != first {
                 split.push(format!("{name}: {lamp} differs from {}", sources[0].0));
@@ -133,4 +141,29 @@ fn every_default_drives_all_backlights_from_one_source() {
     assert!(split.is_empty(), "backlights on more than one source:
   {}", split.join("
   "));
+}
+
+/// A shipped default passes the same checks the editor puts a user's profile
+/// through: every signal exists in its module, every field fits its cells.
+/// Skipped where `data/catalogue` has not been generated.
+#[test]
+fn every_default_passes_the_editors_checks() {
+    let Ok(catalogue) = Catalogue::load_dir(&root().join("data/catalogue")) else {
+        return;
+    };
+    let inventory = inventory();
+    let displays = DisplayCatalogue::load_dir(&root().join("data/displays")).expect("displays load");
+    let mut found = Vec::new();
+    for path in defaults() {
+        let name = path.file_name().unwrap().to_string_lossy().into_owned();
+        let profile = Profile::load(&path).expect("shipped profile loads");
+        let Some(module) = catalogue.module(&profile.module) else {
+            found.push(format!("{name}: module {} is not in the catalogue", profile.module));
+            continue;
+        };
+        for problem in profile.problems(module, &inventory, &displays) {
+            found.push(format!("{name}: {problem}"));
+        }
+    }
+    assert!(found.is_empty(), "shipped defaults fail the editor's checks:\n  {}", found.join("\n  "));
 }

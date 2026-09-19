@@ -66,14 +66,20 @@ fn a_profile_written_before_a_device_existed_gains_rows_for_it() {
         .collect();
     assert_eq!(
         ufc.len(),
-        2,
-        "both UFC lamps appear, the two that share the vendor's name across \
-         parts: {ufc:?}"
+        3,
+        "every UFC lamp appears, the two that share the vendor's name across \
+         parts among them: {ufc:?}"
     );
     assert!(ufc.contains(&"INST_PNL_Backlight"));
     assert!(ufc.contains(&"HUD_INST_PNL_Backlight"));
-    // The LCD backlight follows the display, so it is not a row at all.
-    assert!(!ufc.contains(&"LCDBacklight"));
+    // The LCD backlight lights a screen, so it arrives held at full rather
+    // than unassigned: at 0 the page on it could not be read.
+    let lcd = after
+        .bindings
+        .iter()
+        .find(|b| b.device == "CarrierAce_UFC" && b.led == "LCDBacklight")
+        .expect("the LCD backlight is a row");
+    assert!(lcd.always && lcd.off == 255, "{lcd:?}");
 }
 
 #[test]

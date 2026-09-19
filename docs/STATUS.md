@@ -10,7 +10,7 @@ Everything below is background. This is what to actually do next.
 
 ```powershell
 python tools/build_catalogue.py   # required after a fresh clone - see below
-cargo test --workspace            # expect 170 passing
+cargo test --workspace            # expect 207 passing
 cargo run --bin wctrl -- devices
 cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -74,14 +74,15 @@ Unknown: whether the editor shows that the panel is absent.
    * 39 of 66 glyphs are captured from SimAppPro's frames; 27 are drawn in the
      same style and listed in the file. `tests/ded_render.rs` reproduces every
      captured frame's lines from the DCS-BIOS text, including an inverse one.
-   * `data/defaults/f-16c-50.json` maps `DED_L1..5` to the five lines, and the
+   * `data/defaults/f-16.json` maps `DED_L1..5` to the five lines, and the
      panel backlight follows `PRI_CONSOLES_BRT_KNB`.
-   * The DED backlight (`Screen_Backlight`, index 1, capture-verified) is not a
-     profile lamp. It is marked `lights_display` and the engine drives it with
-     the screen: 255 while a profile has fields on the DED, 0 when the DED is
-     blanked. Hidden from profiles and the editor by decision, 2026-09-18.
-     The UFC's `LCDBacklight` works the same way, and its rows were removed
-     from every profile.
+   * The DED backlight (`Screen_Backlight`, index 1, capture-verified) is
+     marked `lights_display`. A profile binds it like any lamp (reversed
+     2026-09-18, so a screen can follow its cockpit brightness knob), but it
+     lights only while the profile has fields on the DED and is 0 when nothing
+     is drawn there. A binding not yet resolved counts as full. Every default
+     holds it at full; it is outside the one-knob backlight rule. The UFC's
+     `LCDBacklight` and the MCDU's `Screen_Backlight` work the same way.
 
    The brief flash on a page change is the panel's own; SimAppPro does it too.
 
@@ -113,15 +114,44 @@ Unknown: whether the editor shows that the panel is absent.
    binds `Backlight_L` to the throttle's knob with the other two `same_as` it.
    Details in `PROTOCOL.md`.
 
-   Left: the MCDU CAPTAIN (`0xbb36`), which `devices.json` knows nothing about.
-   Same method: `wctrl parts --pid ...`, then a SimAppPro HID capture.
+   The **MCDU** (part `0xbb32`) went in the same evening, lamps from
+   SimAppPro captures. Like the MFD it has three names, each its own PID:
+   CAPTAIN `0xbb36`, CO-PILOT `0xbb3e`, OBSERVER `0xbb3a`, so it is three
+   inventory entries. `Backlight` 0 joins every default's one knob.
+   `Marker_Light` 2 is the gate for the nine indicators at 8 to 16, held like
+   the PTO2's FLAG with a daylight floor of 255. The indicators are unbound in
+   every default. `Screen_Backlight` 1 follows the screen rule, as the
+   ICP's does. Captures run through `tools/tail_wwthid.py` now, because the log
+   wraps within a minute.
 
-   **The MCDU is lamps only, by decision.** Its screen belongs to an existing,
-   mature utility that drives it across many modules, and this project
-   complements it rather than competing. So nothing here writes to the MCDU's
-   `0xf0` display channel, not even to blank it on exit. Revisit only if that
-   utility is abandoned or stops being updated. SimAppPro was seen
-   sending it `SET_LEDX`, so its lamps are on the ordinary path.
+   **The MCDU screen is a third kind of display, `text`.** Decided
+   2026-09-18 that users run one application, so wctrl drives the screen
+   too. SimAppPro never drives it from DCS, so the protocol is ported from
+   WwDevicesDotnet (BSD-3) with its font upload, and the A-10C font comes from
+   WCtrlDcsBiosBridge (MIT); notices in `THIRD_PARTY_NOTICES.md`, details in
+   `PROTOCOL.md` under "Driving a text grid". **Drawn on our panel** with
+   `wctrl mcdu-test`. In the engine a text grid is 336 cells of character,
+   colour and size (`data/displays/mcdu.json`), sent whole on any change, and
+   a readout takes `colour`, `small` and `replace` (one-for-one character
+   swaps for DCS-BIOS's stand-ins). The font is the aircraft's, never the
+   user's: `native_fonts` maps runtime aircraft name to font, and a profile
+   putting fields on the MCDU for an aircraft without one is refused. `wctrl
+   run` uploads the font on first paint and when it changes. Field strings
+   are now read one byte per character (Latin-1), because DCS-BIOS sends CDU
+   symbols as single bytes above ASCII.
+
+   Aircraft with their own CDU font, each on all three MCDU names:
+   * A-10C: `CDU_LINE0..9` on rows 5 to 14 in green, so the CDU's line
+     select lines 3, 5, 7 and 9 sit beside MCDU rows 7 to 13 and the
+     scratchpad on row 14. Flown.
+   * CH-47F: 14 lines per seat with per-character colours. Flown.
+   * F-14BU: the RIO's CDNU on rows 7 to 14, one column in, from either seat.
+     Flown.
+   * AH-64D: only the seated crew member's KU scratchpad, on row 14 one
+     column in (2026-09-18). **Not yet flown.**
+
+   Font selection for aircraft without a CDU comes with the field
+   customisation ticket.
 
 6. **The Tauri editor.** Scaffolded 2026-09-16, see below. Shape is specified
    in `CONFIG.md`.
@@ -186,7 +216,8 @@ it as it was when editing began, and delete confirms first. All four binding
 forms are offered, each only where it can mean something:
 
 * **conditions**, through the signal typeahead, its test and its values
-* **any_of**, through "+ Add alternative (or)"
+* **any_of**, through "+ Add alternative (or)", with a choice between the
+  brightest alternative and the one whose signal moved last (`pick`)
 * **always**, on a lamp nothing is assigned to
 * **same_as**, only on a dimmer with another dimmer to point at
 
@@ -303,7 +334,7 @@ the real device. All six compared groups match.
   write is corrected by the next repaint rather than retried.
 * The editor has a display section per device with glass, and a "drive this
   panel" checkbox per device.
-* `data/defaults/fa-18c-hornet.json` ships all 15 UFC fields.
+* `data/defaults/fa-18.json` ships all 15 UFC fields.
 
 **Two bugs this uncovered, both fixed:**
 
@@ -615,7 +646,7 @@ data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
 crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
-data/devices.json     every connected panel verified except the MCDU
+data/devices.json     every connected panel verified, MCDU screen still unmapped
 tools/                catalogue builder, HID probe, WWTHID log parser
 ```
 
@@ -635,9 +666,9 @@ Tauri renders through WebView2, which ships with Windows.
    runs both with "Sync with DCS" on. Detect and warn.
 6. **Perceptual response curve** for dimmers; linear PWM feels wrong at the
    bottom. Deferred.
-7. **The MCDU Captain** (`0xbb36`) enumerates with 64-byte reports both ways,
-   unlike every other panel here at 14, so its screen is presumably not driven
-   by `SET_LCDS` in this form. Unmapped.
+7. ~~**The MCDU Captain** (`0xbb36`) screen is unmapped.~~ Resolved
+   2026-09-18: it is a text grid over report `0xf2`, ported from
+   WwDevicesDotnet. See "Driving a text grid" in `PROTOCOL.md`.
 
 ## Next steps
 

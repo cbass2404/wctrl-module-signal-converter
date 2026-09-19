@@ -27,6 +27,45 @@ daemon lists only enumerated panels and skips the MFD without error; the editor
 keeps the MFD rows, since the merge never drops rows for an unplugged panel.
 Unknown: whether the editor shows that the panel is absent.
 
+**Then: DCS-BIOS version mismatch.** The shipped defaults were written against
+DCS-BIOS `2026.09.18-nightly`. A user on another release, a stable one in
+particular, may have signals the defaults name missing, renamed or changed.
+Today that is all or nothing: `validate` reports `UnknownSignal` and
+`load_profiles` skips the whole profile, so one renamed signal costs every lamp
+in that aircraft.
+
+Wanted: a default that names signals the installed DCS-BIOS lacks still loads.
+The rows that can't resolve are left inert and every other row works. The user
+gets one warning saying which rows are affected and which DCS-BIOS version gives
+full functionality.
+
+There are two different mismatches, and only one of them can degrade gracefully:
+
+- **Defaults vs the installed DCS-BIOS.** The catalogue is built on the user's
+  machine, so its addresses are correct for their DCS-BIOS. The only risk is a
+  signal the defaults use that their DCS-BIOS doesn't have. This is the case to
+  degrade gracefully. The defaults need to record the version they were
+  written against, and profiles carry no version today.
+- **Catalogue vs the installed DCS-BIOS.** This happens when DCS-BIOS updates
+  and the catalogue isn't rebuilt. Every address can be silently wrong, and no
+  per-row fallback can detect it. The catalogue already carries `bios_version`,
+  but nothing reads it. Compare it at startup with the installed version (the
+  one `build_catalogue.py` reads from `BIOSConfig.lua`) and refuse to run, or
+  rebuild, when they differ.
+
+To decide:
+
+- Defaults only, or user profiles too? Skipping a user's whole profile over one
+  signal is just as harsh.
+- A signal can still exist but have changed meaning, for example a selector
+  that gained a position. The name check won't catch that. Comparing
+  `max_value` against the version the defaults were written for would.
+- An `any_of` binding with one dead branch: drop the branch or the whole
+  binding?
+- The editor has to show inert rows as unavailable without removing them from
+  the file, so they come back once DCS-BIOS is updated. This follows the same
+  rule as the merge, which never drops rows.
+
 **Then, in order:**
 
 1. ~~Build the engine crate.~~ **Done 2026-09-16.** `crates/wctrl-engine` holds
@@ -647,7 +686,8 @@ editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the worksp
 crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
 data/devices.json     every connected panel verified, MCDU screen still unmapped
-tools/                catalogue builder, HID probe, WWTHID log parser
+tools/                catalogue builder, HID probe, WWTHID log parser,
+                      daemon benchmark (results in docs/PERFORMANCE.md)
 ```
 
 Rust 1.98 MSVC. `hidapi` uses its `windows-native` backend, so no C toolchain

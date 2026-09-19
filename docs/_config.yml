@@ -1,0 +1,4 @@
+# GitHub Pages publishes only the landing page and its images. The Markdown
+# docs are for reading on GitHub, where the README links them.
+exclude:
+  - "*.md"

@@ -1,0 +1,1097 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Your WinWing panels, lit by the DCS cockpit you are actually sitting in. Lamps, backlights and screens follow the aircraft. Free and open source." />
+    <meta name="color-scheme" content="light dark" />
+    <meta
+      name="theme-color"
+      content="#ECEEF1"
+      media="(prefers-color-scheme: light)"
+    />
+    <meta
+      name="theme-color"
+      content="#101418"
+      media="(prefers-color-scheme: dark)"
+    />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="DCS Signal Converter" />
+    <meta property="og:description" content="Your WinWing panels, lit by the DCS cockpit you are actually sitting in. Lamps, backlights and screens follow the aircraft. Free and open source." />
+    <meta
+      property="og:url"
+      content="https://cbass2404.github.io/wctrl-module-signal-converter/"
+    />
+    <meta
+      property="og:image"
+      content="https://cbass2404.github.io/wctrl-module-signal-converter/img/profile-editor-device-expanded.png"
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <title>DCS Signal Converter</title>
+    <link rel="icon" href="img/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="img/icon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="img/icon.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    />
+
+    <style>
+      /* --- minimal reset (the hosted version got this from its container) --- */
+      html {
+        -webkit-text-size-adjust: 100%;
+      }
+      img,
+      svg,
+      video {
+        display: block;
+        max-width: 100%;
+        height: auto;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      table {
+        border-collapse: collapse;
+      }
+      a {
+        color: inherit;
+      }
+      :root {
+        --ground: #eceef1;
+        --panel: #ffffff;
+        --panel-2: #f5f7f9;
+        --panel-3: #e3e7eb;
+        --ink: #16191d;
+        --ink-2: #4a5560;
+        --ink-3: #77828e;
+        --rule: #d3d9df;
+        --rule-2: #bfc7cf;
+        --accent: #c25e00;
+        --accent-2: #e88a2e;
+        --accent-wash: #fbeedf;
+        --btn-ink: #ffffff;
+        --live: #1f7a3d;
+        --live-wash: #c6efce;
+        --shadow:
+          0 1px 2px rgba(20, 26, 32, 0.08), 0 8px 24px rgba(20, 26, 32, 0.06);
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --ground: #101418;
+          --panel: #171c22;
+          --panel-2: #1d232a;
+          --panel-3: #262e36;
+          --ink: #e8ecf0;
+          --ink-2: #a6b2be;
+          --ink-3: #79848f;
+          --rule: #2a323a;
+          --rule-2: #39434d;
+          --accent: #f2a14b;
+          --accent-2: #c25e00;
+          --accent-wash: #2a2118;
+          --btn-ink: #12161a;
+          --live: #6fcf8e;
+          --live-wash: #1e3a26;
+          --shadow:
+            0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.34);
+        }
+      }
+      :root[data-theme="dark"] {
+        --ground: #101418;
+        --panel: #171c22;
+        --panel-2: #1d232a;
+        --panel-3: #262e36;
+        --ink: #e8ecf0;
+        --ink-2: #a6b2be;
+        --ink-3: #79848f;
+        --rule: #2a323a;
+        --rule-2: #39434d;
+        --accent: #f2a14b;
+        --accent-2: #c25e00;
+        --accent-wash: #2a2118;
+        --btn-ink: #12161a;
+        --live: #6fcf8e;
+        --live-wash: #1e3a26;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.34);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--ground);
+        color: var(--ink);
+        font-family:
+          "Barlow",
+          system-ui,
+          -apple-system,
+          "Segoe UI",
+          sans-serif;
+        font-size: 17px;
+        line-height: 1.62;
+        margin: 0;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      .prose {
+        max-width: 64ch;
+      }
+
+      h1,
+      h2,
+      h3 {
+        font-family:
+          "Barlow Condensed", "Barlow Semi Condensed", system-ui, sans-serif;
+        text-wrap: balance;
+        margin: 0;
+      }
+      h1 {
+        font-weight: 700;
+        font-size: clamp(2.6rem, 7vw, 4.4rem);
+        line-height: 0.98;
+        letter-spacing: -0.015em;
+      }
+      h2 {
+        font-weight: 700;
+        font-size: clamp(1.7rem, 3.6vw, 2.3rem);
+        line-height: 1.08;
+        letter-spacing: 0.005em;
+      }
+      h3 {
+        font-weight: 600;
+        font-size: 1.22rem;
+        line-height: 1.2;
+      }
+      p {
+        margin: 0;
+      }
+
+      .eyebrow {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.19em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .mono {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-variant-numeric: tabular-nums;
+      }
+      strong {
+        font-weight: 600;
+        color: var(--ink);
+      }
+
+      /* the 0-100 scale motif, reused as a divider */
+      .ruler {
+        height: 9px;
+        margin: 0;
+        border: 0;
+        background: repeating-linear-gradient(
+          to right,
+          var(--rule-2) 0 1px,
+          transparent 1px 10px
+        );
+        border-bottom: 1px solid var(--rule);
+      }
+
+      header {
+        padding: 78px 0 0;
+      }
+      .badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 22px;
+      }
+      .badge {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+        padding: 4px 9px;
+        border: 1px solid var(--rule-2);
+        color: var(--ink-2);
+        background: var(--panel);
+      }
+      .badge.hot {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-wash);
+      }
+      .lede {
+        font-size: clamp(1.12rem, 2.2vw, 1.32rem);
+        color: var(--ink-2);
+        margin-top: 22px;
+        max-width: 56ch;
+      }
+      h1 .em {
+        color: var(--accent);
+      }
+
+      .cta-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        align-items: center;
+        margin: 34px 0 12px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 1.16rem;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        padding: 13px 26px;
+        background: var(--accent);
+        color: var(--btn-ink);
+        border: 1px solid var(--accent);
+        transition:
+          transform 0.12s ease,
+          filter 0.12s ease;
+      }
+      .btn:hover {
+        filter: brightness(1.07);
+        transform: translateY(-1px);
+      }
+      .btn:focus-visible {
+        outline: 3px solid var(--ink);
+        outline-offset: 3px;
+      }
+      .btn-note {
+        font-size: 0.94rem;
+        color: var(--ink-3);
+      }
+
+      section {
+        padding: 64px 0;
+      }
+      .section-head {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 30px;
+      }
+
+      .dance {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 1px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+        margin-bottom: 26px;
+      }
+      .step {
+        background: var(--panel);
+        padding: 16px 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .step .n {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.72rem;
+        color: var(--accent);
+        letter-spacing: 0.1em;
+      }
+      .step .t {
+        font-size: 0.97rem;
+        line-height: 1.42;
+        color: var(--ink-2);
+        overflow-wrap: anywhere;
+      }
+      .step .mono {
+        font-size: 0.9em;
+      }
+
+      .after {
+        border-left: 3px solid var(--live);
+        background: var(--panel);
+        padding: 20px 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .after .t {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 1.5rem;
+        color: var(--live);
+      }
+      .after p {
+        color: var(--ink-2);
+        font-size: 0.99rem;
+      }
+
+      .groups {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        gap: 18px;
+        margin-top: 22px;
+      }
+      .group {
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        box-shadow: var(--shadow);
+        padding: 16px;
+        min-width: 0;
+      }
+      .group-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--rule);
+        padding-bottom: 8px;
+      }
+      .group-title {
+        font-family: "IBM Plex Mono", monospace;
+        font-weight: 500;
+        font-size: 0.68rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .group-count {
+        font-family: "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        font-size: 0.8rem;
+        color: var(--accent);
+        flex: none;
+      }
+      .group-why {
+        font-size: 0.85rem;
+        color: var(--ink-2);
+        margin: 10px 0 12px;
+      }
+      .group-list {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+      }
+      .group-list li {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 4px 0;
+        border-bottom: 1px solid var(--rule);
+      }
+      .group-list li:last-child {
+        border-bottom: 0;
+      }
+      .gi-name {
+        font-family: "IBM Plex Mono", monospace;
+        font-weight: 600;
+        font-size: 0.88rem;
+        overflow-wrap: anywhere;
+      }
+      .gi-pct {
+        font-family: "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+        font-size: 0.88rem;
+        color: var(--accent);
+        flex: none;
+      }
+      .foot-note {
+        font-size: 0.9rem;
+        color: var(--ink-3);
+        margin-top: 14px;
+        max-width: 62ch;
+      }
+
+      .shots {
+        display: grid;
+        gap: 34px;
+      }
+      figure {
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .frame {
+        background: var(--panel-2);
+        border: 1px solid var(--rule);
+        padding: 18px;
+        box-shadow: var(--shadow);
+        display: flex;
+        justify-content: center;
+      }
+      .frame img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+      figcaption {
+        font-size: 0.94rem;
+        color: var(--ink-2);
+        max-width: 60ch;
+      }
+      figcaption b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+
+      .feats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(258px, 1fr));
+        gap: 1px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+      }
+      .feat {
+        background: var(--panel);
+        padding: 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .feat h3 {
+        color: var(--ink);
+      }
+      .feat p {
+        font-size: 0.96rem;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+
+      .reqs {
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+      }
+      .req {
+        background: var(--panel);
+        padding: 18px 22px;
+        display: grid;
+        grid-template-columns: minmax(0, 190px) 1fr;
+        gap: 20px;
+      }
+      .req .lbl {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 1.2rem;
+        line-height: 1.3;
+      }
+      .req .txt {
+        font-size: 0.98rem;
+        color: var(--ink-2);
+      }
+      @media (max-width: 640px) {
+        .req {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+      }
+
+      .beta {
+        border: 1px solid var(--accent);
+        background: var(--accent-wash);
+        padding: 24px 26px;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .beta .h {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 1.35rem;
+        color: var(--accent);
+      }
+      .beta p {
+        font-size: 0.98rem;
+        color: var(--ink-2);
+      }
+
+      footer {
+        padding: 54px 0 76px;
+        border-top: 1px solid var(--rule);
+        margin-top: 20px;
+      }
+      .foot {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 18px;
+        justify-content: space-between;
+        align-items: baseline;
+      }
+      .foot a {
+        color: var(--accent);
+      }
+
+      .support {
+        border: 1px solid var(--rule);
+        background: var(--panel);
+        box-shadow: var(--shadow);
+        padding: 26px 28px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .support-txt {
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        max-width: 58ch;
+      }
+      .support-txt h3 {
+        color: var(--ink);
+        display: flex;
+        align-items: baseline;
+        gap: 0.42em;
+      }
+      .hrt {
+        font-size: 0.88em;
+        line-height: 1;
+        flex: none;
+        font-family:
+          "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif;
+      }
+      .support-txt p {
+        font-size: 0.97rem;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+      .btn-ghost {
+        background: transparent;
+        color: var(--accent);
+        border-color: var(--accent);
+      }
+      .btn-ghost:hover {
+        background: var(--accent-wash);
+        filter: none;
+      }
+      .btn-ghost svg {
+        width: 21px;
+        height: 21px;
+        flex: none;
+        stroke: currentColor;
+      }
+
+      @media (prefers-reduced-motion: no-preference) {
+        .rise {
+          animation: rise 0.62s cubic-bezier(0.2, 0.7, 0.3, 1) both;
+        }
+        @keyframes rise {
+          from {
+            opacity: 0;
+            transform: translateY(12px);
+          }
+          to {
+            opacity: 1;
+            transform: none;
+          }
+        }
+      }
+      /* the screenshots' window title bar predates the product name; trim it */
+      .crop {
+        overflow: hidden;
+      }
+      .crop img {
+        margin-top: -2.9%;
+      }
+      .mark {
+        width: 64px;
+        height: 64px;
+        margin-bottom: 22px;
+      }
+      .step a {
+        color: var(--accent);
+      }
+      .btn-note a {
+        color: var(--accent);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="wrap">
+        <div class="rise">
+          <img class="mark" src="img/icon.svg" alt="" width="64" height="64" />
+          <div class="badges">
+            <span class="badge hot">Alpha</span>
+            <span class="badge">WinWing panels</span>
+            <span class="badge">DCS-BIOS</span>
+            <span class="badge">Free &amp; open source</span>
+          </div>
+          <h1>
+            Your WinWing panels, lit by
+            <span class="em">the cockpit you are actually sitting in</span>.
+          </h1>
+          <p class="lede">
+            Gear lamps that follow the gear. A Master Caution that comes on when
+            the jet's does. Backlights that dim with the console knob. Jump into
+            a Hornet and the panels follow the Hornet; switch to an Apache and
+            they follow the Apache. Quit DCS and they go dark.
+          </p>
+          <div class="cta-row">
+            <a
+              class="btn"
+              href="https://github.com/cbass2404/wctrl-module-signal-converter/releases/latest"
+              >Get the latest release from GitHub</a
+            >
+            <span class="btn-note"
+              >Run the <span class="mono">setup.exe</span>. No admin prompt,
+              no SimAppPro.</span
+            >
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <div style="padding-top: 52px"><hr class="ruler" /></div>
+    </div>
+
+    <section>
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">What it does</span>
+          <h2>The panels show what the cockpit shows</h2>
+        </div>
+        <div class="prose" style="margin-bottom: 26px">
+          <p>
+            DCS Signal Converter reads the cockpit through DCS-BIOS and drives
+            the lamps, backlights and screens on your WinWing panels to match.
+            It starts with DCS on its own, so there is nothing to remember
+            before a flight and no alt-tabbing when you change aircraft.
+          </p>
+        </div>
+        <div class="feats">
+          <div class="feat">
+            <h3>Lamps</h3>
+            <p>
+              Gear, Master Caution, APU fire, jettison and the rest light when
+              the cockpit's do, from either seat in a two-seater.
+            </p>
+          </div>
+          <div class="feat">
+            <h3>Backlights</h3>
+            <p>
+              Every panel backlight follows one cockpit knob, so the whole pit
+              dims together until you decide otherwise.
+            </p>
+          </div>
+          <div class="feat">
+            <h3>Screens</h3>
+            <p>
+              The Hornet UFC on the UFC, the Viper's DED on the ICP, and the
+              A-10C, CH-47F, F-14B (Upgrade) or AH-64D CDU on your MCDU.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="padding-top: 0">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Ships ready to fly</span>
+          <h2>Your panels, these aircraft, already set up</h2>
+        </div>
+        <div class="groups">
+          <div class="group">
+            <div class="group-head">
+              <span class="group-title">Panels</span>
+              <span class="group-count">7</span>
+            </div>
+            <p class="group-why">
+              Any that are plugged in. The rest are skipped, so a profile can
+              bind a panel you do not own without harm.
+            </p>
+            <ul class="group-list">
+              <li><span class="gi-name">PTO2</span></li>
+              <li><span class="gi-name">Orion Throttle Base II</span></li>
+              <li><span class="gi-name">CarrierAce UFC + HUD</span></li>
+              <li><span class="gi-name">ViperAce ICP</span></li>
+              <li>
+                <span class="gi-name">CarrierAce MFD</span
+                ><span class="gi-pct">L C R</span>
+              </li>
+              <li><span class="gi-name">Orion Combat Rudder Pedals</span></li>
+              <li>
+                <span class="gi-name">MCDU</span
+                ><span class="gi-pct">CPT FO OBS</span>
+              </li>
+            </ul>
+          </div>
+          <div class="group">
+            <div class="group-head">
+              <span class="group-title">Aircraft profiles</span>
+              <span class="group-count">10</span>
+            </div>
+            <p class="group-why">
+              Anything else gets a blank starter profile the first time you fly
+              it, ready to fill in.
+            </p>
+            <ul class="group-list">
+              <li><span class="gi-name">A-10C</span><span class="gi-pct">CDU</span></li>
+              <li><span class="gi-name">AH-64D</span><span class="gi-pct">CDU</span></li>
+              <li><span class="gi-name">CH-47F</span><span class="gi-pct">CDU</span></li>
+              <li><span class="gi-name">F-14A / F-14B</span></li>
+              <li><span class="gi-name">F-14B (Upgrade)</span><span class="gi-pct">CDU</span></li>
+              <li><span class="gi-name">F-16C / D / I</span></li>
+              <li><span class="gi-name">F/A-18C + mods</span></li>
+              <li><span class="gi-name">Mi-24P</span></li>
+              <li><span class="gi-name">Flaming Cliffs</span></li>
+              <li><span class="gi-name">Spectator</span></li>
+            </ul>
+          </div>
+        </div>
+        <p class="foot-note">
+          <span class="mono" style="color: var(--accent)">CDU</span> marks the
+          aircraft that also put their own CDU on the MCDU screen. Open a
+          profile in the editor to see exactly what it drives.
+        </p>
+      </div>
+    </section>
+
+    <section style="padding-top: 0">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Setup</span>
+          <h2>Five steps, once</h2>
+        </div>
+        <div class="dance">
+          <div class="step">
+            <span class="n">01</span
+            ><span class="t"
+              >Install
+              <a href="https://github.com/DCS-Skunkworks/dcs-bios">DCS-BIOS</a>
+              into <span class="mono">&quot;Saved Games\<wbr />DCS\<wbr />Scripts&quot;</span></span
+            >
+          </div>
+          <div class="step">
+            <span class="n">02</span
+            ><span class="t"
+              >Copy the line that ships with DCS-BIOS into
+              <span class="mono">&quot;Scripts\<wbr />Export.lua&quot;</span></span
+            >
+          </div>
+          <div class="step">
+            <span class="n">03</span><span class="t">Close DCS</span>
+          </div>
+          <div class="step">
+            <span class="n">04</span
+            ><span class="t">Run the installer from the latest release</span>
+          </div>
+          <div class="step">
+            <span class="n">05</span><span class="t">Start DCS and fly</span>
+          </div>
+        </div>
+        <div class="after">
+          <span class="t">Then it just runs</span>
+          <p>
+            A small hook starts the converter with each mission. Within a second
+            or two of the cockpit loading it picks your aircraft's profile and
+            sets every lamp to match. Leave the mission and the panels go dark;
+            quit DCS and it quits too.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section style="padding-top: 0">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">The editor</span>
+          <h2>Every lamp is yours to reassign, per aircraft</h2>
+        </div>
+        <div class="shots">
+          <figure>
+            <div class="frame">
+              <div class="crop">
+                <img
+                  src="img/profile-selection.png"
+                  alt="The profile list: one row per aircraft with Edit, Copy to and Reset buttons"
+                  width="1096"
+                  height="829"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <b>One profile per aircraft.</b> Filter by name or module, copy a
+              profile to related aircraft, or reset it to the shipped one.
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="frame">
+              <div class="crop">
+                <img
+                  src="img/profile-editor-device-expanded.png"
+                  alt="The PTO2 panel expanded, each lamp beside the cockpit signal that drives it"
+                  width="1104"
+                  height="846"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <b>Every lamp on every panel</b>, beside the cockpit signal that
+              drives it. Untick <b>drive this panel</b> and the profile leaves
+              that panel alone for another program.
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="frame">
+              <div class="crop">
+                <img
+                  src="img/profile-edit-signal-create-typeahead-filtering.png"
+                  alt="Typing into a signal box lists matching cockpit signals"
+                  width="1103"
+                  height="831"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <b>Type three letters and pick.</b> The test fills itself in to
+              suit the signal and the lamp. Do not know what a switch is called?
+              Press <b>Learn</b>, flip it in the cockpit, and it is at the top
+              of the list.
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="frame">
+              <div class="crop">
+                <img
+                  src="img/profile-edit-multicrew-flow.png"
+                  alt="A backlight driven by the pilot's knob or the gunner's, depending on the seat"
+                  width="1099"
+                  height="832"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <b>Two seats, one panel.</b> Conditions and alternatives let a
+              lamp follow whichever seat you are in.
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="frame">
+              <div class="crop">
+                <img
+                  src="img/profile-edit-something-wrong-with-profile.png"
+                  alt="A banner naming the signals the installed DCS-BIOS lacks"
+                  width="1099"
+                  height="828"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <b>It tells you what will not work, and why.</b> Signals your
+              DCS-BIOS does not have yet are named, and everything else still
+              runs.
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+    </section>
+
+    <section style="padding-top: 0">
+      <div class="wrap">
+        <div class="feats">
+          <div class="feat">
+            <h3>Starts with DCS</h3>
+            <p>
+              A hook launches it with each mission. Nothing to start by hand,
+              and SimAppPro can stay closed.
+            </p>
+          </div>
+          <div class="feat">
+            <h3>Follows you mid-session</h3>
+            <p>
+              Join mid-mission or switch slots and the panels catch up within a
+              couple of seconds. Nothing to restart.
+            </p>
+          </div>
+          <div class="feat">
+            <h3>Edit in flight</h3>
+            <p>
+              Save in the editor and the running converter picks it up within
+              about a second. Watch the lamp change without leaving the cockpit.
+            </p>
+          </div>
+          <div class="feat">
+            <h3>Clean exit</h3>
+            <p>
+              Quit DCS and the panels go dark. If DCS crashes, the converter
+              notices the silence, clears the panels and exits on its own.
+            </p>
+          </div>
+          <div class="feat">
+            <h3>Touches nothing else</h3>
+            <p>
+              Runs unelevated. No DCS, DCS-BIOS, SimAppPro or WinWing file is
+              modified.
+            </p>
+          </div>
+          <div class="feat">
+            <h3>Your changes are kept</h3>
+            <p>
+              Updates add new profiles and panels but never rewrite a lamp you
+              have changed. Release notes say which shipped lamps were fixed.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="padding-top: 0">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Before you start</span>
+          <h2>What you need</h2>
+        </div>
+        <div class="reqs">
+          <div class="req">
+            <div class="lbl">DCS-BIOS</div>
+            <div class="txt">
+              <strong>Required.</strong> It is where every signal comes from.
+              Stable or nightly both work; the few lamps and fields that need a
+              newer DCS-BIOS are named in the editor, and come back on their own
+              when you update it.
+            </div>
+          </div>
+          <div class="req">
+            <div class="lbl">WinWing panels</div>
+            <div class="txt">
+              Any of the panels above. The same hardware sold as WinCtrl is the
+              same device and works the same.
+            </div>
+          </div>
+          <div class="req">
+            <div class="lbl">Not SimAppPro</div>
+            <div class="txt">
+              It does not need to be running, and can stay closed. If you do run
+              it, turn off <strong>Sync with DCS</strong> for each panel so the
+              two do not fight over the backlights. In the Hornet and the Viper
+              it also draws the UFC and the DED itself; to leave those to
+              SimAppPro, untick <strong>drive this panel</strong> for that
+              panel in the profile, or clear its screen fields.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section style="padding-top: 0">
+      <div class="wrap">
+        <div class="beta">
+          <span class="h">Read this bit: it is an alpha</span>
+          <p>
+            It is flown daily on the author's panels, but WinWing do not publish
+            how their panels talk to the PC, so the USB protocol was
+            reverse-engineered, and the installer is new. Treat it as community
+            software rather than a vendor feature.
+          </p>
+          <p>
+            An independent project. It is not made, endorsed or supported by
+            WinCtrl or WinWing; their names appear here only to say which
+            hardware it drives. Bug reports very welcome.
+          </p>
+        </div>
+        <div class="cta-row" style="margin-top: 30px">
+          <a
+            class="btn"
+            href="https://github.com/cbass2404/wctrl-module-signal-converter/releases/latest"
+            >Get the latest release from GitHub</a
+          >
+          <span class="btn-note"
+            >Full setup and troubleshooting are in the
+            <a
+              href="https://github.com/cbass2404/wctrl-module-signal-converter#readme"
+              >README</a
+            >.</span
+          >
+        </div>
+      </div>
+    </section>
+
+    <section style="padding-top: 0">
+      <div class="wrap">
+        <div class="support">
+          <div class="support-txt">
+            <span class="eyebrow">Free &amp; open source</span>
+            <h3>
+              <span class="hrt" aria-hidden="true">❤️</span>Support the project
+            </h3>
+            <p>
+              No ads, no trackers, no paid tier. If it got your panels following
+              the cockpit and you back to flying, you can put something in the
+              tip jar. Entirely optional; every part of this stays free either
+              way.
+            </p>
+          </div>
+          <a
+            class="btn btn-ghost"
+            href="https://www.buymeacoffee.com/cbass2404"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke-width="1.7"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M4.2 9h12.6v5.6a5 5 0 0 1-5 5H9.2a5 5 0 0 1-5-5V9Z" />
+              <path d="M16.8 10.2h1.5a2.4 2.4 0 0 1 0 4.8h-1.5" />
+              <path d="M8.4 2.6v2.3M12.6 2.6v2.3" />
+            </svg>
+            Buy me a coffee
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <div class="wrap">
+        <div class="foot">
+          <span class="eyebrow">DCS Signal Converter</span>
+          <span class="mono" style="font-size: 0.86rem">
+            <a
+              href="https://www.buymeacoffee.com/cbass2404"
+              target="_blank"
+              rel="noopener noreferrer"
+              >buy me a coffee</a
+            >
+            <span style="color: var(--ink-3)">&nbsp;&middot;&nbsp;</span>
+            <a href="https://github.com/cbass2404/wctrl-module-signal-converter"
+              >github.com/cbass2404/wctrl-module-signal-converter</a
+            >
+          </span>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

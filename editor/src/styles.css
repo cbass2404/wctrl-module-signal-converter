@@ -126,6 +126,31 @@ h2 {
   margin-top: 6px;
 }
 
+/* A different release is out: a bar along the foot of the window, on every
+   page. The body pads by its height so it never covers the last row. */
+.update {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: color-mix(in srgb, var(--accent) 14%, var(--bg));
+  border-top: 1px solid var(--accent);
+  font-size: 13px;
+}
+
+.update a {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+body.with-update {
+  padding-bottom: 40px;
+}
+
 /* Which DCS-BIOS the signals came from, under the profiles heading. */
 .catalogue {
   display: block;

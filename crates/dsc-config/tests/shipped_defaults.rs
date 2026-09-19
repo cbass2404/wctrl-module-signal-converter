@@ -147,11 +147,17 @@ fn every_default_drives_all_backlights_from_one_source() {
 /// through, and against the nightly it is written for, flags nothing: every
 /// signal exists in its module and every value is in range. A user's DCS-BIOS
 /// may flag some, which is what flags are for; the defaults' own may not.
-/// Skipped where `data/catalogue` has not been generated.
+/// Skipped where `data/catalogue` has not been generated, except in the
+/// pipeline, which sets `DSC_REQUIRE_CATALOGUE` so a missing catalogue fails
+/// rather than passing by skipping.
 #[test]
 fn every_default_passes_the_editors_checks() {
-    let Ok(catalogue) = Catalogue::load_dir(&root().join("data/catalogue")) else {
-        return;
+    let catalogue = match Catalogue::load_dir(&root().join("data/catalogue")) {
+        Ok(catalogue) => catalogue,
+        Err(e) if std::env::var_os("DSC_REQUIRE_CATALOGUE").is_some() => {
+            panic!("DSC_REQUIRE_CATALOGUE is set and data/catalogue does not load: {e}")
+        }
+        Err(_) => return,
     };
     let inventory = inventory();
     let displays = DisplayCatalogue::load_dir(&root().join("data/displays")).expect("displays load");

@@ -22,7 +22,7 @@ use dsc_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
 #[derive(Parser)]
-#[command(name = "dcs-signal", about = "DCS Signal Converter", version = dsc_config::version())]
+#[command(name = "dcs-signal", about = "DCS Signal Converter", version = dsc_config::build_label())]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -1907,7 +1907,7 @@ fn run(
     seconds: Option<u64>,
     exit_when_idle: Option<u64>,
 ) -> Result<()> {
-    println!("DCS Signal Converter {}", dsc_config::version());
+    println!("DCS Signal Converter {}", dsc_config::build_label());
     let inventory = DeviceInventory::load(devices_path)
         .with_context(|| format!("loading {}", devices_path.display()))?;
     let cat = load_catalogue(catalogue_dir, bios)?;

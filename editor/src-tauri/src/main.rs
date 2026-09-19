@@ -10,6 +10,7 @@
 mod check;
 mod claims;
 mod learn;
+mod update;
 mod view;
 
 use dsc_config::paths::Paths;
@@ -408,6 +409,7 @@ fn main() {
         .manage(status)
         .manage(learn::State::default())
         .manage(check::Cache::default())
+        .manage(update::Found::default())
         .invoke_handler(tauri::generate_handler![
             catalogue_status,
             devices,
@@ -425,7 +427,9 @@ fn main() {
             learn_start,
             learn_poll,
             learn_again,
-            learn_stop
+            learn_stop,
+            update::update_check,
+            update::open_update
         ])
         .run(tauri::generate_context!())
         .expect("starting the editor window");

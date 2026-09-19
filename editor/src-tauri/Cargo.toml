@@ -14,6 +14,9 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = [] }
+# The update check. Windows' own TLS, so nothing to compile and no certificate
+# bundle to go stale; the system proxy, so it works where the browser does.
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "system-proxy"] }
 dsc-bios = { path = "../../crates/dsc-bios" }
 dsc-config = { path = "../../crates/dsc-config" }
 dsc-engine = { path = "../../crates/dsc-engine" }

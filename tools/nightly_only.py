@@ -24,12 +24,18 @@ import urllib.request
 import zipfile
 
 REPO = "DCS-Skunkworks/dcs-bios"
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def release(tag):
     url = ("https://api.github.com/repos/%s/releases/%s"
            % (REPO, "tags/" + tag if tag else "latest"))
-    req = urllib.request.Request(url, headers={"Accept": "application/vnd.github+json"})
+    headers = {"Accept": "application/vnd.github+json"}
+    # The pipeline passes its token: unauthenticated calls share a small
+    # hourly limit across every job on the runner's address.
+    if os.environ.get("GITHUB_TOKEN"):
+        headers["Authorization"] = "Bearer " + os.environ["GITHUB_TOKEN"]
+    req = urllib.request.Request(url, headers=headers)
     with urllib.request.urlopen(req) as resp:
         return json.load(resp)
 
@@ -57,7 +63,14 @@ def main():
             sys.exit("%s has no DCS-BIOS/doc/json" % asset["name"])
         cmd = ["cargo", "run", "--quiet", "--bin", "dcs-signal", "--",
                "nightly-only", "--stable", stable]
-        sys.exit(subprocess.call(cmd))
+        sys.exit(subprocess.call(cmd, cwd=ROOT, env=checkout_env()))
+
+
+def checkout_env():
+    """The checkout's `data`, named outright. A Tauri build copies
+    `data/devices.json` beside `target/*/dcs-signal.exe`, which then takes
+    itself for an installed copy and would write elsewhere."""
+    return dict(os.environ, DSC_DATA=os.path.join(ROOT, "data"))
 
 
 if __name__ == "__main__":

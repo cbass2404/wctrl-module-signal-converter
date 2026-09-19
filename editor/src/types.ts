@@ -247,6 +247,14 @@ export interface ModuleChoice {
   lamps: number;
 }
 
+/** A release other than the one running, from GitHub. */
+export interface Update {
+  /** VERSION.md as this build carries it. */
+  current: string;
+  /** The newest release, as its tag has it less the leading v. */
+  latest: string;
+}
+
 /** One signal that moved in the cockpit, as learn mode reports it. */
 export interface LearnChange {
   id: string;

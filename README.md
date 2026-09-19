@@ -1,10 +1,13 @@
-# wctrl
+# DCS Signal Converter
 
 Middleware that reads DCS-BIOS signals from whatever DCS aircraft is loaded and
 lights the matching LEDs on WinCtrl (WinWing) panels, driven by a per-aircraft
 profile.
 
 SimAppPro is not required. DCS-BIOS is required; it is the only signal source.
+
+An independent project. It is not made, endorsed or supported by WinCtrl or
+WinWing; their names appear here only to say which hardware it drives.
 
 This README covers running the daemon. Everything else is in `docs/`:
 `STATUS.md` to resume work, `CONFIG.md` for the profile format, `PROTOCOL.md`
@@ -20,8 +23,8 @@ DCS-BIOS the signals came from and whether it just rebuilt them. To force a
 rebuild, or to point at DCS-BIOS outside `Saved Games\DCS\Scripts`:
 
 ```powershell
-cargo run --bin wctrl -- catalogue --rebuild
-cargo run --bin wctrl -- catalogue --rebuild --bios "D:\DCS-BIOS\doc\json"
+cargo run --bin dcs-signal -- catalogue --rebuild
+cargo run --bin dcs-signal -- catalogue --rebuild --bios "D:\DCS-BIOS\doc\json"
 ```
 
 The folder given with `--bios` is remembered, so it is needed only once.
@@ -35,7 +38,7 @@ Window", and reopen.
 From the repository root:
 
 ```powershell
-cargo run --bin wctrl -- run
+cargo run --bin dcs-signal -- run
 ```
 
 Add `--release` for actual flying. The debug build spends several seconds just
@@ -174,10 +177,10 @@ remembered. Copy the two files from `tools/hook`:
 
 | From | To |
 | --- | --- |
-| `wctrl-hook.lua` | `Saved Games/DCS/Scripts/Hooks/wctrl-hook.lua` |
-| `run-hidden.vbs` | next to `wctrl.exe`, in the install folder |
+| `dcs-signal-hook.lua` | `Saved Games/DCS/Scripts/Hooks/dcs-signal-hook.lua` |
+| `run-hidden.vbs` | next to `dcs-signal.exe`, in the install folder |
 
-Then replace `WCTRL_DIR` in the hook with the folder `wctrl.exe` lives in. The
+Then replace `DSC_DIR` in the hook with the folder `dcs-signal.exe` lives in. The
 VBS shim exists so no console window flashes on every mission start.
 
 **The hook only starts the daemon; it never stops it.** A hook cannot run when
@@ -336,7 +339,7 @@ Each font draws that CDU's symbols, which is why only these aircraft have
 one: a profile that puts fields on the MCDU for any other aircraft is refused.
 The screen stays black while nothing is on it.
 
-`wctrl mcdu-test` draws a test pattern without DCS, to check a panel on its
+`dcs-signal mcdu-test` draws a test pattern without DCS, to check a panel on its
 own.
 
 ### When something looks wrong
@@ -367,12 +370,12 @@ daemon and the editor both caution about one that does not.
 
 ## Other commands
 
-`cargo run --bin wctrl -- --help` lists them. `listen` is the useful one
+`cargo run --bin dcs-signal -- --help` lists them. `listen` is the useful one
 alongside the daemon: it prints the raw stream and can follow named signals on
 one timestamped timeline, which is how the flap thresholds were measured.
 
 ```powershell
-cargo run --bin wctrl -- listen --seconds 60 --watch FLAP_POS --watch FLAPS_SWITCH
+cargo run --bin dcs-signal -- listen --seconds 60 --watch FLAP_POS --watch FLAPS_SWITCH
 ```
 
 It can run at the same time as the daemon.
@@ -382,7 +385,7 @@ loaded module publishes and prints a table per window, fewest movements first,
 so a control can be named without a window open:
 
 ```powershell
-cargo run --bin wctrl -- learn --seconds 5
+cargo run --bin dcs-signal -- learn --seconds 5
 ```
 
 ```text

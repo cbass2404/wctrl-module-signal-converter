@@ -217,7 +217,7 @@ async function showLibrary(): Promise<void> {
 /** Reset discards the user's work, so it asks first and says exactly what it does. */
 async function resetOne(row: ProfileSummary): Promise<void> {
   const ok = await confirmAction(
-    `Replace ${row.name} with the profile that shipped with wctrl?\n\n` +
+    `Replace ${row.name} with the profile that shipped with DCS Signal Converter?\n\n` +
       `Any changes you have made to it will be lost. Profiles you created yourself are not affected.`,
     "Reset",
   );

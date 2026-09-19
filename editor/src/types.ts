@@ -1,5 +1,5 @@
 // Mirrors the shapes `editor/src-tauri/src/view.rs` serialises, and the profile
-// shapes `wctrl-config` serialises. Kept as plain types rather than generated,
+// shapes `dsc-config` serialises. Kept as plain types rather than generated,
 // because there are few of them and a generator is another thing to install.
 
 /** `{ "equals": 1 }`, `{ "between": [21000, 25000] }`, and so on. */

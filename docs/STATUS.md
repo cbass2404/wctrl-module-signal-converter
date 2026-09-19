@@ -9,9 +9,9 @@ Everything below is background. This is what to actually do next.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 235 passing
-cargo run --bin wctrl -- devices
-cargo run --bin wctrl -- catalogue --aircraft F-4E-45MC --find hook
+cargo test --workspace            # expect 238 passing
+cargo run --bin dcs-signal -- devices
+cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
 
 `data/catalogue/` is **not in git**. It is generated from the DCS-BIOS installed
@@ -48,7 +48,7 @@ Decided 2026-09-19:
   file, so it comes back once the source is fixed. The daemon logs one warning
   per profile.
 - **Only nightly-only signals are worth a word.** The defaults target the
-  nightly; most users run stable. Profiles carry no version. Instead each wctrl
+  nightly; most users run stable. Profiles carry no version. Instead each
   release ships `data/nightly-only.json`: the signals the defaults read that the
   latest stable lacks or reports with a different range, and nothing older.
   A flagged condition on that list says it needs the nightly, and the profile
@@ -58,7 +58,7 @@ Decided 2026-09-19:
 The plan:
 
 1. ~~**The catalogue follows the installed DCS-BIOS.**~~ **Done 2026-09-19.**
-   The Python builder is ported to Rust (`wctrl-config::catalogue_build`) and
+   The Python builder is ported to Rust (`dsc-config::catalogue_build`) and
    deleted; the output matched it byte for byte on all 50 modules, line
    endings aside. The daemon, the editor and every CLI command that reads the
    catalogue call `ensure` first, which rebuilds only when the version in
@@ -66,7 +66,7 @@ The plan:
    catalogue's (see step 4 for why the stamp), so whichever app starts second
    finds the work done. A lock file stops two builds at once, and a build goes
    into `catalogue.building` and is renamed into place, so nothing reads half a
-   catalogue. `wctrl catalogue --rebuild` forces one; `--bios` points at an
+   catalogue. `dcs-signal catalogue --rebuild` forces one; `--bios` points at an
    install outside Saved Games and is remembered in `index.json`.
 
    The index now records where `CommonData` puts `VERSION` (address 1126, 24
@@ -79,8 +79,8 @@ The plan:
    next mission starts it clean. **Not yet seen against live DCS:** the next
    flight should show no version message at all.
 2. ~~**The nightly-only list.**~~ **Done 2026-09-19.**
-   `wctrl-config::nightly_only` compares what the defaults read in the local
-   nightly catalogue against a stable one; `wctrl nightly-only --stable <json>`
+   `dsc-config::nightly_only` compares what the defaults read in the local
+   nightly catalogue against a stable one; `dcs-signal nightly-only --stable <json>`
    writes `data/nightly-only.json`; `python tools/nightly_only.py` fetches the
    latest stable from GitHub and runs it. **This is a release step** and belongs
    in the release process when it is written. Against stable v0.11.7 it lists 8
@@ -127,6 +127,14 @@ The plan:
    missing signal loads with that row off. Docs: "Rows this DCS-BIOS cannot
    back" in `CONFIG.md`, and the catalogue section of the README.
 
+**Done 2026-09-19: renamed to DCS Signal Converter.** Nothing user-facing
+may read as WinCtrl software: the product and window are DCS Signal
+Converter, the daemon is `dcs-signal.exe`, and the crates are `dsc-*`. Only
+`wctrl-hid` keeps its name, because it is the vendor's protocol, and so do
+vendor strings such as the `WINCTRL ...` product names. WinCtrl and WinWing
+appear only to say which hardware this drives; the README says it is not
+affiliated. The repository and folder keep their names.
+
 **Next: the installer, the release process and a CI pipeline**, so the
 whole flow (first-run catalogue build, rebuild on a DCS-BIOS update, the
 nightly-only list) can be tested as a user would meet it. There is no release
@@ -135,18 +143,81 @@ The release process must run `tools/nightly_only.py`. Worth knowing for the
 installer: the editor finds `data` beside the executable once installed, and
 it writes the catalogue and profiles there, which Program Files does not allow.
 Leaning: read-only data stays with the program, and what is written (profiles,
-catalogue, its lock) goes to `Saved Games\wctrl`, found through the Saved
+catalogue, its lock) goes to `Saved Games\DCS Signal Converter`, found through the Saved
 Games known folder rather than assumed under `%USERPROFILE%`, since users move
 it. Chosen over Documents, which OneDrive often syncs, and that fights the
 catalogue's lock and rename. Decide there whether a dev run uses it too.
 
+Decided 2026-09-19:
+
+* Dev runs keep using the checkout's `data/`.
+* Install per user (`%LOCALAPPDATA%\Programs`, no admin prompt), in the stock
+  NSIS look: no custom pages or theming. Where a question has to be asked it
+  is a plain message box and the Windows folder picker.
+* The installer places the DCS hook and removes it on uninstall, but only
+  after confirming where DCS saves. Saved Games comes from the known-folder
+  API. DCS saves to `Saved Games\DCS` unless its install folder (registry
+  `HKCU\Software\Eagle Dynamics\DCS World`, `Path`) holds
+  `dcs_variant.txt`, which makes it `DCS.<variant>`. Only plain `DCS` with a
+  `Config` folder is taken silently; anything else asks for the DCS folder and
+  for where profiles go, rather than assume either.
+* `VERSION.md` is the one source of the version, printed as written
+  (`1.0.0-alpha.001`) by `dcs-signal --version`, the daemon log, the tag and
+  the release. Cargo, Tauri and npm reject leading zeros, so
+  `tools/version.py` stamps them with `1.0.0-alpha.1`; `--check` fails when
+  they drift. Add/Remove Programs shows that form, since Tauri's upgrade check
+  compares it as semver.
+
+**Installer, built 2026-09-19, not yet installed on a real machine:**
+
+* `dsc-config::paths` is the one resolver for the daemon, the CLI and the
+  editor (the editor's `paths.rs` is gone; CLI path flags now default from
+  it). Order: `DSC_DATA`; `data\devices.json` beside the exe (installed);
+  a `data` found climbing from the cwd or the exe (checkout). Installed, the
+  shipped files come from `data` beside the exe and profiles and the
+  catalogue go to `HKCU\Software\DCS Signal Converter` `DataDir`, else
+  `Saved Games\DCS Signal Converter`. `default_bios_json` follows `DcsDir`,
+  else `Saved Games\DCS`.
+* `cd editor; npx tauri build` builds `dcs-signal.exe` first and bundles it,
+  `run-hidden.vbs`, the hook template (`hook\`), `data\` (devices, displays,
+  mcdu fonts, defaults, nightly-only list) and the licences.
+* `editor/src-tauri/installer-hooks.nsh`: waits for `dcs-signal.exe` to exit
+  (Retry/Cancel; a silent install kills it), finds or asks for the two
+  folders and records them, writes the hook with `DSC_DIR` filled in. An
+  update reuses the recorded folders and never asks again. Uninstall removes
+  the hook and the catalogue; profiles and the recorded folders go only when
+  "delete app data" is ticked.
+
+An install finding `DCS.exe` running says to restart DCS, which loads hooks
+only at launch. The app icon is `editor/src-tauri/icons/icon.svg`, the
+afterburner app's tile and palette with a lamp in place of the flame.
+
+Left for the installer: testing, decided 2026-09-19 to be done on the
+pipeline's build rather than a local one, since that is how releases are
+compiled. Fresh install, fly, update over it, uninstall with and without
+"delete app data"; the folder prompts from a second Windows user who has
+never run DCS (Windows 11 Home has no Sandbox). The hook template is written as ANSI,
+so an install path outside the system code page would not reach Lua intact.
+
+Still to do: **CI** on push and PR (Windows runner): `cargo test --workspace`,
+`tools/version.py --check`, the editor build. **Release** on a `v*` tag
+matching `VERSION.md`: tests, `nightly_only.py`, the installer renamed to
+carry `VERSION.md` as written, a draft GitHub release. No `cargo fmt` check.
+
+Found 2026-09-19: DCS-BIOS publishes nightlies only as one rolling `latest`
+pre-release whose single zip (`DCS-BIOS_nightly_2026-09-18.zip`) is replaced
+by the next, so a pinned nightly cannot be fetched again later. CI and the
+release need their own copy of the nightly the defaults were written against,
+for example attached to a release in this repository, before the
+shipped-defaults test and `nightly_only.py` can run there.
+
 **Then, in order:**
 
-1. ~~Build the engine crate.~~ **Done 2026-09-16.** `crates/wctrl-engine` holds
+1. ~~Build the engine crate.~~ **Done 2026-09-16.** `crates/dsc-engine` holds
    all the policy and does no I/O, so the whole module-load sequence is tested
-   without hardware or DCS. `wctrl run` is the daemon around it.
+   without hardware or DCS. `dcs-signal run` is the daemon around it.
 
-   **Proven end to end 2026-09-16.** `wctrl run --verbose` drove the PTO2 from a
+   **Proven end to end 2026-09-16.** `dcs-signal run --verbose` drove the PTO2 from a
    live A-10C mission: gear lamps, Master Caution, backlight tracking the console
    dimmer, and the two-condition HALF lamp lighting only at MVR with the gauge in
    its window. The flap lamps looked dead and were not; see the `FLAG` dimmer in
@@ -156,8 +227,8 @@ catalogue's lock and rename. Decide there whether a dev run uses it too.
    from `data/defaults` on startup), then, with a mission loaded:
 
    ```powershell
-   cargo run --bin wctrl -- run --dry-run    # prints writes, opens no device
-   cargo run --bin wctrl -- run              # drives the panels
+   cargo run --bin dcs-signal -- run --dry-run    # prints writes, opens no device
+   cargo run --bin dcs-signal -- run              # drives the panels
    ```
 
    `--dry-run` is the safe first pass: it proves aircraft detection, profile
@@ -215,7 +286,7 @@ catalogue's lock and rename. Decide there whether a dev run uses it too.
    enumerates three collections with only the first writable, which is why
    `Device::open` now chooses by report descriptor. Details in `PROTOCOL.md`.
    **Verified on hardware 2026-09-18** in the hardest case, split mode under
-   the L name: `wctrl led` wrote 0, 255, 20 and 137 through `col01`, each
+   the L name: `dcs-signal led` wrote 0, 255, 20 and 137 through `col01`, each
    acked, and the backlight went dark, full and dim as sent. Not yet flown
    from a profile in a mission.
 
@@ -238,17 +309,17 @@ catalogue's lock and rename. Decide there whether a dev run uses it too.
    wraps within a minute.
 
    **The MCDU screen is a third kind of display, `text`.** Decided
-   2026-09-18 that users run one application, so wctrl drives the screen
+   2026-09-18 that users run one application, so this app drives the screen
    too. SimAppPro never drives it from DCS, so the protocol is ported from
    WwDevicesDotnet (BSD-3) with its font upload, and the A-10C font comes from
    WCtrlDcsBiosBridge (MIT); notices in `THIRD_PARTY_NOTICES.md`, details in
    `PROTOCOL.md` under "Driving a text grid". **Drawn on our panel** with
-   `wctrl mcdu-test`. In the engine a text grid is 336 cells of character,
+   `dcs-signal mcdu-test`. In the engine a text grid is 336 cells of character,
    colour and size (`data/displays/mcdu.json`), sent whole on any change, and
    a readout takes `colour`, `small` and `replace` (one-for-one character
    swaps for DCS-BIOS's stand-ins). The font is the aircraft's, never the
    user's: `native_fonts` maps runtime aircraft name to font, and a profile
-   putting fields on the MCDU for an aircraft without one is refused. `wctrl
+   putting fields on the MCDU for an aircraft without one is refused. `dcs-signal
    run` uploads the font on first paint and when it changes. Field strings
    are now read one byte per character (Latin-1), because DCS-BIOS sends CDU
    symbols as single bytes above ASCII.
@@ -304,7 +375,7 @@ label follows the sections.
 * **One aircraft, one profile.** New profile and Copy to... move a claimed
   aircraft to the new profile and refuse a move that would empty another.
   `editor/src-tauri/src/claims.rs` holds the rule.
-* **One naming rule.** `file_stem` in `wctrl-config` names every generated file,
+* **One naming rule.** `file_stem` in `dsc-config` names every generated file,
   from the daemon, New profile and Copy to... alike. `NONE`, which DCS-BIOS
   reports when the player has no aircraft of their own, gets "No aircraft".
 * **Confirmations are drawn in the window.** `window.confirm` showed nothing in
@@ -354,10 +425,10 @@ Only one daemon runs at a time; a second backs off.
 
 **Learn mode**, added 2026-09-17, is the one place in the editor that does I/O.
 Press **Learn** beside any signal box, flip the control in the cockpit, and what
-moved is listed with the most switch-like first. `wctrl learn` is the same thing
+moved is listed with the most switch-like first. `dcs-signal learn` is the same thing
 without a window.
 
-The judgment lives in `wctrl-engine`'s `learn` module, which has no I/O and is
+The judgment lives in `dsc-engine`'s `learn` module, which has no I/O and is
 tested against a synthetic stream: ranking by movement count, reading each
 signal through its own mask so a shared word does not name its neighbours,
 counting a multi-word string as one movement, and treating a first sighting as a
@@ -431,11 +502,11 @@ obvious.
 
 **Built and wired, 2026-09-17.** Signal to glass works end to end and is
 checked against captured hardware traffic rather than against our own reasoning:
-`crates/wctrl-engine/tests/display_paint.rs` feeds the engine a Hornet COMM page
+`crates/dsc-engine/tests/display_paint.rs` feeds the engine a Hornet COMM page
 as DCS-BIOS frames and asserts the bytes it paints are the ones SimAppPro sent
 the real device. All six compared groups match.
 
-* `wctrl-config::display` holds `Display`, `DisplayCatalogue`, `Screen`,
+* `dsc-config::display` holds `Display`, `DisplayCatalogue`, `Screen`,
   `CellRange` and `Readout`.
 * The engine repaints the whole screen on every batch and diffs whole groups.
   Not an optimisation: a field spans several words, DCS-BIOS delivers them
@@ -475,9 +546,9 @@ by device display name, then part in declared order, then hardware index.
 
 **How it got here, and what is left.** Everything on this list is done except the last item, and each entry keeps what flying it taught, because that is the part that does not survive in the code.
 
-1. ~~**A host-side shadow of the buffer.**~~ Done. `wctrl-config::display`
+1. ~~**A host-side shadow of the buffer.**~~ Done. `dsc-config::display`
    has `Display`, `DisplayCatalogue` and `Screen`, checked against captured
-   hardware traffic by `crates/wctrl-config/tests/display_render.rs`: rendering
+   hardware traffic by `crates/dsc-config/tests/display_render.rs`: rendering
    two real display states reproduces the exact 96 bytes the device was sent.
    Still to do is naming a display from a device spec so a part can carry
    one.
@@ -627,7 +698,7 @@ the exemption then. A new panel's backlight goes on that knob too.
 is gitignored and seeded from `data/defaults` on every start for any name not
 already there. Seeding adds and never replaces. Reset is the only overwrite.
 
-`Profiles` in `wctrl-config` owns this, and both the CLI and the editor call it,
+`Profiles` in `dsc-config` owns this, and both the CLI and the editor call it,
 so there is one implementation of the rule rather than two.
 
 **Housekeeping:** `.gitignore` excludes `target/`, the generated
@@ -704,14 +775,14 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
   settles at 22726 arriving from retracted and 23411 arriving from DN, ringing
   out to 22415 and 23476. A threshold read off a single approach works in one
   direction and silently fails in the other.
-  `crates/wctrl-engine/tests/flap_capture.rs` replays the real capture, lever
+  `crates/dsc-engine/tests/flap_capture.rs` replays the real capture, lever
   values included.
 - **A daemon started mid-mission syncs to the cockpit on its own.** DCS-BIOS
   re-exports on a cycle rather than sending deltas only: word 0 of `_ACFT_NAME`
   arrived 67 times in 20 seconds, about every 300 ms. Documented the other way
   round until 2026-09-16, which produced a README rule telling users to start
   before entering the cockpit. There is no ordering requirement.
-- **`wctrl listen` takes repeated `--watch` by signal name.** Watching a gauge
+- **`dcs-signal listen` takes repeated `--watch` by signal name.** Watching a gauge
   alone cannot say which detent it was travelling towards; watching the lever
   beside it, on one timestamped timeline, is what caught both errors above.
 - **The DCS-BIOS listener sets `SO_REUSEADDR`.** Without it only one process on
@@ -748,16 +819,16 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 ## Where the code is
 
 ```text
-crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0     (10 tests)
-crates/wctrl-bios     export-stream decoder + address space      (10 tests)
-crates/wctrl-config   catalogue, inventory, profiles, displays    (83 tests)
-crates/wctrl-engine   aircraft detection, sweep, writes, learn    (48 tests)
-crates/wctrl-cli      the wctrl binary                            (5 tests)
+crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0      (10 tests)
+crates/dsc-bios       export-stream decoder + address space       (10 tests)
+crates/dsc-config     catalogue, inventory, profiles, displays    (83 tests)
+crates/dsc-engine     aircraft detection, sweep, writes, learn    (48 tests)
+crates/dsc-cli        the dcs-signal binary                       (5 tests)
 editor/src-tauri      editor backend, learn listener, claims      (7 tests)
 data/defaults         shipped profiles, tracked in git
 data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
-crates/wctrl-cli      `wctrl`  devices/parts/led/blink/sweep/listen/learn/run
+crates/dsc-cli        `dcs-signal`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
 data/devices.json     every connected panel verified, MCDU screen still unmapped
 tools/                catalogue builder, HID probe, WWTHID log parser,

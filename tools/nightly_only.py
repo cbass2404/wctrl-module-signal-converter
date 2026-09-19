@@ -4,13 +4,13 @@
   python tools/nightly_only.py [--tag v0.11.7]
 
 A release step. The shipped defaults are written against a DCS-BIOS nightly,
-and most users run the stable release, so each release of wctrl ships the
+and most users run the stable release, so each release of DCS Signal Converter ships the
 short list of signals the defaults read that the current stable lacks or
 reports differently. The editor uses it to tell a user which lamps need the
 nightly, so they can decide whether to update.
 
 Downloads the stable release from GitHub into a temporary folder and runs
-`wctrl nightly-only` against it. The nightly side is the catalogue built from
+`dcs-signal nightly-only` against it. The nightly side is the catalogue built from
 the DCS-BIOS installed on this machine, which should be the nightly the
 defaults were written against.
 """
@@ -55,7 +55,7 @@ def main():
         stable = os.path.join(tmp, "DCS-BIOS", "doc", "json")
         if not os.path.isdir(stable):
             sys.exit("%s has no DCS-BIOS/doc/json" % asset["name"])
-        cmd = ["cargo", "run", "--quiet", "--bin", "wctrl", "--",
+        cmd = ["cargo", "run", "--quiet", "--bin", "dcs-signal", "--",
                "nightly-only", "--stable", stable]
         sys.exit(subprocess.call(cmd))
 

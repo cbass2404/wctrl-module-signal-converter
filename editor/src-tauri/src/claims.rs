@@ -12,7 +12,7 @@
 
 use std::path::Path;
 
-use wctrl_config::{file_stem, Profile};
+use dsc_config::{file_stem, Profile};
 
 /// A profile that gives up some of its aircraft to a new one.
 pub struct Release {
@@ -98,7 +98,7 @@ mod tests {
 
     fn scratch(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "wctrl-claims-{name}-{}",
+            "dsc-claims-{name}-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()

@@ -1,6 +1,6 @@
 # Third-party notices
 
-wctrl is MIT licensed, see `LICENSE`. It includes code and files from the
+DCS Signal Converter is MIT licensed, see `LICENSE`. It includes code and files from the
 projects below, which stay under their own licenses. Those licenses are
 reproduced here because they require it.
 
@@ -11,10 +11,10 @@ cycle before the screen draws anything. The code that drives the screen and
 makes that upload is ported from WwDevicesDotnet, and the files it sends are
 copied into `data/mcdu` unchanged except where the table says otherwise.
 
-| In wctrl | From | License |
+| In this project | From | License |
 | --- | --- | --- |
 | `crates/wctrl-hid`, the MCDU grid channel | WwDevicesDotnet, ported | BSD-3-Clause |
-| `crates/wctrl-config/src/mcdu_font.rs` | WwDevicesDotnet, ported | BSD-3-Clause |
+| `crates/dsc-config/src/mcdu_font.rs` | WwDevicesDotnet, ported | BSD-3-Clause |
 | `data/displays/mcdu.json`, grid and origins | WwDevicesDotnet | BSD-3-Clause |
 | `data/mcdu/font-packet-map-3x31.json` | WwDevicesDotnet, `Resources/WinctrlFontPacketMap-3x31.json`, commit `2bf28fa` | BSD-3-Clause |
 | `data/mcdu/a10c-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/a10c-font-21x31.json`, commit `dd8e87b` | MIT |
@@ -26,7 +26,7 @@ copied into `data/mcdu` unchanged except where the table says otherwise.
   mcdu-dotnet in <https://github.com/vradarserver/cduhub>.
 * WCtrlDcsBiosBridge: <https://github.com/landre-cerp/WCtrlDcsBiosBridge>.
 
-The signal catalogue in `data/catalogue` is not part of wctrl. It is generated
+The signal catalogue in `data/catalogue` is not part of this project. It is generated
 on each machine from the DCS-BIOS installed there, and is not distributed.
 
 ## WwDevicesDotnet

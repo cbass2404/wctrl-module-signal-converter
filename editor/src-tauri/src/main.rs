@@ -3,19 +3,18 @@
 
 //! The profile editor's backend.
 //!
-//! Every command here is a thin wrapper over `wctrl-config`. The editor and the
+//! Every command here is a thin wrapper over `dsc-config`. The editor and the
 //! daemon read and write profiles through exactly the same code, so a profile
 //! the editor produces cannot be one the daemon rejects.
 
 mod check;
 mod claims;
 mod learn;
-mod paths;
 mod view;
 
-use paths::Paths;
+use dsc_config::paths::Paths;
 use view::{DeviceView, ModuleChoice, ProfileSummary, SignalView};
-use wctrl_config::{DeviceInventory, Module, Profile};
+use dsc_config::{DeviceInventory, Module, Profile};
 
 /// Commands return a message rather than an error type, because the only useful
 /// thing the window can do with a failure is show it to the user.
@@ -43,7 +42,7 @@ fn inventory(paths: &Paths) -> Reply<DeviceInventory> {
 fn devices() -> Reply<Vec<DeviceView>> {
     let paths = Paths::resolve();
     let inv = inventory(&paths)?;
-    let maps = wctrl_config::DisplayCatalogue::load_dir(&paths.displays)
+    let maps = dsc_config::DisplayCatalogue::load_dir(&paths.displays)
         .map_err(|e| format!("loading {}: {e}", paths.displays.display()))?;
     let mut out: Vec<DeviceView> = inv
         .devices
@@ -353,7 +352,7 @@ struct CatalogueStatus {
 /// and the other finds the catalogue already matching, so the two never build
 /// twice or read each other's half-written files.
 fn refresh_catalogue(paths: &Paths) -> CatalogueStatus {
-    use wctrl_config::catalogue_build::{self, Freshness};
+    use dsc_config::catalogue_build::{self, Freshness};
     let bios_json = catalogue_build::locate_bios_json(&paths.catalogue, None);
     let fresh = catalogue_build::ensure(&bios_json, &paths.catalogue);
     match &fresh {

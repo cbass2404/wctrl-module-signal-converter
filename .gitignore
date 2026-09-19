@@ -1,5 +1,5 @@
 # Rust build output. ~340 MB each.
-# target-alt is used to build while a daemon is holding target/debug/wctrl.exe.
+# target-alt is used to build while a daemon is holding target/debug/dcs-signal.exe.
 /target/
 /target-alt/
 
@@ -14,7 +14,7 @@
 #   * index.json records the absolute path it was generated from
 #   * it is ~11 MB and regenerates in about a second
 #
-# Force a rebuild with:  cargo run --bin wctrl -- catalogue --rebuild
+# Force a rebuild with:  cargo run --bin dcs-signal -- catalogue --rebuild
 /data/catalogue/
 # A build in progress, the one it replaces, and the lock between them.
 /data/catalogue.building/

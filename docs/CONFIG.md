@@ -491,7 +491,7 @@ knowing whether anything is running while they fly. It reads a copy of a
 multicast the daemon is already receiving and never transmits, so the choice is
 about predictability rather than cost.
 
-`wctrl learn` is the same thing on the command line, over the module DCS is
+`dcs-signal learn` is the same thing on the command line, over the module DCS is
 flying, printing a table per window.
 
 ## Conditions: every one must hold

@@ -2,15 +2,15 @@
 resolver = "2"
 members = [
     "crates/wctrl-hid",
-    "crates/wctrl-bios",
-    "crates/wctrl-config",
-    "crates/wctrl-engine",
-    "crates/wctrl-cli",
+    "crates/dsc-bios",
+    "crates/dsc-config",
+    "crates/dsc-engine",
+    "crates/dsc-cli",
     "editor/src-tauri",
 ]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0-alpha.1"
 edition = "2021"
 rust-version = "1.77"
 license = "MIT"

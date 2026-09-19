@@ -790,6 +790,62 @@ dependencies = [
 ]
 
 [[package]]
+name = "dsc-bios"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "socket2 0.5.10",
+ "thiserror 1.0.69",
+]
+
+[[package]]
+name = "dsc-cli"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "clap",
+ "ctrlc",
+ "dsc-bios",
+ "dsc-config",
+ "dsc-engine",
+ "hidapi",
+ "serde_json",
+ "wctrl-hid",
+]
+
+[[package]]
+name = "dsc-config"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "dsc-editor"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "anyhow",
+ "dsc-bios",
+ "dsc-config",
+ "dsc-engine",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+]
+
+[[package]]
+name = "dsc-engine"
+version = "1.0.0-alpha.1"
+dependencies = [
+ "dsc-bios",
+ "dsc-config",
+ "serde_json",
+]
+
+[[package]]
 name = "dtoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4001,63 +4057,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "wctrl-bios"
-version = "0.1.0"
-dependencies = [
- "socket2 0.5.10",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "wctrl-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "ctrlc",
- "hidapi",
- "serde_json",
- "wctrl-bios",
- "wctrl-config",
- "wctrl-engine",
- "wctrl-hid",
-]
-
-[[package]]
-name = "wctrl-config"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "wctrl-editor"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "wctrl-bios",
- "wctrl-config",
- "wctrl-engine",
-]
-
-[[package]]
-name = "wctrl-engine"
-version = "0.1.0"
-dependencies = [
- "serde_json",
- "wctrl-bios",
- "wctrl-config",
-]
-
-[[package]]
 name = "wctrl-hid"
-version = "0.1.0"
+version = "1.0.0-alpha.1"
 dependencies = [
  "hidapi",
  "serde_json",

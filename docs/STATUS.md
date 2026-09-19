@@ -220,6 +220,51 @@ release need their own copy of the nightly the defaults were written against,
 for example attached to a release in this repository, before the
 shipped-defaults test and `nightly_only.py` can run there.
 
+**CI and release workflows written 2026-09-19, not yet run.** Decided: the
+pipeline runs the tests for every PR and every release, since a local run can
+be skipped, and a release builds only from a commit on `main`, so every
+installer traces to its source.
+
+* The pinned nightly is named in `tools/dcs-bios-pin.json` (version, release
+  tag, asset, SHA-256). `tools/fetch_bios.py` downloads it from this repo's
+  `dcs-bios-2026.09.18-nightly` release, checks the hash and the version in
+  `BIOSConfig.lua`, and with `--build-catalogue` builds `data/catalogue` from
+  it. `--zip` checks a local copy instead.
+* `.github/workflows/ci.yml`, on PRs and pushes to `main`, Windows runner:
+  `version.py --check`, the frontend build, the pinned catalogue,
+  `cargo test --workspace --locked`, the installer build.
+  `DSC_REQUIRE_CATALOGUE` makes the two tests that skip without a catalogue
+  fail instead.
+* `.github/workflows/release.yml`, on a `v*` tag: the tag must equal
+  `v` + `VERSION.md` and its commit must be on `main`; then all of CI (called,
+  not copied); `nightly_only.py` must leave `data/nightly-only.json`
+  unchanged, so what ships is what is committed; the build gets
+  `DSC_COMMIT`, which `dcs-signal --version` and the daemon log print
+  (`local build` otherwise); the installer is renamed
+  `DCS-Signal-Converter-<VERSION.md>-setup.exe` with a `.sha256`, given a
+  build-provenance attestation, and put on a draft release.
+* Found on the way: a Tauri build copies `data\devices.json` into
+  `target\debug` and `target\release`, after which a `cargo run` of
+  `dcs-signal` resolves as installed and reads and writes Saved Games, not the
+  checkout. The release scripts set `DSC_DATA`; a dev `cargo run` does not.
+
+**Update banner, 2026-09-19.** On each start the editor asks GitHub for this
+repo's releases (`editor/src-tauri/src/update.rs`). If the newest published
+`v*` release is not the running `VERSION.md`, a bar at the foot of every page
+links to it. Pre-releases count only while the running version is one.
+Offline or any other failure shows nothing. The backend builds and opens the
+URL itself (`explorer`), so the window still opens no URLs. `reqwest` with
+Windows' own TLS. Not yet seen in the window: no release exists to differ.
+
+To release: `toolselease.cmd`, adapted from the afterburner project. It
+runs only on `main` in step with origin, pushes nothing but the tag, and
+checks `version.py --check` and `nightly-only.json` first so the pipeline
+does not fail on them after the tag exists. It runs no tests; CI does.
+
+Still to do: attach the zip to the `dcs-bios-2026.09.18-nightly` release;
+protect `main` (require CI) and `v*` tags on GitHub; the release-notes list
+of changed default rows; then test the installer from the first draft.
+
 **Then, in order:**
 
 1. ~~Build the engine crate.~~ **Done 2026-09-16.** `crates/dsc-engine` holds

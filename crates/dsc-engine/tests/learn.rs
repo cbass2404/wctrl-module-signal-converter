@@ -290,12 +290,16 @@ fn a_signal_shifted_past_its_word_is_watched_without_panicking() {
 /// Every module in the local catalogue, fed a stream that moves every word it
 /// publishes. Learn mode reads every signal a module has, so one bad entry
 /// anywhere in it is enough to crash the editor. Skipped where the catalogue
-/// has not been generated.
+/// has not been generated, except in the pipeline (`DSC_REQUIRE_CATALOGUE`).
 #[test]
 fn every_catalogue_module_survives_being_watched() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/catalogue");
-    let Ok(catalogue) = dsc_config::Catalogue::load_dir(&dir) else {
-        return;
+    let catalogue = match dsc_config::Catalogue::load_dir(&dir) {
+        Ok(catalogue) => catalogue,
+        Err(e) if std::env::var_os("DSC_REQUIRE_CATALOGUE").is_some() => {
+            panic!("DSC_REQUIRE_CATALOGUE is set and data/catalogue does not load: {e}")
+        }
+        Err(_) => return,
     };
     let t0 = Instant::now();
     for module in catalogue.modules() {

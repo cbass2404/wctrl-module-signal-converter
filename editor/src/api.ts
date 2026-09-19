@@ -12,6 +12,7 @@ import type {
   Profile,
   ProfileSummary,
   SignalView,
+  Update,
 } from "./types";
 
 /** Whether the catalogue matched DCS-BIOS at startup, or was rebuilt, or why not. */
@@ -49,3 +50,9 @@ export const learnStart = (module: string) => invoke<void>("learn_start", { modu
 export const learnPoll = () => invoke<LearnReport>("learn_poll");
 export const learnAgain = () => invoke<void>("learn_again");
 export const learnStop = () => invoke<void>("learn_stop");
+
+// Whether a different release is out. Null when this is the newest, and also
+// when the check could not be made, offline most often: no answer, no banner.
+export const updateCheck = () => invoke<Update | null>("update_check");
+/** Opens the release the check found; the backend holds its address. */
+export const openUpdate = () => invoke<void>("open_update");

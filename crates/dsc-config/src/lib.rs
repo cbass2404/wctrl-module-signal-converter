@@ -21,6 +21,20 @@ pub fn version() -> &'static str {
     include_str!("../../../VERSION.md").trim()
 }
 
+/// The commit this was built from. The release pipeline sets `DSC_COMMIT`, so
+/// an installed copy names the exact source it was compiled from; any other
+/// build has none.
+pub fn commit() -> Option<&'static str> {
+    option_env!("DSC_COMMIT").filter(|c| !c.is_empty())
+}
+
+/// The version with its commit, for `--version` and the daemon log, so a
+/// report from a user leads back to the source that built it.
+pub fn build_label() -> &'static str {
+    static LABEL: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    LABEL.get_or_init(|| format!("{} ({})", version(), commit().unwrap_or("local build")))
+}
+
 pub use display::{
     text_cells, Align, Cell, CellRange, Colour, ColourSource, Display, DisplayCatalogue, Grid,
     Readout, Region, Screen, TextCell, TextGrid, Transport, SEAT_SIGNAL,

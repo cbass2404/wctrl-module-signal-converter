@@ -1,0 +1,145 @@
+# Builds a release from a `v*` tag, as a draft for a person to publish.
+#
+# A release is built only from a commit on main, so every installer traces to
+# reviewed source: the tag must match VERSION.md, its commit must be in main's
+# history, the full test suite runs here (not on anyone's machine), the commit
+# is compiled into the programs (`dcs-signal --version`), and the installer
+# carries a signed build-provenance attestation linking its hash to the commit
+# and to this run.
+
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  DSC_REQUIRE_CATALOGUE: "1"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.check.outputs.commit }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Tag matches VERSION.md and its commit is on main
+        id: check
+        run: |
+          version="$(python3 tools/version.py --print)"
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match VERSION.md ($version); tag v$version"
+            exit 1
+          fi
+          commit="$(git rev-parse "$GITHUB_REF_NAME^{commit}")"
+          git fetch --no-tags origin main
+          if ! git merge-base --is-ancestor "$commit" origin/main; then
+            echo "::error::$GITHUB_REF_NAME points at $commit, which is not on main. Releases are built only from main."
+            exit 1
+          fi
+          echo "commit=$commit" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: verify
+    uses: ./.github/workflows/ci.yml
+    with:
+      build_installer: false
+
+  build:
+    needs: [verify, test]
+    runs-on: windows-latest
+    permissions:
+      contents: write      # the draft release
+      id-token: write      # the provenance attestation
+      attestations: write
+    env:
+      DSC_COMMIT: ${{ needs.verify.outputs.commit }}
+      VERSION: ${{ needs.verify.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.verify.outputs.commit }}
+
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: editor/package-lock.json
+
+      - name: Fetch the pinned DCS-BIOS nightly and build the catalogue
+        run: python tools/fetch_bios.py --build-catalogue
+
+      # The installer ships data/nightly-only.json as committed, so what ships
+      # is in the source. This only checks it is still current.
+      - name: nightly-only.json is current against the latest stable DCS-BIOS
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python tools/nightly_only.py
+          if ! git diff --exit-code -- data/nightly-only.json; then
+            echo "::error::data/nightly-only.json is out of date. Run tools/nightly_only.py, commit it to main and tag again."
+            exit 1
+          fi
+
+      - name: Build the installer
+        working-directory: editor
+        run: |
+          npm ci
+          npx tauri build
+
+      - name: Name the installer after VERSION.md
+        shell: bash
+        run: |
+          mkdir -p out
+          name="DCS-Signal-Converter-$VERSION-setup.exe"
+          built=(target/release/bundle/nsis/*-setup.exe)
+          if [ "${#built[@]}" -ne 1 ]; then
+            echo "::error::expected one installer, found: ${built[*]}"
+            exit 1
+          fi
+          cp "${built[0]}" "out/$name"
+          (cd out && sha256sum "$name" > "$name.sha256")
+          cat "out/$name.sha256"
+
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: out/*.exe
+
+      - name: Draft the release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pin="$(python -c "import json; print(json.load(open('tools/dcs-bios-pin.json'))['version'])")"
+          {
+            echo "Built from \`$DSC_COMMIT\` on main by [this run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+            echo
+            echo "Shipped defaults written against DCS-BIOS \`$pin\`."
+            echo
+            echo "Check an installer came from this build:"
+            echo
+            echo "\`\`\`"
+            echo "gh attestation verify DCS-Signal-Converter-$VERSION-setup.exe -R $GITHUB_REPOSITORY"
+            echo "\`\`\`"
+          } > notes.md
+          pre=""
+          case "$VERSION" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" out/* \
+            --draft $pre --verify-tag \
+            --title "DCS Signal Converter $VERSION" \
+            --notes-file notes.md

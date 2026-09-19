@@ -16,16 +16,18 @@ import {
   listProfiles,
   listSignals,
   openProfile,
+  openUpdate,
   resetProfile,
   deleteProfile,
   saveProfile,
+  updateCheck,
 } from "./api";
 import { bindingEditor } from "./binding";
 import { confirmAction } from "./confirm";
 import { showFlags } from "./flags";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
-import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView } from "./types";
+import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView, Update } from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
 
@@ -1206,7 +1208,39 @@ function lampRow(
 
 // ---------------------------------------------------------------------- boot
 
+/**
+ * A bar along the foot of the window when a different release is out.
+ *
+ * Checked once per start and left alone after: it sits outside `#app`, so
+ * moving between pages does not clear it. Offline, the check finds nothing
+ * and nothing is shown.
+ */
+async function showUpdate(): Promise<void> {
+  let update: Update | null;
+  try {
+    update = await updateCheck();
+  } catch {
+    return;
+  }
+  if (!update) return;
+  const link = el("a", { href: "#" }, `Get ${update.latest}`);
+  link.addEventListener("click", (e) => {
+    e.preventDefault();
+    openUpdate().catch((err: unknown) => showError("Opening the release page", err));
+  });
+  document.body.append(
+    el(
+      "div",
+      { class: "update" },
+      el("span", {}, `DCS Signal Converter ${update.latest} is out. This is ${update.current}.`),
+      link,
+    ),
+  );
+  document.body.classList.add("with-update");
+}
+
 async function start(): Promise<void> {
+  void showUpdate();
   try {
     [devices, modules] = await Promise.all([listDevices(), listModules()]);
   } catch (e) {

@@ -1,18 +1,19 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "WinCtrl Profile Editor",
-  "version": "0.1.0",
-  "identifier": "com.xhworx.wctrl.editor",
+  "productName": "DCS Signal Converter",
+  "mainBinaryName": "DCS Signal Converter",
+  "version": "1.0.0-alpha.1",
+  "identifier": "com.xhworx.dcs-signal-converter",
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build"
+    "beforeBuildCommand": "npm run build && cargo build --release --bin dcs-signal"
   },
   "app": {
     "windows": [
       {
-        "title": "WinCtrl Profile Editor",
+        "title": "DCS Signal Converter",
         "width": 1100,
         "height": 800,
         "minWidth": 760,
@@ -26,6 +27,24 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico"]
+    "icon": ["icons/icon.ico"],
+    "resources": {
+      "../../target/release/dcs-signal.exe": "dcs-signal.exe",
+      "../../tools/hook/run-hidden.vbs": "run-hidden.vbs",
+      "../../tools/hook/dcs-signal-hook.lua": "hook/dcs-signal-hook.lua",
+      "../../data/devices.json": "data/devices.json",
+      "../../data/nightly-only.json": "data/nightly-only.json",
+      "../../data/defaults/": "data/defaults/",
+      "../../data/displays/": "data/displays/",
+      "../../data/mcdu/": "data/mcdu/",
+      "../../LICENSE": "LICENSE",
+      "../../THIRD_PARTY_NOTICES.md": "THIRD_PARTY_NOTICES.md"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser",
+        "installerHooks": "installer-hooks.nsh"
+      }
+    }
   }
 }

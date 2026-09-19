@@ -12,7 +12,7 @@
 //! without either noticing the other.
 //!
 //! The thread owns nothing but the socket. All the judgment lives in
-//! `wctrl_engine::learn`, which has no I/O and is tested without DCS.
+//! `dsc_engine::learn`, which has no I/O and is tested without DCS.
 
 use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -21,9 +21,9 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use wctrl_bios::{Listener, Write as BiosWrite};
-use wctrl_config::Module;
-use wctrl_engine::Watcher;
+use dsc_bios::{Listener, Write as BiosWrite};
+use dsc_config::Module;
+use dsc_engine::Watcher;
 
 /// How long a receive blocks before the thread looks at the stop flag again.
 /// Short enough that closing the panel is instant, long enough to be idle.
@@ -266,7 +266,7 @@ mod tests {
 
     #[test]
     fn a_session_listens_or_says_why_not() {
-        // Everything about what moved is tested in wctrl-engine against a
+        // Everything about what moved is tested in dsc-engine against a
         // synthetic stream. What is only testable here is the thread: that it
         // starts, that a poll answers while it runs, and that a failure to join
         // the group is reported rather than swallowed into a panel that sits

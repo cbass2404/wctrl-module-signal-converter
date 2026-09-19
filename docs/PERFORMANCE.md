@@ -15,7 +15,7 @@ CarrierAce UFC + HUD, ViperAce ICP, Orion Combat Rudder Pedals, MCDU Captain.
 
 ## The daemon
 
-`wctrl run` with the A-10C profile, against a synthetic DCS-BIOS stream. Each
+`dcs-signal run` with the A-10C profile, against a synthetic DCS-BIOS stream. Each
 scenario was measured for 30 seconds, after 3 seconds of warmup that absorb
 the startup and module-load flood.
 
@@ -28,7 +28,7 @@ the startup and module-load flood.
 - **idle:** no stream at all, which is the daemon waiting for DCS.
 - **typical:** 30 frames a second. Each frame moves 20 integer outputs and
   one text field, and the whole map is re-exported every 300 ms, the same
-  cycle DCS-BIOS uses (see `crates/wctrl-bios`).
+  cycle DCS-BIOS uses (see `crates/dsc-bios`).
 - **stress:** 60 frames a second, and every output in the module takes a new
   random value in every frame. Every bound lamp and every display field
   changes every frame, which no real cockpit does.
@@ -55,12 +55,12 @@ the idle and typical figures mean "under about 0.2%", not exact values.
 
 ## The editor
 
-`wctrl-editor.exe` idle with a profile open, measured across its whole process
+`dsc-editor.exe` idle with a profile open, measured across its whole process
 tree after 10 seconds.
 
 | Process | Private memory |
 |---|---|
-| wctrl-editor.exe | 4.1 MB |
+| dsc-editor.exe | 4.1 MB |
 | msedgewebview2.exe (6 processes) | 161.2 MB |
 | **Total** | **165.3 MB** |
 
@@ -75,8 +75,8 @@ does not depend on what the editor does.
 
 | Part | On disk | Compressed |
 |---|---|---|
-| `wctrl.exe` | 2.1 MB | 0.6 MB |
-| `wctrl-editor.exe`, frontend embedded | 9.2 MB | 1.8 MB |
+| `dcs-signal.exe` | 2.1 MB | 0.6 MB |
+| `dsc-editor.exe`, frontend embedded | 9.2 MB | 1.8 MB |
 | `data/defaults`, `data/displays`, `data/devices.json` | 0.35 MB | 0.02 MB |
 | `data/catalogue`, 51 modules | 11 MB | 0.4 MB |
 | **Total** | **about 23 MB** | **about 3 MB** |
@@ -97,7 +97,7 @@ built yet, so these are estimates.
 ## Reproducing
 
 ```powershell
-cargo build --release --bin wctrl
+cargo build --release --bin dcs-signal
 python tools/bench_daemon.py                  # dry run, all three scenarios
 python tools/bench_daemon.py --live           # drives the panels
 python tools/bench_daemon.py --module F-16C_50 --aircraft F-16C_50
@@ -109,7 +109,7 @@ generated catalogue, starts the daemon with its output sent to NUL, and samples
 it with `GetProcessTimes` and `GetProcessMemoryInfo`.
 
 - **Close other DCS-BIOS clients first.** Anything else reading the multicast
-  group, such as `wctrl listen` or the editor's learn mode, sees the synthetic
+  group, such as `dcs-signal listen` or the editor's learn mode, sees the synthetic
   stream too.
 - **`--live` drives the panels.** Lamps and screens flash random values for
   the length of the run. The tool lets the daemon's `--seconds` expire instead

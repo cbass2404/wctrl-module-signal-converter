@@ -1,6 +1,6 @@
 {
   "_comment": "The MCDU's screen: a 24x14 character grid the panel draws itself, from a font uploaded to it, over report 0xf2 (docs/PROTOCOL.md, \"Driving a text grid\"). A cell is a character, a colour and a size, not a bitmap. Cell n is row n / 24, column n % 24.",
-  "_source": "Grid, origins and the font upload are WwDevicesDotnet's (BSD-3-Clause), which took them from SimAppPro; see THIRD_PARTY_NOTICES.md. Drawn on our own panel with wctrl mcdu-test 2026-09-18: all four corners, ten colours, the large font and inverse came out as sent.",
+  "_source": "Grid, origins and the font upload are WwDevicesDotnet's (BSD-3-Clause), which took them from SimAppPro; see THIRD_PARTY_NOTICES.md. Drawn on our own panel with dcs-signal mcdu-test 2026-09-18: all four corners, ten colours, the large font and inverse came out as sent.",
   "_notes": [
     "The panel holds no font across a power cycle. native_fonts says which font each aircraft's own CDU matches, keyed by runtime aircraft name; an aircraft with none cannot put fields here yet.",
     "origin is where the grid starts on the 640x480 surface; font_origin is where the font upload puts it, which WwDevicesDotnet sets 4 pixels higher. Both are theirs, unchanged.",

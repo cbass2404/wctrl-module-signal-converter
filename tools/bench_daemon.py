@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Measure what `wctrl run` costs in CPU and memory.
+"""Measure what `dcs-signal run` costs in CPU and memory.
 
   python tools/bench_daemon.py                          # dry run, A-10C, all scenarios
   python tools/bench_daemon.py --aircraft F-16C_50 --module F-16C_50
@@ -190,7 +190,7 @@ def memory(handle):
 
 
 def measure(args, scenario):
-    exe = os.path.join(ROOT, "target", "release", "wctrl.exe")
+    exe = os.path.join(ROOT, "target", "release", "dcs-signal.exe")
     cmd = [exe, "run", "--seconds", str(int(args.seconds + args.warmup) + 2)]
     if not args.live:
         cmd.append("--dry-run")
@@ -214,7 +214,7 @@ def measure(args, scenario):
     while time.perf_counter() - t0 < args.seconds:
         time.sleep(args.interval)
         if proc.poll() is not None:
-            sys.exit(f"wctrl exited early with code {proc.returncode}")
+            sys.exit(f"dcs-signal exited early with code {proc.returncode}")
         cpu, now = cpu_seconds(handle), time.perf_counter()
         m = memory(handle)
         samples.append((100 * (cpu - prev_cpu) / (now - prev_t), m.WorkingSetSize, m.PrivateUsage))
@@ -256,13 +256,13 @@ def main():
     args = ap.parse_args()
     args.catalogue = os.path.join(ROOT, "data", "catalogue", args.module + ".json")
 
-    if not os.path.exists(os.path.join(ROOT, "target", "release", "wctrl.exe")):
-        sys.exit("build it first: cargo build --release --bin wctrl")
+    if not os.path.exists(os.path.join(ROOT, "target", "release", "dcs-signal.exe")):
+        sys.exit("build it first: cargo build --release --bin dcs-signal")
     if not os.path.exists(args.catalogue):
-        sys.exit(f"{args.catalogue} missing - build it with: cargo run --bin wctrl -- catalogue")
+        sys.exit(f"{args.catalogue} missing - build it with: cargo run --bin dcs-signal -- catalogue")
 
     mode = "live, panels driven" if args.live else "dry run"
-    print(f"wctrl run ({mode}), {args.aircraft}, {args.seconds:g}s per scenario\n")
+    print(f"dcs-signal run ({mode}), {args.aircraft}, {args.seconds:g}s per scenario\n")
     print(f"{'scenario':<9} {'frames/s':>8} {'CPU avg':>8} {'CPU peak':>9} "
           f"{'WS avg':>8} {'WS peak':>8} {'private':>8}")
     names = list(SCENARIOS) if args.scenario == "all" else [args.scenario]

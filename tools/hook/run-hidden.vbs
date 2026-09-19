@@ -1,4 +1,4 @@
-' run-hidden.vbs - start the wctrl daemon with no console window.
+' run-hidden.vbs - start the DCS Signal Converter daemon with no console window.
 '
 ' Not something to double-click: it is the shim the DCS hook uses. DCS's
 ' os.execute() would otherwise flash a console window on every mission start.
@@ -13,7 +13,7 @@ Set shell = CreateObject("WScript.Shell")
 Set fso = CreateObject("Scripting.FileSystemObject")
 
 here = fso.GetParentFolderName(WScript.ScriptFullName)
-exePath = here & "\wctrl.exe"
+exePath = here & "\dcs-signal.exe"
 If Not fso.FileExists(exePath) Then WScript.Quit 1
 
 idle = 20

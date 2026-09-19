@@ -601,7 +601,7 @@ mod tests {
 
     #[test]
     fn pixel_frames_match_every_captured_write() {
-        let log = include_str!("../../wctrl-config/tests/fixtures/ded_simapppro_frames.txt");
+        let log = include_str!("../../dsc-config/tests/fixtures/ded_simapppro_frames.txt");
         let mut writes = 0;
         for line in log.lines().filter(|l| l.contains("[f0 ")) {
             let raw = captured(line);

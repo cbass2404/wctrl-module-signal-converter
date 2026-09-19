@@ -1,0 +1,22 @@
+[package]
+name = "dsc-cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Headless driver and diagnostics for DCS Signal Converter"
+
+[[bin]]
+name = "dcs-signal"
+path = "src/main.rs"
+
+[dependencies]
+wctrl-hid = { path = "../wctrl-hid" }
+dsc-bios = { path = "../dsc-bios" }
+dsc-config = { path = "../dsc-config" }
+dsc-engine = { path = "../dsc-engine" }
+anyhow.workspace = true
+clap = { version = "4", features = ["derive"] }
+ctrlc = "3"
+hidapi = { version = "2.6", default-features = false, features = ["windows-native"] }
+serde_json.workspace = true

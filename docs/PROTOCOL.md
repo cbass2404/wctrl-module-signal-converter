@@ -337,7 +337,7 @@ slider order rather than index order.
 
 **Index 2 is a shortcut, not a lamp and not a gate.** A write to it goes through
 to both pedal lights, and whichever write came last wins. Worked out on
-hardware with `wctrl led`, with 1 and 2 starting at 0:
+hardware with `dcs-signal led`, with 1 and 2 starting at 0:
 
 1. 1 = 255 lit the right light alone, so 2 at 0 does not hold it off.
 2. 2 = 255 lit both, with 1 still at 0, so 2 drives them directly.
@@ -659,7 +659,7 @@ SimAppPro never drives the MCDU from DCS. It is ported from WwDevicesDotnet
 (BSD-3-Clause, Andrew Whewell and Laurent André,
 <https://github.com/landre-cerp/WwDevicesDotnet>, `Winctrl/README.md`), which
 worked it out from SimAppPro's font upload, and it was **confirmed on our own
-panel 2026-09-18** with `wctrl mcdu-test`: the corners of the 24x14 grid, ten
+panel 2026-09-18** with `dcs-signal mcdu-test`: the corners of the 24x14 grid, ten
 colours, the large font and an inverse cell all came out as sent.
 
 **Setup, on the pixel channel `0xf0`, as structured commands:**
@@ -691,7 +691,7 @@ so 40 ms follows each one.
 **The font is not the panel's.** Glyphs live in RAM and are lost on a power
 cycle, and until a font is sent the grid draws nothing. The upload is
 SimAppPro's, replayed from WwDevicesDotnet's packet map with the glyph bytes
-swapped in (`data/mcdu`, `crates/wctrl-config/src/mcdu_font.rs`): 603 reports
+swapped in (`data/mcdu`, `crates/dsc-config/src/mcdu_font.rs`): 603 reports
 of `0x106` downLoadFontHead for slots 5 and 6, `0x107` downLoadFontData,
 `0x105` getLastErrorString after each chunk, its own format table, and one
 `SET_LEDX` of the screen brightness. It sends nothing persistent. It resets

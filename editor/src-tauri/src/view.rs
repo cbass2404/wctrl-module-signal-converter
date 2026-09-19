@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use wctrl_config::{DeviceSpec, DisplayCatalogue, Led, Module, Profile, ValueLabel};
+use dsc_config::{DeviceSpec, DisplayCatalogue, Led, Module, Profile, ValueLabel};
 
 #[derive(Serialize)]
 pub struct LedView {
@@ -182,7 +182,7 @@ pub struct ModuleChoice {
     pub lamps: usize,
 }
 
-/// `index.json` as `wctrl_config::catalogue_build` writes it.
+/// `index.json` as `dsc_config::catalogue_build` writes it.
 #[derive(Deserialize)]
 struct Index {
     #[serde(default)]

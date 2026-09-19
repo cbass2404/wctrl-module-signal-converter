@@ -1,6 +1,6 @@
 //! Checking a profile the way the daemon will, while it is still being edited.
 //!
-//! `wctrl-config` already knows every rule; nothing here restates one. The job
+//! `dsc-config` already knows every rule; nothing here restates one. The job
 //! is to run those rules often enough that a fault is found where it was made,
 //! instead of on the ramp, where the daemon's answer to a bad profile is to
 //! skip the whole file and leave every lamp in it dark.
@@ -13,11 +13,11 @@
 
 use std::sync::Mutex;
 
-use wctrl_config::catalogue_build::catalogue_version;
-use wctrl_config::nightly_only::{Change, NightlyOnly};
-use wctrl_config::{DeviceInventory, DisplayCatalogue, Flag, Module, Place, Profile, Unsound};
+use dsc_config::catalogue_build::catalogue_version;
+use dsc_config::nightly_only::{Change, NightlyOnly};
+use dsc_config::{DeviceInventory, DisplayCatalogue, Flag, Module, Place, Profile, Unsound};
 
-use crate::paths::Paths;
+use dsc_config::paths::Paths;
 
 /// The catalogue pieces a check needs, loaded once and reused.
 #[derive(Default)]

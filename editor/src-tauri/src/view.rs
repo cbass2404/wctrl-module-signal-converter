@@ -81,6 +81,10 @@ pub struct DisplayView {
     /// of asking for a cell run, because a cell run is not something anyone
     /// deciding what to put on a panel can be expected to know.
     pub regions: Vec<RegionView>,
+    /// Whether this glass can draw a character inverse. The window offers a
+    /// highlighting signal only where it can, because `validate` rejects one
+    /// on a display that cannot: it would do nothing.
+    pub draws_inverse: bool,
 }
 
 #[derive(Serialize)]
@@ -119,6 +123,7 @@ impl DeviceView {
                         note: r.note.clone(),
                     })
                     .collect(),
+                draws_inverse: d.draws_inverse(),
             })
             .collect();
         self
@@ -303,5 +308,40 @@ impl SignalView {
                 .then_with(|| a.description.to_lowercase().cmp(&b.description.to_lowercase()))
         });
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dsc_config::paths::Paths;
+    use dsc_config::DeviceInventory;
+
+    /// The window offers a highlighting signal only where the glass can draw
+    /// one, and `validate` refuses it anywhere else, so the two have to agree.
+    /// The UFC is the case that matters: it is pixel glass like the DED, and
+    /// nothing about it on screen says it has no inverse form.
+    #[test]
+    fn only_glass_that_draws_inverse_says_so() {
+        let paths = Paths::resolve();
+        let maps = DisplayCatalogue::load_dir(&paths.displays).expect("the shipped display maps load");
+        let inv = DeviceInventory::load(&paths.devices).expect("the shipped inventory loads");
+        let views: Vec<DisplayView> = inv
+            .devices
+            .iter()
+            .flat_map(|d| DeviceView::of(d).with_displays(d, &maps).displays)
+            .collect();
+        assert!(!views.is_empty(), "some device has glass");
+        for view in views {
+            let expected = match view.key.as_str() {
+                // Pixel glass with inverse rows, and a text grid, which always
+                // has an inverse form.
+                "DED" | "MCDU" => true,
+                // Seven segment and fixed shapes: no slots to flip.
+                "UFC1" => false,
+                other => panic!("unmapped display {other:?}; say whether it draws inverse"),
+            };
+            assert_eq!(view.draws_inverse, expected, "{}", view.key);
+        }
     }
 }

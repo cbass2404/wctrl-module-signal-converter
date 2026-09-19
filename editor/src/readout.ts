@@ -7,6 +7,7 @@
 // and on any other the user has.
 
 import { flagSlot } from "./flags";
+import { noteEditor } from "./note";
 import { signalPicker } from "./typeahead";
 import type { Device, DisplayInfo, Readout, RegionInfo, SignalView } from "./types";
 
@@ -109,6 +110,44 @@ function isText(signals: SignalView[], id: string): boolean {
 /** How many characters a text signal will hand over, or 0. */
 function textLength(signals: SignalView[], id: string): number {
   return signals.find((x) => x.id === id)?.length ?? 0;
+}
+
+/**
+ * The highlighting twin DCS-BIOS exports beside a text signal, if it has one.
+ *
+ * The F-16 is the only module in the catalogue that does this, sending each DED
+ * line as `DED_Ln` and its highlighting as `DED_Ln_FORMAT`. The naming is a
+ * convention rather than a rule, which is why finding the twin fills the box in
+ * and does not replace it.
+ */
+function twinOf(signals: SignalView[], source: string): string | undefined {
+  if (!source) return undefined;
+  const id = `${source}_FORMAT`;
+  return signals.some((x) => x.id === id && x.text) ? id : undefined;
+}
+
+/**
+ * Keep the highlighting signal with the source it belongs to.
+ *
+ * A field repointed from DED line 1 to line 2 wants line 2's twin and never
+ * line 1's. The old one would go on marking characters inverse against text it
+ * no longer describes, which is a real text signal, so nothing in `validate`
+ * would say a word and the glass would simply highlight the wrong characters.
+ * A twin the user chose themselves is left where they put it.
+ */
+function followTwin(readout: Readout, signals: SignalView[], was: string): void {
+  const chosen = readout.format !== undefined && readout.format !== twinOf(signals, was);
+  // A number has no characters to mark, so its highlighting goes whoever chose
+  // it. This is the one place that is fair: the source has just been changed by
+  // hand, so the field is already being rewritten.
+  if (chosen && !isText(signals, readout.source)) {
+    delete readout.format;
+    return;
+  }
+  if (chosen) return;
+  const twin = twinOf(signals, readout.source);
+  if (twin) readout.format = twin;
+  else delete readout.format;
 }
 
 /** How DCS-BIOS reports the occupied crew station, where it reports one. */
@@ -350,6 +389,68 @@ function aliasEditor(readout: Readout, onChange: () => void): HTMLElement {
   return wrap;
 }
 
+/**
+ * The signal that says which of this field's characters draw inverse.
+ *
+ * Offered only on glass that can draw inverse, because `validate` refuses a
+ * highlighting signal on glass that cannot: it would do nothing at all. The
+ * box fills itself in when the source has a twin, which is every DED line, so
+ * the common case costs nobody a decision, and it stays a picker because no
+ * rule says the next module to export highlighting will name its twin this way.
+ */
+function formatChooser(readout: Readout, signals: SignalView[], onChange: () => void): HTMLElement {
+  const wrap = el("div", { class: "highlighting" });
+  // Numbers are not offered: highlighting is one mark per cell, and a number
+  // has no characters to mark with.
+  const text = signals.filter((s) => s.text);
+  const row = el("div", { class: "highlight-row" });
+
+  const draw = (): void => {
+    row.textContent = "";
+    row.append(
+      signalPicker({
+        signals: text,
+        value: readout.format ?? "",
+        onPick: (id) => {
+          readout.format = id;
+          onChange();
+        },
+      }),
+    );
+    // The picker commits a signal and never an empty box, so clearing the
+    // choice needs a control of its own, the same trash icon a substitution
+    // is removed with.
+    if (readout.format) {
+      const drop = el(
+        "button",
+        { class: "icon danger", title: "Draw this field with no highlighting" },
+        "\u{1F5D1}",
+      );
+      drop.addEventListener("click", () => {
+        delete readout.format;
+        draw();
+        onChange();
+      });
+      row.append(drop);
+    }
+  };
+
+  draw();
+  wrap.append(
+    el("label", { class: "meta" }, "highlighting"),
+    row,
+    el(
+      "span",
+      { class: "meta block" },
+      "A second signal laid out across the same cells, one mark per character: " +
+        "i draws that character inverse and anything else draws it plain. This " +
+        "is how the F-16 DED shows the field you are working on, and DCS-BIOS " +
+        "sends it beside the line itself, DED_L1 and DED_L1_FORMAT.",
+    ),
+  );
+  return wrap;
+}
+
 interface RowOptions {
   readout: Readout;
   display: DisplayInfo;
@@ -471,14 +572,25 @@ function row(opts: RowOptions): HTMLTableRowElement {
       extras.append(seatChooser(readout, stations, onChange));
     }
 
-    extras.append(aliasEditor(readout, onChange));
+    // Highlighting marks characters, so it means nothing over a number, and
+    // nothing at all on glass with no inverse form to draw. One already set is
+    // shown anyway, so a hand-written field can be read and undone here rather
+    // than only in the file. Drawing a row never changes it: opening a profile
+    // would otherwise dirty it before anyone touched anything.
+    if (display.draws_inverse && (isText(signals, readout.source) || readout.format !== undefined)) {
+      extras.append(formatChooser(readout, signals, onChange));
+    }
+
+    extras.append(aliasEditor(readout, onChange), noteEditor(readout, "field", onChange));
   };
 
   const picker = signalPicker({
     signals,
     value: readout.source,
     onPick: (id) => {
+      const was = readout.source;
       readout.source = id;
+      followTwin(readout, signals, was);
       drawExtras();
       onChange();
     },

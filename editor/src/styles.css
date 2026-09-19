@@ -838,6 +838,28 @@ td.num label.field input.value {
 
 /* On every lamp with a shipped version; disabled while the lamp matches it.
    Unlike the profile-level Reset, it touches one lamp. */
+/* The foot of a lamp: whatever note it carries on the left, and Reset off in
+   the far corner. Reset discards the lamp's whole setup, so it does not belong
+   at the bottom of the same stack as the buttons that add to it. */
+.binding-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 2px;
+}
+
+.binding-footer .note-box {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Overrides the flex-start every other add button sits at: this one follows
+   the bottom of the note beside it rather than the top. */
+.binding-footer button.add.revert {
+  align-self: flex-end;
+}
+
 button.add.revert {
   color: var(--muted);
 }
@@ -1014,6 +1036,51 @@ input.cells.bad {
 input.alias {
   width: 7em;
   font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+}
+
+/* Laid out like .aliases, which is the same shape of thing: a labelled control
+   with the reason for it underneath. */
+.highlighting,
+.note-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* A signal search box and a note are both too wide to sit beside a checkbox,
+   so they take a line of their own in the wrapping row of field extras. The
+   lamp editor holds the note in a column already and needs no basis: setting
+   one there would read as a height. */
+.readout-extras .highlighting,
+.readout-extras .note-box {
+  flex-basis: 100%;
+}
+
+.highlight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+textarea.note {
+  width: 100%;
+  min-height: 3.2em;
+  resize: vertical;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+textarea.note:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
 }
 
 select.seat {

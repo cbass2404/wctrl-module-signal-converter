@@ -8,6 +8,7 @@
 
 import { confirmAction } from "./confirm";
 import { flagSlot } from "./flags";
+import { noteEditor } from "./note";
 import { hintFor, signalPicker } from "./typeahead";
 import type { Binding, Branch, Condition, Led, OnWhen, SignalView } from "./types";
 
@@ -636,13 +637,13 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
         addCondition({ conditions: binding.conditions });
       });
       host.append(swap);
-      appendRevert();
+      appendFooter();
       return;
     }
 
     if (binding.same_as) {
       host.append(mirrorRow(binding.same_as));
-      appendRevert();
+      appendFooter();
       return;
     }
 
@@ -676,7 +677,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       }
 
       host.append(choices);
-      appendRevert();
+      appendFooter();
       return;
     }
 
@@ -716,7 +717,26 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       host.append(el("div", { class: "meta" }, "The lamp lights only when every condition holds."));
     }
 
-    appendRevert();
+    appendFooter();
+  }
+
+  /**
+   * What sits under every lamp whatever form its binding takes.
+   *
+   * The note belongs on all of them, the unassigned ones most of all: six
+   * lamps in the A-10C default are left unassigned with the reasoning in a
+   * note, and a lamp with no conditions is exactly the one a reader has the
+   * most questions about.
+   */
+  function appendFooter(): void {
+    // The note on the left, Reset alone in the corner. Reset is the only
+    // control in this cell that throws work away, and it was sitting at the
+    // bottom of the same stack as the buttons that add things, one slip from
+    // the last of them.
+    const footer = el("div", { class: "binding-footer" });
+    footer.append(noteEditor(binding, "lamp", opts.onChange));
+    appendRevert(footer);
+    host.append(footer);
   }
 
   /**
@@ -724,7 +744,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
    * the same place. Disabled while the lamp already matches, so it is never a
    * no-op. A profile the user made has no shipped version and no button.
    */
-  function appendRevert(): void {
+  function appendRevert(into: HTMLElement): void {
     const shipped = opts.shipped;
     if (!shipped) return;
     const revert = el("button", { class: "add revert", type: "button" }, "Reset this lamp");
@@ -735,7 +755,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       revert.title = "Put this lamp back the way it shipped. No other lamp is touched.";
       revert.addEventListener("click", () => void confirmRevert(shipped));
     }
-    host.append(revert);
+    into.append(revert);
   }
 
   /** Asks first, showing both setups, so a revert is never made blind. */

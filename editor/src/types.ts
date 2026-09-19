@@ -104,6 +104,14 @@ export interface Readout {
    * 50 catalogued.
    */
   seat?: number;
+  /**
+   * A second text signal, laid out across the same cells, whose `i` marks the
+   * characters to draw inverse.
+   *
+   * The F-16 DED is the case DCS-BIOS exports: each line arrives as `DED_Ln`
+   * and its highlighting as `DED_Ln_FORMAT`, one character for one.
+   */
+  format?: string;
   note?: string;
 }
 
@@ -185,6 +193,9 @@ export interface DisplayInfo {
   /** Cell index to shape, so a run that cannot take letters can be flagged. */
   shapes: string[];
   regions: RegionInfo[];
+  /** Whether this glass can draw a character inverse, which is what decides
+   *  whether a highlighting signal is worth offering. */
+  draws_inverse: boolean;
 }
 
 export interface Device {

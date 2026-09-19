@@ -391,24 +391,50 @@ Shipped profiles are a product, not a sample. They live read-only in
 is a separate, writable one, and it starts as a copy of `data/defaults`.
 
 - **Install** copies every default in.
-- **Update** copies in only the names that are not already there. A profile the
-  user has is theirs, and an update never rewrites it.
-- **Reset** copies one default back over the active file.
-- **Delete** removes a profile the user made. A shipped one is refused, since
-  it would be seeded straight back; Reset is the way back for those.
+- **Update** copies in only the names that are not already there, and only for
+  the aircraft no profile already claims. A profile the user has is theirs, and
+  an update never rewrites it.
+- **Reset** copies one default back over the active file, except for aircraft
+  another profile has taken since, which stay where they are.
+- **Delete** removes a profile the user made, or a shipped one when another
+  profile can take its aircraft. When deleting would leave an aircraft with no
+  profile, the editor offers the profiles that can take it; a shipped one must
+  hand its aircraft on, since seeding would bring it straight back otherwise,
+  so with nowhere to send them it has Reset and no Delete.
+
+  A profile can take an aircraft when it reads the same module and already
+  flies an aircraft of the same **family**. The shipped defaults are the
+  families (`Profiles::families`): each shipped file groups aircraft on
+  purpose, so the F-14 and F-14BU, one module shipped as two, never take each
+  other's aircraft, and "No aircraft", which rides on FC3, takes nothing and
+  goes nowhere. An aircraft no default lists is grouped by its module.
+- **Rename** changes the name the list shows, never the file name.
 
 There is exactly one folder in use, so what a user sees in it is what runs.
 Nothing is shadowed at load time and `--profiles` keeps pointing at one place.
 
 The cost, accepted deliberately: a correction shipped to a default never reaches
 a user who already has that profile, including one who never opened it. Reset is
-the manual remedy. A profile the user deletes reappears on the next update
-unless the seeded names are tracked.
+the manual remedy.
 
-Seeding goes by file name, so renaming a shipped profile leaves a user with the
-old file and the new one, both claiming the same aircraft. The old copy then has
-no shipped default, so the editor offers Delete on it. The A-10C default was
-renamed from `a-10c-2.json` to `a-10c.json` this way, after the DCS-BIOS module.
+**One aircraft, one profile.** The daemon flies the first profile, by file name,
+that claims the aircraft DCS reports, so a second claim is never used and would
+be silent. Nothing may make one:
+
+- Seeding matches a default by file name but checks its claim by aircraft. A
+  default whose aircraft are all claimed is skipped, and one with some claimed
+  comes in without them. This is what lets a deleted shipped profile stay
+  deleted once its aircraft live elsewhere, and what keeps a default shipped in
+  an update from doubling up on a profile the user already made.
+- New profile and Copy to... move a claimed aircraft rather than share it.
+- A starter profile is written only for an aircraft no file claims, including
+  one that was skipped for a fault.
+- A claim made anyway, by a file copied in by hand, is logged by the daemon and
+  named at the top of the editor's profile list.
+
+A shipped default renamed between releases (`a-10c-2.json` to `a-10c.json`,
+after the DCS-BIOS module) no longer leaves two profiles behind: the new file
+finds its aircraft claimed by the old one and is not seeded.
 
 ## The source dropdown
 

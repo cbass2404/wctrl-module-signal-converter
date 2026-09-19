@@ -88,6 +88,7 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         .map_err(|e| fail("adding new hardware to the profiles", e))?;
 
     let dir = &paths.profiles.active;
+    let families = paths.profiles.families();
     let mut out = Vec::new();
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -105,7 +106,7 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         // A profile that will not parse is still listed, carrying its error.
         // Hiding it would leave the user looking for a file they can see on disk.
         out.push(match Profile::load(&path) {
-            Ok(p) => ProfileSummary::of(&p, file, has_default),
+            Ok(p) => ProfileSummary::of(&p, file, has_default, &families),
             Err(e) => ProfileSummary::broken(file, has_default, e.to_string()),
         });
     }
@@ -307,6 +308,11 @@ fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<F
 #[tauri::command]
 fn save_profile(file: String, profile: Profile, cache: tauri::State<check::Cache>) -> Reply<()> {
     let paths = Paths::resolve();
+    // The name is only what the list shows, never the file, so renaming
+    // changes nothing else. It still has to be something to read.
+    if profile.name.trim().is_empty() {
+        return Err(format!("{file} was not written, because a profile needs a name"));
+    }
     let problems = cache.problems(&paths, &profile);
     if !problems.is_empty() {
         return Err(format!(
@@ -332,14 +338,13 @@ fn reset_profile(file: String) -> Reply<()> {
         .map_err(|e| fail(&format!("resetting {file}"), e))
 }
 
-/// Delete a profile the user made. A shipped one is refused; it has reset.
+/// Delete a profile, giving its aircraft to the profile `give_to` first if one
+/// is named. A shipped profile whose aircraft would go nowhere is refused,
+/// since seeding would bring it straight back; Reset is that.
 #[tauri::command]
-fn delete_profile(file: String) -> Reply<()> {
+fn delete_profile(file: String, give_to: Option<String>) -> Reply<()> {
     let paths = Paths::resolve();
-    paths
-        .profiles
-        .delete(&file)
-        .map_err(|e| fail(&format!("deleting {file}"), e))
+    claims::delete_giving(&paths.profiles, &file, give_to.as_deref())
 }
 
 /// What the startup check on the catalogue found, for the profiles page.

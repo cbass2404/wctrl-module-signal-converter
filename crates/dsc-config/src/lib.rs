@@ -58,8 +58,6 @@ pub enum Error {
     OutOfRange(String, u8, u8),
     #[error("no shipped default named {0:?} to reset from")]
     NoDefault(String),
-    #[error("{0:?} shipped with DCS Signal Converter, so it cannot be deleted; reset it instead")]
-    ShippedProfile(String),
     #[error("{0:?} is not a profile file name")]
     NotAProfileFile(String),
     #[error("LED {0:?} is set to always on but also carries conditions; it can have one or the other")]
@@ -1583,6 +1581,30 @@ pub fn profile_name_for(aircraft: &str) -> &str {
     }
 }
 
+/// Aircraft grouped by the shipped default that lists them.
+///
+/// Two aircraft in one family can share a profile: one of them can be handed
+/// to a profile flying the other. An aircraft no default lists is grouped by
+/// its module, since nothing has said its module's aircraft differ.
+pub struct Families(HashMap<String, String>);
+
+impl Families {
+    /// The family `aircraft` belongs to, on a profile reading `module`.
+    pub fn of(&self, aircraft: &str, module: &str) -> String {
+        match self.0.get(aircraft) {
+            Some(file) => file.clone(),
+            None => format!("module {module}"),
+        }
+    }
+
+    /// Whether `aircraft` could join `target`: it reads the same module and
+    /// already flies an aircraft of the same family.
+    pub fn fits(&self, aircraft: &str, module: &str, target: &Profile) -> bool {
+        let family = self.of(aircraft, module);
+        target.module == module && target.aircraft.iter().any(|a| self.of(a, &target.module) == family)
+    }
+}
+
 impl Profiles {
     pub fn new(defaults: impl Into<PathBuf>, active: impl Into<PathBuf>) -> Self {
         Profiles {
@@ -1599,15 +1621,27 @@ impl Profiles {
     /// claim different aircraft, which is fine. A profile that will not parse
     /// claims nothing, since it cannot be loaded to fly either.
     pub fn claimed_aircraft(&self) -> HashMap<String, String> {
+        self.claimed_except(None)
+    }
+
+    /// [`claimed_aircraft`](Self::claimed_aircraft), leaving out the claims of
+    /// one file, for asking what a profile could take back without counting
+    /// its own.
+    pub fn claimed_except(&self, file: Option<&str>) -> HashMap<String, String> {
         let mut out = HashMap::new();
         let Ok(entries) = std::fs::read_dir(&self.active) else {
             return out;
         };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .filter(|p| file.is_none() || p.file_name().and_then(|n| n.to_str()) != file)
+            .collect();
+        // In file name order, which is the order the daemon loads them in, so
+        // an aircraft claimed twice is named after the profile that wins.
+        paths.sort();
+        for path in paths {
             if let Ok(p) = Profile::load(&path) {
                 for a in &p.aircraft {
                     out.entry(a.clone()).or_insert_with(|| p.name.clone());
@@ -1618,31 +1652,88 @@ impl Profiles {
     }
 
     /// Copy in every default the active folder does not already have, returning
-    /// the file names copied. Creates the active folder if it is missing.
+    /// a line for each one copied. Creates the active folder if it is missing.
     ///
     /// Safe to run on every start, which is the point: install, update and a
     /// user who deleted the folder all take the same path.
+    ///
+    /// A default comes in only for the aircraft no profile already claims. The
+    /// file name is not the claim, the aircraft is: a user who deleted a
+    /// shipped profile after moving its aircraft elsewhere, or an update that
+    /// ships a default for an aircraft the user already set up themselves,
+    /// would otherwise end with two profiles for one aircraft and the daemon
+    /// flying whichever sorts first. One with nothing left to claim is skipped.
     pub fn seed(&self) -> Result<Vec<String>> {
         if !self.defaults.is_dir() {
             return Ok(Vec::new());
         }
         std::fs::create_dir_all(&self.active)?;
+        let mut claimed = self.claimed_aircraft();
+        let mut defaults: Vec<PathBuf> = std::fs::read_dir(&self.defaults)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .collect();
+        defaults.sort();
         let mut copied = Vec::new();
-        for entry in std::fs::read_dir(&self.defaults)? {
-            let from = entry?.path();
-            if from.extension().and_then(|e| e.to_str()) != Some("json") {
+        for from in defaults {
+            let Some(name) = from.file_name().map(|n| n.to_string_lossy().into_owned()) else {
                 continue;
-            }
-            let Some(name) = from.file_name() else { continue };
-            let to = self.active.join(name);
+            };
+            let to = self.active.join(&name);
             if to.exists() {
                 continue;
             }
-            std::fs::copy(&from, &to)?;
-            copied.push(name.to_string_lossy().into_owned());
+            // A default that will not parse is our fault, not the user's, and
+            // copying it is how the daemon gets to say what is wrong with it.
+            let Ok(mut profile) = Profile::load(&from) else {
+                std::fs::copy(&from, &to)?;
+                copied.push(name);
+                continue;
+            };
+            let (free, taken): (Vec<String>, Vec<String>) =
+                profile.aircraft.iter().cloned().partition(|a| !claimed.contains_key(a));
+            if free.is_empty() {
+                continue;
+            }
+            if taken.is_empty() {
+                std::fs::copy(&from, &to)?;
+                copied.push(name);
+            } else {
+                profile.aircraft = free;
+                profile.save(&to)?;
+                copied.push(format!("{name} without {}, which another profile has", taken.join(", ")));
+            }
+            for a in &profile.aircraft {
+                claimed.insert(a.clone(), profile.name.clone());
+            }
         }
-        copied.sort();
         Ok(copied)
+    }
+
+    /// Which aircraft belong together, as the shipped defaults group them.
+    ///
+    /// Sharing a module is not enough to share a profile. The F-14 and F-14BU
+    /// read one module and ship apart because their screens differ, and "No
+    /// aircraft" rides on FC3 without being an FC3 aircraft. Each shipped file
+    /// is that decision already made, so it is the grouping; see [`Families`].
+    pub fn families(&self) -> Families {
+        let mut out = HashMap::new();
+        if let Ok(entries) = std::fs::read_dir(&self.defaults) {
+            let mut paths: Vec<PathBuf> = entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+                .collect();
+            paths.sort();
+            for path in paths {
+                let Ok(p) = Profile::load(&path) else { continue };
+                let file = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                for a in p.aircraft {
+                    out.entry(a).or_insert_with(|| file.clone());
+                }
+            }
+        }
+        Families(out)
     }
 
     /// True when a shipped default exists for this file name, which is what
@@ -1744,19 +1835,16 @@ impl Profiles {
         Ok(notes)
     }
 
-    /// Delete a profile the user made.
+    /// Delete a profile, shipped or made by the user.
     ///
-    /// Refused for one that shipped: it would be seeded straight back on the
-    /// next start, so deleting it only looks like it worked. Reset is the way
-    /// back for those. What this is for is the profile left over from splitting
-    /// one aircraft list in two, which nothing else can remove.
+    /// A shipped one stays deleted only while other profiles claim all of its
+    /// aircraft, because [`seed`](Self::seed) brings a default back for any
+    /// aircraft nothing claims. That is the intent: an aircraft is never left
+    /// without a profile by accident, and the editor says so before deleting.
     pub fn delete(&self, file: &str) -> Result<()> {
         // A bare file name, so nothing outside the active folder is reachable.
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
             return Err(Error::NotAProfileFile(file.to_string()));
-        }
-        if self.has_default(file) {
-            return Err(Error::ShippedProfile(file.to_string()));
         }
         std::fs::remove_file(self.active.join(file))?;
         Ok(())
@@ -1765,14 +1853,34 @@ impl Profiles {
     /// Overwrite one active profile with its shipped default.
     ///
     /// Destroys user work, so it is never reached except by someone clicking
-    /// reset.
+    /// reset. The lamps go back to how they shipped; the aircraft only where
+    /// no other profile has taken them since, so a profile split with Copy
+    /// to... is not claimed twice by resetting the half that shipped. If every
+    /// shipped aircraft is taken, it keeps the ones it has.
     pub fn reset_to_default(&self, file: &str) -> Result<()> {
         let from = self.defaults.join(file);
         if !from.is_file() {
             return Err(Error::NoDefault(file.to_string()));
         }
         std::fs::create_dir_all(&self.active)?;
-        std::fs::copy(&from, self.active.join(file))?;
+        let to = self.active.join(file);
+        let Ok(mut shipped) = Profile::load(&from) else {
+            std::fs::copy(&from, &to)?;
+            return Ok(());
+        };
+        let others = self.claimed_except(Some(file));
+        let free: Vec<String> =
+            shipped.aircraft.iter().filter(|a| !others.contains_key(*a)).cloned().collect();
+        if free.len() == shipped.aircraft.len() {
+            std::fs::copy(&from, &to)?;
+            return Ok(());
+        }
+        shipped.aircraft = if free.is_empty() {
+            Profile::load(&to).map(|p| p.aircraft).unwrap_or_default()
+        } else {
+            free
+        };
+        shipped.save(&to)?;
         Ok(())
     }
 }

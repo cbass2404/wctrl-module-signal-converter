@@ -36,6 +36,25 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * A one-glyph button: `pencil` opens a thing for editing, `done` keeps the
+ * edit and `cancel` puts it back. Shared with the profile header's rename.
+ */
+export function iconButton(
+  cls: string,
+  glyph: string,
+  title: string,
+  onClick: () => void,
+): HTMLButtonElement {
+  const button = el(
+    "button",
+    { class: `icon ${cls}`, type: "button", title, "aria-label": title },
+    glyph,
+  );
+  button.addEventListener("click", onClick);
+  return button;
+}
+
 export function testKind(w: OnWhen): TestKind {
   return Object.keys(w)[0] as TestKind;
 }
@@ -351,21 +370,6 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     // Choosing between alternatives means nothing without two of them, and
     // the profile check rejects it.
     if (branches.length < 2) delete binding.pick;
-  }
-
-  function iconButton(
-    cls: string,
-    glyph: string,
-    title: string,
-    onClick: () => void,
-  ): HTMLButtonElement {
-    const button = el(
-      "button",
-      { class: `icon ${cls}`, type: "button", title, "aria-label": title },
-      glyph,
-    );
-    button.addEventListener("click", onClick);
-    return button;
   }
 
   function viewRow(condition: Condition, signal: SignalView | undefined): HTMLElement {

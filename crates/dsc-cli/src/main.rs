@@ -1780,6 +1780,30 @@ fn load_profiles(
         ));
         out.profiles.push(p);
     }
+    // The engine flies the first profile that claims an aircraft, which is
+    // the first by file name. A second claim is never used, and nothing else
+    // would say so.
+    let mut owners: Vec<(&str, Vec<&str>)> = Vec::new();
+    for p in &out.profiles {
+        for a in &p.aircraft {
+            match owners.iter_mut().find(|(k, _)| *k == a.as_str()) {
+                Some((_, names)) => names.push(&p.name),
+                None => owners.push((a, vec![&p.name])),
+            }
+        }
+    }
+    let twice: Vec<String> = owners
+        .into_iter()
+        .filter(|(_, names)| names.len() > 1)
+        .map(|(a, names)| {
+            format!(
+                "caution  {a} is claimed by {}; {} is used and the rest are not",
+                names.join(" and "),
+                names[0]
+            )
+        })
+        .collect();
+    out.messages.extend(twice);
     if out.skipped > 0 {
         out.messages
             .push(format!("{} profile(s) skipped; the rest still run.", out.skipped));
@@ -2500,6 +2524,13 @@ fn write_stub(
     }
     let path = profiles_dir.join(format!("{stem}.json"));
     if path.exists() {
+        return Ok(());
+    }
+    // No profile loaded is not the same as none claiming it: one that was
+    // skipped still does, and a stub beside it would claim the aircraft twice
+    // once that one is fixed. Only the active folder is read, so no defaults.
+    if let Some(owner) = Profiles::new(PathBuf::new(), profiles_dir).claimed_aircraft().get(aircraft) {
+        println!("  {owner} claims {aircraft} but was skipped; fix it rather than starting another.");
         return Ok(());
     }
 

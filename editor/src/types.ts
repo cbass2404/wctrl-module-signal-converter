@@ -200,6 +200,8 @@ export interface ProfileSummary {
   name: string;
   module: string;
   aircraft: string[];
+  /** Each aircraft's family, in order: which aircraft this profile could take. */
+  families: string[];
   bound: number;
   total: number;
   has_default: boolean;

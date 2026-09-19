@@ -39,8 +39,13 @@ export const saveProfile = (file: string, profile: Profile) =>
  */
 export const checkProfile = (profile: Profile) => invoke<Findings>("check_profile", { profile });
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
-/** Only for a profile with no shipped default; the backend refuses the rest. */
-export const deleteProfile = (file: string) => invoke<void>("delete_profile", { file });
+/**
+ * Delete a profile, first giving its aircraft to `giveTo` if one is named. It
+ * must read the same module. A shipped profile whose aircraft would go nowhere
+ * is refused, since it would be seeded straight back.
+ */
+export const deleteProfile = (file: string, giveTo: string | null) =>
+  invoke<void>("delete_profile", { file, giveTo });
 export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });
 

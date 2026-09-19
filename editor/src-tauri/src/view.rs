@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use dsc_config::{DeviceSpec, DisplayCatalogue, Led, Module, Profile, ValueLabel};
+use dsc_config::{DeviceSpec, DisplayCatalogue, Families, Led, Module, Profile, ValueLabel};
 
 #[derive(Serialize)]
 pub struct LedView {
@@ -132,6 +132,9 @@ pub struct ProfileSummary {
     pub name: String,
     pub module: String,
     pub aircraft: Vec<String>,
+    /// The family of each of `aircraft`, in order: which aircraft could be
+    /// handed to this profile. See `dsc_config::Families`.
+    pub families: Vec<String>,
     /// Lamps assigned in any form (not placeholders), against the total listed.
     pub bound: usize,
     pub total: usize,
@@ -144,12 +147,13 @@ pub struct ProfileSummary {
 }
 
 impl ProfileSummary {
-    pub fn of(p: &Profile, file: String, has_default: bool) -> Self {
+    pub fn of(p: &Profile, file: String, has_default: bool, families: &Families) -> Self {
         ProfileSummary {
             file,
             name: p.name.clone(),
             module: p.module.clone(),
             aircraft: p.aircraft.clone(),
+            families: p.aircraft.iter().map(|a| families.of(a, &p.module)).collect(),
             bound: p.bindings.iter().filter(|b| !b.is_placeholder()).count(),
             total: p.bindings.len(),
             has_default,
@@ -163,6 +167,7 @@ impl ProfileSummary {
             file,
             module: String::new(),
             aircraft: Vec::new(),
+            families: Vec::new(),
             bound: 0,
             total: 0,
             has_default,

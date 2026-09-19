@@ -188,6 +188,10 @@ A few more things the editor does:
 - **New profile** starts one for an aircraft that has none, blank or copied from a
   related one. **Copy to...** copies an existing profile to other aircraft, which
   is how the Hornet profile serves the Super Hornet mod.
+- **Rename** a profile with the pencil beside its name.
+- **Delete** removes a profile. If that leaves an aircraft with no profile, you
+  choose which profile takes it, so splitting a profile and deleting a half
+  gives its aircraft back.
 - **Reset** puts a profile back to the shipped one. **Reset this lamp** does the
   same for a single lamp, and shows you what it will reset to before it does.
 - **Drive this panel** per panel. Untick it and the profile leaves that panel

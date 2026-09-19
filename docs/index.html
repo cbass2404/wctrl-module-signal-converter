@@ -3,7 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="description" content="Your WinWing panels, lit by the DCS cockpit you are actually sitting in. Lamps, backlights and screens follow the aircraft. Free and open source." />
+    <meta
+      name="description"
+      content="Your WinWing panels, lit by the DCS cockpit you are actually sitting in. Lamps, backlights and screens follow the aircraft. Free and open source."
+    />
     <meta name="color-scheme" content="light dark" />
     <meta
       name="theme-color"
@@ -18,7 +21,10 @@
 
     <meta property="og:type" content="website" />
     <meta property="og:title" content="DCS Signal Converter" />
-    <meta property="og:description" content="Your WinWing panels, lit by the DCS cockpit you are actually sitting in. Lamps, backlights and screens follow the aircraft. Free and open source." />
+    <meta
+      property="og:description"
+      content="Your WinWing panels, lit by the DCS cockpit you are actually sitting in. Lamps, backlights and screens follow the aircraft. Free and open source."
+    />
     <meta
       property="og:url"
       content="https://cbass2404.github.io/wctrl-module-signal-converter/"
@@ -614,10 +620,17 @@
       .crop img {
         margin-top: -2.9%;
       }
+      /* the icon and the product name on one line */
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 22px;
+      }
       .mark {
         width: 64px;
         height: 64px;
-        margin-bottom: 22px;
+        flex: none;
       }
       .step a {
         color: var(--accent);
@@ -631,7 +644,16 @@
     <header>
       <div class="wrap">
         <div class="rise">
-          <img class="mark" src="img/icon.svg" alt="" width="64" height="64" />
+          <div class="brand">
+            <img
+              class="mark"
+              src="img/icon.svg"
+              alt=""
+              width="64"
+              height="64"
+            />
+            <h1>DCS Signal Converter</h1>
+          </div>
           <div class="badges">
             <span class="badge hot">Alpha</span>
             <span class="badge">WinWing panels</span>
@@ -655,8 +677,8 @@
               >Get the latest release from GitHub</a
             >
             <span class="btn-note"
-              >Run the <span class="mono">setup.exe</span>. No admin prompt,
-              no SimAppPro.</span
+              >Run the <span class="mono">setup.exe</span>. No admin prompt, no
+              SimAppPro.</span
             >
           </div>
         </div>
@@ -749,11 +771,23 @@
               it, ready to fill in.
             </p>
             <ul class="group-list">
-              <li><span class="gi-name">A-10C</span><span class="gi-pct">CDU</span></li>
-              <li><span class="gi-name">AH-64D</span><span class="gi-pct">CDU</span></li>
-              <li><span class="gi-name">CH-47F</span><span class="gi-pct">CDU</span></li>
+              <li>
+                <span class="gi-name">A-10C</span
+                ><span class="gi-pct">CDU</span>
+              </li>
+              <li>
+                <span class="gi-name">AH-64D</span
+                ><span class="gi-pct">CDU</span>
+              </li>
+              <li>
+                <span class="gi-name">CH-47F</span
+                ><span class="gi-pct">CDU</span>
+              </li>
               <li><span class="gi-name">F-14A / F-14B</span></li>
-              <li><span class="gi-name">F-14B (Upgrade)</span><span class="gi-pct">CDU</span></li>
+              <li>
+                <span class="gi-name">F-14B (Upgrade)</span
+                ><span class="gi-pct">CDU</span>
+              </li>
               <li><span class="gi-name">F-16C / D / I</span></li>
               <li><span class="gi-name">F/A-18C + mods</span></li>
               <li><span class="gi-name">Mi-24P</span></li>
@@ -782,14 +816,19 @@
             ><span class="t"
               >Install
               <a href="https://github.com/DCS-Skunkworks/dcs-bios">DCS-BIOS</a>
-              into <span class="mono">&quot;Saved Games\<wbr />DCS\<wbr />Scripts&quot;</span></span
+              into
+              <span class="mono"
+                >&quot;Saved Games\<wbr />DCS\<wbr />Scripts&quot;</span
+              ></span
             >
           </div>
           <div class="step">
             <span class="n">02</span
             ><span class="t"
               >Copy the line that ships with DCS-BIOS into
-              <span class="mono">&quot;Scripts\<wbr />Export.lua&quot;</span></span
+              <span class="mono"
+                >&quot;Scripts\<wbr />Export.lua&quot;</span
+              ></span
             >
           </div>
           <div class="step">
@@ -994,8 +1033,8 @@
               it, turn off <strong>Sync with DCS</strong> for each panel so the
               two do not fight over the backlights. In the Hornet and the Viper
               it also draws the UFC and the DED itself; to leave those to
-              SimAppPro, untick <strong>drive this panel</strong> for that
-              panel in the profile, or clear its screen fields.
+              SimAppPro, untick <strong>drive this panel</strong> for that panel
+              in the profile, or clear its screen fields.
             </div>
           </div>
         </div>

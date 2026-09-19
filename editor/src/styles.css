@@ -175,6 +175,11 @@ dialog.confirm .actions {
   margin-top: 16px;
 }
 
+/* A setup shown in the question keeps its line per condition. */
+dialog.confirm p {
+  white-space: pre-line;
+}
+
 .actions {
   display: flex;
   gap: 8px;
@@ -764,15 +769,20 @@ td.num label.field input.value {
   max-width: 62px;
 }
 
-/* Shown only where a lamp differs from the shipped profile, so it is never a
-   no-op. Unlike the profile-level Reset, it touches one lamp. */
+/* On every lamp with a shipped version; disabled while the lamp matches it.
+   Unlike the profile-level Reset, it touches one lamp. */
 button.add.revert {
   color: var(--muted);
 }
 
-button.add.revert:hover {
+button.add.revert:hover:not(:disabled) {
   color: var(--accent);
   border-color: var(--accent);
+}
+
+button.add.revert:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 
 /* The two ways to start an undecided lamp: read a signal, or just be on. */

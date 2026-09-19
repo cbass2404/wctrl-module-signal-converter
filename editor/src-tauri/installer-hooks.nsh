@@ -62,6 +62,20 @@ Var DscDataDir
 
 !macro NSIS_HOOK_PREINSTALL
   !insertmacro DSC_WAIT_FOR_DAEMON
+
+  ; Clear what an earlier install shipped, so installing over it without
+  ; uninstalling first leaves nothing behind that this release dropped: a
+  ; retired default in data\defaults would otherwise go on being seeded.
+  ; Only shipped files live here; everything written is under DataDir.
+  ; The folders go whole. Top-level files are named, since the install folder
+  ; may be one the user chose with other things in it; when a release stops
+  ; shipping a top-level file, keep its name in this list.
+  RMDir /r "$INSTDIR\data"
+  RMDir /r "$INSTDIR\hook"
+  Delete "$INSTDIR\${DSC_DAEMON}"
+  Delete "$INSTDIR\run-hidden.vbs"
+  Delete "$INSTDIR\LICENSE"
+  Delete "$INSTDIR\THIRD_PARTY_NOTICES.md"
 !macroend
 
 !macro NSIS_HOOK_POSTINSTALL

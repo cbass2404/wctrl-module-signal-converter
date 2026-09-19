@@ -14,6 +14,8 @@ anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = [] }
+# Export and import. The backend runs the dialogs; the window is granted none.
+tauri-plugin-dialog = "2"
 # The update check. Windows' own TLS, so nothing to compile and no certificate
 # bundle to go stale; the system proxy, so it works where the browser does.
 reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "system-proxy"] }

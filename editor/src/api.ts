@@ -5,8 +5,10 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   CatalogueStatus,
+  ConverterState,
   Device,
   Findings,
+  ImportPreview,
   LearnReport,
   ModuleChoice,
   Profile,
@@ -21,6 +23,21 @@ export const listDevices = () => invoke<Device[]>("devices");
 export const listModules = () => invoke<ModuleChoice[]>("modules");
 export const listProfiles = () => invoke<ProfileSummary[]>("profiles");
 export const listSignals = (module: string) => invoke<SignalView[]>("signals", { module });
+/**
+ * What a divider of this many cells will draw.
+ *
+ * Asked of the backend rather than worked out here, so the preview cannot
+ * drift from the rule the panel is actually sent.
+ */
+export const dividerRule = (cells: number) => invoke<string>("divider_rule", { cells });
+
+// The converter daemon. Nothing here is needed to edit a profile: a running
+// daemon picks up a saved one on its own. See editor/src/converter.ts.
+export const converterState = () => invoke<ConverterState>("converter_state");
+/** Stops a running converter, waits for it to clear the panels, starts a fresh one. */
+export const converterRestart = () => invoke<string>("converter_restart");
+/** Ends it without asking, for one that will not answer. Clears no panels. */
+export const converterKill = () => invoke<string>("converter_kill");
 
 export const openProfile = (file: string) => invoke<Profile>("open_profile", { file });
 export const defaultProfile = (file: string) => invoke<Profile | null>("default_profile", { file });
@@ -39,10 +56,28 @@ export const saveProfile = (file: string, profile: Profile) =>
  */
 export const checkProfile = (profile: Profile) => invoke<Findings>("check_profile", { profile });
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
-/** Only for a profile with no shipped default; the backend refuses the rest. */
-export const deleteProfile = (file: string) => invoke<void>("delete_profile", { file });
+/**
+ * Delete a profile, first giving its aircraft to `giveTo` if one is named. It
+ * must read the same module. A shipped profile whose aircraft would go nowhere
+ * is refused, since it would be seeded straight back.
+ */
+export const deleteProfile = (file: string, giveTo: string | null) =>
+  invoke<void>("delete_profile", { file, giveTo });
 export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });
+
+// Sharing. The backend runs the file dialogs; the window is allowed none.
+/** Where the profile was saved, or null if the dialog was cancelled. */
+export const exportProfile = (file: string) => invoke<string | null>("export_profile", { file });
+/** Asks for a file and checks it. Null if the dialog was cancelled; refused if it would not load. */
+export const importPick = () => invoke<ImportPreview | null>("import_pick");
+/**
+ * Write the picked profile under `name` for `aircraft`, which must be some of
+ * those it came with. Aircraft other profiles fly move to it. A profile left
+ * with none is deleted only if `remove` names it, which the user confirms first.
+ */
+export const importProfile = (path: string, name: string, aircraft: string[], remove: string[]) =>
+  invoke<string>("import_profile", { path, name, aircraft, delete: remove });
 
 // Learn mode. The only commands that touch the DCS-BIOS stream, and the only
 // ones that leave anything running in the backend between calls.

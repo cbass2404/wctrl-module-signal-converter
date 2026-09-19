@@ -9,7 +9,8 @@ use std::time::{Duration, Instant};
 
 use dsc_bios::Write as BiosWrite;
 use dsc_config::{
-    text_cells, Catalogue, Colour, DeviceInventory, DisplayCatalogue, Profile, Transport,
+    divider_rule, text_cells, Catalogue, Colour, DeviceInventory, DisplayCatalogue, Profile,
+    Transport,
 };
 use dsc_engine::{Batch, Engine, LcdWrite};
 
@@ -69,6 +70,18 @@ fn fly(e: &mut Engine, aircraft: &str, lines: &[(usize, &[u8])]) -> Batch {
     batch
 }
 
+/// Everything the daemon would refuse this profile for, in its own words.
+fn refusals(p: &Profile) -> Vec<String> {
+    let e = engine(p.clone());
+    let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
+    let module = e.catalogue().module(&p.module).expect("the module");
+    p.problems(module, &devices, &displays)
+        .iter()
+        .map(|e| e.to_string())
+        .collect()
+}
+
 fn screen(batch: &Batch) -> &LcdWrite {
     let texts: Vec<&LcdWrite> = batch
         .lcd
@@ -99,9 +112,16 @@ fn the_cdu_lines_land_on_rows_5_to_14_with_their_symbols() {
     assert_eq!(w.device, MCDU);
     assert_eq!(w.part_id, 0xbb32);
     assert_eq!(w.display, "MCDU");
-    for n in 1..=4 {
+    for n in 1..=3 {
         assert_eq!(row(w, n).trim(), "", "row {n} is left empty");
     }
+    // The CDU is ten lines on a screen of fourteen, so the default rules row 4
+    // to give the page a top edge. It reads no signal and is there from load.
+    assert_eq!(
+        row(w, 4),
+        divider_rule(24).concat(),
+        "a rule across row 4, above the first CDU line"
+    );
     assert_eq!(
         row(w, 5),
         format!("{:<24}", "\u{2190}WAYPT\u{2192}  \u{2610}")
@@ -159,12 +179,7 @@ fn mission_end_blanks_the_screen_without_a_font() {
 
 #[test]
 fn the_shipped_a10c_default_passes_its_checks() {
-    let e = engine(profile());
-    let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
-    let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
-    let module = e.catalogue().module("A-10C").unwrap();
-    let problems = profile().problems(module, &devices, &displays);
-    assert!(problems.is_empty(), "{problems:?}");
+    assert!(refusals(&profile()).is_empty(), "{:?}", refusals(&profile()));
 }
 
 #[test]
@@ -173,32 +188,63 @@ fn an_aircraft_without_a_cdu_font_cannot_put_fields_on_the_mcdu() {
     // font has nothing to draw with until field customisation arrives.
     let mut p = profile();
     p.aircraft.push("A-10A".into());
-    let e = engine(p.clone());
-    let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
-    let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
-    let module = e.catalogue().module("A-10C").unwrap();
-    let problems = p.problems(module, &devices, &displays);
     assert!(
-        problems.iter().any(|e| e.to_string().contains("A-10A")),
-        "{problems:?}"
+        refusals(&p).iter().any(|e| e.contains("A-10A")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_divider_on_a_segment_display_is_refused() {
+    // The UFC draws from a glyph table, and there is no rule in it. Saying so
+    // beats accepting the field and leaving a row of blank cells on the glass.
+    let mut p = Profile::load(&r("data/defaults/fa-18.json")).unwrap();
+    p.readouts.truncate(1);
+    p.readouts[0].source = String::new();
+    p.readouts[0].cells = "2-8".parse().unwrap();
+    p.readouts[0].divider = true;
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("only a text grid")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_divider_that_also_names_a_signal_is_refused() {
+    // A rule never changes, so a source on one is a field someone meant to
+    // finish. Drawing the rule over it would quietly throw the signal away.
+    let mut p = profile();
+    let d = p.readouts.iter().position(|r| r.divider).expect("the shipped rule");
+    p.readouts[d].source = "CDU_LINE0".into();
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("reads nothing")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_divider_with_no_room_for_a_dash_is_refused() {
+    let mut p = profile();
+    let d = p.readouts.iter().position(|r| r.divider).expect("the shipped rule");
+    p.readouts[d].cells = "72-73".parse().unwrap();
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("a dash with a blank each side")),
+        "{:?}",
+        refusals(&p)
     );
 }
 
 #[test]
 fn a_colour_on_a_segment_display_is_refused() {
-    let hornet = Profile::load(&r("data/defaults/fa-18.json")).unwrap();
-    let mut p = hornet.clone();
+    let mut p = Profile::load(&r("data/defaults/fa-18.json")).unwrap();
     p.readouts[0].colour = Some(Colour::Amber);
-    let e = engine(p.clone());
-    let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
-    let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
-    let module = e.catalogue().module(&p.module).unwrap();
-    let problems = p.problems(module, &devices, &displays);
     assert!(
-        problems
-            .iter()
-            .any(|e| e.to_string().contains("only a text grid")),
-        "{problems:?}"
+        refusals(&p).iter().any(|e| e.contains("only a text grid")),
+        "{:?}",
+        refusals(&p)
     );
 }
 
@@ -437,11 +483,20 @@ fn apache_at(seat: u16) -> LcdWrite {
 fn the_apache_scratchpad_sits_on_the_bottom_row_for_the_seat() {
     let w = apache_at(0);
     assert_eq!(w.font.as_deref(), Some("../mcdu/ah64d-font-21x31.json"));
-    for n in 1..=13 {
+    for n in 1..=12 {
         assert_eq!(row(&w, n).trim(), "", "row {n} is left empty");
     }
+    // The Apache exports only the keyboard unit, so the rest of the glass is
+    // dark and the default rules the row above it, inset to the same 22 cells.
+    assert_eq!(
+        row(&w, 13),
+        format!(" {} ", divider_rule(22).concat()),
+        "a rule above the keyboard unit"
+    );
     assert_eq!(row(&w, 14), format!(" {:<23}", "PILOT\u{2588}"));
 
     let w = apache_at(1);
+    // The rule carries no seat, so it draws the same for either crew station.
+    assert_eq!(row(&w, 13), format!(" {} ", divider_rule(22).concat()));
     assert_eq!(row(&w, 14), format!(" {:<23}", "\u{25c0}CPG\u{25a0}\u{25b6}"));
 }

@@ -72,9 +72,9 @@ fn the_startup_merge_leaves_every_default_untouched() {
         std::fs::copy(&path, dir.join("active").join(path.file_name().unwrap())).unwrap();
     }
 
-    let notes = Profiles::new(dir.join("none"), dir.join("active"))
-        .merge_new(&inventory())
-        .expect("merge runs");
+    let notes = Profiles::new(dir.join("none"), dir.join("active")).merge_new(&inventory());
+    let _ = std::fs::remove_dir_all(&dir);
+    let notes = notes.expect("merge runs");
     assert!(notes.is_empty(), "the merge would change shipped defaults: {notes:#?}");
 }
 

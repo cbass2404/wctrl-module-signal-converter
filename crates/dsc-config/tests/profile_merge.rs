@@ -8,7 +8,24 @@ use std::path::{Path, PathBuf};
 
 use dsc_config::{DeviceInventory, Profile, Profiles};
 
-fn scratch(name: &str) -> PathBuf {
+/// A folder of its own for one test, removed when the test ends, pass or fail,
+/// so a run leaves nothing in the temp folder.
+struct Scratch(PathBuf);
+
+impl std::ops::Deref for Scratch {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn scratch(name: &str) -> Scratch {
     let dir = std::env::temp_dir().join(format!(
         "dsc-merge-{name}-{}",
         std::time::SystemTime::now()
@@ -18,7 +35,7 @@ fn scratch(name: &str) -> PathBuf {
     ));
     std::fs::create_dir_all(dir.join("defaults")).unwrap();
     std::fs::create_dir_all(dir.join("active")).unwrap();
-    dir
+    Scratch(dir)
 }
 
 fn inventory() -> DeviceInventory {
@@ -44,6 +61,100 @@ fn old_profile() -> String {
       ]
     }"#
     .to_string()
+}
+
+/// A profile that predates a display field the default has gained.
+///
+/// The A-10C and AH-64D both gained an MCDU divider and no lamp, which is the
+/// case that found this: the field was merged into the loaded profile and then
+/// thrown away, because only added bindings decided whether the file was
+/// written. It happened again on every start and said nothing.
+#[test]
+fn a_profile_gains_a_display_field_the_default_has_added() {
+    let dir = scratch("field");
+    let shipped = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "72-95",
+          "divider": true, "colour": "green" }
+      ]
+    }"#;
+    let mine = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "96-119",
+          "source": "CDU_LINE0", "colour": "green" }
+      ]
+    }"#;
+    std::fs::write(dir.join("defaults/a-10c.json"), shipped).unwrap();
+    std::fs::write(dir.join("active/a-10c.json"), mine).unwrap();
+
+    let notes = Profiles::new(dir.join("defaults"), dir.join("active"))
+        .merge_new(&inventory())
+        .expect("merge runs");
+    assert!(
+        notes.iter().any(|n| n.contains("display field")),
+        "the added field is reported: {notes:?}"
+    );
+
+    // Written to disk, not merely merged in memory.
+    let after = Profile::load(&dir.join("active/a-10c.json")).expect("still loads");
+    assert!(
+        after.readouts.iter().any(|r| r.divider),
+        "the divider reached the file: {:?}",
+        after.readouts.iter().map(|r| r.cells.to_string()).collect::<Vec<_>>()
+    );
+    assert!(
+        after.readouts.iter().any(|r| r.source == "CDU_LINE0"),
+        "and the user's own field is still there"
+    );
+}
+
+/// The other half: a field the user has already claimed those cells for is not
+/// replaced by the shipped one, and does not count as a change.
+#[test]
+fn a_shipped_field_never_displaces_one_the_user_put_there() {
+    let dir = scratch("claimed");
+    let shipped = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "72-95",
+          "divider": true, "colour": "green" }
+      ]
+    }"#;
+    let mine = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "80-90",
+          "source": "CDU_LINE9", "colour": "white" }
+      ]
+    }"#;
+    std::fs::write(dir.join("defaults/a-10c.json"), shipped).unwrap();
+    std::fs::write(dir.join("active/a-10c.json"), mine).unwrap();
+
+    Profiles::new(dir.join("defaults"), dir.join("active"))
+        .merge_new(&inventory())
+        .expect("merge runs");
+
+    let after = Profile::load(&dir.join("active/a-10c.json")).expect("still loads");
+    assert_eq!(after.readouts.len(), 1, "nothing was added over the user's field");
+    assert_eq!(after.readouts[0].source, "CDU_LINE9");
 }
 
 #[test]
@@ -246,16 +357,12 @@ fn claimed_aircraft_is_keyed_by_aircraft_not_module() {
 }
 
 #[test]
-fn only_a_profile_the_user_made_can_be_deleted() {
+fn any_profile_deletes_but_nothing_outside_the_folder() {
     let dir = scratch("delete");
     std::fs::write(dir.join("defaults/old.json"), old_profile()).unwrap();
     std::fs::write(dir.join("active/old.json"), old_profile()).unwrap();
     std::fs::write(dir.join("active/mine.json"), old_profile()).unwrap();
     let profiles = Profiles::new(dir.join("defaults"), dir.join("active"));
-
-    // A shipped one would be seeded straight back, so it is refused.
-    assert!(profiles.delete("old.json").is_err());
-    assert!(dir.join("active/old.json").is_file());
 
     // Nothing outside the active folder is reachable.
     assert!(profiles.delete("../defaults/old.json").is_err());
@@ -263,4 +370,73 @@ fn only_a_profile_the_user_made_can_be_deleted() {
 
     profiles.delete("mine.json").expect("a profile the user made deletes");
     assert!(!dir.join("active/mine.json").exists());
+    profiles.delete("old.json").expect("so does a shipped one");
+    assert!(!dir.join("active/old.json").exists());
+}
+
+/// A profile file for the A-10C module claiming `aircraft`.
+fn a10(name: &str, aircraft: &[&str]) -> String {
+    let list: Vec<String> = aircraft.iter().map(|a| format!("{a:?}")).collect();
+    format!(
+        r#"{{"name": "{name}", "aircraft": [{}], "module": "A-10C", "bindings": []}}"#,
+        list.join(", ")
+    )
+}
+
+fn aircraft_of(path: &Path) -> Vec<String> {
+    Profile::load(path).unwrap().aircraft
+}
+
+#[test]
+fn a_default_whose_aircraft_are_all_claimed_is_not_seeded() {
+    // The user split the shipped A-10C profile, moved both aircraft into their
+    // own profiles and deleted the shipped one. Seeding it back would give
+    // both aircraft two profiles, and the daemon would fly whichever sorted
+    // first.
+    let dir = scratch("seed-claimed");
+    std::fs::write(dir.join("defaults/a-10c.json"), a10("A-10C", &["A-10C_2", "A-10C"])).unwrap();
+    std::fs::write(dir.join("active/warthog.json"), a10("Warthog", &["A-10C_2", "A-10C"])).unwrap();
+    let profiles = Profiles::new(dir.join("defaults"), dir.join("active"));
+
+    assert!(profiles.seed().unwrap().is_empty());
+    assert!(!dir.join("active/a-10c.json").exists());
+}
+
+#[test]
+fn a_default_comes_back_for_only_the_aircraft_nothing_claims() {
+    // The shipped A-10C profile was deleted after its A-10C II went to a
+    // profile of the user's; the A-10C was left with nowhere to go, so the
+    // shipped profile returns for it and for it alone.
+    let dir = scratch("seed-partial");
+    std::fs::write(dir.join("defaults/a-10c.json"), a10("A-10C", &["A-10C_2", "A-10C"])).unwrap();
+    std::fs::write(dir.join("active/mine.json"), a10("Mine", &["A-10C_2"])).unwrap();
+    let profiles = Profiles::new(dir.join("defaults"), dir.join("active"));
+
+    let seeded = profiles.seed().unwrap();
+    assert_eq!(seeded.len(), 1, "{seeded:?}");
+    assert!(seeded[0].contains("A-10C_2"), "says what it left out: {seeded:?}");
+    assert_eq!(aircraft_of(&dir.join("active/a-10c.json")), vec!["A-10C".to_string()]);
+    assert_eq!(aircraft_of(&dir.join("active/mine.json")), vec!["A-10C_2".to_string()]);
+}
+
+#[test]
+fn reset_takes_back_only_the_aircraft_no_other_profile_has() {
+    // Copy to... moved the A-10C II out of the shipped profile. Resetting the
+    // shipped half puts its lamps back, not its claim on the A-10C II.
+    let dir = scratch("reset-claims");
+    std::fs::write(dir.join("defaults/a-10c.json"), a10("A-10C", &["A-10C_2", "A-10C"])).unwrap();
+    std::fs::write(dir.join("active/a-10c.json"), a10("Renamed", &["A-10C"])).unwrap();
+    std::fs::write(dir.join("active/a-10c-ii.json"), a10("A-10C II", &["A-10C_2"])).unwrap();
+    let profiles = Profiles::new(dir.join("defaults"), dir.join("active"));
+
+    profiles.reset_to_default("a-10c.json").unwrap();
+    let reset = Profile::load(&dir.join("active/a-10c.json")).unwrap();
+    assert_eq!(reset.name, "A-10C", "the rest goes back to how it shipped");
+    assert_eq!(reset.aircraft, vec!["A-10C".to_string()]);
+    assert_eq!(aircraft_of(&dir.join("active/a-10c-ii.json")), vec!["A-10C_2".to_string()]);
+
+    // With the other profile gone, reset takes the whole shipped list again.
+    profiles.delete("a-10c-ii.json").unwrap();
+    profiles.reset_to_default("a-10c.json").unwrap();
+    assert_eq!(aircraft_of(&dir.join("active/a-10c.json")).len(), 2);
 }

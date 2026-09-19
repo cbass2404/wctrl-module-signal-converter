@@ -32,6 +32,10 @@ pub const REGISTRY_DATA: &str = "DataDir";
 /// DCS's own Saved Games folder, the one holding `Config` and `Scripts`.
 pub const REGISTRY_DCS: &str = "DcsDir";
 
+/// The file a checkout uses to say it is being developed in, beside `data`.
+/// Untracked, so it is one developer's choice and never something that ships.
+pub const DEV_FILE: &str = ".env";
+
 /// How the paths were found, for reporting.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Layout {
@@ -39,6 +43,9 @@ pub enum Layout {
     Env,
     /// A development checkout: everything in its `data` folder.
     Checkout,
+    /// A checkout whose `.env` says `env=dev`: the tracked defaults are the
+    /// active profiles, and nothing outside the checkout is touched.
+    Dev,
     /// Installed: shipped files beside the executable, written ones apart.
     Installed,
 }
@@ -64,31 +71,65 @@ impl Paths {
     ///
     /// 1. `DSC_DATA`, one folder for everything, so a test or a second copy can
     ///    be pointed somewhere else without rebuilding.
-    /// 2. `data/devices.json` beside the executable: installed.
-    /// 3. A `data/devices.json` in the current directory or any ancestor, then
+    /// 2. A checkout whose `.env` says `env=dev`: everything in its `data`
+    ///    folder, with the tracked defaults standing in as the active
+    ///    profiles. Tested before installed on purpose, because a Tauri build
+    ///    copies `data` beside the executable and would otherwise make every
+    ///    development run look installed, writing to the profiles the
+    ///    developer actually flies.
+    /// 3. `data/devices.json` beside the executable: installed.
+    /// 4. A `data/devices.json` in the current directory or any ancestor, then
     ///    the executable's: a checkout. `tauri dev` runs from
     ///    `editor/src-tauri` and cargo from `target/debug`, both below the root.
     ///
-    /// Installed is tested before the checkout so an installed copy started
-    /// from inside a checkout still uses its own files.
+    /// Installed is tested before the plain checkout so an installed copy
+    /// started from inside a checkout still uses its own files.
     pub fn resolve() -> Self {
         if let Some(dir) = std::env::var_os("DSC_DATA") {
             return Self::in_one(Layout::Env, PathBuf::from(dir));
         }
         let exe_dir = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf));
+        let cwd = std::env::current_dir().ok();
+        let checkout = cwd.iter().chain(exe_dir.iter()).find_map(|start| climb(start));
+
+        if let Some(root) = &checkout {
+            if dev_requested(root) {
+                return Self::dev(root.clone());
+            }
+        }
         if let Some(dir) = &exe_dir {
             let shipped = dir.join("data");
             if shipped.join("devices.json").is_file() {
                 return Self::installed(shipped, writable_dir());
             }
         }
-        let cwd = std::env::current_dir().ok();
-        for start in cwd.iter().chain(exe_dir.iter()) {
-            if let Some(found) = climb(start) {
-                return Self::in_one(Layout::Checkout, found);
-            }
+        match checkout {
+            Some(found) => Self::in_one(Layout::Checkout, found),
+            None => Self::in_one(Layout::Checkout, PathBuf::from("data")),
         }
-        Self::in_one(Layout::Checkout, PathBuf::from("data"))
+    }
+
+    /// Development: the tracked defaults are also the active profiles.
+    ///
+    /// One folder, and it is the one in git, so what is authored in the editor
+    /// is what ships and a change is a diff rather than something to copy
+    /// across by hand. Nothing here touches the profiles or the catalogue the
+    /// developer flies with the installed copy, which is the point: those are
+    /// in `Saved Games` and this never looks there.
+    ///
+    /// Seeding becomes a no-op, because every default already exists in the
+    /// active folder, being the same file. Reset likewise has nothing to put
+    /// back, which is correct: in development the default is what is being
+    /// edited.
+    pub fn dev(root: PathBuf) -> Self {
+        Paths {
+            layout: Layout::Dev,
+            devices: root.join("devices.json"),
+            displays: root.join("displays"),
+            nightly_only: root.join("nightly-only.json"),
+            catalogue: root.join("catalogue"),
+            profiles: Profiles::new(root.join("defaults"), root.join("defaults")),
+        }
     }
 
     fn in_one(layout: Layout, root: PathBuf) -> Self {
@@ -123,6 +164,85 @@ fn climb(start: &Path) -> Option<PathBuf> {
         .ancestors()
         .map(|dir| dir.join("data"))
         .find(|candidate| candidate.join("devices.json").is_file())
+}
+
+/// Whether the checkout holding `data` asks for development mode.
+///
+/// The file sits beside `data` rather than inside it, so it is the checkout
+/// that is marked rather than the data, and it is untracked, so it is never
+/// something an install could carry.
+fn dev_requested(data_dir: &Path) -> bool {
+    let Some(root) = data_dir.parent() else {
+        return false;
+    };
+    std::fs::read_to_string(root.join(DEV_FILE))
+        .map(|text| env_is_dev(&text))
+        .unwrap_or(false)
+}
+
+/// Does this `.env` say `env=dev`?
+///
+/// Enough of the format to read one setting: blank lines and `#` comments are
+/// skipped, whitespace and surrounding quotes are ignored, and the key is
+/// matched whatever its case. A later line wins, which is how a file is
+/// usually flipped back and forth. Anything but `dev`, including a missing
+/// value, means production: the safe answer is the one that leaves the
+/// developer's own profiles alone.
+pub fn env_is_dev(text: &str) -> bool {
+    let mut dev = false;
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some((key, value)) = line.split_once('=') else {
+            continue;
+        };
+        if !key.trim().eq_ignore_ascii_case("env") {
+            continue;
+        }
+        let value = value.trim().trim_matches(['"', '\'']);
+        dev = value.eq_ignore_ascii_case("dev");
+    }
+    dev
+}
+
+#[cfg(test)]
+mod dev_env_tests {
+    use super::env_is_dev;
+
+    #[test]
+    fn dev_is_read_whatever_the_spacing_or_case() {
+        assert!(env_is_dev("env=dev"));
+        assert!(env_is_dev("  ENV = Dev  "));
+        assert!(env_is_dev("env=\"dev\""));
+        assert!(env_is_dev("# a comment
+DSC_OTHER=1
+env=dev
+"));
+    }
+
+    #[test]
+    fn anything_else_means_production() {
+        // The safe answer, because production is the layout that leaves the
+        // profiles the developer flies alone.
+        assert!(!env_is_dev(""));
+        assert!(!env_is_dev("env=prod"));
+        assert!(!env_is_dev("env="));
+        assert!(!env_is_dev("# env=dev"));
+        assert!(!env_is_dev("environment=dev"), "a different key entirely");
+    }
+
+    #[test]
+    fn the_last_setting_wins() {
+        // How a file gets flipped back and forth while working.
+        assert!(!env_is_dev("env=dev
+env=prod
+"));
+        assert!(env_is_dev("env=prod
+env=dev
+"));
+    }
 }
 
 /// Where an installed copy writes: what the installer recorded, else

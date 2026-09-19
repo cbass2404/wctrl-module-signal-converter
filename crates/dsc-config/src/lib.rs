@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub mod catalogue_build;
+pub mod daemon;
 pub mod display;
 pub mod mcdu_font;
 pub mod nightly_only;
@@ -36,8 +37,9 @@ pub fn build_label() -> &'static str {
 }
 
 pub use display::{
-    text_cells, Align, Cell, CellRange, Colour, ColourSource, Display, DisplayCatalogue, Grid,
-    Readout, Region, Screen, TextCell, TextGrid, Transport, SEAT_SIGNAL,
+    divider_rule, text_cells, Align, Cell, CellRange, Colour, ColourSource, Display,
+    DisplayCatalogue, Grid, Readout, Region, Screen, TextCell, TextGrid, Transport,
+    MIN_DIVIDER_CELLS, SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -58,8 +60,6 @@ pub enum Error {
     OutOfRange(String, u8, u8),
     #[error("no shipped default named {0:?} to reset from")]
     NoDefault(String),
-    #[error("{0:?} shipped with DCS Signal Converter, so it cannot be deleted; reset it instead")]
-    ShippedProfile(String),
     #[error("{0:?} is not a profile file name")]
     NotAProfileFile(String),
     #[error("LED {0:?} is set to always on but also carries conditions; it can have one or the other")]
@@ -92,6 +92,12 @@ pub enum Error {
     ColourCodeNotOneChar(String),
     #[error("cells {1} of display {0:?} are given a colour or size, which only a text grid draws")]
     StyleNotDrawn(String, String),
+    #[error("cells {1} of display {0:?} are given a divider, which only a text grid draws")]
+    DividerNotDrawn(String, String),
+    #[error("the divider on {1} of display {0:?} also names a signal {2:?}; a divider draws a fixed rule and reads nothing")]
+    DividerReadsSignal(String, String, String),
+    #[error("the divider on {1} of display {0:?} has {2} cells; a rule needs {3}, a dash with a blank each side")]
+    DividerTooNarrow(String, String, usize, usize),
     #[error("display {0:?} has no cell {1}")]
     NoSuchCell(String, usize),
     #[error("{0:?} cannot be drawn on a {1} cell of display {2:?}")]
@@ -974,9 +980,14 @@ impl Profile {
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| Error::Json(e, path.display().to_string()))?;
         let temp = path.with_extension("json.saving");
-        std::fs::write(&temp, text)?;
         // Rename replaces an existing file on Windows as well as on Unix.
-        std::fs::rename(&temp, path)?;
+        let written = std::fs::write(&temp, text).and_then(|()| std::fs::rename(&temp, path));
+        if written.is_err() {
+            // A half-written temporary is no use to anyone and the daemon
+            // would list it on every poll.
+            let _ = std::fs::remove_file(&temp);
+        }
+        written?;
         Ok(())
     }
 
@@ -1391,6 +1402,36 @@ impl Profile {
                 }
             }
 
+            // A divider reads nothing, so every check below it is about a
+            // source it does not have. What it can get wrong is its own: glass
+            // that cannot draw it, a signal named anyway, or a run with no room
+            // for a dash between two margins.
+            if r.divider {
+                if !display.is_text_grid() {
+                    out.push(Error::DividerNotDrawn(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                    ));
+                }
+                if !r.source.is_empty() {
+                    out.push(Error::DividerReadsSignal(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                        r.source.clone(),
+                    ));
+                }
+                if r.cells.len() < MIN_DIVIDER_CELLS {
+                    out.push(Error::DividerTooNarrow(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                        r.cells.len(),
+                        MIN_DIVIDER_CELLS,
+                    ));
+                }
+                self.text_problems(r, display, out);
+                continue;
+            }
+
             // A field with nothing chosen yet is unfinished work rather than a
             // mistake, but it still stops the profile loading, so it is said
             // plainly and in those terms.
@@ -1477,6 +1518,15 @@ impl Profile {
             for to in r.replace.values() {
                 if let Some(c) = to.chars().next().filter(|c| !set.contains(c)) {
                     out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
+                }
+            }
+            // A rule is drawn from the font like any other character, so a font
+            // without a dash would rule the line in blanks and look broken.
+            if r.divider {
+                for c in ['-', ' '] {
+                    if !set.contains(&c) {
+                        out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
+                    }
                 }
             }
         }
@@ -1583,6 +1633,30 @@ pub fn profile_name_for(aircraft: &str) -> &str {
     }
 }
 
+/// Aircraft grouped by the shipped default that lists them.
+///
+/// Two aircraft in one family can share a profile: one of them can be handed
+/// to a profile flying the other. An aircraft no default lists is grouped by
+/// its module, since nothing has said its module's aircraft differ.
+pub struct Families(HashMap<String, String>);
+
+impl Families {
+    /// The family `aircraft` belongs to, on a profile reading `module`.
+    pub fn of(&self, aircraft: &str, module: &str) -> String {
+        match self.0.get(aircraft) {
+            Some(file) => file.clone(),
+            None => format!("module {module}"),
+        }
+    }
+
+    /// Whether `aircraft` could join `target`: it reads the same module and
+    /// already flies an aircraft of the same family.
+    pub fn fits(&self, aircraft: &str, module: &str, target: &Profile) -> bool {
+        let family = self.of(aircraft, module);
+        target.module == module && target.aircraft.iter().any(|a| self.of(a, &target.module) == family)
+    }
+}
+
 impl Profiles {
     pub fn new(defaults: impl Into<PathBuf>, active: impl Into<PathBuf>) -> Self {
         Profiles {
@@ -1599,15 +1673,50 @@ impl Profiles {
     /// claim different aircraft, which is fine. A profile that will not parse
     /// claims nothing, since it cannot be loaded to fly either.
     pub fn claimed_aircraft(&self) -> HashMap<String, String> {
+        self.claimed_except(None)
+    }
+
+    /// Whether an active profile other than `file` is already called `name`.
+    ///
+    /// The name is the only thing that identifies a profile to the user: the
+    /// file name is never shown, and never changes once written. Two profiles
+    /// reading the same in the list cannot be told apart, and the one wanted
+    /// is a guess. Compared without case or surrounding space, because that is
+    /// how a user reads two names as the same.
+    pub fn name_taken(&self, file: &str, name: &str) -> Option<String> {
+        let wanted = name.trim().to_lowercase();
+        let entries = std::fs::read_dir(&self.active).ok()?;
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some(file))
+            .collect();
+        paths.sort();
+        paths.into_iter().find_map(|path| {
+            let p = Profile::load(&path).ok()?;
+            (p.name.trim().to_lowercase() == wanted).then_some(p.name)
+        })
+    }
+
+    /// [`claimed_aircraft`](Self::claimed_aircraft), leaving out the claims of
+    /// one file, for asking what a profile could take back without counting
+    /// its own.
+    pub fn claimed_except(&self, file: Option<&str>) -> HashMap<String, String> {
         let mut out = HashMap::new();
         let Ok(entries) = std::fs::read_dir(&self.active) else {
             return out;
         };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .filter(|p| file.is_none() || p.file_name().and_then(|n| n.to_str()) != file)
+            .collect();
+        // In file name order, which is the order the daemon loads them in, so
+        // an aircraft claimed twice is named after the profile that wins.
+        paths.sort();
+        for path in paths {
             if let Ok(p) = Profile::load(&path) {
                 for a in &p.aircraft {
                     out.entry(a.clone()).or_insert_with(|| p.name.clone());
@@ -1618,31 +1727,88 @@ impl Profiles {
     }
 
     /// Copy in every default the active folder does not already have, returning
-    /// the file names copied. Creates the active folder if it is missing.
+    /// a line for each one copied. Creates the active folder if it is missing.
     ///
     /// Safe to run on every start, which is the point: install, update and a
     /// user who deleted the folder all take the same path.
+    ///
+    /// A default comes in only for the aircraft no profile already claims. The
+    /// file name is not the claim, the aircraft is: a user who deleted a
+    /// shipped profile after moving its aircraft elsewhere, or an update that
+    /// ships a default for an aircraft the user already set up themselves,
+    /// would otherwise end with two profiles for one aircraft and the daemon
+    /// flying whichever sorts first. One with nothing left to claim is skipped.
     pub fn seed(&self) -> Result<Vec<String>> {
         if !self.defaults.is_dir() {
             return Ok(Vec::new());
         }
         std::fs::create_dir_all(&self.active)?;
+        let mut claimed = self.claimed_aircraft();
+        let mut defaults: Vec<PathBuf> = std::fs::read_dir(&self.defaults)?
+            .filter_map(|e| e.ok().map(|e| e.path()))
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .collect();
+        defaults.sort();
         let mut copied = Vec::new();
-        for entry in std::fs::read_dir(&self.defaults)? {
-            let from = entry?.path();
-            if from.extension().and_then(|e| e.to_str()) != Some("json") {
+        for from in defaults {
+            let Some(name) = from.file_name().map(|n| n.to_string_lossy().into_owned()) else {
                 continue;
-            }
-            let Some(name) = from.file_name() else { continue };
-            let to = self.active.join(name);
+            };
+            let to = self.active.join(&name);
             if to.exists() {
                 continue;
             }
-            std::fs::copy(&from, &to)?;
-            copied.push(name.to_string_lossy().into_owned());
+            // A default that will not parse is our fault, not the user's, and
+            // copying it is how the daemon gets to say what is wrong with it.
+            let Ok(mut profile) = Profile::load(&from) else {
+                std::fs::copy(&from, &to)?;
+                copied.push(name);
+                continue;
+            };
+            let (free, taken): (Vec<String>, Vec<String>) =
+                profile.aircraft.iter().cloned().partition(|a| !claimed.contains_key(a));
+            if free.is_empty() {
+                continue;
+            }
+            if taken.is_empty() {
+                std::fs::copy(&from, &to)?;
+                copied.push(name);
+            } else {
+                profile.aircraft = free;
+                profile.save(&to)?;
+                copied.push(format!("{name} without {}, which another profile has", taken.join(", ")));
+            }
+            for a in &profile.aircraft {
+                claimed.insert(a.clone(), profile.name.clone());
+            }
         }
-        copied.sort();
         Ok(copied)
+    }
+
+    /// Which aircraft belong together, as the shipped defaults group them.
+    ///
+    /// Sharing a module is not enough to share a profile. The F-14 and F-14BU
+    /// read one module and ship apart because their screens differ, and "No
+    /// aircraft" rides on FC3 without being an FC3 aircraft. Each shipped file
+    /// is that decision already made, so it is the grouping; see [`Families`].
+    pub fn families(&self) -> Families {
+        let mut out = HashMap::new();
+        if let Ok(entries) = std::fs::read_dir(&self.defaults) {
+            let mut paths: Vec<PathBuf> = entries
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+                .collect();
+            paths.sort();
+            for path in paths {
+                let Ok(p) = Profile::load(&path) else { continue };
+                let file = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
+                for a in p.aircraft {
+                    out.entry(a).or_insert_with(|| file.clone());
+                }
+            }
+        }
+        Families(out)
     }
 
     /// True when a shipped default exists for this file name, which is what
@@ -1697,6 +1863,7 @@ impl Profiles {
                 .map(|b| (b.device.clone(), b.led.clone()))
                 .collect();
             let before = profile.bindings.len();
+            let before_fields = profile.readouts.len();
             let mut from_default = 0usize;
 
             if let Ok(shipped) = Profile::load(&self.defaults.join(&name)) {
@@ -1728,35 +1895,43 @@ impl Profiles {
             }
 
             let added = profile.bindings.len() - before;
+            // Counted, because a default that gains a display field and no lamp
+            // is a real case: the A-10C and AH-64D both gained an MCDU divider
+            // that way. Left out of this sum, the field was merged in memory
+            // and then dropped by the check below, silently, on every start.
+            let fields = profile.readouts.len() - before_fields;
             let order_changed = sort_bindings(&mut profile.bindings, devices);
-            if added == 0 && !order_changed {
+            if added == 0 && fields == 0 && !order_changed {
                 continue;
             }
             profile.save(&path)?;
+            let mut what = Vec::new();
             if added > 0 {
-                notes.push(format!(
-                    "{name}: added {added} row(s), {from_default} from the shipped default"
+                what.push(format!(
+                    "{added} row(s), {from_default} from the shipped default"
                 ));
-            } else {
-                notes.push(format!("{name}: reordered"));
+            }
+            if fields > 0 {
+                what.push(format!("{fields} display field(s) from the shipped default"));
+            }
+            match what.is_empty() {
+                true => notes.push(format!("{name}: reordered")),
+                false => notes.push(format!("{name}: added {}", what.join(" and "))),
             }
         }
         Ok(notes)
     }
 
-    /// Delete a profile the user made.
+    /// Delete a profile, shipped or made by the user.
     ///
-    /// Refused for one that shipped: it would be seeded straight back on the
-    /// next start, so deleting it only looks like it worked. Reset is the way
-    /// back for those. What this is for is the profile left over from splitting
-    /// one aircraft list in two, which nothing else can remove.
+    /// A shipped one stays deleted only while other profiles claim all of its
+    /// aircraft, because [`seed`](Self::seed) brings a default back for any
+    /// aircraft nothing claims. That is the intent: an aircraft is never left
+    /// without a profile by accident, and the editor says so before deleting.
     pub fn delete(&self, file: &str) -> Result<()> {
         // A bare file name, so nothing outside the active folder is reachable.
         if Path::new(file).file_name().and_then(|n| n.to_str()) != Some(file) {
             return Err(Error::NotAProfileFile(file.to_string()));
-        }
-        if self.has_default(file) {
-            return Err(Error::ShippedProfile(file.to_string()));
         }
         std::fs::remove_file(self.active.join(file))?;
         Ok(())
@@ -1765,14 +1940,34 @@ impl Profiles {
     /// Overwrite one active profile with its shipped default.
     ///
     /// Destroys user work, so it is never reached except by someone clicking
-    /// reset.
+    /// reset. The lamps go back to how they shipped; the aircraft only where
+    /// no other profile has taken them since, so a profile split with Copy
+    /// to... is not claimed twice by resetting the half that shipped. If every
+    /// shipped aircraft is taken, it keeps the ones it has.
     pub fn reset_to_default(&self, file: &str) -> Result<()> {
         let from = self.defaults.join(file);
         if !from.is_file() {
             return Err(Error::NoDefault(file.to_string()));
         }
         std::fs::create_dir_all(&self.active)?;
-        std::fs::copy(&from, self.active.join(file))?;
+        let to = self.active.join(file);
+        let Ok(mut shipped) = Profile::load(&from) else {
+            std::fs::copy(&from, &to)?;
+            return Ok(());
+        };
+        let others = self.claimed_except(Some(file));
+        let free: Vec<String> =
+            shipped.aircraft.iter().filter(|a| !others.contains_key(*a)).cloned().collect();
+        if free.len() == shipped.aircraft.len() {
+            std::fs::copy(&from, &to)?;
+            return Ok(());
+        }
+        shipped.aircraft = if free.is_empty() {
+            Profile::load(&to).map(|p| p.aircraft).unwrap_or_default()
+        } else {
+            free
+        };
+        shipped.save(&to)?;
         Ok(())
     }
 }

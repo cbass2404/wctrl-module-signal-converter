@@ -9,17 +9,19 @@
 
 mod check;
 mod claims;
+mod converter;
 mod learn;
+mod share;
 mod update;
 mod view;
 
 use dsc_config::paths::Paths;
 use view::{DeviceView, ModuleChoice, ProfileSummary, SignalView};
-use dsc_config::{DeviceInventory, Module, Profile};
+use dsc_config::{divider_rule as rule_for, DeviceInventory, Module, Profile};
 
 /// Commands return a message rather than an error type, because the only useful
 /// thing the window can do with a failure is show it to the user.
-type Reply<T> = Result<T, String>;
+pub type Reply<T> = Result<T, String>;
 
 fn fail(context: &str, e: impl std::fmt::Display) -> String {
     format!("{context}: {e}")
@@ -88,6 +90,7 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         .map_err(|e| fail("adding new hardware to the profiles", e))?;
 
     let dir = &paths.profiles.active;
+    let families = paths.profiles.families();
     let mut out = Vec::new();
     let entries = match std::fs::read_dir(dir) {
         Ok(entries) => entries,
@@ -105,7 +108,7 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         // A profile that will not parse is still listed, carrying its error.
         // Hiding it would leave the user looking for a file they can see on disk.
         out.push(match Profile::load(&path) {
-            Ok(p) => ProfileSummary::of(&p, file, has_default),
+            Ok(p) => ProfileSummary::of(&p, file, has_default, &families),
             Err(e) => ProfileSummary::broken(file, has_default, e.to_string()),
         });
     }
@@ -118,6 +121,16 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
 fn signals(module: String) -> Reply<Vec<SignalView>> {
     let paths = Paths::resolve();
     SignalView::of_module(&paths.catalogue.join(format!("{module}.json")))
+}
+
+/// What a divider of this many cells will draw, for the window to show.
+///
+/// Asked of the backend rather than worked out again in TypeScript, so there is
+/// one rule for where the dashes fall and the preview cannot drift from what
+/// the panel gets.
+#[tauri::command]
+fn divider_rule(cells: usize) -> Reply<String> {
+    Ok(rule_for(cells).concat())
 }
 
 #[tauri::command]
@@ -307,6 +320,18 @@ fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<F
 #[tauri::command]
 fn save_profile(file: String, profile: Profile, cache: tauri::State<check::Cache>) -> Reply<()> {
     let paths = Paths::resolve();
+    // The name is only what the list shows, never the file, so renaming
+    // changes nothing else. It still has to be something to read.
+    if profile.name.trim().is_empty() {
+        return Err(format!("{file} was not written, because a profile needs a name"));
+    }
+    // Renaming is the one way a duplicate name could be made: every path that
+    // writes a new file goes through `claims::write_new`, which refuses one.
+    if let Some(taken) = paths.profiles.name_taken(&file, &profile.name) {
+        return Err(format!(
+            "{file} was not written, because another profile is already called {taken}."
+        ));
+    }
     let problems = cache.problems(&paths, &profile);
     if !problems.is_empty() {
         return Err(format!(
@@ -332,14 +357,13 @@ fn reset_profile(file: String) -> Reply<()> {
         .map_err(|e| fail(&format!("resetting {file}"), e))
 }
 
-/// Delete a profile the user made. A shipped one is refused; it has reset.
+/// Delete a profile, giving its aircraft to the profile `give_to` first if one
+/// is named. A shipped profile whose aircraft would go nowhere is refused,
+/// since seeding would bring it straight back; Reset is that.
 #[tauri::command]
-fn delete_profile(file: String) -> Reply<()> {
+fn delete_profile(file: String, give_to: Option<String>) -> Reply<()> {
     let paths = Paths::resolve();
-    paths
-        .profiles
-        .delete(&file)
-        .map_err(|e| fail(&format!("deleting {file}"), e))
+    claims::delete_giving(&paths.profiles, &file, give_to.as_deref())
 }
 
 /// What the startup check on the catalogue found, for the profiles page.
@@ -406,6 +430,7 @@ fn catalogue_status(status: tauri::State<CatalogueStatus>) -> Reply<CatalogueSta
 fn main() {
     let status = refresh_catalogue(&Paths::resolve());
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(status)
         .manage(learn::State::default())
         .manage(check::Cache::default())
@@ -416,6 +441,10 @@ fn main() {
             modules,
             profiles,
             signals,
+            divider_rule,
+            converter::converter_state,
+            converter::converter_restart,
+            converter::converter_kill,
             open_profile,
             default_profile,
             create_profile,
@@ -424,6 +453,9 @@ fn main() {
             save_profile,
             reset_profile,
             delete_profile,
+            share::export_profile,
+            share::import_pick,
+            share::import_profile,
             learn_start,
             learn_poll,
             learn_again,

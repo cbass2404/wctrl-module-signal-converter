@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use dsc_config::{DeviceSpec, DisplayCatalogue, Led, Module, Profile, ValueLabel};
+use dsc_config::{Colour, DeviceSpec, DisplayCatalogue, Families, Led, Module, Profile, ValueLabel};
 
 #[derive(Serialize)]
 pub struct LedView {
@@ -81,6 +81,18 @@ pub struct DisplayView {
     /// of asking for a cell run, because a cell run is not something anyone
     /// deciding what to put on a panel can be expected to know.
     pub regions: Vec<RegionView>,
+    /// Whether this glass can draw a character inverse. The window offers a
+    /// highlighting signal only where it can, because `validate` rejects one
+    /// on a display that cannot: it would do nothing.
+    pub draws_inverse: bool,
+    /// Whether this glass is a text grid, which is what decides whether a
+    /// divider is worth offering. A segment display draws from a glyph table
+    /// with no rule in it, and `validate` rejects one there.
+    pub text_grid: bool,
+    /// The colours this glass can draw, in the order the panel indexes them.
+    /// Empty on anything but a text grid, which is the only kind that has a
+    /// colour to choose.
+    pub colours: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -119,6 +131,13 @@ impl DeviceView {
                         note: r.note.clone(),
                     })
                     .collect(),
+                draws_inverse: d.draws_inverse(),
+                text_grid: d.is_text_grid(),
+                colours: if d.is_text_grid() {
+                    Colour::ALL.iter().map(|c| c.name().to_string()).collect()
+                } else {
+                    Vec::new()
+                },
             })
             .collect();
         self
@@ -132,6 +151,9 @@ pub struct ProfileSummary {
     pub name: String,
     pub module: String,
     pub aircraft: Vec<String>,
+    /// The family of each of `aircraft`, in order: which aircraft could be
+    /// handed to this profile. See `dsc_config::Families`.
+    pub families: Vec<String>,
     /// Lamps assigned in any form (not placeholders), against the total listed.
     pub bound: usize,
     pub total: usize,
@@ -144,12 +166,13 @@ pub struct ProfileSummary {
 }
 
 impl ProfileSummary {
-    pub fn of(p: &Profile, file: String, has_default: bool) -> Self {
+    pub fn of(p: &Profile, file: String, has_default: bool, families: &Families) -> Self {
         ProfileSummary {
             file,
             name: p.name.clone(),
             module: p.module.clone(),
             aircraft: p.aircraft.clone(),
+            families: p.aircraft.iter().map(|a| families.of(a, &p.module)).collect(),
             bound: p.bindings.iter().filter(|b| !b.is_placeholder()).count(),
             total: p.bindings.len(),
             has_default,
@@ -163,6 +186,7 @@ impl ProfileSummary {
             file,
             module: String::new(),
             aircraft: Vec::new(),
+            families: Vec::new(),
             bound: 0,
             total: 0,
             has_default,
@@ -298,5 +322,40 @@ impl SignalView {
                 .then_with(|| a.description.to_lowercase().cmp(&b.description.to_lowercase()))
         });
         Ok(out)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use dsc_config::paths::Paths;
+    use dsc_config::DeviceInventory;
+
+    /// The window offers a highlighting signal only where the glass can draw
+    /// one, and `validate` refuses it anywhere else, so the two have to agree.
+    /// The UFC is the case that matters: it is pixel glass like the DED, and
+    /// nothing about it on screen says it has no inverse form.
+    #[test]
+    fn only_glass_that_draws_inverse_says_so() {
+        let paths = Paths::resolve();
+        let maps = DisplayCatalogue::load_dir(&paths.displays).expect("the shipped display maps load");
+        let inv = DeviceInventory::load(&paths.devices).expect("the shipped inventory loads");
+        let views: Vec<DisplayView> = inv
+            .devices
+            .iter()
+            .flat_map(|d| DeviceView::of(d).with_displays(d, &maps).displays)
+            .collect();
+        assert!(!views.is_empty(), "some device has glass");
+        for view in views {
+            let expected = match view.key.as_str() {
+                // Pixel glass with inverse rows, and a text grid, which always
+                // has an inverse form.
+                "DED" | "MCDU" => true,
+                // Seven segment and fixed shapes: no slots to flip.
+                "UFC1" => false,
+                other => panic!("unmapped display {other:?}; say whether it draws inverse"),
+            };
+            assert_eq!(view.draws_inverse, expected, "{}", view.key);
+        }
     }
 }

@@ -32,6 +32,11 @@
   box-sizing: border-box;
 }
 
+/* Anything scrolled to stops below the sticky header rather than under it. */
+html {
+  scroll-padding-top: 72px;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -42,16 +47,30 @@ body {
 #app {
   max-width: 1000px;
   margin: 0 auto;
-  padding: 20px 16px 48px;
+  padding: 8px 16px 48px;
 }
 
+/* Stays in view while the page scrolls, so the filter on the profile list and
+   Save and Back on a profile are always a click away. Opaque, because rows
+   pass beneath it, and below the hint box, which shows over everything.
+
+   The divider is a shadow rather than a border: a stuck header sits at a
+   fractional scroll offset, and the browser dropped a 1px border there on
+   every other pixel of scrolling. A shadow is painted outside the box and
+   survives it. The second shadow is the lift, and only while stuck. */
 header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 12px;
+  padding: 12px 0;
   margin-bottom: 16px;
-  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow:
+    0 1px 0 var(--line),
+    0 6px 10px -10px rgb(0 0 0 / 70%);
 }
 
 h1 {
@@ -151,6 +170,12 @@ body.with-update {
   padding-bottom: 40px;
 }
 
+/* A passing message in the same bar, which sits above the update bar when
+   that is showing rather than covering it. */
+body.with-update .update.banner {
+  bottom: 38px;
+}
+
 /* Which DCS-BIOS the signals came from, under the profiles heading. */
 .catalogue {
   display: block;
@@ -209,6 +234,28 @@ dialog.confirm p {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* Manage Converter. Wider than a plain confirm, because the reasons to press
+   anything here are the point of the dialog. */
+dialog.converter {
+  max-width: 520px;
+}
+
+/* Kill to the far left, as far from Restart as the row allows: it is the one
+   action here that cannot be undone and cannot clear the panels. */
+dialog.converter .actions .danger {
+  margin-right: auto;
+}
+
+dialog.converter ul.reasons {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  white-space: normal;
+}
+
+dialog.converter ul.reasons li {
+  margin-bottom: 6px;
 }
 
 /* ------------------------------------------------------------- profile list */
@@ -294,7 +341,8 @@ dialog.picker label.field {
 }
 
 dialog.picker label.field input,
-header input.filter {
+header input.filter,
+header input.rename {
   font: inherit;
   padding: 5px 7px;
   background: var(--panel);
@@ -474,12 +522,28 @@ input.signal {
 }
 
 input.signal:focus,
-header input.filter:focus {
+header input.filter:focus,
+header input.rename:focus {
   outline: 2px solid var(--accent);
   outline-offset: -1px;
 }
 
 header input.filter {
+  width: 320px;
+  min-width: 0;
+}
+
+/* The profile name and its pencil, or the rename box and its keep and
+   cancel, in a row where the heading was. */
+header .title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+header input.rename {
+  font-size: 19px;
+  font-weight: 600;
   width: 320px;
   min-width: 0;
 }
@@ -796,6 +860,28 @@ td.num label.field input.value {
 
 /* On every lamp with a shipped version; disabled while the lamp matches it.
    Unlike the profile-level Reset, it touches one lamp. */
+/* The foot of a lamp: whatever note it carries on the left, and Reset off in
+   the far corner. Reset discards the lamp's whole setup, so it does not belong
+   at the bottom of the same stack as the buttons that add to it. */
+.binding-footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-top: 2px;
+}
+
+.binding-footer .note-box {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Overrides the flex-start every other add button sits at: this one follows
+   the bottom of the note beside it rather than the top. */
+.binding-footer button.add.revert {
+  align-self: flex-end;
+}
+
 button.add.revert {
   color: var(--muted);
 }
@@ -974,8 +1060,74 @@ input.alias {
   font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
 }
 
+/* The rule a divider will draw, shown as the panel draws it. Monospaced
+   because the spacing is the whole of what it says, and on the glass's own
+   black rather than the page's, so a white rule is not invisible in light mode
+   and every colour reads the way it will on the panel. The colour itself is set
+   from the chosen one, which is the point of showing it at all. */
+.divider-preview {
+  flex-basis: 100%;
+  font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  letter-spacing: 0.05em;
+  background: #05070a;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
+/* Laid out like .aliases, which is the same shape of thing: a labelled control
+   with the reason for it underneath. */
+.highlighting,
+.note-box {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* A signal search box and a note are both too wide to sit beside a checkbox,
+   so they take a line of their own in the wrapping row of field extras. The
+   lamp editor holds the note in a column already and needs no basis: setting
+   one there would read as a height. */
+.readout-extras .highlighting,
+.readout-extras .note-box {
+  flex-basis: 100%;
+}
+
+.highlight-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+textarea.note {
+  width: 100%;
+  min-height: 3.2em;
+  resize: vertical;
+  font: inherit;
+  font-size: 12.5px;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+textarea.note:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 select.seat {
   min-width: 9em;
+}
+
+select.colour {
+  min-width: 8em;
 }
 
 button.add.small {

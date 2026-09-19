@@ -60,6 +60,12 @@ jobs:
           npm ci
           npm run build
 
+      # `.env` is untracked, so a runner has none and already resolves as
+      # production. Written anyway, so the layout the build tests is the one it
+      # ships rather than one that happens to be right by omission.
+      - name: Pin the production layout
+        run: echo env=prod > .env
+
       - name: Fetch the pinned DCS-BIOS nightly and build the catalogue
         run: python tools/fetch_bios.py --build-catalogue
 

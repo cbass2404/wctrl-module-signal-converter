@@ -6,9 +6,26 @@
 // that drives its own glass the cockpit has already decided what belongs there,
 // and on any other the user has.
 
+import { dividerRule } from "./api";
 import { flagSlot } from "./flags";
+import { noteEditor } from "./note";
 import { signalPicker } from "./typeahead";
 import type { Device, DisplayInfo, Readout, RegionInfo, SignalView } from "./types";
+
+/** The swatch beside each colour name, so the menu shows what it means. */
+const SWATCH: Record<string, string> = {
+  black: "#000000",
+  amber: "#ff9d1c",
+  white: "#f2f4f7",
+  cyan: "#3fe0e0",
+  green: "#36d14a",
+  magenta: "#e668d8",
+  red: "#f0564a",
+  yellow: "#f2e14c",
+  brown: "#9a6b3f",
+  grey: "#9aa3ad",
+  khaki: "#c3bb72",
+};
 
 function el<K extends keyof HTMLElementTagNameMap>(
   tag: K,
@@ -58,7 +75,8 @@ export function cellProblem(
     if (self.seat !== undefined && other.seat !== undefined && self.seat !== other.seat) continue;
     const r = parseCells(other.cells);
     if (r && first <= r[1] && r[0] <= last) {
-      return `${describe(other.cells, display)} is already taken by ${other.source || "another field"}.`;
+      const taken = other.divider ? "a divider" : other.source || "another field";
+      return `${describe(other.cells, display)} is already taken by ${taken}.`;
     }
   }
   return null;
@@ -109,6 +127,44 @@ function isText(signals: SignalView[], id: string): boolean {
 /** How many characters a text signal will hand over, or 0. */
 function textLength(signals: SignalView[], id: string): number {
   return signals.find((x) => x.id === id)?.length ?? 0;
+}
+
+/**
+ * The highlighting twin DCS-BIOS exports beside a text signal, if it has one.
+ *
+ * The F-16 is the only module in the catalogue that does this, sending each DED
+ * line as `DED_Ln` and its highlighting as `DED_Ln_FORMAT`. The naming is a
+ * convention rather than a rule, which is why finding the twin fills the box in
+ * and does not replace it.
+ */
+function twinOf(signals: SignalView[], source: string): string | undefined {
+  if (!source) return undefined;
+  const id = `${source}_FORMAT`;
+  return signals.some((x) => x.id === id && x.text) ? id : undefined;
+}
+
+/**
+ * Keep the highlighting signal with the source it belongs to.
+ *
+ * A field repointed from DED line 1 to line 2 wants line 2's twin and never
+ * line 1's. The old one would go on marking characters inverse against text it
+ * no longer describes, which is a real text signal, so nothing in `validate`
+ * would say a word and the glass would simply highlight the wrong characters.
+ * A twin the user chose themselves is left where they put it.
+ */
+function followTwin(readout: Readout, signals: SignalView[], was: string): void {
+  const chosen = readout.format !== undefined && readout.format !== twinOf(signals, was);
+  // A number has no characters to mark, so its highlighting goes whoever chose
+  // it. This is the one place that is fair: the source has just been changed by
+  // hand, so the field is already being rewritten.
+  if (chosen && !isText(signals, readout.source)) {
+    delete readout.format;
+    return;
+  }
+  if (chosen) return;
+  const twin = twinOf(signals, readout.source);
+  if (twin) readout.format = twin;
+  else delete readout.format;
 }
 
 /** How DCS-BIOS reports the occupied crew station, where it reports one. */
@@ -350,6 +406,161 @@ function aliasEditor(readout: Readout, onChange: () => void): HTMLElement {
   return wrap;
 }
 
+/**
+ * The signal that says which of this field's characters draw inverse.
+ *
+ * Offered only on glass that can draw inverse, because `validate` refuses a
+ * highlighting signal on glass that cannot: it would do nothing at all. The
+ * box fills itself in when the source has a twin, which is every DED line, so
+ * the common case costs nobody a decision, and it stays a picker because no
+ * rule says the next module to export highlighting will name its twin this way.
+ */
+function formatChooser(readout: Readout, signals: SignalView[], onChange: () => void): HTMLElement {
+  const wrap = el("div", { class: "highlighting" });
+  // Numbers are not offered: highlighting is one mark per cell, and a number
+  // has no characters to mark with.
+  const text = signals.filter((s) => s.text);
+  const row = el("div", { class: "highlight-row" });
+
+  const draw = (): void => {
+    row.textContent = "";
+    row.append(
+      signalPicker({
+        signals: text,
+        value: readout.format ?? "",
+        onPick: (id) => {
+          readout.format = id;
+          onChange();
+        },
+      }),
+    );
+    // The picker commits a signal and never an empty box, so clearing the
+    // choice needs a control of its own, the same trash icon a substitution
+    // is removed with.
+    if (readout.format) {
+      const drop = el(
+        "button",
+        { class: "icon danger", title: "Draw this field with no highlighting" },
+        "\u{1F5D1}",
+      );
+      drop.addEventListener("click", () => {
+        delete readout.format;
+        draw();
+        onChange();
+      });
+      row.append(drop);
+    }
+  };
+
+  draw();
+  wrap.append(
+    el("label", { class: "meta" }, "highlighting"),
+    row,
+    el(
+      "span",
+      { class: "meta block" },
+      "A second signal laid out across the same cells, one mark per character: " +
+        "i draws that character inverse and anything else draws it plain. This " +
+        "is how the F-16 DED shows the field you are working on, and DCS-BIOS " +
+        "sends it beside the line itself, DED_L1 and DED_L1_FORMAT.",
+    ),
+  );
+  return wrap;
+}
+
+/**
+ * What a divider shows, in place of a signal picker.
+ *
+ * There is nothing to choose: it reads no signal, so it has no range, no
+ * highlighting and no alignment. What it does have is a width, which is what
+ * decides where the dashes fall, so the rule is drawn here as the panel will
+ * draw it. The backend works it out; one rule written twice is one rule that
+ * can drift.
+ */
+function dividerCell(
+  readout: Readout,
+  display: DisplayInfo,
+  onChange: () => void,
+): { node: HTMLElement; refresh: () => void } {
+  const preview = el("div", { class: "divider-preview" });
+  const paint = (): void => {
+    preview.style.color = SWATCH[readout.colour ?? "white"] ?? "";
+  };
+  const refresh = (): void => {
+    const range = parseCells(readout.cells);
+    const width = range ? range[1] - range[0] + 1 : 0;
+    void dividerRule(width).then(
+      (rule) => {
+        // Spaces carry the shape here, so they have to survive being drawn in
+        // HTML, which collapses a run of them to one.
+        preview.textContent = rule.replace(/ /g, "\u00a0");
+      },
+      () => {
+        preview.textContent = "";
+      },
+    );
+  };
+  refresh();
+  paint();
+
+  const node = el(
+    "div",
+    { class: "readout-extras" },
+    el("span", { class: "meta" }, "A rule. It reads nothing and never changes."),
+    preview,
+    colourChooser(readout, display, () => {
+      paint();
+      onChange();
+    }),
+    el(
+      "span",
+      { class: "meta block" },
+      "A blank cell at each end and an unbroken line between them, so it sits " +
+        "clear of whatever is beside it. It is on the glass from the moment " +
+        "the aircraft loads, which is what makes it an edge for a page that " +
+        "does not fill the screen.",
+    ),
+    noteEditor(readout, "field", onChange),
+  );
+  return { node, refresh };
+}
+
+/**
+ * What colour the glass draws this rule in.
+ *
+ * Offered on a divider and nowhere else. A field's colour is the aircraft's
+ * business, matching what its own CDU draws, and is left as the profile has it;
+ * a rule is the user's own addition, so its colour is theirs to pick. The list
+ * comes from the backend, so it cannot offer one the panel has no index for.
+ */
+function colourChooser(
+  readout: Readout,
+  display: DisplayInfo,
+  onChange: () => void,
+): HTMLElement {
+  const menu = el("select", { class: "colour" });
+  for (const name of display.colours) {
+    menu.append(el("option", { value: name }, name));
+  }
+  menu.value = readout.colour ?? "white";
+  menu.addEventListener("change", () => {
+    readout.colour = menu.value;
+    onChange();
+  });
+  return el(
+    "label",
+    { class: "meta" },
+    "drawn in ",
+    menu,
+    el(
+      "span",
+      { class: "meta block" },
+      "Match the page it is ruling. Black is the screen's own background, so a " +
+        "rule drawn in it is a rule nobody can see.",
+    ),
+  );
+}
+
 interface RowOptions {
   readout: Readout;
   display: DisplayInfo;
@@ -363,7 +574,20 @@ function row(opts: RowOptions): HTMLTableRowElement {
   const { readout, display, all, signals, onChange } = opts;
   const tr = el("tr");
 
-  tr.append(cellChooser(readout, display, all, onChange));
+  // A divider's preview follows its width, so a change of cells has to reach
+  // it. Everything else in a row reads the cells only when it is drawn.
+  const rule = readout.divider ? dividerCell(readout, display, onChange) : null;
+  const changed = (): void => {
+    rule?.refresh();
+    onChange();
+  };
+  tr.append(cellChooser(readout, display, all, changed));
+
+  if (rule) {
+    tr.append(el("td", {}, rule.node));
+    tr.append(el("td", { class: "num" }, removeButton(opts)));
+    return tr;
+  }
 
   // --- source --------------------------------------------------------------
   const extras = el("div", { class: "readout-extras" });
@@ -471,14 +695,25 @@ function row(opts: RowOptions): HTMLTableRowElement {
       extras.append(seatChooser(readout, stations, onChange));
     }
 
-    extras.append(aliasEditor(readout, onChange));
+    // Highlighting marks characters, so it means nothing over a number, and
+    // nothing at all on glass with no inverse form to draw. One already set is
+    // shown anyway, so a hand-written field can be read and undone here rather
+    // than only in the file. Drawing a row never changes it: opening a profile
+    // would otherwise dirty it before anyone touched anything.
+    if (display.draws_inverse && (isText(signals, readout.source) || readout.format !== undefined)) {
+      extras.append(formatChooser(readout, signals, onChange));
+    }
+
+    extras.append(aliasEditor(readout, onChange), noteEditor(readout, "field", onChange));
   };
 
   const picker = signalPicker({
     signals,
     value: readout.source,
     onPick: (id) => {
+      const was = readout.source;
       readout.source = id;
+      followTwin(readout, signals, was);
       drawExtras();
       onChange();
     },
@@ -486,8 +721,14 @@ function row(opts: RowOptions): HTMLTableRowElement {
   drawExtras();
   tr.append(el("td", {}, picker, flagSlot(readout), extras));
 
-  // --- remove --------------------------------------------------------------
-  const remove = el("button", { class: "icon danger", title: "Remove this field" }, "\u{1F5D1}");
+  tr.append(el("td", { class: "num" }, removeButton(opts)));
+  return tr;
+}
+
+/** Removal, armed by the first click and done by the second. */
+function removeButton(opts: RowOptions): HTMLElement {
+  const what = opts.readout.divider ? "divider" : "field";
+  const remove = el("button", { class: "icon danger", title: `Remove this ${what}` }, "\u{1F5D1}");
   let armed = false;
   remove.addEventListener("click", () => {
     if (!armed) {
@@ -498,8 +739,20 @@ function row(opts: RowOptions): HTMLTableRowElement {
     }
     opts.onRemove();
   });
-  tr.append(el("td", { class: "num" }, remove));
-  return tr;
+  return remove;
+}
+
+/**
+ * The colour every field on this display already draws in, if they agree.
+ *
+ * A new divider takes it, because a white rule across a green page reads as a
+ * fault rather than a divider, and colour is not something the window offers
+ * anywhere else yet. Undefined where they disagree or there are none, which
+ * leaves the rule on the display's own default.
+ */
+function agreedColour(existing: Readout[]): string | undefined {
+  const used = new Set(existing.map((r) => r.colour).filter((c) => c !== undefined));
+  return used.size === 1 ? [...used][0] : undefined;
 }
 
 /**
@@ -575,6 +828,22 @@ export function displaySection(
       onChange();
     });
 
+    // Only a text grid draws a rule. A segment display draws from a glyph
+    // table with no dash in it, and the daemon refuses one there.
+    const addRule = el("button", { class: "add" }, "Add a divider");
+    addRule.addEventListener("click", () => {
+      readouts.push({
+        device: device.key,
+        display: display.key,
+        cells: firstFree(display, mine()),
+        source: "",
+        divider: true,
+        colour: agreedColour(mine()),
+      });
+      redraw();
+      onChange();
+    });
+
     wrap.append(
       el(
         "div",
@@ -585,6 +854,7 @@ export function displaySection(
           el("span", { class: "name" }, `${display.key} display`),
           el("span", { class: "meta" }, `${display.cells} cells`),
           add,
+          ...(display.text_grid ? [addRule] : []),
         ),
         el(
           "table",

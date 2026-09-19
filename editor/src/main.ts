@@ -19,15 +19,29 @@ import {
   openUpdate,
   resetProfile,
   deleteProfile,
+  exportProfile,
+  importPick,
+  importProfile,
   saveProfile,
   updateCheck,
 } from "./api";
-import { bindingEditor } from "./binding";
+import { bindingEditor, iconButton } from "./binding";
 import { confirmAction } from "./confirm";
+import { manageConverter } from "./converter";
 import { showFlags } from "./flags";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
-import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView, Update } from "./types";
+import type {
+  Binding,
+  Device,
+  ImportPreview,
+  Led,
+  ModuleChoice,
+  Profile,
+  ProfileSummary,
+  SignalView,
+  Update,
+} from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
 
@@ -76,6 +90,20 @@ function clear(): void {
   app.replaceChildren();
 }
 
+/**
+ * Something done that is worth a word and no more, in the update bar's style
+ * along the foot of the window. Gone after ten seconds, and a newer one
+ * replaces it rather than stacking.
+ */
+let bannerTimer: number | undefined;
+function showBanner(text: string): void {
+  document.querySelector(".update.banner")?.remove();
+  window.clearTimeout(bannerTimer);
+  const banner = el("div", { class: "update banner" }, el("span", {}, text));
+  document.body.append(banner);
+  bannerTimer = window.setTimeout(() => banner.remove(), 10_000);
+}
+
 /** Failures are shown in the window, never swallowed and never only in a console. */
 function showError(where: string, e: unknown): void {
   const message = e instanceof Error ? e.message : String(e);
@@ -118,6 +146,8 @@ async function showLibrary(): Promise<void> {
     el("div", { class: "spacer" }),
     filter,
     el("div", { class: "spacer" }),
+    el("button", { id: "converter" }, "Manage Converter"),
+    el("button", { id: "import" }, "Import..."),
     el("button", { class: "primary", id: "new" }, "New profile"),
   );
   app.append(header);
@@ -141,7 +171,13 @@ async function showLibrary(): Promise<void> {
     return;
   }
 
+  header.querySelector("#converter")?.addEventListener("click", () => {
+    void manageConverter().then((said) => {
+      if (said) showBanner(said);
+    });
+  });
   header.querySelector("#new")?.addEventListener("click", () => void showNewProfile());
+  header.querySelector("#import")?.addEventListener("click", () => void showImport());
 
   if (rows.length === 0) {
     app.append(
@@ -152,6 +188,34 @@ async function showLibrary(): Promise<void> {
       ),
     );
     return;
+  }
+
+  // One aircraft, one profile. Nothing in the window makes a second claim,
+  // but a file copied in by hand can, and the daemon then flies the first by
+  // file name and never the other. Named here so it can be fixed.
+  const claims = new Map<string, ProfileSummary[]>();
+  for (const row of [...rows].sort((a, b) => (a.file < b.file ? -1 : 1))) {
+    if (row.error) continue;
+    for (const a of row.aircraft) claims.set(a, [...(claims.get(a) ?? []), row]);
+  }
+  const twice = [...claims].filter(([, owners]) => owners.length > 1);
+  if (twice.length > 0) {
+    const box = el(
+      "div",
+      { class: "cautions" },
+      el("strong", {}, twice.length === 1 ? "An aircraft has two profiles:" : "Some aircraft have two profiles:"),
+    );
+    for (const [a, owners] of twice) {
+      const names = owners.map((o) => o.name);
+      box.append(
+        el(
+          "div",
+          { class: "caution" },
+          `${a} is in ${names.join(" and ")}. ${names[0]} is the one flown. Remove it from the others, or delete them.`,
+        ),
+      );
+    }
+    app.append(box);
   }
 
   const list = el("ul", { class: "profiles" });
@@ -176,16 +240,23 @@ async function showLibrary(): Promise<void> {
     if (!row.error) {
       const copy = el("button", {}, "Copy to...");
       copy.addEventListener("click", () => void showCloneProfile(row));
-      actions.append(copy);
+      const share = el("button", {}, "Export...");
+      share.addEventListener("click", () => void exportOne(row));
+      actions.append(copy, share);
     }
     if (row.has_default) {
       const reset = el("button", { class: "danger" }, "Reset");
       reset.addEventListener("click", () => void resetOne(row));
       actions.append(reset);
-    } else {
-      // One the user made. A shipped profile would only be seeded back.
+    }
+    // A shipped profile goes only when another can take its aircraft. Deleted
+    // otherwise, it would be seeded straight back, so the button would be a
+    // Reset under another name.
+    const plan = deletePlan(row, rows);
+    const canDelete = !row.has_default || plan.orphans.length === 0 || plan.homes.length > 0;
+    if (canDelete) {
       const remove = el("button", { class: "danger" }, "Delete");
-      remove.addEventListener("click", () => void deleteOne(row));
+      remove.addEventListener("click", () => void deleteOne(row, rows));
       actions.append(remove);
     }
 
@@ -216,6 +287,180 @@ async function showLibrary(): Promise<void> {
   apply();
 }
 
+/** Save a copy of one profile where the user chooses, and say where it went. */
+async function exportOne(row: ProfileSummary): Promise<void> {
+  try {
+    const to = await exportProfile(row.file);
+    if (to === null) return;
+    showBanner(`Exported ${row.name} to ${to}.`);
+  } catch (e) {
+    showError("Exporting the profile", e);
+  }
+}
+
+/**
+ * Import a profile someone shared.
+ *
+ * The backend asks for the file and refuses one that would not load here. The
+ * dialog then works like New profile's aircraft step: free aircraft start
+ * ticked, ones another profile flies start unticked with where they are. Taking
+ * one asks first. A profile that would be left with no aircraft is deleted, so
+ * that asks too, and saying no to it cancels the import outright.
+ */
+async function showImport(): Promise<void> {
+  let preview: ImportPreview | null;
+  let existing: ProfileSummary[];
+  try {
+    preview = await importPick();
+    if (preview === null) return;
+    existing = await listProfiles();
+  } catch (e) {
+    showError("Importing a profile", e);
+    return;
+  }
+  const picked: ImportPreview = preview;
+  const claimedBy = new Map<string, ProfileSummary>();
+  for (const p of existing) {
+    if (p.error) continue;
+    for (const a of p.aircraft) if (!claimedBy.has(a)) claimedBy.set(a, p);
+  }
+
+  const boxes: HTMLInputElement[] = [];
+  const list = el("div", { class: "checklist" });
+  for (const a of picked.aircraft) {
+    const owner = claimedBy.get(a);
+    const box = el("input", { type: "checkbox", value: a });
+    box.checked = owner === undefined;
+    boxes.push(box);
+    const row = el("label", {}, box, el("span", {}, a));
+    if (owner) row.append(el("span", { class: "meta" }, `in ${owner.name}`));
+    list.append(row);
+  }
+  const chosen = (): string[] => boxes.filter((b) => b.checked).map((b) => b.value);
+
+  const name = el("input", { type: "text", value: picked.name });
+  const moves = el("p", { class: "meta" });
+  const failed = el("p", { class: "bad" });
+  const make = el("button", { class: "primary" }, "Import");
+  const cancel = el("button", {}, "Cancel");
+
+  /** Each profile that would give up aircraft, and whether it would have none left. */
+  const takes = (): { from: ProfileSummary; taken: string[]; emptied: boolean }[] => {
+    const aircraft = chosen();
+    return existing
+      .filter((p) => !p.error)
+      .map((p) => {
+        const taken = p.aircraft.filter((a) => aircraft.includes(a));
+        return { from: p, taken, emptied: taken.length === p.aircraft.length };
+      })
+      .filter((t) => t.taken.length > 0);
+  };
+
+  const sync = (): void => {
+    const lines = takes().map((t) =>
+      t.emptied
+        ? `${t.taken.join(", ")} out of ${t.from.name}, which would then be deleted`
+        : `${t.taken.join(", ")} out of ${t.from.name}`,
+    );
+    moves.textContent = lines.length > 0 ? `Moves ${lines.join("; ")}.` : "";
+    if (chosen().length > 0 && name.value.trim() !== "") make.removeAttribute("disabled");
+    else make.setAttribute("disabled", "");
+  };
+  name.addEventListener("input", sync);
+  for (const b of boxes) b.addEventListener("change", sync);
+
+  const about = [`Reads ${picked.module}.`];
+  if (picked.author.trim() !== "") about.push(`Made by ${picked.author}.`);
+  about.push(`${picked.bound} of ${picked.total} lamps assigned.`);
+  const dialog = el(
+    "dialog",
+    { class: "picker" },
+    el("h2", {}, `Import ${picked.name}`),
+    el("p", { class: "meta" }, about.join(" ")),
+  );
+  // Neither stops the import. They are said here because the user is about
+  // to own the profile, and afterwards it looks like their own doing.
+  const notes = [...picked.cautions];
+  if (picked.flagged > 0) {
+    notes.unshift(
+      `${picked.flagged} ${picked.flagged === 1 ? "row reads a signal" : "rows read signals"} the DCS-BIOS installed here does not have, so ${picked.flagged === 1 ? "it stays" : "they stay"} off.`,
+    );
+  }
+  if (notes.length > 0) {
+    const box = el("div", { class: "cautions" });
+    for (const n of notes) box.append(el("div", { class: "caution" }, n));
+    dialog.append(box);
+  }
+  dialog.append(
+    el("p", { class: "meta" }, "Which aircraft is it for? These are the ones it was made for."),
+    list,
+    el("label", { class: "field" }, "Name", name),
+    moves,
+    failed,
+    el("div", { class: "actions" }, cancel, make),
+  );
+  app.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
+  sync();
+  name.select();
+
+  cancel.addEventListener("click", () => dialog.close());
+  make.addEventListener("click", () => {
+    void (async () => {
+      const plan = takes();
+      // Taking an aircraft from another profile changes what that one flies,
+      // so it is asked, not only listed.
+      if (plan.length > 0) {
+        const lines = plan.map((t) => `${t.taken.join(", ")} from ${t.from.name}`);
+        const take = await confirmAction(
+          `Take ${lines.join(" and ")}?
+
+` +
+            `${plan.length === 1 ? "That profile" : "Those profiles"} will no longer fly ` +
+            `${plan.reduce((n, t) => n + t.taken.length, 0) === 1 ? "it" : "them"}; ${name.value.trim()} will.`,
+          "Take",
+        );
+        if (!take) return;
+      }
+      // A profile with no aircraft can never fly, so it goes, but only if
+      // the user says so. No leaves nothing half done: the import is off.
+      const emptied = plan.filter((t) => t.emptied).map((t) => t.from);
+      if (emptied.length > 0) {
+        const names = emptied.map((p) => p.name).join(" and ");
+        const gone = await confirmAction(
+          `Delete ${names}?
+
+` +
+            `${emptied.length === 1 ? "It" : "They"} would be left with no aircraft. ` +
+            `The ${emptied.length === 1 ? "file is" : "files are"} removed and cannot be recovered.
+
+` +
+            `Cancel stops the import, and nothing is changed.`,
+          "Delete",
+        );
+        if (!gone) {
+          dialog.close();
+          return;
+        }
+      }
+      try {
+        const file = await importProfile(
+          picked.path,
+          name.value,
+          chosen(),
+          emptied.map((p) => p.file),
+        );
+        dialog.close();
+        await showProfile(file);
+      } catch (e) {
+        // Kept open, since the usual cause is a name already taken.
+        failed.textContent = e instanceof Error ? e.message : String(e);
+      }
+    })();
+  });
+}
+
 /** Reset discards the user's work, so it asks first and says exactly what it does. */
 async function resetOne(row: ProfileSummary): Promise<void> {
   const ok = await confirmAction(
@@ -232,21 +477,100 @@ async function resetOne(row: ProfileSummary): Promise<void> {
   }
 }
 
-/** Delete cannot be undone, so it asks first, the same way Reset does. */
-async function deleteOne(row: ProfileSummary): Promise<void> {
-  const ok = await confirmAction(
-    `Delete ${row.name}?\n\n` +
-      `The file is removed and cannot be recovered. Any other profile that lists ` +
-      `the same aircraft takes over from it.`,
-    "Delete",
+/**
+ * What deleting `row` would leave behind: the aircraft only it flies, and the
+ * profiles that could take all of them.
+ *
+ * A profile can take an aircraft when it reads the same module and already
+ * flies one of the same family, which is how the shipped profiles group them.
+ * The F-14 and F-14BU share a module and ship apart, and "No aircraft" rides on
+ * FC3 without being one, so neither pair can take the other's aircraft.
+ */
+function deletePlan(row: ProfileSummary, rows: ProfileSummary[]): { orphans: string[]; homes: ProfileSummary[] } {
+  const others = rows.filter((r) => r.file !== row.file && !r.error);
+  // An aircraft another profile already claims keeps flying that one.
+  const orphans: string[] = [];
+  const needed = new Set<string>();
+  row.aircraft.forEach((a, i) => {
+    if (others.some((o) => o.aircraft.includes(a))) return;
+    orphans.push(a);
+    needed.add(row.families[i] ?? "");
+  });
+  const homes = others.filter((o) => o.module === row.module && [...needed].every((f) => o.families.includes(f)));
+  return { orphans, homes };
+}
+
+/**
+ * Delete cannot be undone, so it asks first, and it asks where the aircraft go.
+ *
+ * Laid out like the confirm dialog, with one choice added when deleting would
+ * leave an aircraft with no profile: which profile on the same module takes
+ * it. That is the split case, an A-10C profile copied into an A-10C II one,
+ * where deleting either half should be able to hand its aircraft back.
+ */
+async function deleteOne(row: ProfileSummary, rows: ProfileSummary[]): Promise<void> {
+  const { orphans, homes } = deletePlan(row, rows);
+
+  // A shipped profile left with aircraft nobody else flies is seeded straight
+  // back as shipped, on the very next listing, so it has no "No profile"
+  // choice. The row offers Delete only when it has somewhere to send them.
+  const mustRehome = row.has_default && orphans.length > 0;
+
+  const target = el("select", {});
+  for (const h of homes) target.append(el("option", { value: h.file }, h.name));
+  if (!mustRehome) target.append(el("option", { value: "" }, "No profile"));
+  const outcome = el("p", { class: "meta" });
+  const sync = (): void => {
+    const list = orphans.join(", ");
+    if (target.value !== "") {
+      outcome.textContent = `${target.selectedOptions[0]?.textContent ?? ""} will fly ${list} as well as its own aircraft.`;
+    } else {
+      outcome.textContent = `${list} will fly with the panels cleared until a profile is made for ${orphans.length === 1 ? "it" : "them"}.`;
+    }
+  };
+  target.addEventListener("change", sync);
+  sync();
+
+  const cancel = el("button", {}, "Cancel");
+  const go = el("button", { class: "danger" }, "Delete");
+  const dialog = el(
+    "dialog",
+    { class: "picker confirm" },
+    el("h2", {}, `Delete ${row.name}?`),
+    el("p", { class: "meta" }, "The file is removed and cannot be recovered."),
   );
-  if (!ok) return;
-  try {
-    await deleteProfile(row.file);
-    await showLibrary();
-  } catch (e) {
-    showError("Deleting the profile", e);
+  if (orphans.length > 0) {
+    dialog.append(
+      el(
+        "label",
+        { class: "field" },
+        `${orphans.join(", ")} ${orphans.length === 1 ? "has" : "have"} no other profile. Give ${orphans.length === 1 ? "it" : "them"} to`,
+        target,
+      ),
+      outcome,
+    );
   }
+  dialog.append(el("div", { class: "actions" }, cancel, go));
+  app.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
+  // Cancel takes the focus, as it does in every confirm, so Enter on a
+  // misclick deletes nothing.
+  cancel.focus();
+
+  cancel.addEventListener("click", () => dialog.close());
+  go.addEventListener("click", () => {
+    const giveTo = orphans.length > 0 && target.value !== "" ? target.value : null;
+    dialog.close();
+    void (async () => {
+      try {
+        await deleteProfile(row.file, giveTo);
+        await showLibrary();
+      } catch (e) {
+        showError("Deleting the profile", e);
+      }
+    })();
+  });
 }
 
 /**
@@ -614,6 +938,17 @@ async function showProfile(file: string): Promise<void> {
   // is flying something this profile does not cover.
   setLearnContext(profile.module, profile.aircraft);
 
+  // What the other profiles are called, for the rename box: a name already in
+  // use is refused, since the list shows nothing else to tell them apart.
+  const taken = new Map<string, string>();
+  try {
+    for (const row of await listProfiles()) {
+      if (row.file !== file && !row.error) taken.set(row.name.trim().toLowerCase(), row.name);
+    }
+  } catch {
+    // Only costs the warning while typing; the save is still refused.
+  }
+
   // The shipped copy, so one lamp can be reverted without resetting the file.
   // A profile the user made has none, which is not an error.
   const shipped = new Map<string, Binding>();
@@ -788,7 +1123,7 @@ async function showProfile(file: string): Promise<void> {
       el(
         "div",
         { class: "grow" },
-        el("h1", {}, profile.name),
+        profileTitle(session, taken),
         el("span", { class: "meta block", ...aircraft.title }, `${profile.module} · ${aircraft.text}`),
       ),
       state,
@@ -862,6 +1197,55 @@ async function showProfile(file: string): Promise<void> {
     for (const section of live()) section.open = expand;
     syncToggle();
   });
+}
+
+/**
+ * The profile's name, renamed in place with the pencil, the way a condition
+ * is edited: keep or cancel, then Save writes it with everything else.
+ *
+ * Only the name changes, never the file. The file name is what seeding and
+ * Reset match a shipped profile by, so renaming the file would bring the
+ * shipped one back beside it; the name is only what the list shows.
+ */
+function profileTitle(session: Session, taken: Map<string, string>): HTMLElement {
+  const title = el("div", { class: "title" });
+  const view = (): void => {
+    title.replaceChildren(
+      el("h1", {}, session.profile.name),
+      iconButton("pencil", "✎", "Rename this profile", edit),
+    );
+  };
+  // The name is all the list shows, so two profiles sharing one cannot be
+  // told apart. Said while it is typed; the backend refuses it either way.
+  const clash = (value: string): string | undefined => taken.get(value.trim().toLowerCase());
+  const edit = (): void => {
+    const input = el("input", { type: "text", class: "rename", value: session.profile.name });
+    const clashing = el("span", { class: "bad" });
+    const keep = (): void => {
+      const name = input.value.trim();
+      if (name === "" || clash(name) !== undefined) return;
+      session.profile.name = name;
+      session.refreshDirty();
+      view();
+    };
+    const done = iconButton("done", "✓", "Keep this name", keep);
+    const sync = (): void => {
+      const other = clash(input.value);
+      clashing.textContent = other === undefined ? "" : `Another profile is already called ${other}.`;
+      if (input.value.trim() === "" || other !== undefined) done.setAttribute("disabled", "");
+      else done.removeAttribute("disabled");
+    };
+    input.addEventListener("input", sync);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") keep();
+      if (e.key === "Escape") view();
+    });
+    title.replaceChildren(input, done, iconButton("cancel", "✕", "Keep the old name", view), clashing);
+    sync();
+    input.select();
+  };
+  view();
+  return title;
 }
 
 /**

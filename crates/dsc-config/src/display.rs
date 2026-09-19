@@ -146,6 +146,41 @@ impl Colour {
     pub fn ordinal(self) -> u8 {
         self as u8
     }
+
+    /// Every colour, in the order the panel indexes them.
+    ///
+    /// Here rather than in the editor so a colour cannot be offered that the
+    /// hardware has no index for, and so the two lists cannot drift apart.
+    pub const ALL: [Colour; 11] = [
+        Colour::Black,
+        Colour::Amber,
+        Colour::White,
+        Colour::Cyan,
+        Colour::Green,
+        Colour::Magenta,
+        Colour::Red,
+        Colour::Yellow,
+        Colour::Brown,
+        Colour::Grey,
+        Colour::Khaki,
+    ];
+
+    /// The name this colour is written under in a profile.
+    pub fn name(self) -> &'static str {
+        match self {
+            Colour::Black => "black",
+            Colour::Amber => "amber",
+            Colour::White => "white",
+            Colour::Cyan => "cyan",
+            Colour::Green => "green",
+            Colour::Magenta => "magenta",
+            Colour::Red => "red",
+            Colour::Yellow => "yellow",
+            Colour::Brown => "brown",
+            Colour::Grey => "grey",
+            Colour::Khaki => "khaki",
+        }
+    }
 }
 
 /// One cell of a text grid as the buffer holds it.
@@ -345,6 +380,15 @@ impl Display {
 
     /// Whether any cell here can be drawn inverse. A text grid always can: it
     /// swaps a cell's colours.
+    /// Whether this glass is a text grid.
+    ///
+    /// A grid draws characters from a font it was given, so it can draw
+    /// anything in that font; the others draw from a fixed glyph table. That is
+    /// what decides colour, the small font and a divider.
+    pub fn is_text_grid(&self) -> bool {
+        self.transport == Transport::Text
+    }
+
     pub fn draws_inverse(&self) -> bool {
         self.transport == Transport::Text || self.inverse.values().any(|slots| !slots.is_empty())
     }
@@ -821,6 +865,31 @@ pub enum Align {
     Right,
 }
 
+/// The narrowest run a divider can rule: a dash with a blank each side.
+pub const MIN_DIVIDER_CELLS: usize = 3;
+
+/// The rule a divider draws across `width` cells, one glyph per cell.
+///
+/// A blank cell at each end, so the line never runs into the frame or into
+/// whatever sits beside it, and an unbroken run of dashes between them:
+/// ` ------- `. Spaced dashes were tried first, on the glass, and read as a
+/// dotted line rather than a rule.
+///
+/// A run too narrow to hold a dash between two margins draws blank rather than
+/// crowding the ends, and `problems` refuses one before it gets here. This is a
+/// function of the width alone so the editor can show the same rule it will
+/// draw, by asking rather than working it out again.
+pub fn divider_rule(width: usize) -> Vec<String> {
+    let mut out = vec![" ".to_string(); width];
+    if width < MIN_DIVIDER_CELLS {
+        return out;
+    }
+    for cell in out.iter_mut().take(width - 1).skip(1) {
+        *cell = "-".to_string();
+    }
+    out
+}
+
 /// One field of a display, and the signal that feeds it.
 ///
 /// A field has exactly one owner. Nothing chooses between two sources for the
@@ -833,8 +902,22 @@ pub struct Readout {
     /// Which display on that device, matching a key in `data/displays`.
     pub display: String,
     pub cells: CellRange,
-    /// Catalogue signal id.
+    /// Catalogue signal id. Empty on a divider, which reads nothing, and on a
+    /// field nobody has finished yet, which `problems` says so about.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source: String,
+    /// Draw a fixed rule across these cells instead of reading a signal.
+    ///
+    /// A screen only half used needs somewhere for the eye to stop. The Apache
+    /// puts its keyboard unit on the bottom line and the A-10C starts ten lines
+    /// down, and with the rest of the glass dark the page has no edge. A rule
+    /// gives it one. It names no signal, so it is drawn from the moment the
+    /// aircraft loads and never changes afterwards.
+    ///
+    /// Text grids only, like `colour` and `small`: a segment display draws from
+    /// a glyph table, and none of them has a rule in it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub divider: bool,
     /// Only paint this field from one crew station.
     ///
     /// DCS-BIOS exports the whole cockpit whatever seat you are sitting in, so
@@ -971,6 +1054,11 @@ impl Readout {
             }
         }
         out
+    }
+
+    /// The rule this divider draws, one glyph per cell.
+    pub fn divider_cells(&self) -> Vec<String> {
+        divider_rule(self.cells.len())
     }
 
     /// Which cells of the run draw inverse, given the format signal's text.

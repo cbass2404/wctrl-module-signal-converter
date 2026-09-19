@@ -81,6 +81,25 @@ export interface Readout {
   cells: string;
   source: string;
   /**
+   * Draw a fixed rule across these cells instead of reading a signal.
+   *
+   * A screen only half used has no edge to it: the Apache exports only its
+   * keyboard unit and the A-10C's CDU starts ten lines down, so the rest of
+   * the glass is dark and the page runs off into it. A rule gives it one.
+   * Text grids only, which is what `text_grid` on the display decides.
+   */
+  divider?: boolean;
+  /**
+   * What colour a text grid draws this in.
+   *
+   * Chosen in the window on a divider, and carried through untouched on a
+   * field, whose colour follows what the aircraft's own CDU does. A new
+   * divider starts on the colour the display's other fields agree on, so the
+   * rule matches the page it is ruling rather than arriving white on a green
+   * screen.
+   */
+  colour?: string;
+  /**
    * What the gauge reads in the cockpit at each end of its travel.
    *
    * Required for a number, meaningless for a signal that already reports
@@ -104,6 +123,14 @@ export interface Readout {
    * 50 catalogued.
    */
   seat?: number;
+  /**
+   * A second text signal, laid out across the same cells, whose `i` marks the
+   * characters to draw inverse.
+   *
+   * The F-16 DED is the case DCS-BIOS exports: each line arrives as `DED_Ln`
+   * and its highlighting as `DED_Ln_FORMAT`, one character for one.
+   */
+  format?: string;
   note?: string;
 }
 
@@ -127,6 +154,15 @@ export interface Findings {
   flags: FlagView[];
   /** One line for the page, only when a flagged row needs the DCS-BIOS nightly. */
   notice: string | null;
+}
+
+/** Whether the converter daemon is running, and whether there is one to start. */
+export interface ConverterState {
+  running: boolean;
+  /** The process holding the panels, when one does. */
+  pid: number | null;
+  /** False in a checkout with no daemon built beside the editor. */
+  can_start: boolean;
 }
 
 export interface Profile {
@@ -185,6 +221,16 @@ export interface DisplayInfo {
   /** Cell index to shape, so a run that cannot take letters can be flagged. */
   shapes: string[];
   regions: RegionInfo[];
+  /** Whether this glass can draw a character inverse, which is what decides
+   *  whether a highlighting signal is worth offering. */
+  draws_inverse: boolean;
+  /** Whether this glass is a text grid, drawing characters from a font rather
+   *  than from a fixed glyph table. Only a grid can draw a divider. */
+  text_grid: boolean;
+  /** The colours this glass draws, in the order the panel indexes them. Empty
+   *  on anything but a text grid. Named by the backend so the window cannot
+   *  offer one the hardware has no index for. */
+  colours: string[];
 }
 
 export interface Device {
@@ -195,11 +241,28 @@ export interface Device {
   displays: DisplayInfo[];
 }
 
+/** A profile picked for import, before anything is written. */
+export interface ImportPreview {
+  /** Where it was picked from, handed back to `importProfile`. */
+  path: string;
+  name: string;
+  author: string;
+  module: string;
+  aircraft: string[];
+  bound: number;
+  total: number;
+  /** Rows reading something this DCS-BIOS cannot back. They load and stay off. */
+  flagged: number;
+  cautions: string[];
+}
+
 export interface ProfileSummary {
   file: string;
   name: string;
   module: string;
   aircraft: string[];
+  /** Each aircraft's family, in order: which aircraft this profile could take. */
+  families: string[];
   bound: number;
   total: number;
   has_default: boolean;

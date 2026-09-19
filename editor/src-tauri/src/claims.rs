@@ -8,11 +8,12 @@
 //!
 //! What a move must not do is leave a profile claiming nothing, because a
 //! profile with no aircraft can never be flown and would sit in the list
-//! looking fine. That is refused before anything is written.
+//! looking fine. That is refused before anything is written, unless the user
+//! has confirmed deleting that profile, which only an import asks.
 
 use std::path::Path;
 
-use dsc_config::{file_stem, Profile};
+use dsc_config::{file_stem, Profile, Profiles};
 
 /// A profile that gives up some of its aircraft to a new one.
 pub struct Release {
@@ -21,12 +22,14 @@ pub struct Release {
 }
 
 /// Every active profile that would give up one of `aircraft`, with its list
-/// already trimmed. Refused, naming each one, if any would be left empty.
-pub fn plan(active: &Path, aircraft: &[String]) -> Result<Vec<Release>, String> {
+/// already trimmed, and the files of those left empty. Refused, naming each
+/// one, if any would be left empty that `deletable` does not name.
+pub fn plan(active: &Path, aircraft: &[String], deletable: &[String]) -> Result<(Vec<Release>, Vec<String>), String> {
     let mut out = Vec::new();
+    let mut gone = Vec::new();
     let mut emptied = Vec::new();
     let Ok(entries) = std::fs::read_dir(active) else {
-        return Ok(out);
+        return Ok((out, gone));
     };
     for entry in entries.flatten() {
         let path = entry.path();
@@ -38,11 +41,15 @@ pub fn plan(active: &Path, aircraft: &[String]) -> Result<Vec<Release>, String> 
             continue;
         }
         profile.aircraft.retain(|a| !aircraft.contains(a));
+        let file = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
         if profile.aircraft.is_empty() {
-            emptied.push(profile.name.clone());
+            if deletable.contains(&file) {
+                gone.push(file);
+            } else {
+                emptied.push(profile.name.clone());
+            }
             continue;
         }
-        let file = path.file_name().unwrap_or_default().to_string_lossy().into_owned();
         out.push(Release { file, profile });
     }
     if !emptied.is_empty() {
@@ -51,16 +58,27 @@ pub fn plan(active: &Path, aircraft: &[String]) -> Result<Vec<Release>, String> 
             emptied.join(", ")
         ));
     }
-    Ok(out)
+    Ok((out, gone))
 }
 
 /// Write `profile` as a new file named after it, then move its aircraft out of
 /// every profile that claimed them. Returns the new file name.
 ///
-/// The new file is written first. If a release then fails, the aircraft is
-/// claimed twice until the user fixes it, which the error says; the other
-/// order would drop the aircraft from its old profile with nowhere to go.
-pub fn write_new(active: &Path, mut profile: Profile) -> Result<String, String> {
+/// All or nothing. The new file is written first, so an aircraft always has a
+/// profile, and if anything after it fails, every file touched is put back as
+/// it was and the new one removed.
+pub fn write_new(active: &Path, profile: Profile) -> Result<String, String> {
+    write_new_deleting(active, profile, &[])
+}
+
+/// [`write_new`], deleting any of the files in `delete` that the move leaves
+/// with no aircraft. The user has confirmed each one; a profile left empty
+/// that is not named is still refused.
+///
+/// A shipped profile deleted this way stays deleted, because the new profile
+/// now claims every aircraft it had, and seeding brings a default back only
+/// for aircraft nothing claims.
+pub fn write_new_deleting(active: &Path, mut profile: Profile, delete: &[String]) -> Result<String, String> {
     profile.name = profile.name.trim().to_string();
     if profile.name.is_empty() {
         return Err("a profile needs a name".into());
@@ -77,26 +95,127 @@ pub fn write_new(active: &Path, mut profile: Profile) -> Result<String, String> 
     if path.exists() {
         return Err(format!("{file} already exists. Give the profile another name."));
     }
+    // The file name follows the profile name, so this is usually the same
+    // answer as above. Not always: two names can differ only in punctuation
+    // the file name drops, and the list would then show them alike.
+    if let Some(taken) = Profiles::new(active, active).name_taken(&file, &profile.name) {
+        return Err(format!("Another profile is already called {taken}. Give this one another name."));
+    }
 
-    let releases = plan(active, &profile.aircraft)?;
+    let (releases, gone) = plan(active, &profile.aircraft, delete)?;
+    // Everything this may change, as it is now, to put back on a failure.
+    let mut before = Vec::new();
+    for f in releases.iter().map(|r| &r.file).chain(&gone) {
+        let bytes = std::fs::read(active.join(f)).map_err(|e| format!("reading {f}: {e}"))?;
+        before.push((f.clone(), bytes));
+    }
     std::fs::create_dir_all(active).map_err(|e| format!("creating the profile folder: {e}"))?;
     profile.save(&path).map_err(|e| format!("writing {file}: {e}"))?;
-    for r in releases {
-        r.profile.save(&active.join(&r.file)).map_err(|e| {
-            format!(
-                "{file} was written, but {} could not give up its aircraft ({e}). Remove them from it by hand.",
-                r.file
-            )
-        })?;
+
+    let moved = || -> Result<(), String> {
+        for r in &releases {
+            r.profile
+                .save(&active.join(&r.file))
+                .map_err(|e| format!("{} could not give up its aircraft: {e}", r.file))?;
+        }
+        for g in &gone {
+            std::fs::remove_file(active.join(g)).map_err(|e| format!("{g} could not be deleted: {e}"))?;
+        }
+        Ok(())
+    };
+    if let Err(why) = moved() {
+        let _ = std::fs::remove_file(&path);
+        let unrestored: Vec<&str> = before
+            .iter()
+            .filter(|(f, bytes)| std::fs::write(active.join(f), bytes).is_err())
+            .map(|(f, _)| f.as_str())
+            .collect();
+        return Err(if unrestored.is_empty() {
+            format!("{why}. Nothing was changed.")
+        } else {
+            format!("{why}, and {} could not be put back as it was.", unrestored.join(", "))
+        });
     }
     Ok(file)
+}
+
+/// Delete `file`, first giving the aircraft only it flies to the profile `to`,
+/// if one is named. Returns nothing; the list is reread afterwards.
+///
+/// The one case this is for: a profile split in two with Copy to..., where
+/// deleting either half would otherwise leave its aircraft with no profile.
+/// `to` must be able to fly each of them, which is a same-module profile
+/// already flying an aircraft of the same family (see `Families`): the F-14BU
+/// is not handed to the F-14, nor "No aircraft" to FC3. Aircraft another
+/// profile already flies stay there, so nothing ends up claimed twice.
+///
+/// A shipped profile must hand its aircraft on. Left with nowhere to go, they
+/// would have it seeded straight back as shipped, which is Reset.
+///
+/// The target is written before the file is removed. If the removal then
+/// fails, both claim the aircraft until the user deletes it again, which the
+/// error says; the other order could drop the aircraft with nowhere to go.
+pub fn delete_giving(profiles: &Profiles, file: &str, to: Option<&str>) -> Result<(), String> {
+    if to == Some(file) {
+        return Err("a profile cannot take its own aircraft".into());
+    }
+    let gone = Profile::load(&profiles.active.join(file)).map_err(|e| format!("reading {file}: {e}"))?;
+    let others = profiles.claimed_except(Some(file));
+    let orphans: Vec<String> = gone.aircraft.iter().filter(|a| !others.contains_key(*a)).cloned().collect();
+
+    match to {
+        None if profiles.has_default(file) && !orphans.is_empty() => {
+            return Err(format!(
+                "{} shipped with DCS Signal Converter and would come straight back for {}. Give them to a profile for the same aircraft, or use Reset.",
+                gone.name,
+                orphans.join(", ")
+            ));
+        }
+        None => {}
+        Some(to) => {
+            let path = profiles.active.join(to);
+            let mut target = Profile::load(&path).map_err(|e| format!("reading {to}: {e}"))?;
+            let families = profiles.families();
+            let misfits: Vec<&str> = orphans
+                .iter()
+                .filter(|a| !families.fits(a, &gone.module, &target))
+                .map(String::as_str)
+                .collect();
+            if !misfits.is_empty() {
+                return Err(format!("{} cannot fly {}", target.name, misfits.join(", ")));
+            }
+            target.aircraft.extend(orphans);
+            target.save(&path).map_err(|e| format!("writing {to}: {e}"))?;
+        }
+    }
+    profiles.delete(file).map_err(|e| match to {
+        Some(to) => format!("{to} took the aircraft, but {file} could not be deleted ({e}). Delete it again."),
+        None => format!("deleting {file}: {e}"),
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn scratch(name: &str) -> std::path::PathBuf {
+    /// A folder of its own for one test, removed when the test ends, pass or
+    /// fail, so a run leaves nothing in the temp folder.
+    struct Scratch(std::path::PathBuf);
+
+    impl std::ops::Deref for Scratch {
+        type Target = std::path::Path;
+        fn deref(&self) -> &std::path::Path {
+            &self.0
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    fn scratch(name: &str) -> Scratch {
         let dir = std::env::temp_dir().join(format!(
             "dsc-claims-{name}-{}",
             std::time::SystemTime::now()
@@ -105,7 +224,7 @@ mod tests {
                 .as_nanos()
         ));
         std::fs::create_dir_all(&dir).unwrap();
-        dir
+        Scratch(dir)
     }
 
     fn profile(name: &str, aircraft: &[&str]) -> Profile {
@@ -143,6 +262,32 @@ mod tests {
     }
 
     #[test]
+    fn two_profiles_cannot_share_a_name() {
+        // A renamed profile no longer matches its file name, so the file check
+        // does not catch this one. The name is all the list shows.
+        let dir = scratch("named");
+        profile("A-10C", &["A-10C"]).save(&dir.join("mine.json")).unwrap();
+
+        let err = write_new(&dir, profile("a-10c ", &["A-10C_2"])).unwrap_err();
+        assert!(err.contains("already called A-10C"), "{err}");
+        assert!(!dir.join("a-10c.json").exists(), "nothing was written");
+    }
+
+    #[test]
+    fn a_profile_left_empty_is_deleted_only_when_named() {
+        let dir = scratch("emptied");
+        profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-2.json")).unwrap();
+
+        let err = write_new_deleting(&dir, profile("Shared", &["A-10C_2"]), &["other.json".into()]).unwrap_err();
+        assert!(err.contains("A-10C II"), "{err}");
+        assert!(dir.join("a-10c-2.json").exists());
+
+        write_new_deleting(&dir, profile("Shared", &["A-10C_2"]), &["a-10c-2.json".into()]).unwrap();
+        assert!(!dir.join("a-10c-2.json").exists(), "the emptied profile went");
+        assert!(dir.join("shared.json").exists());
+    }
+
+    #[test]
     fn an_unclaimed_aircraft_touches_no_other_profile() {
         let dir = scratch("free");
         profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-2.json")).unwrap();
@@ -150,5 +295,76 @@ mod tests {
 
         write_new(&dir, profile("A-10C", &["A-10C"])).unwrap();
         assert_eq!(std::fs::read(dir.join("a-10c-2.json")).unwrap(), before);
+    }
+
+    #[test]
+    fn deleting_half_of_a_split_gives_its_aircraft_back() {
+        let dir = scratch("give");
+        profile("A-10C", &["A-10C"]).save(&dir.join("a-10c.json")).unwrap();
+        profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-ii.json")).unwrap();
+        let profiles = Profiles::new(dir.join("none"), &*dir);
+
+        delete_giving(&profiles, "a-10c-ii.json", Some("a-10c.json")).unwrap();
+        assert!(!dir.join("a-10c-ii.json").exists());
+        let kept = Profile::load(&dir.join("a-10c.json")).unwrap();
+        assert_eq!(kept.aircraft, vec!["A-10C".to_string(), "A-10C_2".to_string()]);
+    }
+
+    #[test]
+    fn a_shipped_profile_is_deleted_only_once_its_aircraft_have_a_home() {
+        let dir = scratch("shipped");
+        let (defaults, active) = (dir.join("defaults"), dir.join("active"));
+        std::fs::create_dir_all(&defaults).unwrap();
+        std::fs::create_dir_all(&active).unwrap();
+        profile("A-10C", &["A-10C_2", "A-10C"]).save(&defaults.join("a-10c.json")).unwrap();
+        profile("A-10C", &["A-10C"]).save(&active.join("a-10c.json")).unwrap();
+        profile("Mine", &["A-10C_2"]).save(&active.join("mine.json")).unwrap();
+        let profiles = Profiles::new(&defaults, &active);
+
+        let err = delete_giving(&profiles, "a-10c.json", None).unwrap_err();
+        assert!(err.contains("Reset"), "{err}");
+        assert!(active.join("a-10c.json").exists());
+
+        delete_giving(&profiles, "a-10c.json", Some("mine.json")).unwrap();
+        assert!(!active.join("a-10c.json").exists());
+        assert!(profiles.seed().unwrap().is_empty(), "and it stays deleted");
+    }
+
+    #[test]
+    fn a_shipped_profile_goes_only_to_a_profile_for_the_same_aircraft() {
+        // Two defaults on one module, shipped apart on purpose: the F-14BU is
+        // not an F-14, and neither takes the other's aircraft.
+        let dir = scratch("family");
+        let (defaults, active) = (dir.join("defaults"), dir.join("active"));
+        std::fs::create_dir_all(&defaults).unwrap();
+        std::fs::create_dir_all(&active).unwrap();
+        for (file, name, aircraft) in [("f-14.json", "F-14", "F-14B"), ("f-14bu.json", "F-14BU", "F-14BU")] {
+            let mut p = profile(name, &[aircraft]);
+            p.module = "F-14".into();
+            p.save(&defaults.join(file)).unwrap();
+            p.save(&active.join(file)).unwrap();
+        }
+        let profiles = Profiles::new(&defaults, &active);
+
+        let err = delete_giving(&profiles, "f-14bu.json", Some("f-14.json")).unwrap_err();
+        assert!(err.contains("F-14BU"), "{err}");
+        assert!(delete_giving(&profiles, "f-14bu.json", None).is_err());
+        assert!(active.join("f-14bu.json").exists());
+        assert_eq!(Profile::load(&active.join("f-14.json")).unwrap().aircraft, vec!["F-14B".to_string()]);
+    }
+
+    #[test]
+    fn aircraft_go_only_to_a_profile_on_the_same_module() {
+        let dir = scratch("give-module");
+        profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-ii.json")).unwrap();
+        let mut viper = profile("Viper", &["F-16C_50"]);
+        viper.module = "F-16C_50".into();
+        viper.save(&dir.join("viper.json")).unwrap();
+        let profiles = Profiles::new(dir.join("none"), &*dir);
+
+        let err = delete_giving(&profiles, "a-10c-ii.json", Some("viper.json")).unwrap_err();
+        assert!(err.contains("Viper cannot fly A-10C_2"), "{err}");
+        assert!(dir.join("a-10c-ii.json").exists(), "nothing was deleted");
+        assert_eq!(Profile::load(&dir.join("viper.json")).unwrap().aircraft, vec!["F-16C_50".to_string()]);
     }
 }

@@ -408,7 +408,10 @@ is a separate, writable one, and it starts as a copy of `data/defaults`.
   purpose, so the F-14 and F-14BU, one module shipped as two, never take each
   other's aircraft, and "No aircraft", which rides on FC3, takes nothing and
   goes nowhere. An aircraft no default lists is grouped by its module.
-- **Rename** changes the name the list shows, never the file name.
+- **Rename** changes the name the list shows, never the file name. A name
+  another profile already has is refused, ignoring case and surrounding space,
+  since the name is the only thing that tells two profiles apart. Every path
+  that writes a new file refuses one too; renaming was the way round it.
 
 There is exactly one folder in use, so what a user sees in it is what runs.
 Nothing is shadowed at load time and `--profiles` keeps pointing at one place.

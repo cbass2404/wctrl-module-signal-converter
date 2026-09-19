@@ -188,7 +188,8 @@ A few more things the editor does:
 - **New profile** starts one for an aircraft that has none, blank or copied from a
   related one. **Copy to...** copies an existing profile to other aircraft, which
   is how the Hornet profile serves the Super Hornet mod.
-- **Rename** a profile with the pencil beside its name.
+- **Rename** a profile with the pencil beside its name. Two profiles cannot
+  share a name, since the name is all the list shows.
 - **Export...** saves a copy of a profile anywhere you choose, to share it.
   **Import...** brings one in. It is checked first, and refused if it would not
   load here. If it is for an aircraft another profile flies, you are asked

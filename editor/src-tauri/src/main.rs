@@ -314,6 +314,13 @@ fn save_profile(file: String, profile: Profile, cache: tauri::State<check::Cache
     if profile.name.trim().is_empty() {
         return Err(format!("{file} was not written, because a profile needs a name"));
     }
+    // Renaming is the one way a duplicate name could be made: every path that
+    // writes a new file goes through `claims::write_new`, which refuses one.
+    if let Some(taken) = paths.profiles.name_taken(&file, &profile.name) {
+        return Err(format!(
+            "{file} was not written, because another profile is already called {taken}."
+        ));
+    }
     let problems = cache.problems(&paths, &profile);
     if !problems.is_empty() {
         return Err(format!(

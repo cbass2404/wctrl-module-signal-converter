@@ -89,6 +89,20 @@ function clear(): void {
   app.replaceChildren();
 }
 
+/**
+ * Something done that is worth a word and no more, in the update bar's style
+ * along the foot of the window. Gone after ten seconds, and a newer one
+ * replaces it rather than stacking.
+ */
+let bannerTimer: number | undefined;
+function showBanner(text: string): void {
+  document.querySelector(".update.banner")?.remove();
+  window.clearTimeout(bannerTimer);
+  const banner = el("div", { class: "update banner" }, el("span", {}, text));
+  document.body.append(banner);
+  bannerTimer = window.setTimeout(() => banner.remove(), 10_000);
+}
+
 /** Failures are shown in the window, never swallowed and never only in a console. */
 function showError(where: string, e: unknown): void {
   const message = e instanceof Error ? e.message : String(e);
@@ -271,7 +285,7 @@ async function exportOne(row: ProfileSummary): Promise<void> {
   try {
     const to = await exportProfile(row.file);
     if (to === null) return;
-    app.querySelector("header")?.after(el("div", { class: "meta catalogue" }, `Exported ${row.name} to ${to}.`));
+    showBanner(`Exported ${row.name} to ${to}.`);
   } catch (e) {
     showError("Exporting the profile", e);
   }
@@ -917,6 +931,17 @@ async function showProfile(file: string): Promise<void> {
   // is flying something this profile does not cover.
   setLearnContext(profile.module, profile.aircraft);
 
+  // What the other profiles are called, for the rename box: a name already in
+  // use is refused, since the list shows nothing else to tell them apart.
+  const taken = new Map<string, string>();
+  try {
+    for (const row of await listProfiles()) {
+      if (row.file !== file && !row.error) taken.set(row.name.trim().toLowerCase(), row.name);
+    }
+  } catch {
+    // Only costs the warning while typing; the save is still refused.
+  }
+
   // The shipped copy, so one lamp can be reverted without resetting the file.
   // A profile the user made has none, which is not an error.
   const shipped = new Map<string, Binding>();
@@ -1091,7 +1116,7 @@ async function showProfile(file: string): Promise<void> {
       el(
         "div",
         { class: "grow" },
-        profileTitle(session),
+        profileTitle(session, taken),
         el("span", { class: "meta block", ...aircraft.title }, `${profile.module} · ${aircraft.text}`),
       ),
       state,
@@ -1175,7 +1200,7 @@ async function showProfile(file: string): Promise<void> {
  * Reset match a shipped profile by, so renaming the file would bring the
  * shipped one back beside it; the name is only what the list shows.
  */
-function profileTitle(session: Session): HTMLElement {
+function profileTitle(session: Session, taken: Map<string, string>): HTMLElement {
   const title = el("div", { class: "title" });
   const view = (): void => {
     title.replaceChildren(
@@ -1183,18 +1208,24 @@ function profileTitle(session: Session): HTMLElement {
       iconButton("pencil", "✎", "Rename this profile", edit),
     );
   };
+  // The name is all the list shows, so two profiles sharing one cannot be
+  // told apart. Said while it is typed; the backend refuses it either way.
+  const clash = (value: string): string | undefined => taken.get(value.trim().toLowerCase());
   const edit = (): void => {
     const input = el("input", { type: "text", class: "rename", value: session.profile.name });
+    const clashing = el("span", { class: "bad" });
     const keep = (): void => {
       const name = input.value.trim();
-      if (name === "") return;
+      if (name === "" || clash(name) !== undefined) return;
       session.profile.name = name;
       session.refreshDirty();
       view();
     };
     const done = iconButton("done", "✓", "Keep this name", keep);
     const sync = (): void => {
-      if (input.value.trim() === "") done.setAttribute("disabled", "");
+      const other = clash(input.value);
+      clashing.textContent = other === undefined ? "" : `Another profile is already called ${other}.`;
+      if (input.value.trim() === "" || other !== undefined) done.setAttribute("disabled", "");
       else done.removeAttribute("disabled");
     };
     input.addEventListener("input", sync);
@@ -1202,7 +1233,8 @@ function profileTitle(session: Session): HTMLElement {
       if (e.key === "Enter") keep();
       if (e.key === "Escape") view();
     });
-    title.replaceChildren(input, done, iconButton("cancel", "✕", "Keep the old name", view));
+    title.replaceChildren(input, done, iconButton("cancel", "✕", "Keep the old name", view), clashing);
+    sync();
     input.select();
   };
   view();

@@ -32,6 +32,11 @@
   box-sizing: border-box;
 }
 
+/* Anything scrolled to stops below the sticky header rather than under it. */
+html {
+  scroll-padding-top: 72px;
+}
+
 body {
   margin: 0;
   background: var(--bg);
@@ -42,16 +47,30 @@ body {
 #app {
   max-width: 1000px;
   margin: 0 auto;
-  padding: 20px 16px 48px;
+  padding: 8px 16px 48px;
 }
 
+/* Stays in view while the page scrolls, so the filter on the profile list and
+   Save and Back on a profile are always a click away. Opaque, because rows
+   pass beneath it, and below the hint box, which shows over everything.
+
+   The divider is a shadow rather than a border: a stuck header sits at a
+   fractional scroll offset, and the browser dropped a 1px border there on
+   every other pixel of scrolling. A shadow is painted outside the box and
+   survives it. The second shadow is the lift, and only while stuck. */
 header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding-bottom: 12px;
+  padding: 12px 0;
   margin-bottom: 16px;
-  border-bottom: 1px solid var(--line);
+  background: var(--bg);
+  box-shadow:
+    0 1px 0 var(--line),
+    0 6px 10px -10px rgb(0 0 0 / 70%);
 }
 
 h1 {
@@ -149,6 +168,12 @@ h2 {
 
 body.with-update {
   padding-bottom: 40px;
+}
+
+/* A passing message in the same bar, which sits above the update bar when
+   that is showing rather than covering it. */
+body.with-update .update.banner {
+  bottom: 38px;
 }
 
 /* Which DCS-BIOS the signals came from, under the profiles heading. */

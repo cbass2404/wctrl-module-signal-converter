@@ -1629,6 +1629,29 @@ impl Profiles {
         self.claimed_except(None)
     }
 
+    /// Whether an active profile other than `file` is already called `name`.
+    ///
+    /// The name is the only thing that identifies a profile to the user: the
+    /// file name is never shown, and never changes once written. Two profiles
+    /// reading the same in the list cannot be told apart, and the one wanted
+    /// is a guess. Compared without case or surrounding space, because that is
+    /// how a user reads two names as the same.
+    pub fn name_taken(&self, file: &str, name: &str) -> Option<String> {
+        let wanted = name.trim().to_lowercase();
+        let entries = std::fs::read_dir(&self.active).ok()?;
+        let mut paths: Vec<PathBuf> = entries
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+            .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some(file))
+            .collect();
+        paths.sort();
+        paths.into_iter().find_map(|path| {
+            let p = Profile::load(&path).ok()?;
+            (p.name.trim().to_lowercase() == wanted).then_some(p.name)
+        })
+    }
+
     /// [`claimed_aircraft`](Self::claimed_aircraft), leaving out the claims of
     /// one file, for asking what a profile could take back without counting
     /// its own.

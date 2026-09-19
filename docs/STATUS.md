@@ -9,7 +9,7 @@ Everything below is background. This is what to actually do next.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 254 passing
+cargo test --workspace            # expect 255 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```

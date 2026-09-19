@@ -95,6 +95,12 @@ pub fn write_new_deleting(active: &Path, mut profile: Profile, delete: &[String]
     if path.exists() {
         return Err(format!("{file} already exists. Give the profile another name."));
     }
+    // The file name follows the profile name, so this is usually the same
+    // answer as above. Not always: two names can differ only in punctuation
+    // the file name drops, and the list would then show them alike.
+    if let Some(taken) = Profiles::new(active, active).name_taken(&file, &profile.name) {
+        return Err(format!("Another profile is already called {taken}. Give this one another name."));
+    }
 
     let (releases, gone) = plan(active, &profile.aircraft, delete)?;
     // Everything this may change, as it is now, to put back on a failure.
@@ -253,6 +259,18 @@ mod tests {
         assert!(!dir.join("copy.json").exists(), "nothing was written");
         let old = Profile::load(&dir.join("a-10c-2.json")).unwrap();
         assert_eq!(old.aircraft, vec!["A-10C_2".to_string()], "and nothing was taken");
+    }
+
+    #[test]
+    fn two_profiles_cannot_share_a_name() {
+        // A renamed profile no longer matches its file name, so the file check
+        // does not catch this one. The name is all the list shows.
+        let dir = scratch("named");
+        profile("A-10C", &["A-10C"]).save(&dir.join("mine.json")).unwrap();
+
+        let err = write_new(&dir, profile("a-10c ", &["A-10C_2"])).unwrap_err();
+        assert!(err.contains("already called A-10C"), "{err}");
+        assert!(!dir.join("a-10c.json").exists(), "nothing was written");
     }
 
     #[test]

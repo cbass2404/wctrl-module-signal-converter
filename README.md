@@ -394,6 +394,13 @@ moves  signal                             value
 Each window starts a fresh sheet, so several controls can be found in one run.
 Ctrl-C stops it.
 
+## Resource use
+
+The daemon uses about 22 MB of memory and well under 1% of one core in flight.
+The editor uses about 165 MB, almost all of it WebView2. The install is about
+23 MB. `docs/PERFORMANCE.md` has the measurements and explains how to rerun them
+with `tools/bench_daemon.py`.
+
 ## License
 
 MIT, see `LICENSE`. The MCDU screen code and fonts come from other projects

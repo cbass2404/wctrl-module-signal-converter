@@ -9,7 +9,7 @@ Everything below is background. This is what to actually do next.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 255 passing
+cargo test --workspace            # expect 270 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -19,6 +19,20 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
+
+**Built 2026-09-19, seen on the glass: MCDU dividers.** A field with `divider`
+draws a fixed rule instead of reading a signal, and the A-10C and AH-64D
+defaults now carry one. Drawn in a live A-10C mission the same day, which
+changed it twice: spaced dashes read as a dotted line and became an unbroken
+run, and the colour became something the editor picks. Neither change has been
+back on the glass yet. See "Dividers" in `CONFIG.md`, and the entry under the
+MCDU below.
+
+**Built 2026-09-19, unproven: Manage Converter.** The editor can now stop and
+start the daemon, from a dialog on the profiles page. Built but not yet pressed
+in the window, and the stop path has not been run against a live daemon: only
+the netstat parser has tests, because the rest of it is process control and
+sockets. See below.
 
 **Verified 2026-09-19: an unplugged panel is harmless.** With the MFDs unplugged
 while profiles bound them, the daemon and the editor both ran and everything
@@ -328,8 +342,8 @@ of changed default rows; then test the installer from the first draft.
    Both ICP lamps are verified on hardware: `Backlight` (0) followed the
    PRIMARY CONSOLES knob in the jet.
 
-   Left to do: give the editor a way to pick a readout's `format`; replace
-   drawn glyphs as captures turn up.
+   Left to do: replace drawn glyphs as captures turn up. The editor got a
+   `format` picker 2026-09-19, offered only on glass that draws inverse.
 
 5. **Inventory the remaining devices.** The CarrierAce UFC + HUD (`0xbede`) is
    done, see below. So is the **CarrierAce MFD**, 2026-09-18: one dimmer,
@@ -392,6 +406,31 @@ of changed default rows; then test the installer from the first draft.
    Font selection for aircraft without a CDU comes with the field
    customisation ticket.
 
+   **Dividers, 2026-09-19.** A readout with `divider` draws a rule across its
+   cells and reads nothing: a blank at each end and an unbroken run of dashes
+   between them. Spaced dashes, ` - - - - `, were what it drew first, and
+   seeing it on the glass settled it: it read as a dotted line rather than a
+   rule. The colour is chosen in the editor, which is the one place the window
+   offers a colour at all. It exists because two of the four aircraft leave most of the
+   screen dark, and a page with nothing under it runs off into the black. The
+   A-10C's CDU is ten lines of fourteen, so its rule sits on row 4; the
+   Apache exports only its keyboard unit on row 14, so its rule sits on row 13,
+   inset to the same 22 cells. The F-14BU has none: its CDNU comes within two
+   rows of filling the glass, and Cory's call was that a rule there would be
+   noise. Text grids only, because a segment display draws from a glyph table
+   and none of them holds a rule; `validate` refuses one elsewhere, refuses a
+   divider that also names a signal, and refuses a run too narrow to hold a
+   dash between two margins. The dash and the blank are checked against the
+   aircraft's font like `replace`, and every shipped MCDU font has both.
+
+   Both defaults gaining a row means `merge_new` adds it to profiles that
+   predate it, unless the user has claimed those cells, which is the rule
+   readouts already followed.
+
+   This is deliberately not the text customisation ticket. A rule is fixed and
+   needs no input, so it could ship on its own; anything the user types is that
+   ticket and waits for it.
+
 6. **The Tauri editor.** Scaffolded 2026-09-16, see below. Shape is specified
    in `CONFIG.md`.
 
@@ -449,6 +488,40 @@ label follows the sections.
   disabled panel moved with its signal. Fixed and confirmed in the jet with the
   UFC disabled under the F-16; `tests/disabled_device.rs` pins it.
 
+**Added 2026-09-19:**
+
+* **Notes are editable**, on lamps and fields alike, through the one control in
+  `editor/src/note.ts`. The 143 notes in the shipped defaults were write only
+  before this. A field with nothing written on it shows a button rather than an
+  empty box.
+* **A field can pick the signal marking its inverse characters**, filled in
+  from the source's `_FORMAT` twin and following it when the source changes.
+  Offered only on glass that draws inverse, which `draws_inverse` on
+  `DisplayView` decides; a test names each shipped display.
+* **Reset this lamp** moved to the bottom right of its cell, out of the stack of
+  buttons that add things.
+* **Drawing a row never rewrites it**, so opening a profile leaves it clean and
+  the unsaved marker stays honest.
+* **The header sticks to the top** on both pages. Its divider is a shadow,
+  because a border at a fractional scroll offset was dropped.
+* **Two profiles cannot share a name**, renaming included. The rename box says
+  so while typing, `save_profile` refuses it, and `write_new` checks the name as
+  well as the file name; `Profiles::name_taken` holds the rule, ignoring case
+  and surrounding space.
+* **Export confirms in a banner** that clears after ten seconds, above the
+  update bar rather than over it.
+* **Add a divider**, beside Add a field and only on a text grid. The row has no
+  signal picker, because there is nothing to pick: it shows the rule the panel
+  will draw, and `divider_rule` in the backend works that out, so the preview
+  cannot drift from what is sent. A new one takes the colour the display's
+  other fields agree on, since a white rule across a green page reads as a
+  fault.
+* **A colour menu on a divider**, and nowhere else: a field's colour is the
+  aircraft's business. `Colour::ALL` names the eleven in `dsc-config` and
+  `DisplayView` hands them over, so the window cannot offer one the panel has
+  no index for. The preview draws on the glass's own black rather than the
+  page's background, or a white rule would be invisible in light mode.
+
 Bindings are fully editable. A condition reads as a sentence until its pencil is
 clicked, and an open condition carries keep, cancel and delete: cancel restores
 it as it was when editing began, and delete confirms first. All four binding
@@ -491,22 +564,24 @@ baseline rather than a report. The editor backend adds a thread and a socket and
 nothing else. It listens only while the panel is open, which is deliberate, and
 `CONFIG.md` says why.
 
-**Not built yet:**
+**Profile management:**
 
-1. **Editing a profile's aircraft list in place.** Fixed at creation. An
-   aircraft can be moved to another profile through New profile or Copy to...,
-   or handed to another on Delete, which is the workaround. Renaming was built
-   2026-09-19 (the pencil beside the name; the file name never changes), along
-   with Delete on every profile and seeding that checks claims by aircraft;
-   see "One aircraft, one profile" in `CONFIG.md`. Aircraft move between
-   profiles only within a family, which the shipped defaults define
-   (`Profiles::families`). **Not yet seen in the window.**
-2. ~~**Import and export a profile.**~~ **Built 2026-09-19, not yet seen in
-   the window.** Export... on each row, Import... beside New profile; see
-   "Sharing a profile" in `CONFIG.md`. Beyond the plan below, decided with
-   Cory: taking an aircraft another profile flies is confirmed, a profile left
-   with none is deleted only once confirmed, and declining that cancels the
-   import. `claims::write_new_deleting` rolls every file back on a failure.
+1. **No editor for a profile's aircraft list, by design.** The list is set
+   when a profile is created and afterwards changes only through an operation
+   that has somewhere to put every aircraft it moves: New profile, Import...
+   and Delete each settle the claim as part of what they already do, and none
+   of them can strand an aircraft. A free-standing list editor would have to
+   ask where an aircraft goes with nothing in hand to answer it. Renaming was
+   built 2026-09-19 (the pencil beside the name; the file name never changes),
+   along with Delete on every profile and seeding that checks claims by
+   aircraft; see "One aircraft, one profile" in `CONFIG.md`. Aircraft move
+   between profiles only within a family, which the shipped defaults define
+   (`Profiles::families`).
+2. ~~**Import and export a profile.**~~ **Built 2026-09-19.** Export... on
+   each row, Import... beside New profile; see "Sharing a profile" in
+   `CONFIG.md`. Beyond the plan below, decided with Cory: taking an aircraft
+   another profile flies is confirmed, a profile left with none is deleted only
+   once confirmed, and declining that cancels the import. `claims::write_new_deleting` rolls every file back on a failure.
    Export sits on the row rather than the edit page, so it never has to ask
    about unsaved edits. Tests no longer leave `dsc-*` folders in `%TEMP%`,
    and `Profile::save` removes its `.json.saving` file when a write fails.
@@ -531,6 +606,13 @@ picker, collapsible sections, and the signal search. Three faults found by using
 it and fixed: columns not aligning between sections, the hint box being cut off
 at the window edge, and dropdown rows losing clicks to a focus race.
 
+**Confirmed in the window 2026-09-19**, every flow used rather than read:
+rename, Delete on any profile, and seeding that checks claims; Import... and
+Export..., including the confirmations and the rollback; the sticky header, the
+export banner, and the refusal of a name another profile holds; notes on lamps
+and fields, the inverse-highlight `format` chooser, and Reset in its new
+place.
+
 **Verified on hardware 2026-09-17**, in a running mission with real panels:
 
 * **Lamps still follow signals** after `apply` began reporting whether a word
@@ -553,6 +635,90 @@ rather than through the hook, which is not installed yet.
 use both, `always` for the PTO2 gates in the F-14, Mi-24P, FC3 and No aircraft
 profiles and `same_as` for both gates in the AH-64D, but neither has been
 watched driving a real lamp.
+
+## Development mode, and two faults it uncovered
+
+**`.env` beside `data`, 2026-09-19.** `env=dev` makes `Paths::resolve` return
+`Layout::Dev`: everything in the checkout's `data`, with the tracked defaults
+standing in as the active profiles. So a profile authored in the editor is a
+diff rather than something to copy across by hand, and nothing done while
+developing reaches the profiles Cory actually flies. `.env` is untracked and
+`.env.example` is the copy that ships; `env_is_dev` is tested, and anything but
+`dev` means production, because that is the answer that leaves real profiles
+alone. CI and the release pipeline write `env=prod` before they build, so the
+layout they test is the one they ship rather than one that is right only
+because the file is missing.
+
+**Why it was needed.** A Tauri build copies `data` beside the executable, so
+`target/debug/data/devices.json` and `target/release/data/devices.json` both
+exist. `resolve` tested "data beside the exe" before it looked for a checkout,
+so **every development run was classified as installed**: it read a stale
+`target/*/data/defaults` copied at build time and wrote profiles and the
+catalogue into `Saved Games\DCS Signal Converter`. Found 2026-09-19 by asking
+where a divider added in the editor had gone. Dev is now tested before
+installed; installed is still tested before a plain checkout, so an installed
+copy started from inside a checkout still uses its own files.
+
+**`merge_new` dropped display fields, silently.** It decided whether to write by
+counting added *bindings* only, so a default that gained a field and no lamp
+merged it into the loaded profile and then hit `continue`. Nothing was written
+and nothing was said, on every start. The MCDU dividers are exactly that case.
+Readouts are now counted too and named in the note, with two tests: one that a
+new field reaches the file, one that a field the user has already put on those
+cells is never displaced.
+
+## Managing the daemon from the editor
+
+Built 2026-09-19. `dsc-config::daemon` owns what the daemon and the editor both
+need to agree on: the lock address, the stop message, and the four operations
+around them.
+
+**The lock became a control channel.** The daemon already bound
+`127.0.0.1:16539` to prove it was the only one running, and nothing was ever
+sent to it. It now reads it once per pass of its main loop, and a datagram
+carrying `dcs-signal: stop` breaks the loop. That means leaving by the same path
+as Ctrl-C, so every lamp it lit is cleared and every screen it drove is blanked.
+No process id is needed, no privileges, and nothing to clean up: the operating
+system frees the port when the process dies however it dies.
+
+**Why not kill it.** Terminating a process runs none of its shutdown, and the
+lamps latch, so a killed daemon leaves the panels exactly as lit as they were
+with nothing left running to clear them. That is the `0xc000013a` case in the
+README's troubleshooting, and it would have been the normal path rather than an
+accident.
+
+**Kill is still there**, because a wedged daemon answers nothing and the
+alternative is Task Manager and a guess about which `dcs-signal.exe` is the
+right one. It ends only the process holding the lock, found through `netstat`,
+so a `dcs-signal listen` or a second copy being worked on alongside is left
+alone. `pid_holding` is the tested part; a TCP row for the same port is refused,
+because TCP carries a state column and its fourth field is a word rather than a
+pid.
+
+**The shapes decided with Cory, 2026-09-19:**
+
+- **One neutral button, "Manage Converter"**, rather than a bare Restart. The
+  reasons to press it are narrow, and a button that says Restart gets pressed
+  after every save out of superstition, dropping the panels each time.
+- **The dialog lists the reasons before the buttons**, and says outright that
+  saving a profile is not one of them, because hot reload already covers that.
+- **Three ways out**: Cancel, Kill, Restart. Kill is pushed to the far left of
+  the row, away from Restart, and is disabled when nothing is running.
+- **Restart does not fall through to a start when the stop times out.** The old
+  one still holds the lock, so a new daemon would refuse to run and the button
+  would look like it did nothing. It reports and points at Kill.
+- **Started the way the hook starts it**, through `run-hidden.vbs` with
+  `--exit-when-idle 20`, so a daemon started from the editor behaves exactly
+  like one a mission started, and there is one launch path rather than two.
+- **Not "the engine"**, though it was proposed: the audience flies aircraft, and
+  `Engine` in `dsc-engine` is already the thing that resolves signals to lamp
+  values, which is not this.
+
+`dcs-signal stop` is the same thing from the command line, and is how the stop
+path can be proven without the window.
+
+**Left to do:** press it in the window, and run a stop against a live daemon to
+watch it clear the panels on the way out.
 
 ## The UFC, and the first device with a display
 
@@ -741,7 +907,8 @@ by device display name, then part in declared order, then hardware index.
      that could never paint. Until the seat is known the field stays dark,
      because the wrong station's reading looks correct.
 
-   Still hand-edited: `note` on a field.
+   `note` on a field stayed hand-edited until 2026-09-19; see "Added
+   2026-09-19" above.
 
 **Design call, open to revision:** the cell map is a property of the device and
 lives in `data/displays`, but which signal feeds which cell is a property of the
@@ -934,13 +1101,23 @@ Tauri renders through WebView2, which ships with Windows.
 
 1. ~~**Engine crate.**~~ Done 2026-09-16.
 2. ~~**Prove the stream** against live DCS.~~ Done 2026-09-16.
-3. ~~**Tauri editor** scaffold.~~ Done 2026-09-16. Remaining work is listed
-   under "Where the editor stands": renaming a profile and editing its aircraft
-   list in place.
-4. **Seeding by aircraft, not file name.** Seeding copies any default whose file
-   name is missing, so renaming a shipped profile leaves existing installs with
-   two profiles claiming one aircraft. Skip a default whose aircraft are
-   already claimed.
+3. ~~**Tauri editor** scaffold.~~ Done 2026-09-16. Renaming was built and
+   used 2026-09-19, and there is no editor for an aircraft list by design; see
+   "Where the editor stands". Nothing on that list is outstanding.
+4. ~~**Seeding by aircraft, not file name.**~~ Done 2026-09-19. Seeding copied
+   any default whose file name was missing, so renaming a shipped profile left
+   existing installs with two profiles claiming one aircraft. A default whose
+   aircraft are all claimed is now skipped.
+5. **Text output fields**, the editor's next ticket and the one the display
+   work keeps pointing at. The MCDU divider shipped ahead of it on 2026-09-19,
+   because a fixed rule needs no input; everything the user types is this
+   ticket. One way to author screen content across the UFC, the
+   ICP DED and the MCDU, with each input constrained by its cell's parameters:
+   width, allowed characters, rows. Font selection belongs here too, and only
+   for aircraft without a native CDU device, since an aircraft that has one
+   takes its font from the aircraft (`native_fonts`) and offers no choice. The
+   display catalogue is where the per-cell limits should be read from rather
+   than derived again.
 
 ## Method note
 

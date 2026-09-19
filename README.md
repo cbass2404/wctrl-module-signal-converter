@@ -198,6 +198,11 @@ A few more things the editor does:
 - **Delete** removes a profile. If that leaves an aircraft with no profile, you
   choose which profile takes it, so splitting a profile and deleting a half
   gives its aircraft back.
+- **Add a divider** on the MCDU screen draws a rule across a row, for an
+  aircraft whose page does not fill the glass. The A-10C and AH-64D profiles
+  ship with one, and you choose its colour.
+- **Manage Converter** is for the rare times the converter needs restarting.
+  Saving a profile is not one of them. See below.
 - **Reset** puts a profile back to the shipped one. **Reset this lamp** does the
   same for a single lamp, and shows you what it will reset to before it does.
 - **Drive this panel** per panel. Untick it and the profile leaves that panel
@@ -250,6 +255,14 @@ also warns about a gate that goes dark with the console lights off.
 **A lamp does the wrong thing.**
 Open the aircraft's profile in the editor and use **Learn** to find the switch you
 meant. If a shipped profile is wrong, please report it.
+
+**The panels went dark while DCS kept running.**
+The converter stopped. The DCS hook starts it when a mission begins and does not
+notice that it has gone, so it will not come back until DCS is restarted. Open
+the editor and press **Manage Converter**, then **Restart**. The same dialog is
+where to restart it after plugging a panel in, since panels are found once at
+startup. **Kill** in that dialog is only for a converter that will not answer;
+it cannot clear the panels, because a killed program runs none of its shutdown.
 
 **The panels stayed lit after DCS closed.**
 The panels hold whatever was last sent to them, and the converter did not get to
@@ -305,6 +318,10 @@ output.
 For development. Needs Rust (MSVC toolchain) and, for the editor only, Node.
 [docs/STATUS.md](docs/STATUS.md) has the commands, where development stands and
 what comes next.
+
+Copy `.env.example` to `.env` and set `env=dev` first. That points the editor
+and the daemon at the tracked `data/defaults`, so what you author is what
+ships, and nothing you do while developing reaches the profiles you fly.
 
 ---
 

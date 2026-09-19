@@ -10,6 +10,7 @@ use std::path::{Path, PathBuf};
 use serde::{Deserialize, Serialize};
 
 pub mod catalogue_build;
+pub mod daemon;
 pub mod display;
 pub mod mcdu_font;
 pub mod nightly_only;
@@ -36,8 +37,9 @@ pub fn build_label() -> &'static str {
 }
 
 pub use display::{
-    text_cells, Align, Cell, CellRange, Colour, ColourSource, Display, DisplayCatalogue, Grid,
-    Readout, Region, Screen, TextCell, TextGrid, Transport, SEAT_SIGNAL,
+    divider_rule, text_cells, Align, Cell, CellRange, Colour, ColourSource, Display,
+    DisplayCatalogue, Grid, Readout, Region, Screen, TextCell, TextGrid, Transport,
+    MIN_DIVIDER_CELLS, SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -90,6 +92,12 @@ pub enum Error {
     ColourCodeNotOneChar(String),
     #[error("cells {1} of display {0:?} are given a colour or size, which only a text grid draws")]
     StyleNotDrawn(String, String),
+    #[error("cells {1} of display {0:?} are given a divider, which only a text grid draws")]
+    DividerNotDrawn(String, String),
+    #[error("the divider on {1} of display {0:?} also names a signal {2:?}; a divider draws a fixed rule and reads nothing")]
+    DividerReadsSignal(String, String, String),
+    #[error("the divider on {1} of display {0:?} has {2} cells; a rule needs {3}, a dash with a blank each side")]
+    DividerTooNarrow(String, String, usize, usize),
     #[error("display {0:?} has no cell {1}")]
     NoSuchCell(String, usize),
     #[error("{0:?} cannot be drawn on a {1} cell of display {2:?}")]
@@ -1394,6 +1402,36 @@ impl Profile {
                 }
             }
 
+            // A divider reads nothing, so every check below it is about a
+            // source it does not have. What it can get wrong is its own: glass
+            // that cannot draw it, a signal named anyway, or a run with no room
+            // for a dash between two margins.
+            if r.divider {
+                if !display.is_text_grid() {
+                    out.push(Error::DividerNotDrawn(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                    ));
+                }
+                if !r.source.is_empty() {
+                    out.push(Error::DividerReadsSignal(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                        r.source.clone(),
+                    ));
+                }
+                if r.cells.len() < MIN_DIVIDER_CELLS {
+                    out.push(Error::DividerTooNarrow(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                        r.cells.len(),
+                        MIN_DIVIDER_CELLS,
+                    ));
+                }
+                self.text_problems(r, display, out);
+                continue;
+            }
+
             // A field with nothing chosen yet is unfinished work rather than a
             // mistake, but it still stops the profile loading, so it is said
             // plainly and in those terms.
@@ -1480,6 +1518,15 @@ impl Profile {
             for to in r.replace.values() {
                 if let Some(c) = to.chars().next().filter(|c| !set.contains(c)) {
                     out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
+                }
+            }
+            // A rule is drawn from the font like any other character, so a font
+            // without a dash would rule the line in blanks and look broken.
+            if r.divider {
+                for c in ['-', ' '] {
+                    if !set.contains(&c) {
+                        out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
+                    }
                 }
             }
         }
@@ -1816,6 +1863,7 @@ impl Profiles {
                 .map(|b| (b.device.clone(), b.led.clone()))
                 .collect();
             let before = profile.bindings.len();
+            let before_fields = profile.readouts.len();
             let mut from_default = 0usize;
 
             if let Ok(shipped) = Profile::load(&self.defaults.join(&name)) {
@@ -1847,17 +1895,28 @@ impl Profiles {
             }
 
             let added = profile.bindings.len() - before;
+            // Counted, because a default that gains a display field and no lamp
+            // is a real case: the A-10C and AH-64D both gained an MCDU divider
+            // that way. Left out of this sum, the field was merged in memory
+            // and then dropped by the check below, silently, on every start.
+            let fields = profile.readouts.len() - before_fields;
             let order_changed = sort_bindings(&mut profile.bindings, devices);
-            if added == 0 && !order_changed {
+            if added == 0 && fields == 0 && !order_changed {
                 continue;
             }
             profile.save(&path)?;
+            let mut what = Vec::new();
             if added > 0 {
-                notes.push(format!(
-                    "{name}: added {added} row(s), {from_default} from the shipped default"
+                what.push(format!(
+                    "{added} row(s), {from_default} from the shipped default"
                 ));
-            } else {
-                notes.push(format!("{name}: reordered"));
+            }
+            if fields > 0 {
+                what.push(format!("{fields} display field(s) from the shipped default"));
+            }
+            match what.is_empty() {
+                true => notes.push(format!("{name}: reordered")),
+                false => notes.push(format!("{name}: added {}", what.join(" and "))),
             }
         }
         Ok(notes)

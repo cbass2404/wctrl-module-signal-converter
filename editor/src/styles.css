@@ -236,6 +236,28 @@ dialog.confirm p {
   align-items: center;
 }
 
+/* Manage Converter. Wider than a plain confirm, because the reasons to press
+   anything here are the point of the dialog. */
+dialog.converter {
+  max-width: 520px;
+}
+
+/* Kill to the far left, as far from Restart as the row allows: it is the one
+   action here that cannot be undone and cannot clear the panels. */
+dialog.converter .actions .danger {
+  margin-right: auto;
+}
+
+dialog.converter ul.reasons {
+  margin: 0 0 6px;
+  padding-left: 18px;
+  white-space: normal;
+}
+
+dialog.converter ul.reasons li {
+  margin-bottom: 6px;
+}
+
 /* ------------------------------------------------------------- profile list */
 
 ul.profiles {
@@ -1038,6 +1060,23 @@ input.alias {
   font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
 }
 
+/* The rule a divider will draw, shown as the panel draws it. Monospaced
+   because the spacing is the whole of what it says, and on the glass's own
+   black rather than the page's, so a white rule is not invisible in light mode
+   and every colour reads the way it will on the panel. The colour itself is set
+   from the chosen one, which is the point of showing it at all. */
+.divider-preview {
+  flex-basis: 100%;
+  font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  letter-spacing: 0.05em;
+  background: #05070a;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  white-space: pre;
+  overflow-x: auto;
+}
+
 /* Laid out like .aliases, which is the same shape of thing: a labelled control
    with the reason for it underneath. */
 .highlighting,
@@ -1085,6 +1124,10 @@ textarea.note:focus {
 
 select.seat {
   min-width: 9em;
+}
+
+select.colour {
+  min-width: 8em;
 }
 
 button.add.small {

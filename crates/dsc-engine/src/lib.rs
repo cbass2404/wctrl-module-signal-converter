@@ -549,16 +549,6 @@ impl Engine {
                             continue;
                         }
                     }
-                    let Some(signal) = self
-                        .catalogue
-                        .module(&profile.module)
-                        .and_then(|m| m.signal(&r.source))
-                    else {
-                        continue;
-                    };
-                    let Some(output) = signal.primary() else {
-                        continue;
-                    };
                     // Which cells draw inverse. A format that has not arrived
                     // yet draws the field plainly rather than holding it back.
                     let inverse = r
@@ -582,22 +572,37 @@ impl Engine {
                         .and_then(|o| self.state.text(o.address, o.max_length.unwrap_or(0)))
                         .map(|t| r.colour_cells(&t))
                         .unwrap_or_default();
-                    let text = if output.r#type == "string" {
-                        match self.state.text(output.address, output.max_length.unwrap_or(0)) {
-                            Some(t) => t,
-                            None => continue, // not arrived yet; leave it blank
-                        }
+                    // A divider reads nothing. It is a fixed rule the profile
+                    // asked for, so it is laid out without looking for a source
+                    // and is on the glass from the moment the aircraft loads.
+                    let value = if r.divider {
+                        r.divider_cells()
                     } else {
-                        let mask = output.mask.unwrap_or(u16::MAX);
-                        match self.state.value(output.address, mask, output.shift) {
-                            Some(v) => r.format_number(
-                                v,
-                                output.max_value.unwrap_or(u32::from(u16::MAX)).min(u32::from(u16::MAX)) as u16,
-                            ),
-                            None => continue,
-                        }
+                        let Some(output) = self
+                            .catalogue
+                            .module(&profile.module)
+                            .and_then(|m| m.signal(&r.source))
+                            .and_then(|s| s.primary())
+                        else {
+                            continue;
+                        };
+                        let text = if output.r#type == "string" {
+                            match self.state.text(output.address, output.max_length.unwrap_or(0)) {
+                                Some(t) => t,
+                                None => continue, // not arrived yet; leave it blank
+                            }
+                        } else {
+                            let mask = output.mask.unwrap_or(u16::MAX);
+                            match self.state.value(output.address, mask, output.shift) {
+                                Some(v) => r.format_number(
+                                    v,
+                                    output.max_value.unwrap_or(u32::from(u16::MAX)).min(u32::from(u16::MAX)) as u16,
+                                ),
+                                None => continue,
+                            }
+                        };
+                        r.lay_out(&r.replace_chars(&text))
                     };
-                    let value = r.lay_out(&r.replace_chars(&text));
                     for (offset, cell) in r.cells.cells().enumerate() {
                         let Some(glyph) = value.get(offset) else { continue };
                         let flip = inverse.get(offset).copied().unwrap_or(false);

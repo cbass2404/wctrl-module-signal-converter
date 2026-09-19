@@ -80,6 +80,12 @@ jobs:
           cache: npm
           cache-dependency-path: editor/package-lock.json
 
+      # A release must never be built as a development checkout: dev mode
+      # points the daemon and the editor at data/defaults. Untracked, so a
+      # runner has none, and written anyway so it cannot be right by accident.
+      - name: Pin the production layout
+        run: echo env=prod > .env
+
       - name: Fetch the pinned DCS-BIOS nightly and build the catalogue
         run: python tools/fetch_bios.py --build-catalogue
 

@@ -35,6 +35,28 @@ installed program and the profiles folder chosen at install.
 | `--catalogue <DIR>` | `data/catalogue` | Generated signal catalogue. See above. |
 | `--devices <FILE>` | `data/devices.json` | Hardware inventory: which LEDs exist, and what values each accepts. |
 
+From a checkout, the two runs worth knowing. Both are the `run` command, which
+is the daemon; everything after the bare `--` is passed to it rather than to
+cargo.
+
+```powershell
+# A dry pass. Prints every write, opens no device, stops itself after 30 s.
+cargo run --bin dcs-signal -- run --dry-run --verbose --seconds 30
+
+# Flying it. Drives the panels for real, and runs until Ctrl-C.
+cargo run --release --bin dcs-signal -- run --verbose
+```
+
+**Do the dry pass first** whenever a profile or the hardware has changed. It
+reads live DCS the same way the real thing does, so it confirms the aircraft is
+detected and the right profile picked, with nothing to clear afterwards if the
+answer is wrong.
+
+**Fly with `--release`.** A debug build is fine for a dry pass, but the figures
+in [PERFORMANCE.md](PERFORMANCE.md) were measured on a release build and that is
+what the installer ships. Drop `--verbose` once a run looks right; it costs
+nothing to leave on, and says so in the table above.
+
 ### What you should see
 
 ```
@@ -205,6 +227,20 @@ dcs-signal listen --seconds 60 --watch FLAP_POS --watch FLAPS_SWITCH
 ```
 
 It can run at the same time as the daemon.
+
+`stop` asks a running converter to clear the panels and exit. It is what the
+editor's **Manage Converter** presses, and the way to stop one you did not
+start, such as the daemon the DCS hook launched.
+
+```powershell
+dcs-signal stop
+```
+
+Nothing is killed. The message goes to the loopback socket the daemon already
+holds to prove it is the only one running, and the daemon leaves by the same
+path as Ctrl-C, clearing every lamp it lit and blanking every screen it drove.
+A daemon that will not answer is reported rather than forced, because a
+terminated one would leave the panels latched with nothing left to clear them.
 
 `learn` is the editor's learn mode without the editor. It watches everything the
 loaded module publishes and prints a table per window, fewest movements first,

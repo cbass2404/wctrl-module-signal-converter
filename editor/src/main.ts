@@ -27,6 +27,7 @@ import {
 } from "./api";
 import { bindingEditor, iconButton } from "./binding";
 import { confirmAction } from "./confirm";
+import { manageConverter } from "./converter";
 import { showFlags } from "./flags";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
@@ -145,6 +146,7 @@ async function showLibrary(): Promise<void> {
     el("div", { class: "spacer" }),
     filter,
     el("div", { class: "spacer" }),
+    el("button", { id: "converter" }, "Manage Converter"),
     el("button", { id: "import" }, "Import..."),
     el("button", { class: "primary", id: "new" }, "New profile"),
   );
@@ -169,6 +171,11 @@ async function showLibrary(): Promise<void> {
     return;
   }
 
+  header.querySelector("#converter")?.addEventListener("click", () => {
+    void manageConverter().then((said) => {
+      if (said) showBanner(said);
+    });
+  });
   header.querySelector("#new")?.addEventListener("click", () => void showNewProfile());
   header.querySelector("#import")?.addEventListener("click", () => void showImport());
 

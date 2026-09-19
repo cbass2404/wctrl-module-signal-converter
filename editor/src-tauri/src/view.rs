@@ -9,7 +9,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use dsc_config::{DeviceSpec, DisplayCatalogue, Families, Led, Module, Profile, ValueLabel};
+use dsc_config::{Colour, DeviceSpec, DisplayCatalogue, Families, Led, Module, Profile, ValueLabel};
 
 #[derive(Serialize)]
 pub struct LedView {
@@ -85,6 +85,14 @@ pub struct DisplayView {
     /// highlighting signal only where it can, because `validate` rejects one
     /// on a display that cannot: it would do nothing.
     pub draws_inverse: bool,
+    /// Whether this glass is a text grid, which is what decides whether a
+    /// divider is worth offering. A segment display draws from a glyph table
+    /// with no rule in it, and `validate` rejects one there.
+    pub text_grid: bool,
+    /// The colours this glass can draw, in the order the panel indexes them.
+    /// Empty on anything but a text grid, which is the only kind that has a
+    /// colour to choose.
+    pub colours: Vec<String>,
 }
 
 #[derive(Serialize)]
@@ -124,6 +132,12 @@ impl DeviceView {
                     })
                     .collect(),
                 draws_inverse: d.draws_inverse(),
+                text_grid: d.is_text_grid(),
+                colours: if d.is_text_grid() {
+                    Colour::ALL.iter().map(|c| c.name().to_string()).collect()
+                } else {
+                    Vec::new()
+                },
             })
             .collect();
         self

@@ -81,6 +81,25 @@ export interface Readout {
   cells: string;
   source: string;
   /**
+   * Draw a fixed rule across these cells instead of reading a signal.
+   *
+   * A screen only half used has no edge to it: the Apache exports only its
+   * keyboard unit and the A-10C's CDU starts ten lines down, so the rest of
+   * the glass is dark and the page runs off into it. A rule gives it one.
+   * Text grids only, which is what `text_grid` on the display decides.
+   */
+  divider?: boolean;
+  /**
+   * What colour a text grid draws this in.
+   *
+   * Chosen in the window on a divider, and carried through untouched on a
+   * field, whose colour follows what the aircraft's own CDU does. A new
+   * divider starts on the colour the display's other fields agree on, so the
+   * rule matches the page it is ruling rather than arriving white on a green
+   * screen.
+   */
+  colour?: string;
+  /**
    * What the gauge reads in the cockpit at each end of its travel.
    *
    * Required for a number, meaningless for a signal that already reports
@@ -135,6 +154,15 @@ export interface Findings {
   flags: FlagView[];
   /** One line for the page, only when a flagged row needs the DCS-BIOS nightly. */
   notice: string | null;
+}
+
+/** Whether the converter daemon is running, and whether there is one to start. */
+export interface ConverterState {
+  running: boolean;
+  /** The process holding the panels, when one does. */
+  pid: number | null;
+  /** False in a checkout with no daemon built beside the editor. */
+  can_start: boolean;
 }
 
 export interface Profile {
@@ -196,6 +224,13 @@ export interface DisplayInfo {
   /** Whether this glass can draw a character inverse, which is what decides
    *  whether a highlighting signal is worth offering. */
   draws_inverse: boolean;
+  /** Whether this glass is a text grid, drawing characters from a font rather
+   *  than from a fixed glyph table. Only a grid can draw a divider. */
+  text_grid: boolean;
+  /** The colours this glass draws, in the order the panel indexes them. Empty
+   *  on anything but a text grid. Named by the backend so the window cannot
+   *  offer one the hardware has no index for. */
+  colours: string[];
 }
 
 export interface Device {

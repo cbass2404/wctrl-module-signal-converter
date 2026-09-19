@@ -4,7 +4,7 @@
 //! real DCS-BIOS stream before any of it is wrapped in Tauri.
 
 use std::collections::HashMap;
-use std::net::{Ipv4Addr, UdpSocket};
+use std::net::Ipv4Addr;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -14,6 +14,7 @@ use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use dsc_bios::{BiosState, Listener, Write as BiosWrite};
 use dsc_config::catalogue_build::{self, Freshness};
+use dsc_config::daemon::{self, STOP_TIMEOUT};
 use dsc_config::nightly_only::{Change, NightlyOnly};
 use dsc_config::paths::Paths;
 use dsc_config::{Flag, Place, Unsound};
@@ -36,6 +37,8 @@ struct Cli {
 enum Command {
     /// List connected WinCtrl HID interfaces.
     Devices,
+    /// Ask a running converter to clear the panels and exit.
+    Stop,
     /// Broadcast a heartbeat; every sub-part answers with its own id.
     Parts {
         #[arg(long, value_parser = parse_hex16, default_value = "0xbf05")]
@@ -342,6 +345,19 @@ fn main() -> Result<()> {
     // or the install keeps it.
     let paths = Paths::resolve();
     match cli.command {
+        // Nothing is killed here. The running daemon is asked, and clears the
+        // panels itself on the way out; a terminated one would leave them lit,
+        // because the lamps latch and nothing else would be left to write them.
+        Command::Stop => {
+            match daemon::request_stop(STOP_TIMEOUT) {
+                Ok(true) => println!("Stopped. The panels are cleared."),
+                Ok(false) => println!("No converter is running."),
+                Err(e) => {
+                    println!("The converter did not stop: {e}");
+                    println!("It may be wedged. Nothing was killed, so the panels are as it left them.");
+                }
+            }
+        }
         Command::Devices => {
             let api = hidapi::HidApi::new()?;
             let found = wctrl_hid::enumerate(&api);
@@ -1367,31 +1383,6 @@ impl Trace {
     }
 }
 
-/// Loopback address the daemon binds to prove it is the only one running.
-///
-/// Nothing is ever sent to it. It exists because binding is atomic and the
-/// operating system releases it when the process dies, crash included, so a
-/// second daemon can ask "is one already running" and get a truthful answer
-/// with no stale state to clean up.
-const INSTANCE_LOCK: &str = "127.0.0.1:16539";
-
-/// Claim the right to drive the panels, or report who already has it.
-///
-/// Two daemons on one set of panels mostly looks fine, because both write the
-/// same values from the same stream. It goes wrong at the end: one exits and
-/// clears the lamps while the other is still lighting them.
-///
-/// This is reachable in ordinary use. If DCS crashes and is restarted inside
-/// the idle window, the new DCS gets a fresh Lua state, so the hook's own
-/// "already started" flag is gone and it launches a second daemon while the
-/// first is still alive.
-///
-/// A lock file would survive a crash and then need its own liveness check,
-/// which is the problem this is meant to solve rather than a solution to it.
-fn take_instance_lock() -> std::io::Result<UdpSocket> {
-    UdpSocket::bind(INSTANCE_LOCK)
-}
-
 /// How often to re-ask whether DCS is still there, once the stream has gone
 /// quiet. Only reached while quiet, so it costs nothing during a flight.
 const DCS_RECHECK: Duration = Duration::from_secs(5);
@@ -2048,10 +2039,10 @@ fn run(
     // Held for the lifetime of the run. A dry run writes nothing, so it is
     // allowed alongside a real daemon: the lock exists to stop two processes
     // driving one panel, not to stop two processes existing.
-    let _lock = if dry_run {
+    let lock = if dry_run {
         None
     } else {
-        match take_instance_lock() {
+        match daemon::take_instance_lock() {
             Ok(socket) => Some(socket),
             Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
                 println!(
@@ -2113,6 +2104,15 @@ fn run(
             if started.elapsed() >= Duration::from_secs(limit) {
                 break;
             }
+        }
+
+        // Asked to stand down, by `dcs-signal stop` or by the editor's Restart
+        // Converter. Breaking here rather than exiting means the same way out
+        // as Ctrl-C: every lamp this process lit is cleared and every screen it
+        // drove is blanked, which a killed process would not do.
+        if lock.as_ref().is_some_and(daemon::stop_requested) {
+            println!("Asked to stop. Clearing the panels.");
+            break;
         }
 
         writes.clear();

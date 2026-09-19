@@ -5,6 +5,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   CatalogueStatus,
+  ConverterState,
   Device,
   Findings,
   ImportPreview,
@@ -22,6 +23,21 @@ export const listDevices = () => invoke<Device[]>("devices");
 export const listModules = () => invoke<ModuleChoice[]>("modules");
 export const listProfiles = () => invoke<ProfileSummary[]>("profiles");
 export const listSignals = (module: string) => invoke<SignalView[]>("signals", { module });
+/**
+ * What a divider of this many cells will draw.
+ *
+ * Asked of the backend rather than worked out here, so the preview cannot
+ * drift from the rule the panel is actually sent.
+ */
+export const dividerRule = (cells: number) => invoke<string>("divider_rule", { cells });
+
+// The converter daemon. Nothing here is needed to edit a profile: a running
+// daemon picks up a saved one on its own. See editor/src/converter.ts.
+export const converterState = () => invoke<ConverterState>("converter_state");
+/** Stops a running converter, waits for it to clear the panels, starts a fresh one. */
+export const converterRestart = () => invoke<string>("converter_restart");
+/** Ends it without asking, for one that will not answer. Clears no panels. */
+export const converterKill = () => invoke<string>("converter_kill");
 
 export const openProfile = (file: string) => invoke<Profile>("open_profile", { file });
 export const defaultProfile = (file: string) => invoke<Profile | null>("default_profile", { file });

@@ -808,6 +808,52 @@ CDU line with a `_COLOR` twin, and the letters are the module's own, so
 `codes` says what each means. A letter with no entry, and every cell until the
 signal arrives, draws in `colour`.
 
+### Dividers
+
+A field with `divider` draws a fixed rule instead of reading a signal, and is
+how a page that does not fill the screen gets an edge:
+
+```jsonc
+{
+  "device": "MCDU_Captain",
+  "display": "MCDU",
+  "cells": "72-95",   // row 4, above the first CDU line
+  "divider": true,
+  "colour": "green"
+}
+```
+
+It takes no `source`, and naming one is refused rather than ignored: a rule
+never changes, so a signal on one is a field somebody meant to finish. There is
+no range, no highlighting, no alignment and no seat worth setting, since it
+draws the same thing for every station and at every moment.
+
+**`colour` is the one thing to choose**, and the editor offers it here and
+nowhere else. A field's colour belongs to the aircraft, matching what its own
+CDU draws, so the window leaves it alone; a rule is the user's own addition. A
+new one starts on the colour the display's other fields agree on. Black is the
+screen's own background, so a rule drawn in it cannot be seen.
+
+**The rule is a blank cell at each end and an unbroken run of dashes between
+them**, ` ------- `. Spaced dashes were tried first and read as a dotted line on
+the glass rather than a rule. A run of fewer than three cells has no room for a
+dash between two margins and is refused. The editor shows the rule as the panel
+will draw it, asked of the same code that draws it.
+
+**Text grids only**, like `colour` and `small`. A segment display draws from a
+fixed glyph table and none of them holds a rule, so `validate` refuses one
+there rather than leaving a row of dark cells with nothing saying why. The dash
+and the blank must both be in the aircraft's font, which is checked the same way
+`replace` is.
+
+**The shipped A-10C and AH-64D profiles carry one.** The A-10C's CDU is ten
+lines on a screen of fourteen, so its rule sits on row 4, above the first line.
+The Apache exports only its keyboard unit, on the bottom row, so its rule sits
+on row 13 directly above, inset to the same 22 cells. The F-14B (Upgrade) has
+none: its CDNU comes within two rows of filling the glass. A screen showing
+only a rule still counts as a screen with something on it, so the backlight
+comes up with it.
+
 ### Crew stations
 
 `seat` restricts a field to one station. DCS-BIOS exports the whole cockpit

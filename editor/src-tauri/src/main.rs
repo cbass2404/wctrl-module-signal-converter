@@ -9,6 +9,7 @@
 
 mod check;
 mod claims;
+mod converter;
 mod learn;
 mod share;
 mod update;
@@ -16,11 +17,11 @@ mod view;
 
 use dsc_config::paths::Paths;
 use view::{DeviceView, ModuleChoice, ProfileSummary, SignalView};
-use dsc_config::{DeviceInventory, Module, Profile};
+use dsc_config::{divider_rule as rule_for, DeviceInventory, Module, Profile};
 
 /// Commands return a message rather than an error type, because the only useful
 /// thing the window can do with a failure is show it to the user.
-type Reply<T> = Result<T, String>;
+pub type Reply<T> = Result<T, String>;
 
 fn fail(context: &str, e: impl std::fmt::Display) -> String {
     format!("{context}: {e}")
@@ -120,6 +121,16 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
 fn signals(module: String) -> Reply<Vec<SignalView>> {
     let paths = Paths::resolve();
     SignalView::of_module(&paths.catalogue.join(format!("{module}.json")))
+}
+
+/// What a divider of this many cells will draw, for the window to show.
+///
+/// Asked of the backend rather than worked out again in TypeScript, so there is
+/// one rule for where the dashes fall and the preview cannot drift from what
+/// the panel gets.
+#[tauri::command]
+fn divider_rule(cells: usize) -> Reply<String> {
+    Ok(rule_for(cells).concat())
 }
 
 #[tauri::command]
@@ -430,6 +441,10 @@ fn main() {
             modules,
             profiles,
             signals,
+            divider_rule,
+            converter::converter_state,
+            converter::converter_restart,
+            converter::converter_kill,
             open_profile,
             default_profile,
             create_profile,

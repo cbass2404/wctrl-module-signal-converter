@@ -468,7 +468,7 @@ fn the_shipped_hornet_fields_land_on_named_regions() {
 
 // ------------------------------------------------------- readouts
 
-use dsc_config::{Align, CellRange, Readout};
+use dsc_config::{divider_rule, Align, CellRange, Readout, MIN_DIVIDER_CELLS};
 
 fn readout(cells: &str, source: &str) -> Readout {
     Readout {
@@ -476,6 +476,7 @@ fn readout(cells: &str, source: &str) -> Readout {
         display: "UFC1".into(),
         cells: cells.parse::<CellRange>().expect("a cell run parses"),
         source: source.into(),
+        divider: false,
         seat: None,
         reads: None,
         decimals: 0,
@@ -502,6 +503,40 @@ fn a_cell_run_reads_and_writes_the_way_it_is_written() {
 
     assert!("8-2".parse::<CellRange>().is_err(), "a run cannot end before it starts");
     assert!("two".parse::<CellRange>().is_err());
+}
+
+#[test]
+fn a_divider_rules_every_cell_between_a_blank_at_each_end() {
+    // The shape the panel gets: one blank each side and an unbroken line
+    // between. Spaced dashes read as a dotted line on the glass.
+    assert_eq!(divider_rule(9).concat(), " ------- ");
+    assert_eq!(divider_rule(3).concat(), " - ");
+    assert_eq!(divider_rule(24).concat(), " ---------------------- ");
+    // Every rule is exactly as wide as the run it was asked for, so a divider
+    // can never spill into the field beside it, and the margins never close up.
+    for width in MIN_DIVIDER_CELLS..40 {
+        let rule = divider_rule(width);
+        assert_eq!(rule.len(), width);
+        assert_eq!(rule[0], " ", "{width} cells: a blank at the start");
+        assert_eq!(rule[width - 1], " ", "{width} cells: a blank at the end");
+        assert!(rule[1..width - 1].iter().all(|c| c == "-"), "{width} cells");
+    }
+}
+
+#[test]
+fn a_run_with_no_room_for_a_dash_between_two_margins_draws_blank() {
+    // Refused by `problems` long before this, but a rule that crowded the ends
+    // would look like a fault on the glass rather than an unfinished profile.
+    for width in 0..MIN_DIVIDER_CELLS {
+        assert!(divider_rule(width).iter().all(|c| c == " "), "{width} cells");
+    }
+}
+
+#[test]
+fn a_divider_draws_its_own_run_whatever_the_field_says() {
+    let mut r = readout("2-10", "IGNORED");
+    r.divider = true;
+    assert_eq!(r.divider_cells().concat(), " ------- ");
 }
 
 #[test]

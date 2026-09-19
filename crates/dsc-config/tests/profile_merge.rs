@@ -63,6 +63,100 @@ fn old_profile() -> String {
     .to_string()
 }
 
+/// A profile that predates a display field the default has gained.
+///
+/// The A-10C and AH-64D both gained an MCDU divider and no lamp, which is the
+/// case that found this: the field was merged into the loaded profile and then
+/// thrown away, because only added bindings decided whether the file was
+/// written. It happened again on every start and said nothing.
+#[test]
+fn a_profile_gains_a_display_field_the_default_has_added() {
+    let dir = scratch("field");
+    let shipped = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "72-95",
+          "divider": true, "colour": "green" }
+      ]
+    }"#;
+    let mine = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "96-119",
+          "source": "CDU_LINE0", "colour": "green" }
+      ]
+    }"#;
+    std::fs::write(dir.join("defaults/a-10c.json"), shipped).unwrap();
+    std::fs::write(dir.join("active/a-10c.json"), mine).unwrap();
+
+    let notes = Profiles::new(dir.join("defaults"), dir.join("active"))
+        .merge_new(&inventory())
+        .expect("merge runs");
+    assert!(
+        notes.iter().any(|n| n.contains("display field")),
+        "the added field is reported: {notes:?}"
+    );
+
+    // Written to disk, not merely merged in memory.
+    let after = Profile::load(&dir.join("active/a-10c.json")).expect("still loads");
+    assert!(
+        after.readouts.iter().any(|r| r.divider),
+        "the divider reached the file: {:?}",
+        after.readouts.iter().map(|r| r.cells.to_string()).collect::<Vec<_>>()
+    );
+    assert!(
+        after.readouts.iter().any(|r| r.source == "CDU_LINE0"),
+        "and the user's own field is still there"
+    );
+}
+
+/// The other half: a field the user has already claimed those cells for is not
+/// replaced by the shipped one, and does not count as a change.
+#[test]
+fn a_shipped_field_never_displaces_one_the_user_put_there() {
+    let dir = scratch("claimed");
+    let shipped = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "72-95",
+          "divider": true, "colour": "green" }
+      ]
+    }"#;
+    let mine = r#"{
+      "schema_version": 1,
+      "name": "Shipped",
+      "aircraft": ["A-10C"],
+      "module": "A-10C",
+      "bindings": [],
+      "readouts": [
+        { "device": "MCDU_Captain", "display": "MCDU", "cells": "80-90",
+          "source": "CDU_LINE9", "colour": "white" }
+      ]
+    }"#;
+    std::fs::write(dir.join("defaults/a-10c.json"), shipped).unwrap();
+    std::fs::write(dir.join("active/a-10c.json"), mine).unwrap();
+
+    Profiles::new(dir.join("defaults"), dir.join("active"))
+        .merge_new(&inventory())
+        .expect("merge runs");
+
+    let after = Profile::load(&dir.join("active/a-10c.json")).expect("still loads");
+    assert_eq!(after.readouts.len(), 1, "nothing was added over the user's field");
+    assert_eq!(after.readouts[0].source, "CDU_LINE9");
+}
+
 #[test]
 fn a_profile_written_before_a_device_existed_gains_rows_for_it() {
     let dir = scratch("gains");

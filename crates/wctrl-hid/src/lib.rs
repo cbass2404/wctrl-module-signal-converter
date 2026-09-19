@@ -73,6 +73,8 @@ pub enum Error {
     ForbiddenCommand(u8, &'static str),
     #[error("no WinCtrl device with product id 0x{0:04x}")]
     NotFound(u16),
+    #[error("report 0x{0:02x} is not a screen report")]
+    NotAScreenReport(u8),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -105,19 +107,31 @@ pub fn build_frame(part_id: u32, data: &[u8]) -> Result<[u8; FRAME_LEN]> {
 // ------------------------------------------------------------- pixel channel
 //
 // Confirmed on a ViperAce ICP 2026-09-18 (docs/PROTOCOL.md, "Driving a pixel
-// display"). A logical frame is
+// display"). A logical frame is a structured command:
 //
-//   part id u32 | cmd | 01 00 00 | clock u32 ms | 00 | payload len u32 | payload
+//   part id u32 | function u32 | clock u32 ms | respond u8 | payload len u32 | payload
 //
 // and goes out as consecutive 64-byte reports, each `f0 00 <seq> <n>` and then
 // n (1..=60) bytes of the frame, zero padded. WWTHID.log prints the frame
 // without those four header bytes, which is why the first attempt to replay it
-// was acknowledged and drew nothing.
+// was acknowledged and drew nothing. Several commands can share one stream:
+// the device reassembles it, and a command may straddle two reports.
+//
+// The function ids and their names are SimAppPro's, as WwDevicesDotnet
+// documents them (Winctrl/README.md, "Structured Commands").
 
 const PIXEL_REPORT_LEN: usize = 64;
 const PIXEL_REPORT_DATA: usize = 60;
-const PIXEL_WRITE: u8 = 0x02;
-const PIXEL_COMMIT: u8 = 0x03;
+const PIXEL_WRITE: u32 = 0x102;
+const PIXEL_COMMIT: u32 = 0x103; // refreshLCD
+const SET_SCREEN_INFO: u32 = 0x118;
+const SET_FEATURE_INFO: u32 = 0x119;
+const SET_COMPOSITE_INDEX_BYTES: u32 = 0x11a;
+const BUILD_FORMAT_TABLE: u32 = 0x11c;
+const CLEAR_FEATURE_INFO: u32 = 0x11e;
+
+/// The text-grid channel of the CDU-style panels (the MCDU).
+pub const GRID_REPORT_ID: u8 = 0xf2;
 
 /// The most data bytes put in one pixel write.
 ///
@@ -126,15 +140,15 @@ const PIXEL_COMMIT: u8 = 0x03;
 /// than the device's limit, which is not known.
 pub const PIXEL_WRITE_MAX: usize = 225;
 
-/// Only write and commit can be built. `0x04` is the vendor's self-test
-/// pattern, which has no use here.
-fn pixel_frame(part_id: u32, cmd: u8, clock_ms: u32, payload: &[u8]) -> Vec<u8> {
+/// One structured command. Only the functions named above are built here;
+/// `0x104`, the vendor's self-test pattern, has no use.
+fn structured(part_id: u32, function: u32, clock_ms: u32, payload: &[u8]) -> Vec<u8> {
     let mut out = Vec::with_capacity(17 + payload.len());
     out.extend_from_slice(&part_id.to_le_bytes());
-    // Constant in every captured frame; what it means is not known.
-    out.extend_from_slice(&[cmd, 0x01, 0x00, 0x00]);
+    out.extend_from_slice(&function.to_le_bytes());
     // SimAppPro's millisecond clock. The device does not check its continuity.
     out.extend_from_slice(&clock_ms.to_le_bytes());
+    // Whether to answer; nothing sent here needs to.
     out.push(0x00);
     out.extend_from_slice(&(payload.len() as u32).to_le_bytes());
     out.extend_from_slice(payload);
@@ -150,12 +164,129 @@ pub fn pixel_write_frame(part_id: u32, clock_ms: u32, address: u32, bytes: &[u8]
     let mut payload = Vec::with_capacity(4 + bytes.len());
     payload.extend_from_slice(&address.to_le_bytes());
     payload.extend_from_slice(bytes);
-    pixel_frame(part_id, PIXEL_WRITE, clock_ms, &payload)
+    structured(part_id, PIXEL_WRITE, clock_ms, &payload)
 }
 
 /// Show what the writes since the last commit put in the framebuffer.
 pub fn pixel_commit_frame(part_id: u32, clock_ms: u32) -> Vec<u8> {
-    pixel_frame(part_id, PIXEL_COMMIT, clock_ms, &[0x00])
+    structured(part_id, PIXEL_COMMIT, clock_ms, &[0x00])
+}
+
+// -------------------------------------------------------------- grid channel
+//
+// The MCDU's screen as a text grid, ported from WwDevicesDotnet (BSD-3-Clause,
+// Andrew Whewell and Laurent André; Winctrl/CommonWinctrlPanel.cs and
+// Winctrl/ScreenWriter.cs; see THIRD_PARTY_NOTICES.md). docs/PROTOCOL.md,
+// "Driving a text grid", has the detail. Before the device takes grid data it has to be told what a cell can
+// look like: four features, the values each may take, and the device indexes
+// the cartesian product. A cell then names its look by that index.
+
+/// Every value of the four features, in the order the index is built from:
+/// font slot, foreground colour, background colour, and the first/last cell
+/// marker. Each is `feature u16 | value u32 | format id u64`, little-endian,
+/// and the colours are `B G R A`. Taken verbatim from WwDevicesDotnet, which
+/// took them from SimAppPro.
+const GRID_FEATURES: [&str; 27] = [
+    "0100050000000200000000000000", "0100060000000300000000000000",
+    "0200000000ff0400000000000000", "020000a5ffff0500000000000000",
+    "0200ffffffff0600000000000000", "0200ffff00ff0700000000000000",
+    "02003dff00ff0800000000000000", "0200ff63ffff0900000000000000",
+    "02000000ffff0a00000000000000", "020000ffffff0b00000000000000",
+    "0200425c61ff0c00000000000000", "0200777777ff0d00000000000000",
+    "02005e7379ff0e00000000000000", "0300000000ff0f00000000000000",
+    "030000a5ffff1000000000000000", "0300ffffffff1100000000000000",
+    "0300ffff00ff1200000000000000", "03003dff00ff1300000000000000",
+    "0300ff63ffff1400000000000000", "03000000ffff1500000000000000",
+    "030000ffffff1600000000000000", "0300425c61ff1700000000000000",
+    "0300777777ff1800000000000000", "03005e7379ff1900000000000000",
+    "0400000000001a00000000000000", "0400010000001b00000000000000",
+    "0400020000001c00000000000000",
+];
+
+fn hex(s: &str) -> Vec<u8> {
+    (0..s.len())
+        .step_by(2)
+        .map(|i| u8::from_str_radix(&s[i..i + 2], 16).expect("constant hex"))
+        .collect()
+}
+
+/// The stream that declares the grid and its format table: where the grid
+/// starts on the 640x480 surface, its size, and every look a cell can take.
+pub fn grid_format_table(
+    part_id: u32,
+    clock_ms: u32,
+    origin: (u16, u16),
+    rows: u16,
+    columns: u16,
+) -> Vec<u8> {
+    let mut out = structured(part_id, CLEAR_FEATURE_INFO, clock_ms, &[]);
+    let mut info = Vec::with_capacity(8);
+    for v in [origin.0, origin.1, rows, columns] {
+        info.extend_from_slice(&v.to_le_bytes());
+    }
+    out.extend(structured(part_id, SET_SCREEN_INFO, clock_ms, &info));
+    for feature in GRID_FEATURES {
+        out.extend(structured(part_id, SET_FEATURE_INFO, clock_ms, &hex(feature)));
+    }
+    out.extend(structured(part_id, SET_COMPOSITE_INDEX_BYTES, clock_ms, &[2]));
+    out.extend(structured(part_id, BUILD_FORMAT_TABLE, clock_ms, &[]));
+    out
+}
+
+/// One cell of a grid screen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GridCell {
+    pub ch: char,
+    /// Colour ordinal in the table above: 0 black, 1 amber, 2 white, 3 cyan,
+    /// 4 green, 5 magenta, 6 red, 7 yellow, 8 brown, 9 grey, 10 khaki.
+    pub fg: u8,
+    pub bg: u8,
+    pub small: bool,
+}
+
+impl GridCell {
+    pub const BLANK: GridCell = GridCell { ch: ' ', fg: 2, bg: 0, small: false };
+
+    /// The cell's index into the format table. The strides are the product's:
+    /// 363 per font, 33 per foreground, 3 per background, then 1 for the first
+    /// cell of the screen and 2 for the last.
+    fn format(&self, first: bool, last: bool) -> u16 {
+        let mut code = u16::from(self.fg) * 0x21 + u16::from(self.bg) * 3;
+        if self.small {
+            code += 0x16b;
+        }
+        if first {
+            code += 1;
+        } else if last {
+            code += 2;
+        }
+        code
+    }
+}
+
+/// The reports that paint a whole grid screen, row by row.
+///
+/// Each cell is its format index, low byte first, then the character in
+/// UTF-8. The cells run on across report boundaries, and the last report is
+/// zero padded. Cells cannot be addressed singly: every write is the whole
+/// screen.
+pub fn grid_reports(cells: &[GridCell]) -> Vec<[u8; PIXEL_REPORT_LEN]> {
+    let mut stream = Vec::with_capacity(cells.len() * 3);
+    let last = cells.len().saturating_sub(1);
+    for (i, cell) in cells.iter().enumerate() {
+        stream.extend_from_slice(&cell.format(i == 0, i == last).to_le_bytes());
+        let mut utf8 = [0u8; 4];
+        stream.extend_from_slice(cell.ch.encode_utf8(&mut utf8).as_bytes());
+    }
+    stream
+        .chunks(PIXEL_REPORT_LEN - 1)
+        .map(|chunk| {
+            let mut report = [0u8; PIXEL_REPORT_LEN];
+            report[0] = GRID_REPORT_ID;
+            report[1..1 + chunk.len()].copy_from_slice(chunk);
+            report
+        })
+        .collect()
 }
 
 /// Split a logical frame into the reports that carry it.
@@ -338,6 +469,36 @@ impl Device {
         self.send_pixel_frame(&pixel_commit_frame(part_id, self.clock_ms()))
     }
 
+    /// Declare a grid screen and its format table. The grid draws nothing
+    /// until this has been sent, and a font upload resets the grid to 24x14.
+    pub fn declare_grid(&self, part_id: u32, origin: (u16, u16), rows: u16, columns: u16) -> Result<()> {
+        self.send_pixel_frame(&grid_format_table(part_id, self.clock_ms(), origin, rows, columns))
+    }
+
+    /// Paint a whole grid screen. The screen keeps it after the process exits.
+    pub fn paint_grid(&self, cells: &[GridCell]) -> Result<()> {
+        grid_reports(cells)
+            .iter()
+            .try_for_each(|report| self.handle.write(report).map(|_| ()))?;
+        Ok(())
+    }
+
+    /// Send reports built elsewhere, such as a font upload. Only the two screen
+    /// channels pass: anything on the command channel has to go through
+    /// [`build_frame`] and its forbidden list.
+    pub fn send_screen_reports(&self, reports: &[Vec<u8>]) -> Result<()> {
+        for report in reports {
+            match report.first() {
+                Some(&PIXEL_REPORT_ID | &GRID_REPORT_ID) => {
+                    self.handle.write(report)?;
+                }
+                Some(&id) => return Err(Error::NotAScreenReport(id)),
+                None => {}
+            }
+        }
+        Ok(())
+    }
+
     fn clock_ms(&self) -> u32 {
         self.opened.elapsed().as_millis() as u32
     }
@@ -447,14 +608,14 @@ mod tests {
             let frame = &raw[1..];
             let part = u32::from_le_bytes(frame[0..4].try_into().unwrap());
             let clock = u32::from_le_bytes(frame[8..12].try_into().unwrap());
-            let rebuilt = match frame[4] {
+            let rebuilt = match u32::from_le_bytes(frame[4..8].try_into().unwrap()) {
                 PIXEL_WRITE => {
                     writes += 1;
                     let address = u32::from_le_bytes(frame[17..21].try_into().unwrap());
                     pixel_write_frame(part, clock, address, &frame[21..])
                 }
                 PIXEL_COMMIT => pixel_commit_frame(part, clock),
-                other => panic!("unexpected command 0x{other:02x}"),
+                other => panic!("unexpected function 0x{other:03x}"),
             };
             assert_eq!(rebuilt, frame, "{line}");
         }
@@ -494,6 +655,81 @@ mod tests {
                 0x00, 0x00, // padding
             ]
         );
+    }
+
+    /// The commands in a stream, as (function, payload), timestamps dropped.
+    fn commands(stream: &[u8]) -> Vec<(u32, Vec<u8>)> {
+        let mut out = Vec::new();
+        let mut i = 0;
+        while i + 17 <= stream.len() {
+            let function = u32::from_le_bytes(stream[i + 4..i + 8].try_into().unwrap());
+            let len = u32::from_le_bytes(stream[i + 13..i + 17].try_into().unwrap()) as usize;
+            out.push((function, stream[i + 17..i + 17 + len].to_vec()));
+            i += 17 + len;
+        }
+        out
+    }
+
+    #[test]
+    fn the_format_table_is_the_one_simapppro_declares() {
+        // SimAppPro's font upload, as WwDevicesDotnet recorded it, declares
+        // the grid and its format table at the end. Ours has to say the same.
+        let map: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../data/mcdu/font-packet-map-3x31.json"
+        ))
+        .unwrap();
+        let mut stream = Vec::new();
+        for p in map["Packets"].as_array().unwrap() {
+            let p = p.as_str().unwrap().replace("{CP}", "32bb");
+            if !p.starts_with("f0") {
+                continue;
+            }
+            let bytes: Vec<u8> = p
+                .chars()
+                .map(|c| if "_HLWXY".contains(c) { '0' } else { c })
+                .collect::<String>()
+                .as_bytes()
+                .chunks(2)
+                .map(|h| u8::from_str_radix(std::str::from_utf8(h).unwrap(), 16).unwrap())
+                .collect();
+            stream.extend_from_slice(&bytes[4..4 + bytes[3] as usize]);
+        }
+        let theirs: Vec<_> = commands(&stream)
+            .into_iter()
+            .skip_while(|(f, _)| *f != CLEAR_FEATURE_INFO)
+            .filter(|(f, _)| *f != 0x105)
+            .collect();
+        let ours = commands(&grid_format_table(0xbb32, 0, (0, 0), 14, 24));
+        assert_eq!(ours.len(), theirs.len());
+        for ((f, a), (g, b)) in ours.iter().zip(&theirs) {
+            assert_eq!(f, g);
+            if *f == SET_SCREEN_INFO {
+                // The origin is a placeholder in theirs; rows and columns are not.
+                assert_eq!(&a[4..], &b[4..], "14 rows of 24");
+            } else {
+                assert_eq!(a, b, "function 0x{f:03x}");
+            }
+        }
+    }
+
+    #[test]
+    fn a_blank_screen_marks_its_first_and_last_cell() {
+        let reports = grid_reports(&[GridCell::BLANK; 24 * 14]);
+        // 336 cells of three bytes, 63 to a report after the report id.
+        assert_eq!(reports.len(), 16);
+        assert!(reports.iter().all(|r| r[0] == GRID_REPORT_ID));
+        // White on black is 2 * 0x21 = 0x42; the first cell adds 1, the last 2.
+        assert_eq!(&reports[0][1..7], &[0x43, 0x00, b' ', 0x42, 0x00, b' ']);
+        assert_eq!(&reports[15][61..64], &[0x44, 0x00, b' ']);
+    }
+
+    #[test]
+    fn a_small_coloured_glyph_carries_its_utf8_whole() {
+        let cell = GridCell { ch: '☐', fg: 4, bg: 0, small: true };
+        let reports = grid_reports(&[GridCell::BLANK, cell, GridCell::BLANK]);
+        // Green is 4 * 0x21 = 0x84, small adds 0x16b: 0x1ef.
+        assert_eq!(&reports[0][4..9], &[0xef, 0x01, 0xe2, 0x98, 0x90]);
+        assert!(reports[0][12..].iter().all(|b| *b == 0), "zero padded");
     }
 
     #[test]

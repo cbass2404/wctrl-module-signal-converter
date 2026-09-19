@@ -862,11 +862,22 @@ function deviceSection(
   session: Session,
 ): HTMLDetailsElement {
   const count = el("span", { class: "meta" }, "");
+  // What saving now would drive, so any form counts ("same as", "always",
+  // "any of"), but a condition still waiting for its signal does not: the
+  // profile check rejects it. Those are named instead of silently left out,
+  // or an unfinished lamp reads as one the user missed. Refreshed when an edit
+  // is settled rather than on every keystroke; see `onCommit`.
   const refreshCount = (): void => {
-    const assigned = device.leds.filter(
-      (l) => (byLamp.get(lampKey(device.key, l.name))?.conditions.length ?? 0) > 0,
-    ).length;
-    count.textContent = `${assigned} of ${device.leds.length} lamps assigned`;
+    let assigned = 0;
+    let unfinished = 0;
+    for (const l of device.leds) {
+      const binding = byLamp.get(lampKey(device.key, l.name));
+      if (!binding || isPlaceholder(binding)) continue;
+      if (isFinished(binding)) assigned += 1;
+      else unfinished += 1;
+    }
+    count.textContent =
+      `${assigned} of ${device.leds.length} lamps assigned` + (unfinished ? ` · ${unfinished} unfinished` : "");
   };
 
   const rows = el("tbody");
@@ -1008,6 +1019,13 @@ function isPlaceholder(binding: Binding): boolean {
   return !binding.conditions.length && !binding.any_of?.length && !binding.always && !binding.same_as;
 }
 
+/** Assigned, and every condition has its signal, so the profile check accepts it. */
+function isFinished(binding: Binding): boolean {
+  if (binding.always || binding.same_as) return true;
+  const conditions = [...binding.conditions, ...(binding.any_of ?? []).flatMap((b) => b.conditions)];
+  return conditions.length > 0 && conditions.every((c) => c.source !== "");
+}
+
 function onValueMatters(binding: Binding): boolean {
   if (binding.same_as) return false;
   if (binding.always) return true;
@@ -1142,9 +1160,9 @@ function lampRow(
           )
         : [],
       shipped: session.shipped.get(lampKey(device.key, led.name)),
+      onCommit: refreshCount,
       onChange: () => {
         session.refreshDirty();
-        refreshCount();
         // The binding decides whether an output value can do anything, so the
         // cell has to follow it: switching a test from a scale to a threshold
         // is what turns the field on.

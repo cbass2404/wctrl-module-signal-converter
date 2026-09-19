@@ -56,6 +56,14 @@
     },
     {
       "device": "CarrierAce_UFC",
+      "led": "LCDBacklight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [
         {
@@ -65,6 +73,243 @@
           }
         }
       ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "LCP_CONSOLE",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Marker_Light",
+      "conditions": [
+        {
+          "source": "LCP_CONSOLE",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ],
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "LCP_CONSOLE",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Marker_Light",
+      "conditions": [
+        {
+          "source": "LCP_CONSOLE",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ],
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Backlight",
+      "conditions": [
+        {
+          "source": "LCP_CONSOLE",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Marker_Light",
+      "conditions": [
+        {
+          "source": "LCP_CONSOLE",
+          "on_when": {
+            "scale": [0, 65535]
+          }
+        }
+      ],
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM2",
+      "conditions": []
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
@@ -340,6 +585,529 @@
           }
         }
       ]
+    },
+    {
+      "device": "ViperAce_ICP",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    }
+  ],
+  "readouts": [
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "96-119",
+      "source": "CDU_LINE0",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      },
+      "note": "CDU line 1. The ten CDU lines sit on rows 5 to 14, so the CDU's line select keys, beside its lines 3, 5, 7 and 9, land beside MCDU rows 7, 9, 11 and 13, and the scratchpad on line 10 lands on the MCDU's scratchpad row."
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "120-143",
+      "source": "CDU_LINE1",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      },
+      "note": "DCS-BIOS sends the CDU's symbols as single bytes above ASCII (A-10C.lua, cdu_replace_map). replace turns each into the character whose glyph the A-10C font draws for it: the arrows, the box, the up-down arrow (Delta), the cursor block (hexagon), and ? whose glyph is the % slot. Taken from WCtrlDcsBiosBridge's A-10C listener."
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "144-167",
+      "source": "CDU_LINE2",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "168-191",
+      "source": "CDU_LINE3",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "192-215",
+      "source": "CDU_LINE4",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "216-239",
+      "source": "CDU_LINE5",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "240-263",
+      "source": "CDU_LINE6",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "264-287",
+      "source": "CDU_LINE7",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "288-311",
+      "source": "CDU_LINE8",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "312-335",
+      "source": "CDU_LINE9",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      },
+      "note": "CDU line 10, the scratchpad."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "96-119",
+      "source": "CDU_LINE0",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "120-143",
+      "source": "CDU_LINE1",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "144-167",
+      "source": "CDU_LINE2",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "168-191",
+      "source": "CDU_LINE3",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "192-215",
+      "source": "CDU_LINE4",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "216-239",
+      "source": "CDU_LINE5",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "240-263",
+      "source": "CDU_LINE6",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "264-287",
+      "source": "CDU_LINE7",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "288-311",
+      "source": "CDU_LINE8",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "312-335",
+      "source": "CDU_LINE9",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "96-119",
+      "source": "CDU_LINE0",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "120-143",
+      "source": "CDU_LINE1",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "144-167",
+      "source": "CDU_LINE2",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "168-191",
+      "source": "CDU_LINE3",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "192-215",
+      "source": "CDU_LINE4",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "216-239",
+      "source": "CDU_LINE5",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "240-263",
+      "source": "CDU_LINE6",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "264-287",
+      "source": "CDU_LINE7",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "288-311",
+      "source": "CDU_LINE8",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "312-335",
+      "source": "CDU_LINE9",
+      "colour": "green",
+      "replace": {
+        "»": "→",
+        "«": "←",
+        "¡": "☐",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "?": "%",
+        "¶": "⬡"
+      }
     }
   ]
 }

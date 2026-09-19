@@ -114,7 +114,7 @@ fn value(panel: &[(u8, u8)], index: u8) -> u8 {
 fn a_dark_console_drives_the_flag_lamps_full_bright() {
     // Console off means daylight, not "lamps off". A dim flag lamp in daylight
     // is the failure this whole test file exists for.
-    for file in ["a-10c.json", "fa-18c-hornet.json"] {
+    for file in ["a-10c.json", "fa-18.json"] {
         let (module, aircraft, signal) = spec(file);
         let panel = panel_at(file, module, aircraft, signal, 0);
         assert_eq!(
@@ -127,7 +127,7 @@ fn a_dark_console_drives_the_flag_lamps_full_bright() {
 
 #[test]
 fn a_lit_console_dims_the_flag_lamps_with_it() {
-    for file in ["a-10c.json", "fa-18c-hornet.json"] {
+    for file in ["a-10c.json", "fa-18.json"] {
         let (module, aircraft, signal) = spec(file);
         assert_eq!(value(&panel_at(file, module, aircraft, signal, 65535), FLAG), 255);
         assert_eq!(value(&panel_at(file, module, aircraft, signal, 32768), FLAG), 127);
@@ -138,7 +138,7 @@ fn a_lit_console_dims_the_flag_lamps_with_it() {
 fn the_panel_labels_still_follow_the_console_all_the_way_down() {
     // Backlight is deliberately NOT given the daylight floor: labels unlit in
     // daylight is correct, and it is the one dimmer that governs no lamp.
-    for file in ["a-10c.json", "fa-18c-hornet.json"] {
+    for file in ["a-10c.json", "fa-18.json"] {
         let (module, aircraft, signal) = spec(file);
         let panel = panel_at(file, module, aircraft, signal, 0);
         assert_eq!(
@@ -225,7 +225,7 @@ fn every_shipped_gate_survives_a_dark_cockpit() {
 fn spec(file: &str) -> (&'static str, &'static str, &'static str) {
     match file {
         "a-10c.json" => ("A-10C", "A-10C_2", "LCP_CONSOLE"),
-        "fa-18c-hornet.json" => ("FA-18C_hornet", "FA-18C_hornet", "CONSOLES_DIMMER"),
+        "fa-18.json" => ("FA-18C_hornet", "FA-18C_hornet", "CONSOLES_DIMMER"),
         other => panic!("no spec for {other}"),
     }
 }

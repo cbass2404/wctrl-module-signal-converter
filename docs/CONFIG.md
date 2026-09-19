@@ -536,8 +536,31 @@ whichever seat the player is actually in:
 takes the dimmest value any of its conditions asks for; `any_of` takes the
 brightest value any group produces. For on/off tests that is boolean OR, and for
 a continuous source it means the branch that is actually live supplies the value
-while the gated branches sit at zero. One sentence each way, and no third
-mechanism.
+while the gated branches sit at zero. One sentence each way.
+
+**`"pick": "latest"`** is the one alternative to that rule, for alternatives
+that are not gated by anything: the branch whose signals changed value most
+recently supplies the value, dark or not. It exists for a two-seat aircraft
+with a lighting knob per seat and no signal saying which seat is taken, where
+brightest would mean turning both knobs down to dim and dimmest both up to
+brighten. The knob last turned is the one in the player's hand, and in
+multiplayer either crew member takes the panels back by turning theirs.
+
+```jsonc
+"any_of": [
+  { "conditions": [ { "source": "PLT_LIGHT_INTENT_CONSOLE", "on_when": { "scale": [0, 8] } } ] },
+  { "conditions": [ { "source": "RIO_LIGHT_INTENT_CONSOLE", "on_when": { "scale": [0, 8] } } ] }
+],
+"pick": "latest"
+```
+
+A signal "moves" when its own value changes, not when the word carrying it does,
+so a neighbouring switch in the same word does not count. The value first seen,
+and everything in the module-load flood, is a baseline rather than a movement,
+so until a knob is actually turned the brightest branch lights the lamp. Which
+knob moved last survives a profile reload and is forgotten on an aircraft
+change. Absent, or `"brightest"`, is the rule above; the file only carries
+`pick` when it is `"latest"`, and `pick` without `any_of` is rejected.
 
 A branch that is already false stops there rather than reading the rest of
 itself. That is what keeps the example above working: the empty seat's dimmer
@@ -553,8 +576,8 @@ guess, and the editor collapses a single remaining alternative back to
 
 **Seat position comes from DCS-BIOS**, not from anything we add. `SEAT_POSITION`
 is exported by the five multicrew modules that have it: AH-64D (0 = Pilot,
-1 = CP/G), CH-47F, C-101, Mi-24P and UH-1H. The F-14 does not export it, so a
-Pilot/RIO profile has to find another discriminator.
+1 = CP/G), CH-47F, C-101, Mi-24P and UH-1H. The F-14 does not export it, so its
+defaults use `"pick": "latest"` between the pilot's and RIO's console knobs.
 
 ### Always on
 
@@ -658,6 +681,53 @@ is drawn as a filled box with the character knocked out. The F-16 DED is the
 case: DCS-BIOS sends each line as `DED_Ln` and its highlighting as
 `DED_Ln_FORMAT`. Only a display that can draw inverse accepts it, which today
 is the ICP's DED, and any other mark draws normally.
+
+### Text grids
+
+The MCDU's screen is a grid of 24 by 14 characters that the panel draws from
+a font of its own, so a field there carries text and a colour rather than
+glyph bitmaps. `colour`, `small` and `colours` apply to a text grid only, and
+`validate` refuses them anywhere else:
+
+```jsonc
+{
+  "device": "MCDU_Captain",
+  "display": "MCDU",
+  "cells": "313-334",           // row 14, one column in
+  "source": "PLT_KU_DISPLAY",
+  "seat": 0,
+  "colour": "green",            // white when left out
+  "small": false,               // the small font, for a CDU's labels
+  "replace": { "~": "█" },      // one character for one, inside the line
+  "colours": {                  // per character, where the module sends them
+    "source": "PLT_CDU_LINE1_COLOR",
+    "codes": { "g": "green", "p": "magenta" }
+  }
+}
+```
+
+The colours are black, amber, white, cyan, green, magenta, red, yellow, brown,
+grey and khaki. Cell n is row n / 24 and column n % 24, counting from 0, so row
+14 is cells 312 to 335.
+
+**The font belongs to the aircraft.** DCS-BIOS cannot export every symbol a
+CDU draws, so each module sends stand-ins, and each font files those symbols
+under characters of its own choosing. `data/displays/mcdu.json` names the font
+for each aircraft whose CDU it matches, in `native_fonts`, and a profile that
+puts fields on the MCDU for an aircraft without one is refused.
+
+**`replace` joins the two.** It rewrites the module's stand-ins, one character
+for one, into the characters the font draws the symbol under: the A-10C sends
+its arrows as `»` and `«`. Unlike `aliases`, which swaps a whole value, it
+works inside a line, and on any display. On a text grid, every character it
+writes must be one the aircraft's font draws, or the profile is refused. Draw
+the font's glyphs before writing one, because fonts reuse slots: in the A-10C
+font `%` draws a question mark.
+
+**`colours` is a second signal, one letter per cell.** The CH-47F sends each
+CDU line with a `_COLOR` twin, and the letters are the module's own, so
+`codes` says what each means. A letter with no entry, and every cell until the
+signal arrives, draws in `colour`.
 
 ### Crew stations
 

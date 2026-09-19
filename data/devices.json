@@ -282,7 +282,7 @@
               "max": 255,
               "verified": true,
               "lights_display": true,
-              "note": "Driven with the segment display, not from a profile: 255 while a profile puts fields on the UFC, 0 when it is blanked. At 0 the glass is dark even when the cells are being driven correctly."
+              "note": "Lights the segment display: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. At 0 the glass is dark even when the cells are being driven correctly."
             }
           ],
           "display": "UFC1"
@@ -342,7 +342,7 @@
               "max": 255,
               "verified": true,
               "lights_display": true,
-              "note": "Driven with the DED, not from a profile: 255 while a profile puts fields on the DED, 0 when it is blanked. At 0 a correctly drawn page is invisible. Verified 2026-09-18 by capturing the SimAppPro slider: SET_LEDX index 1 took values from 0x00 to 0x70 as it moved, and the DED followed. While SimAppPro is streaming to the DED it raises this to about 60 if the user has it lower, and puts the user's value back when the stream stops (observed on the panel, not captured)."
+              "note": "Lights the DED: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. At 0 a correctly drawn page is invisible. Verified 2026-09-18 by capturing the SimAppPro slider: SET_LEDX index 1 took values from 0x00 to 0x70 as it moved, and the DED followed. While SimAppPro is streaming to the DED it raises this to about 60 if the user has it lower, and puts the user's value back when the stream stops (observed on the panel, not captured)."
             }
           ],
           "display": "DED"
@@ -487,6 +487,396 @@
         "The vendor table (www/js/DeviceConfig.js, AllDevice[PIDByName.R1]) lists Backlight1 0 and Backlight2 1 only. SimAppPro's own UI has a third slider, and the capture put it on index 3. A vendor table is a hypothesis, as the PTO2's FLAG already showed.",
         "INDEX 2 IS DELIBERATELY ABSENT. It is not a lamp and not a gate: a write to it goes through to both pedal lights, and whichever write came last wins. Measured on hardware 2026-09-18 with wctrl led: with 1 and 2 at 0, 1=255 lit the right light alone, so 2 does not gate; 2=255 lit both with 1 at 0, so it drives them directly; then 1=0 put the right light out with 2 still at 255, so nothing of it stays latched; and 2=0 put both out. Index 0 alone lights only the left light, so 2 is a hidden fourth control over 0 and 1 together. SimAppPro never writes it. A profile keeps the lights together with same_as instead, which leaves each one addressable. Owning it would let a sweep overwrite L and R depending on write order, so nothing here addresses it."
       ]
+    },
+    {
+      "key": "MCDU_Captain",
+      "display_name": "MCDU Captain",
+      "product_name": "WINCTRL 32 MCDU CAPTAIN",
+      "usb_pid": 47926,
+      "parts": [
+        {
+          "part_id": 47922,
+          "name": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "SimAppPro's \"Backlight\" slider. Captured 2026-09-18 sweeping 0 to 255 to 0, then taking 1, 13 and 135."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as the ICP's Screen_Backlight does for the DED, and the same rule holds: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Captured 2026-09-18 across 0 to 255."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "governs": ["Fail", "FM", "MCDU", "MENU", "FM1", "IND", "RDY", "STATUS", "FM2"],
+              "note": "SimAppPro's \"Marker Light\" slider. It is the gate for all nine indicators, like the PTO2's SL: at 0 none of them is visible. Captured 2026-09-18 across 0 to 255; what it gates was observed on the panel the same day."
+            },
+            {
+              "index": 8,
+              "name": "Fail",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 9,
+              "name": "FM",
+              "label": "FM",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 10,
+              "name": "MCDU",
+              "label": "MCDU",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 11,
+              "name": "MENU",
+              "label": "MENU",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 12,
+              "name": "FM1",
+              "label": "FM1",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 13,
+              "name": "IND",
+              "label": "IND",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 14,
+              "name": "RDY",
+              "label": "RDY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 15,
+              "name": "STATUS",
+              "label": "STATUS",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 16,
+              "name": "FM2",
+              "label": "FM2",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            }
+          ],
+          "display": "MCDU"
+        }
+      ],
+      "_notes": [
+        "One physical MCDU, three possible identities. SimAppPro renames it CAPTAIN, CO-PILOT or OBSERVER, and each name is its own USB PID: CAPTAIN 0xbb36, CO-PILOT 0xbb3e, OBSERVER 0xbb3a, all measured 2026-09-18. Same part 0xbb32 and same serial under every name, so this entry, MCDU_CoPilot and MCDU_Observer differ only in PID and name. It declares 64-byte reports and the 0xf0 screen channel, like the ICP.",
+        "The name lives in config offset 0xcc, byte 1: CAPTAIN 0, OBSERVER 1, CO-PILOT 2, all captured 2026-09-18 (byte 0 is 01 each time). Before the first rename it read ff and the panel was CAPTAIN. Writing it drops the device off USB and it re-enumerates about three seconds later under the new PID. We never write it; WRITE_CFG_DATA is forbidden.",
+        "Every index captured from SimAppPro 2026-09-18. The nine indicators were switched on and off in index order and only ever took 1 or 0. Indices 3 to 7 were never written.",
+        "The screen is a 24x14 text grid on report 0xf2, drawn from a font the panel is sent (data/displays/mcdu.json). SimAppPro's own screen buttons send only self-tests, cmd 0x104 with values 13 to 20 (white, black, red, green, blue, lime, purple, the WinWing logo). See docs/PROTOCOL.md."
+      ]
+    },
+    {
+      "key": "MCDU_CoPilot",
+      "display_name": "MCDU Co-Pilot",
+      "product_name": "WINCTRL 32 MCDU CO-PILOT",
+      "usb_pid": 47934,
+      "parts": [
+        {
+          "part_id": 47922,
+          "name": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "SimAppPro's \"Backlight\" slider. Captured 2026-09-18 sweeping 0 to 255 to 0, then taking 1, 13 and 135."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as the ICP's Screen_Backlight does for the DED, and the same rule holds: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Captured 2026-09-18 across 0 to 255."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "governs": ["Fail", "FM", "MCDU", "MENU", "FM1", "IND", "RDY", "STATUS", "FM2"],
+              "note": "SimAppPro's \"Marker Light\" slider. It is the gate for all nine indicators, like the PTO2's SL: at 0 none of them is visible. Captured 2026-09-18 across 0 to 255; what it gates was observed on the panel the same day."
+            },
+            {
+              "index": 8,
+              "name": "Fail",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 9,
+              "name": "FM",
+              "label": "FM",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 10,
+              "name": "MCDU",
+              "label": "MCDU",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 11,
+              "name": "MENU",
+              "label": "MENU",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 12,
+              "name": "FM1",
+              "label": "FM1",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 13,
+              "name": "IND",
+              "label": "IND",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 14,
+              "name": "RDY",
+              "label": "RDY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 15,
+              "name": "STATUS",
+              "label": "STATUS",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 16,
+              "name": "FM2",
+              "label": "FM2",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            }
+          ],
+          "display": "MCDU"
+        }
+      ],
+      "_notes": [
+        "The same hardware as MCDU_Captain under its CO-PILOT name, PID 0xbb3e. See that entry's notes for the rename, the lamps and the screen."
+      ]
+    },
+    {
+      "key": "MCDU_Observer",
+      "display_name": "MCDU Observer",
+      "product_name": "WINCTRL 32 MCDU OBSERVER",
+      "usb_pid": 47930,
+      "parts": [
+        {
+          "part_id": 47922,
+          "name": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "backlight": true,
+              "note": "SimAppPro's \"Backlight\" slider. Captured 2026-09-18 sweeping 0 to 255 to 0, then taking 1, 13 and 135."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as the ICP's Screen_Backlight does for the DED, and the same rule holds: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Captured 2026-09-18 across 0 to 255."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": true,
+              "governs": ["Fail", "FM", "MCDU", "MENU", "FM1", "IND", "RDY", "STATUS", "FM2"],
+              "note": "SimAppPro's \"Marker Light\" slider. It is the gate for all nine indicators, like the PTO2's SL: at 0 none of them is visible. Captured 2026-09-18 across 0 to 255; what it gates was observed on the panel the same day."
+            },
+            {
+              "index": 8,
+              "name": "Fail",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 9,
+              "name": "FM",
+              "label": "FM",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 10,
+              "name": "MCDU",
+              "label": "MCDU",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 11,
+              "name": "MENU",
+              "label": "MENU",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 12,
+              "name": "FM1",
+              "label": "FM1",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 13,
+              "name": "IND",
+              "label": "IND",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 14,
+              "name": "RDY",
+              "label": "RDY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 15,
+              "name": "STATUS",
+              "label": "STATUS",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            },
+            {
+              "index": 16,
+              "name": "FM2",
+              "label": "FM2",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": true
+            }
+          ],
+          "display": "MCDU"
+        }
+      ],
+      "_notes": [
+        "The same hardware as MCDU_Captain under its OBSERVER name, PID 0xbb3a. See that entry's notes for the rename, the lamps and the screen."
+      ]
     }
   ],
   "_persisted_brightness": {
@@ -548,6 +938,16 @@
           null
         ],
         "note": "Orion Combat Rudder Pedals. Slider order, not index order: byte 2 is Logo at index 3. Seen 2026-09-18 ending 06 e8 00 00 0b de 65 ff after L 11, R 222, logo 101."
+      },
+      "0xbb32": {
+        "offset": 208,
+        "layout": [
+          "Backlight",
+          "Screen_Backlight",
+          "Marker_Light",
+          null
+        ],
+        "note": "MCDU Captain. Seen 2026-09-18 ending 06 d0 00 00 87 87 87 ff after all three at 135, each byte written as its slider was released."
       }
     },
     "warning": "We must never write these. WRITE_CFG_DATA is persistent and is on the forbidden list. Reading them with READ_CFG_DATA is safe and is how the daemon can warn when a user's stored brightness would make correctly driven output invisible. The UFC has two such traps, not one: a dark LCDBacklight hides the whole display."

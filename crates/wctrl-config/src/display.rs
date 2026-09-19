@@ -70,6 +70,131 @@ pub enum Transport {
     /// Report `0xf0`: writes of any length into a framebuffer, then a commit
     /// to show them. A bit index is a pixel.
     Pixel,
+    /// Report `0xf2`: a grid of characters the panel draws from a font it was
+    /// sent. The MCDU. Only ever written whole, so the buffer is one group.
+    Text,
+}
+
+/// A character grid the panel renders itself, from a font uploaded to it.
+///
+/// Unlike a segment or pixel display, a cell holds a character and a colour,
+/// not a bitmap. The panel keeps no font across a power cycle, so which font
+/// to upload is part of the display's description. It is not the user's
+/// choice: an aircraft with a CDU of its own has glyphs drawn to match what
+/// DCS-BIOS sends for it, and that font is the aircraft's.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TextGrid {
+    pub columns: usize,
+    pub rows: usize,
+    /// Top-left of the grid on the panel's 640x480 surface, in pixels.
+    pub origin: [u16; 2],
+    /// Where the font upload puts the text, which is not quite `origin`.
+    pub font_origin: [u16; 2],
+    /// The font upload to fill with glyphs, relative to this file.
+    pub upload: String,
+    /// Runtime aircraft name to its font, relative to this file. Keyed by
+    /// aircraft rather than module, because one module can carry two
+    /// cockpits: the F-14B and F-14B(U) share `F-14` and only one has a CDNU.
+    #[serde(default)]
+    pub native_fonts: HashMap<String, String>,
+    /// The directory this display was loaded from, which the paths above are
+    /// relative to.
+    #[serde(skip)]
+    pub dir: std::path::PathBuf,
+    /// Per font file, the characters it can draw in each size.
+    #[serde(skip)]
+    pub charsets: HashMap<String, FontChars>,
+}
+
+/// The characters one font can draw.
+#[derive(Debug, Clone, Default)]
+pub struct FontChars {
+    pub large: std::collections::HashSet<char>,
+    pub small: std::collections::HashSet<char>,
+}
+
+impl TextGrid {
+    /// The font file for an aircraft, if it has a native one.
+    pub fn font_for(&self, aircraft: &str) -> Option<&str> {
+        self.native_fonts.get(aircraft).map(String::as_str)
+    }
+
+    pub fn path(&self, relative: &str) -> std::path::PathBuf {
+        self.dir.join(relative)
+    }
+}
+
+/// The colours a text grid can draw, in the order the panel indexes them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Colour {
+    Black,
+    Amber,
+    #[default]
+    White,
+    Cyan,
+    Green,
+    Magenta,
+    Red,
+    Yellow,
+    Brown,
+    Grey,
+    Khaki,
+}
+
+impl Colour {
+    pub fn ordinal(self) -> u8 {
+        self as u8
+    }
+}
+
+/// One cell of a text grid as the buffer holds it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TextCell {
+    pub ch: char,
+    pub fg: u8,
+    pub bg: u8,
+    pub small: bool,
+}
+
+/// Bytes per cell in a text grid's buffer: the character in the low 21 bits,
+/// then foreground, background and size. All zero is a blank cell.
+pub const TEXT_CELL_BYTES: usize = 4;
+
+impl TextCell {
+    fn encode(self) -> [u8; TEXT_CELL_BYTES] {
+        let code = u32::from(self.ch)
+            | u32::from(self.fg & 0x0f) << 21
+            | u32::from(self.bg & 0x0f) << 25
+            | u32::from(self.small) << 29;
+        code.to_le_bytes()
+    }
+
+    fn decode(bytes: &[u8]) -> Self {
+        let code = u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        if code == 0 {
+            return TextCell {
+                ch: ' ',
+                fg: Colour::White.ordinal(),
+                bg: 0,
+                small: false,
+            };
+        }
+        TextCell {
+            ch: char::from_u32(code & 0x1f_ffff).unwrap_or(' '),
+            fg: ((code >> 21) & 0x0f) as u8,
+            bg: ((code >> 25) & 0x0f) as u8,
+            small: code >> 29 & 1 == 1,
+        }
+    }
+}
+
+/// A text grid's buffer as cells, row by row, for the transport to send.
+pub fn text_cells(bytes: &[u8]) -> Vec<TextCell> {
+    bytes
+        .chunks(TEXT_CELL_BYTES)
+        .map(TextCell::decode)
+        .collect()
 }
 
 /// A regular grid of character cells over a pixel framebuffer.
@@ -145,13 +270,20 @@ pub struct Display {
     pub part_id: u32,
     #[serde(default)]
     pub transport: Transport,
+    /// Worked out from `text` on a text grid, so it can be left out there.
+    #[serde(default)]
     pub buffer_bytes: usize,
     /// The unit a change is found and written in. For a segment display that
-    /// is the device's write group; for a pixel display it is one row.
+    /// is the device's write group; for a pixel display it is one row; for a
+    /// text grid it is the whole screen.
+    #[serde(default)]
     pub group_bytes: usize,
     /// Generates `cells` when they are not listed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grid: Option<Grid>,
+    /// The character grid, on a `text` display.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<TextGrid>,
     #[serde(default)]
     pub cells: Vec<Cell>,
     /// Shape name, then glyph, then which of a cell's slots that glyph lights.
@@ -211,9 +343,10 @@ impl Display {
         self.cells.get(index)
     }
 
-    /// Whether any cell here can be drawn inverse.
+    /// Whether any cell here can be drawn inverse. A text grid always can: it
+    /// swaps a cell's colours.
     pub fn draws_inverse(&self) -> bool {
-        self.inverse.values().any(|slots| !slots.is_empty())
+        self.transport == Transport::Text || self.inverse.values().any(|slots| !slots.is_empty())
     }
 
     /// Build the cells, glyphs and inverse slots a `grid` implies. Called at
@@ -221,6 +354,37 @@ impl Display {
     pub fn expand(&mut self) -> Result<()> {
         let key = self.key.clone();
         let bad = |why: String| Error::BadDisplay(key.clone(), why);
+        if self.transport == Transport::Text {
+            let Some(t) = &self.text else {
+                return Err(bad(
+                    "a text display needs a `text` block saying its size".into()
+                ));
+            };
+            if self.grid.is_some() || !self.fonts.is_empty() || !self.glyphs.is_empty() {
+                return Err(bad(
+                    "a text display draws from the panel's font, not from glyphs or a pixel grid"
+                        .into(),
+                ));
+            }
+            let n = t.columns * t.rows;
+            self.cells = (0..n)
+                .map(|index| Cell {
+                    index,
+                    shape: "text".into(),
+                    width: 1,
+                    segments: Vec::new(),
+                })
+                .collect();
+            self.buffer_bytes = n * TEXT_CELL_BYTES;
+            self.group_bytes = self.buffer_bytes;
+            return Ok(());
+        }
+        if self.text.is_some() {
+            return Err(bad("only a text display takes a `text` block".into()));
+        }
+        if self.buffer_bytes == 0 || self.group_bytes == 0 {
+            return Err(bad("buffer_bytes and group_bytes are required".into()));
+        }
         let Some(g) = self.grid.clone() else {
             if !self.fonts.is_empty() {
                 return Err(bad("a font needs a grid to say where its rows go".into()));
@@ -397,6 +561,10 @@ impl DisplayCatalogue {
             let mut one: DisplayCatalogue = read_json(&path)?;
             for display in &mut one.displays {
                 display.expand()?;
+                if let Some(text) = &mut display.text {
+                    text.dir = dir.to_path_buf();
+                    load_charsets(&display.key, text)?;
+                }
             }
             out.displays.extend(one.displays);
         }
@@ -411,6 +579,25 @@ impl DisplayCatalogue {
     pub fn for_part(&self, part_id: u32) -> Option<&Display> {
         self.displays.iter().find(|d| d.part_id == part_id)
     }
+}
+
+/// Read what each native font can draw, so a profile can be checked against
+/// it. A font that will not load is an error now rather than a blank screen
+/// in the middle of a flight.
+fn load_charsets(key: &str, text: &mut TextGrid) -> Result<()> {
+    let files: std::collections::BTreeSet<String> = text.native_fonts.values().cloned().collect();
+    for file in files {
+        let font = crate::mcdu_font::McduFont::load(&text.path(&file))
+            .map_err(|e| Error::BadDisplay(key.to_string(), format!("font {file}: {e}")))?;
+        text.charsets.insert(
+            file,
+            FontChars {
+                large: font.large_glyphs.iter().map(|g| g.character).collect(),
+                small: font.small_glyphs.iter().map(|g| g.character).collect(),
+            },
+        );
+    }
+    Ok(())
 }
 
 /// A host-side copy of a display's segment buffer.
@@ -486,6 +673,41 @@ impl Screen {
                 self.bytes[byte] &= !mask;
             }
         }
+        Ok(())
+    }
+
+    /// Put one character in a text grid's cell, replacing what was there.
+    ///
+    /// Inverse swaps the colours, which is how a text grid highlights: the
+    /// cell fills with the field's colour and the character is cut out of it
+    /// in black. The character is not checked against a font here; which
+    /// characters a font draws is a profile check, and a stray one on the live
+    /// stream draws as a gap rather than stopping the rest of the screen.
+    pub fn draw_text(
+        &mut self,
+        display: &Display,
+        index: usize,
+        ch: char,
+        colour: Colour,
+        small: bool,
+        inverse: bool,
+    ) -> Result<()> {
+        if display.transport != Transport::Text || index >= display.cells.len() {
+            return Err(Error::NoSuchCell(display.key.clone(), index));
+        }
+        let (fg, bg) = if inverse {
+            (Colour::Black, colour)
+        } else {
+            (colour, Colour::Black)
+        };
+        let cell = TextCell {
+            ch,
+            fg: fg.ordinal(),
+            bg: bg.ordinal(),
+            small,
+        };
+        let at = index * TEXT_CELL_BYTES;
+        self.bytes[at..at + TEXT_CELL_BYTES].copy_from_slice(&cell.encode());
         Ok(())
     }
 
@@ -662,8 +884,41 @@ pub struct Readout {
     /// font.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
+    /// The colour a text grid draws this field in. Text grids only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colour: Option<Colour>,
+    /// Draw in the text grid's small font. Text grids only.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub small: bool,
+    /// A second string signal, laid out like `source`, whose characters pick
+    /// each cell's colour through `codes`. Text grids only.
+    ///
+    /// The CH-47F is the case: DCS-BIOS sends each CDU line with a
+    /// `_COLOR` twin, one letter per character. The letters are the module's
+    /// own, so the profile says what they mean. A letter with no entry, and
+    /// every cell until the signal arrives, draws in `colour`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colours: Option<ColourSource>,
+    /// Characters this module sends in place of the ones it means, rewritten
+    /// one for one before the field is laid out.
+    ///
+    /// DCS-BIOS cannot export every symbol a CDU draws, so it sends a
+    /// stand-in: the A-10C's arrows arrive as `»` and `«`. Unlike `aliases`,
+    /// which swap a whole value, this works inside a line of text. Each key
+    /// and value is one character.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub replace: HashMap<String, String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub note: String,
+}
+
+/// Where a readout's per-character colours come from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColourSource {
+    /// Catalogue signal id, a string one character per cell.
+    pub source: String,
+    /// Each letter the module sends, and the colour it means.
+    pub codes: HashMap<String, Colour>,
 }
 
 fn is_zero_u8(n: &u8) -> bool {
@@ -723,8 +978,37 @@ impl Readout {
         self.lay_out(format).iter().map(|m| m == "i").collect()
     }
 
+    /// The colour of each cell of the run, given the colour signal's text.
+    ///
+    /// None where the text names no colour, so the field's own applies.
+    pub fn colour_cells(&self, codes: &str) -> Vec<Option<Colour>> {
+        let Some(source) = &self.colours else {
+            return Vec::new();
+        };
+        self.lay_out(codes)
+            .iter()
+            .map(|c| source.codes.get(c).copied())
+            .collect()
+    }
+
     /// Apply this module's wording fixes.
     pub fn alias<'a>(&'a self, value: &'a str) -> &'a str {
         self.aliases.get(value).map(String::as_str).unwrap_or(value)
+    }
+
+    /// Swap each stand-in character for the one it stands for.
+    pub fn replace_chars(&self, text: &str) -> String {
+        if self.replace.is_empty() {
+            return text.to_string();
+        }
+        text.chars()
+            .map(|c| {
+                let mut buf = [0u8; 4];
+                self.replace
+                    .get(c.encode_utf8(&mut buf) as &str)
+                    .and_then(|r| r.chars().next())
+                    .unwrap_or(c)
+            })
+            .collect()
     }
 }

@@ -377,6 +377,7 @@ fn an_unassigned_lamp_is_swept_off_and_never_driven() {
         conditions: Vec::new(),
         always: false,
         any_of: Vec::new(),
+        pick: wctrl_config::Pick::default(),
         same_as: None,
         on: None,
         off: 0,
@@ -399,7 +400,7 @@ fn an_unassigned_lamp_is_swept_off_and_never_driven() {
 }
 
 #[test]
-fn a_stub_profile_covers_every_lamp_and_binds_none_but_the_gates() {
+fn a_stub_profile_covers_every_lamp_and_binds_none_but_the_gates_and_screens() {
     let devs = devices();
     let stub = Profile::stub("A-10C II", "A-10C_2", "TEST", &devs);
 
@@ -414,11 +415,15 @@ fn a_stub_profile_covers_every_lamp_and_binds_none_but_the_gates() {
             .device(&b.device)
             .and_then(|d| d.led(&b.led))
             .expect("stub rows name real lamps");
-        if led.governs.is_empty() {
-            assert!(b.is_placeholder(), "{} should be unassigned", b.led);
-        } else {
+        if !led.governs.is_empty() {
             assert!(b.always, "{} is a gate and should be held at full", b.led);
             assert_eq!(b.off, led.max_value(), "{} should carry its daylight floor", b.led);
+        } else if led.lights_display {
+            // At 0 the page on it cannot be read, which is the same trap.
+            assert!(b.always, "{} lights a screen and should be held at full", b.led);
+            assert_eq!(b.off, led.max_value(), "{} should start at full", b.led);
+        } else {
+            assert!(b.is_placeholder(), "{} should be unassigned", b.led);
         }
     }
     assert!(stub.cautions(&devs).is_empty(), "{:?}", stub.cautions(&devs));

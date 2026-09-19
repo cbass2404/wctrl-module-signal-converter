@@ -186,8 +186,13 @@ impl BiosState {
     }
 
     /// Read one signal, as the catalogue describes it.
+    ///
+    /// A shift of 16 or more reads 0 rather than overflowing. DCS-BIOS ships
+    /// such entries (the Mi-24P's `PLT_WIPER_OFF` is `mask: 0, shift: 16`), and
+    /// a plain `>>` panics on them in a debug build.
     pub fn value(&self, address: u16, mask: u16, shift: u8) -> Option<u16> {
-        self.word(address).map(|w| (w & mask) >> shift)
+        self.word(address)
+            .map(|w| (w & mask).checked_shr(u32::from(shift)).unwrap_or(0))
     }
 
     /// The raw bytes of a string signal: `len` of them starting at `address`,
@@ -222,13 +227,20 @@ impl BiosState {
     /// be tidied away. The Hornet UFC scratchpad is right aligned in its window,
     /// so trimming would shift every character into the wrong cell, and a field
     /// that has gone blank would read as absent rather than as blank.
+    ///
+    /// One byte is one character, read as Latin-1, not UTF-8. DCS-BIOS sends
+    /// the symbols a CDU draws as single bytes above ASCII: the A-10C module's
+    /// `cdu_replace_map` turns its arrows into `0xBB` and `0xAB`, `»` and `«`.
+    /// Decoded as UTF-8 each of those is invalid and becomes the same
+    /// replacement character, so they could not be told apart, and a field
+    /// would stop being one character per cell.
     pub fn text(&self, address: u16, len: u16) -> Option<String> {
-        let bytes: Vec<u8> = self
-            .bytes(address, len)?
-            .into_iter()
-            .map(|b| if b == 0 { b' ' } else { b })
-            .collect();
-        Some(String::from_utf8_lossy(&bytes).to_string())
+        Some(
+            self.bytes(address, len)?
+                .into_iter()
+                .map(|b| if b == 0 { ' ' } else { char::from(b) })
+                .collect(),
+        )
     }
 
     pub fn len(&self) -> usize {
@@ -441,6 +453,30 @@ mod tests {
         // the hole into the wrong cell.
         assert_eq!(state.text(0x7446, 6), Some("AB  EF".to_string()));
         assert_eq!(state.string(0x7446, 6), Some("AB".to_string()));
+    }
+
+    #[test]
+    fn a_shift_past_the_word_reads_zero_rather_than_panicking() {
+        // The Mi-24P catalogue's wiper selectors, as DCS-BIOS ships them.
+        // Learn mode reads every signal in a module, so one of these took the
+        // editor down the moment the Hind's stream arrived.
+        let mut state = BiosState::new();
+        state.apply(Write {
+            address: 26624,
+            value: 0xffff,
+        });
+        assert_eq!(state.value(26624, 0, 16), Some(0));
+        assert_eq!(state.value(26624, 0xffff, 200), Some(0));
+    }
+
+    #[test]
+    fn text_reads_a_cdu_symbol_as_its_own_character() {
+        let mut state = BiosState::new();
+        // What the A-10C module's cdu_replace_map sends for an arrow each way
+        // and a box. Each is one byte, so one cell, and each must survive
+        // distinct: as UTF-8 all three are the same replacement character.
+        put_text(&mut state, 0x11c0, b"\xabWP\xbb \xa1");
+        assert_eq!(state.text(0x11c0, 6), Some("\u{ab}WP\u{bb} \u{a1}".to_string()));
     }
 
     #[test]

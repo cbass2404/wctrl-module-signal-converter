@@ -65,12 +65,12 @@ flying.
 ### What you should see
 
 ```
-profile  A-10C II               15 set,  6 unset  for A-10C_2, A-10C
-profile  F/A-18C Hornet         23 set,  1 unset  for FA-18C_hornet
+profile  A-10C                  15 set,  6 unset  for A-10C_2, A-10C
+profile  FA-18                  23 set,  1 unset  for EA-18G, FA-18C_hornet, FA-18E, FA-18F
 device   PTO2                   pid 0xbf05
 device   Orion Throttle Base II pid 0xbd64
 Running. Ctrl-C to stop and clear the panels.
-aircraft A-10C_2  ->  profile A-10C II
+aircraft A-10C_2  ->  profile A-10C
 ```
 
 Nothing happens until a cockpit is loaded. Once one is, whether you enter it
@@ -91,7 +91,7 @@ same caution shows in the editor.
 startup:
 
 ```text
-aircraft A-10C_2  ->  profile A-10C II
+aircraft A-10C_2  ->  profile A-10C
   following 6 signal address(es) for this profile
      731 ms  signal  FLAP_POS                     = 20000
     2818 ms  sweep   TAKEOFF_PLANEL_2.SL          = 255
@@ -234,7 +234,7 @@ it can mean something:
 | | |
 | --- | --- |
 | **+ Add condition** | Another test that must *also* hold. The A-10C half-flaps lamp needs two. |
-| **+ Add alternative (or)** | Another way to light the lamp, independent of the first. Written for multicrew aircraft, where a lamp follows whichever seat you are in. |
+| **+ Add alternative (or)** | Another way to light the lamp, independent of the first. Written for multicrew aircraft, where a lamp follows whichever seat you are in. When more than one could light it, the lamp takes the brightest, or the one whose signal moved last: that is for two seats with a knob each and no seat signal, as in the F-14. |
 | **Always on** | Lit whenever the aircraft is loaded, reading nothing. On a lamp that dims, this is also how a fixed brightness is set. |
 | **Match another lamp** | Follow another dimmer on the same device, so both move together. Only offered between lamps that dim. |
 
@@ -313,6 +313,28 @@ cd editor
 npm run tauri build
 ```
 
+### The MCDU screen
+
+Where an aircraft has a CDU of its own, its shipped profile puts that CDU on the
+MCDU's screen, on all three MCDU names:
+
+| Aircraft | What shows |
+| --- | --- |
+| A-10C, A-10C II | The CDU's ten lines on rows 5 to 14, so its scratchpad lands on the MCDU's |
+| CH-47F | The seated crew member's CDU, all 14 lines in its own colours |
+| F-14B (Upgrade) | The RIO's CDNU on the bottom eight rows, from either seat |
+| AH-64D | The seated crew member's keyboard unit scratchpad, on the bottom row |
+
+The screen holds no font across a power cycle, so the daemon uploads the
+aircraft's own font when it first paints, and again when the next aircraft
+needs a different one.
+Each font draws that CDU's symbols, which is why only these aircraft have
+one: a profile that puts fields on the MCDU for any other aircraft is refused.
+The screen stays black while nothing is on it.
+
+`wctrl mcdu-test` draws a test pattern without DCS, to check a panel on its
+own.
+
 ### When something looks wrong
 
 **Nothing lights.** Check it printed an `aircraft ...` line. No line means no
@@ -371,3 +393,9 @@ moves  signal                             value
 
 Each window starts a fresh sheet, so several controls can be found in one run.
 Ctrl-C stops it.
+
+## License
+
+MIT, see `LICENSE`. The MCDU screen code and fonts come from other projects
+under their own licenses, listed with their full text in
+`THIRD_PARTY_NOTICES.md`.

@@ -27,7 +27,7 @@ fn text_at(address: u16, s: &str) -> Vec<BiosWrite> {
 }
 
 fn profile() -> Profile {
-    Profile::load(&r("data/defaults/f-16c-50.json")).expect("F-16 profile")
+    Profile::load(&r("data/defaults/f-16.json")).expect("F-16 profile")
 }
 
 fn engine() -> (Engine, DisplayCatalogue) {
@@ -144,11 +144,11 @@ fn backlight(batch: &Batch) -> Option<u8> {
 }
 
 #[test]
-fn the_ded_backlight_is_not_a_lamp_a_profile_can_bind() {
+fn the_ded_backlight_is_a_lamp_a_profile_can_bind() {
     let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
     let icp = devices.device("ViperAce_ICP").unwrap();
-    assert!(icp.led("Screen_Backlight").is_none(), "hidden from profiles");
-    assert!(icp.leds().all(|(_, l)| l.name != "Screen_Backlight"), "and from the editor");
+    assert!(icp.led("Screen_Backlight").is_some(), "offered to profiles");
+    assert!(icp.leds().any(|(_, l)| l.name == "Screen_Backlight"), "and to the editor");
     assert_eq!(icp.display_lamps().map(|(_, l)| l.index).collect::<Vec<_>>(), [1]);
 }
 

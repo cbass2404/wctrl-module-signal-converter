@@ -16,7 +16,7 @@
 
 use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -88,6 +88,15 @@ struct Shared {
     error: Option<String>,
 }
 
+/// Take the shared lock, even after the listener thread panicked holding it.
+///
+/// Every command reads through here on the webview's thread, where a panic
+/// cannot unwind and aborts the whole editor. A dead listener is reported by
+/// [`Session::report`] instead.
+fn lock(shared: &Mutex<Shared>) -> MutexGuard<'_, Shared> {
+    shared.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
 /// A running listener, its thread, and the watcher they share.
 pub struct Session {
     shared: Arc<Mutex<Shared>>,
@@ -109,7 +118,7 @@ impl Session {
             let mut listener = match Listener::bind(Ipv4Addr::UNSPECIFIED) {
                 Ok(listener) => listener,
                 Err(e) => {
-                    let mut shared = thread_shared.lock().expect("the learn lock");
+                    let mut shared = lock(&thread_shared);
                     shared.error = Some(format!(
                         "joining the DCS-BIOS multicast group on 239.255.50.10:5010: {e}"
                     ));
@@ -117,7 +126,7 @@ impl Session {
                 }
             };
             if let Err(e) = listener.set_read_timeout(Some(POLL)) {
-                let mut shared = thread_shared.lock().expect("the learn lock");
+                let mut shared = lock(&thread_shared);
                 shared.error = Some(format!("setting a read timeout: {e}"));
                 return;
             }
@@ -134,13 +143,13 @@ impl Session {
                         continue
                     }
                     Err(e) => {
-                        let mut shared = thread_shared.lock().expect("the learn lock");
+                        let mut shared = lock(&thread_shared);
                         shared.error = Some(format!("reading the export stream: {e}"));
                         return;
                     }
                 }
                 let now = Instant::now();
-                let mut shared = thread_shared.lock().expect("the learn lock");
+                let mut shared = lock(&thread_shared);
                 shared.watcher.ingest(&writes, now);
             }
         });
@@ -153,23 +162,23 @@ impl Session {
     }
 
     pub fn module(&self) -> String {
-        self.shared
-            .lock()
-            .expect("the learn lock")
-            .watcher
-            .module()
-            .to_string()
+        lock(&self.shared).watcher.module().to_string()
     }
 
     pub fn report(&self) -> Report {
-        let shared = self.shared.lock().expect("the learn lock");
+        let shared = lock(&self.shared);
         Report {
             module: shared.watcher.module().to_string(),
             listening: true,
             ready: shared.watcher.ready(),
             datagrams: shared.watcher.datagrams(),
             aircraft: shared.watcher.aircraft(),
-            error: shared.error.clone(),
+            error: shared.error.clone().or_else(|| {
+                self.handle
+                    .as_ref()
+                    .is_some_and(|h| h.is_finished())
+                    .then(|| "the listener stopped unexpectedly; close learn mode and open it again".to_string())
+            }),
             changes: shared
                 .watcher
                 .changes()
@@ -187,11 +196,7 @@ impl Session {
 
     /// Forget what has moved and start a fresh sheet, keeping the map.
     pub fn rearm(&self) {
-        self.shared
-            .lock()
-            .expect("the learn lock")
-            .watcher
-            .rearm(Instant::now());
+        lock(&self.shared).watcher.rearm(Instant::now());
     }
 }
 

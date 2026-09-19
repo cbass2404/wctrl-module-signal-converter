@@ -196,6 +196,13 @@ export interface BindingEditorOptions {
   shipped?: Binding | undefined;
   /** Called whenever the binding changes, so the window can mark itself dirty. */
   onChange: () => void;
+  /**
+   * Called when a change is settled: a condition kept with its tick or
+   * deleted, or a form chosen that has no edit step (always on, matching
+   * another lamp, a revert). Not called while a condition is being edited, nor
+   * on cancel, which only returns to what was already counted.
+   */
+  onCommit: () => void;
 }
 
 /** What a revert compares and copies. The device and lamp never change. */
@@ -203,6 +210,7 @@ function meaningfulPart(b: Binding): string {
   return JSON.stringify({
     conditions: b.conditions,
     any_of: b.any_of ?? [],
+    pick: b.pick ?? "brightest",
     always: b.always ?? false,
     same_as: b.same_as ?? null,
     on: b.on ?? null,
@@ -287,6 +295,11 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     render();
   }
 
+  function committed(): void {
+    opts.onCommit();
+    changed();
+  }
+
   /**
    * Drop empty alternatives, and collapse a single survivor back to a plain
    * condition list.
@@ -303,6 +316,9 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       binding.conditions = branches[0]?.conditions ?? [];
       binding.any_of = [];
     }
+    // Choosing between alternatives means nothing without two of them, and
+    // the profile check rejects it.
+    if (branches.length < 2) delete binding.pick;
   }
 
   function iconButton(
@@ -395,6 +411,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
         { class: "row-actions" },
         iconButton("done", "\u2713", "Keep these changes", () => {
           editing.delete(condition);
+          opts.onCommit();
           render();
         }),
         iconButton("cancel", "\u2715", "Discard changes to this condition", () => {
@@ -432,7 +449,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
             if (at >= 0) group.conditions.splice(at, 1);
             editing.delete(condition);
             normalise();
-            changed();
+            committed();
           });
         }),
       ),
@@ -461,7 +478,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     row.append(
       iconButton("cancel", "\u2715", "Stop driving this lamp", () => {
         binding.always = false;
-        changed();
+        committed();
       }),
     );
     return row;
@@ -504,14 +521,14 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       pick.value = target;
       pick.addEventListener("change", () => {
         binding.same_as = pick.value;
-        changed();
+        committed();
       });
       row.append(pick);
     }
     row.append(
       iconButton("cancel", "\u2715", "Stop matching another lamp", () => {
         binding.same_as = null;
-        changed();
+        committed();
       }),
     );
     return row;
@@ -572,6 +589,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       const swap = el("button", { class: "add", type: "button" }, "Use a signal instead");
       swap.addEventListener("click", () => {
         binding.always = false;
+        opts.onCommit();
         addCondition({ conditions: binding.conditions });
       });
       host.append(swap);
@@ -597,7 +615,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       on.title = "Light this lamp whenever the aircraft is loaded, with no signal behind it.";
       on.addEventListener("click", () => {
         binding.always = true;
-        changed();
+        committed();
       });
       const choices = el("div", { class: "choices" }, assign, on);
 
@@ -608,7 +626,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
         match.title = "Follow another dimmer on this device, so both move together.";
         match.addEventListener("click", () => {
           binding.same_as = opts.siblings[0]?.name ?? null;
-          changed();
+          committed();
         });
         choices.append(match);
       }
@@ -630,12 +648,25 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     host.append(alt);
 
     if (alternatives) {
+      // Brightest is OR for on/off tests. Latest is for a lamp that follows one
+      // of several knobs with nothing saying which is in use: two seats with a
+      // lighting knob each, where brightest would mean turning both down.
+      const pick = el("select", { class: "test" });
+      pick.append(
+        el("option", { value: "brightest" }, "the brightest one"),
+        el("option", { value: "latest" }, "the one whose signal moved last"),
+      );
+      pick.value = binding.pick ?? "brightest";
+      pick.title =
+        "The one whose signal moved last suits a knob per seat with no signal for which seat is in use: the knob turned last drives the lamp. Until one moves, the brightest does.";
+      pick.addEventListener("change", () => {
+        if (pick.value === "latest") binding.pick = "latest";
+        else delete binding.pick;
+        changed();
+      });
       host.append(
-        el(
-          "div",
-          { class: "meta" },
-          "Any one alternative lights the lamp. Within an alternative, every condition must hold.",
-        ),
+        el("div", { class: "meta" }, "When more than one alternative could light the lamp, use ", pick, "."),
+        el("div", { class: "meta" }, "Within an alternative, every condition must hold."),
       );
     } else if ((groups[0]?.conditions.length ?? 0) > 1) {
       host.append(el("div", { class: "meta" }, "The lamp lights only when every condition holds."));
@@ -656,13 +687,15 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     revert.addEventListener("click", () => {
       binding.conditions = structuredClone(shipped.conditions);
       binding.any_of = structuredClone(shipped.any_of ?? []);
+      if (shipped.pick) binding.pick = shipped.pick;
+      else delete binding.pick;
       binding.always = shipped.always ?? false;
       binding.same_as = shipped.same_as ?? null;
       binding.on = shipped.on;
       binding.off = shipped.off;
       binding.note = shipped.note;
       editing.clear();
-      changed();
+      committed();
     });
     host.append(revert);
   }

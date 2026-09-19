@@ -1,32 +1,151 @@
 {
   "schema_version": 1,
-  "name": "No aircraft",
+  "name": "F-14",
   "author": "",
   "profile_version": "0.1.0",
   "aircraft": [
-    "NONE"
+    "F-14A-135-GR",
+    "F-14A-135-GR-Early",
+    "F-14B"
   ],
-  "module": "FC3",
+  "module": "F-14",
   "bindings": [
     {
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest",
+      "note": "Every backlight follows the console light knob turned last, pilot's or RIO's. The module has no seat signal, so the knob in the player's hand is the one that moved; in multiplayer either crew member takes it back by turning theirs. Until one moves, the brighter one lights the panels."
     },
     {
       "device": "CarrierAce_MFD_L",
       "led": "INST_PNL_Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "CarrierAce_MFD_R",
       "led": "INST_PNL_Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "CarrierAce_UFC",
@@ -39,12 +158,70 @@
     {
       "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "MCDU_Captain",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "MCDU_Captain",
@@ -110,7 +287,36 @@
     {
       "device": "MCDU_CoPilot",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "MCDU_CoPilot",
@@ -176,7 +382,36 @@
     {
       "device": "MCDU_Observer",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "MCDU_Observer",
@@ -242,37 +477,140 @@
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_L",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_R",
-      "conditions": []
+      "conditions": [],
+      "same_as": "Backlight_L"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Logo",
-      "conditions": []
+      "conditions": [],
+      "same_as": "Backlight_L"
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "A/A",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "PLT_HUD_MODE_A2A",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "A/G",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "PLT_HUD_MODE_A2G",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -368,7 +706,36 @@
     {
       "device": "ViperAce_ICP",
       "led": "Backlight",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "RIO_LIGHT_INTENT_CONSOLE",
+              "on_when": {
+                "scale": [
+                  0,
+                  8
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "pick": "latest"
     },
     {
       "device": "ViperAce_ICP",
@@ -378,5 +745,8 @@
       "off": 255,
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
+  ],
+  "disabled_devices": [
+    "ViperAce_ICP"
   ]
 }

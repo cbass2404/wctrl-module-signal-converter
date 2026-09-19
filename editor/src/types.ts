@@ -49,6 +49,12 @@ export interface Binding {
    */
   any_of?: Branch[];
   /**
+   * How the alternatives combine. Absent means the brightest wins; `"latest"`
+   * follows the alternative whose signal changed last, which is how a lamp
+   * follows one of two seats' knobs with nothing saying which seat is taken.
+   */
+  pick?: "brightest" | "latest";
+  /**
    * Mirror another lamp on the same device, by name. A link rather than a copy,
    * so changing what the other lamp reads moves this one with it.
    *

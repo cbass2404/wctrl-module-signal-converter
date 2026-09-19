@@ -190,6 +190,14 @@
     },
     {
       "device": "CarrierAce_UFC",
+      "led": "LCDBacklight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
       "any_of": [
@@ -232,6 +240,324 @@
           ]
         }
       ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Captain",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "led": "FM2",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Backlight",
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            },
+            {
+              "source": "PLT_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "CPG_INTL_PRIMARY_L_KNB",
+              "on_when": {
+                "scale": [
+                  0,
+                  65535
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "Backlight",
+      "off": 255,
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "Fail",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MCDU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "MENU",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM1",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "IND",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "RDY",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "STATUS",
+      "conditions": []
+    },
+    {
+      "device": "MCDU_Observer",
+      "led": "FM2",
+      "conditions": []
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
@@ -546,6 +872,107 @@
           ]
         }
       ]
+    },
+    {
+      "device": "ViperAce_ICP",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    }
+  ],
+  "readouts": [
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "PLT_KU_DISPLAY",
+      "seat": 0,
+      "colour": "green",
+      "replace": {
+        "~": "█",
+        "#": "█",
+        ">": "▶",
+        "<": "◀",
+        "=": "■"
+      },
+      "note": "KU scratchpad. The seat's own keyboard unit line, 22 characters, sits on the bottom row, 14, the MCDU's scratchpad row, one column in so it is centred across. SEAT_POSITION picks the pilot's KU (0) or the CPG's (1). The replace map follows the WCtrlDcsBiosBridge's AH-64D listener: ~ and # draw the block cursor, < and > the arrows, = a square."
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
+        "~": "█",
+        "#": "█",
+        ">": "▶",
+        "<": "◀",
+        "=": "■"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "PLT_KU_DISPLAY",
+      "seat": 0,
+      "colour": "green",
+      "replace": {
+        "~": "█",
+        "#": "█",
+        ">": "▶",
+        "<": "◀",
+        "=": "■"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
+        "~": "█",
+        "#": "█",
+        ">": "▶",
+        "<": "◀",
+        "=": "■"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "PLT_KU_DISPLAY",
+      "seat": 0,
+      "colour": "green",
+      "replace": {
+        "~": "█",
+        "#": "█",
+        ">": "▶",
+        "<": "◀",
+        "=": "■"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
+        "~": "█",
+        "#": "█",
+        ">": "▶",
+        "<": "◀",
+        "=": "■"
+      }
     }
   ]
 }

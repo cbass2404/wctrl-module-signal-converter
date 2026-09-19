@@ -4060,6 +4060,7 @@ name = "wctrl-hid"
 version = "0.1.0"
 dependencies = [
  "hidapi",
+ "serde_json",
  "thiserror 1.0.69",
 ]
 

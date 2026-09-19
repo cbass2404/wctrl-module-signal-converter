@@ -7,6 +7,7 @@
 // would otherwise flash on the way past.
 
 import { confirmAction } from "./confirm";
+import { flagSlot } from "./flags";
 import { hintFor, signalPicker } from "./typeahead";
 import type { Binding, Branch, Condition, Led, OnWhen, SignalView } from "./types";
 
@@ -205,6 +206,12 @@ export interface BindingEditorOptions {
   onCommit: () => void;
 }
 
+/** `extra` appended inside `field`, which is returned. */
+function under(field: HTMLElement, extra: HTMLElement): HTMLElement {
+  field.append(extra);
+  return field;
+}
+
 /** What a revert compares and copies. The device and lamp never change. */
 function meaningfulPart(b: Binding): string {
   return JSON.stringify({
@@ -361,6 +368,8 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       );
     }
 
+    // Under the signal, so the reason sits with what it is about.
+    text.append(flagSlot(condition));
     const row = el("div", { class: "condition-view" }, text);
     row.append(
       iconButton("pencil", "\u270E", "Edit this condition", () => {
@@ -389,22 +398,27 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     return el(
       "div",
       { class: "condition-edit" },
-      signalPicker({
-        // Text signals are hidden here. A condition compares a number, so one
-        // that reports characters could never satisfy it, and offering it would
-        // be offering a choice that silently never lights the lamp. They belong
-        // to display fields, which is where they are offered.
-        signals: signals.filter((s) => !s.text),
-        value: condition.source,
-        onPick: (id) => {
-          const wasUnset = condition.source === "";
-          condition.source = id;
-          // Only fill in a test for a condition that never had one chosen, so
-          // swapping the signal under a tuned window does not discard it.
-          if (wasUnset) condition.on_when = defaultTest(byId.get(id), led);
-          changed();
-        },
-      }),
+      // The flag goes inside the picker's column. As a sibling it would be
+      // another item in this flex row and squeeze the picker to nothing.
+      under(
+        signalPicker({
+          // Text signals are hidden here. A condition compares a number, so one
+          // that reports characters could never satisfy it, and offering it would
+          // be offering a choice that silently never lights the lamp. They belong
+          // to display fields, which is where they are offered.
+          signals: signals.filter((s) => !s.text),
+          value: condition.source,
+          onPick: (id) => {
+            const wasUnset = condition.source === "";
+            condition.source = id;
+            // Only fill in a test for a condition that never had one chosen, so
+            // swapping the signal under a tuned window does not discard it.
+            if (wasUnset) condition.on_when = defaultTest(byId.get(id), led);
+            changed();
+          },
+        }),
+        flagSlot(condition),
+      ),
       el("div", { class: "test-row" }, select, valueControls(condition, signal, changed)),
       el(
         "div",

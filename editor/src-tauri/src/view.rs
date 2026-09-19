@@ -182,7 +182,7 @@ pub struct ModuleChoice {
     pub lamps: usize,
 }
 
-/// `index.json` as `tools/build_catalogue.py` writes it.
+/// `index.json` as `wctrl_config::catalogue_build` writes it.
 #[derive(Deserialize)]
 struct Index {
     #[serde(default)]

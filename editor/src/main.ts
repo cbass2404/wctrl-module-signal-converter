@@ -6,6 +6,7 @@
 
 import { displaySection } from "./readout";
 import {
+  catalogueStatus,
   checkProfile,
   cloneProfile,
   createProfile,
@@ -21,6 +22,7 @@ import {
 } from "./api";
 import { bindingEditor } from "./binding";
 import { confirmAction } from "./confirm";
+import { showFlags } from "./flags";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
 import type { Binding, Device, Led, ModuleChoice, Profile, ProfileSummary, SignalView } from "./types";
@@ -117,6 +119,17 @@ async function showLibrary(): Promise<void> {
     el("button", { class: "primary", id: "new" }, "New profile"),
   );
   app.append(header);
+
+  // Which DCS-BIOS the signals came from, and whether that just changed. On
+  // this page because it is the first one the window opens on, and the one
+  // place a user would look after updating DCS-BIOS.
+  try {
+    const status = await catalogueStatus();
+    const cls = { ok: "meta catalogue", caution: "cautions", error: "error" }[status.level];
+    app.append(el("div", { class: cls }, status.text));
+  } catch {
+    // Only reachable if the command itself is missing; the list still works.
+  }
 
   let rows: ProfileSummary[];
   try {
@@ -626,6 +639,13 @@ async function showProfile(file: string): Promise<void> {
   // meant. Shown beside the problems, and never a reason to withhold Save.
   let cautions: string[] = [];
   const cautionList = el("div", { class: "cautions", hidden: "" });
+  // One line, only when a row reads something the DCS-BIOS nightly has and
+  // the installed one lacks. The rows themselves carry the detail.
+  const notice = el("div", { class: "cautions", hidden: "" });
+  const drawNotice = (text: string | null): void => {
+    notice.hidden = !text;
+    notice.textContent = text ?? "";
+  };
 
   /**
    * The header's state line, and whether Save is offered.
@@ -715,6 +735,8 @@ async function showProfile(file: string): Promise<void> {
             problems = found.problems;
             cautions = found.cautions;
             drawProblems();
+            showFlags(session.profile, found.flags);
+            drawNotice(found.notice);
             refreshSave();
           })
           .catch((e: unknown) => {
@@ -723,6 +745,8 @@ async function showProfile(file: string): Promise<void> {
             problems = [`The profile could not be checked: ${e instanceof Error ? e.message : String(e)}`];
             cautions = [];
             drawProblems();
+            showFlags(session.profile, []);
+            drawNotice(null);
             refreshSave();
           });
       }, 250);
@@ -770,7 +794,7 @@ async function showProfile(file: string): Promise<void> {
       save,
     ),
   );
-  app.append(problemList, cautionList);
+  app.append(notice, problemList, cautionList);
 
   if (signalError) {
     app.append(

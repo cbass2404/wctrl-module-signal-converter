@@ -333,8 +333,9 @@ everything construction cannot:
 - Work that is simply unfinished. A condition or a field with no signal chosen
   is the common one, and it has its own wording rather than being reported as
   an unknown signal named `""`.
-- Faults that arrived in the file. A profile shared by someone with different
-  panels, or written before a DCS-BIOS update moved the catalogue under it.
+- Faults that arrived in the file, such as a profile shared by someone with
+  different panels. A signal that is not in this DCS-BIOS is not one of these:
+  see "Rows this DCS-BIOS cannot back" below.
 
 Outstanding problems are listed above the rows, in full and naming the lamp or
 the cells, and **Save is withheld until there are none**. The trade is
@@ -348,6 +349,40 @@ do what was meant. They come from `Profile::cautions` and never withhold Save.
 The one so far is a gate, a dimmer marked in `devices.json` with `governs`, that
 resolves to 0 with every signal at 0, which hides its lamps in daylight. The
 daemon logs the same cautions on load.
+
+### Rows this DCS-BIOS cannot back
+
+A profile is written against one DCS-BIOS release and run on whatever the user
+has. A condition whose signal is not in the catalogue, or whose value is above
+the signal's highest (a selector position that release does not have), is not
+reading what it was written for. Refusing the whole profile over it would cost
+every other lamp, so these are **flagged, not refused**, by the same rule for
+shipped profiles and the user's own (`Profile::flags`):
+
+- **A flagged condition turns off its whole AND chain.** The rest of the chain
+  on its own could light the lamp when nobody meant it to. The lamp is left
+  unset and swept dark.
+- **In `any_of`, only the branch holding it goes.** Each alternative stands on
+  its own, so the others still work. A lamp with no branch left is unset.
+- **A display field reading a missing signal is left out**, and its cells stay
+  blank.
+
+What runs is `Profile::runnable`, a copy with those rows off. The file keeps
+every row, so they work again once DCS-BIOS has the signal. The daemon logs one
+warning per profile, grouped by reason. The editor marks each flagged
+condition or field under the row itself, saying why and what it costs, and
+Save stays available.
+
+The shipped defaults target the DCS-BIOS nightly, and most users run stable.
+Each release ships `data/nightly-only.json`, built by `tools/nightly_only.py`:
+the signals the defaults read that the latest stable lacks or reports with a
+different range. A flag on that list says the nightly has it, and the profile
+page shows one line saying so, only when the installed DCS-BIOS is actually
+missing some of them. Profiles carry no DCS-BIOS version.
+
+The catalogue itself always matches the installed DCS-BIOS: it is rebuilt at
+startup when the version or the `doc/json` files change, and the profiles page
+says which release the signals came from.
 
 ## Where profiles live
 

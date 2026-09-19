@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::net::{Ipv4Addr, UdpSocket};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -13,6 +13,9 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use wctrl_bios::{BiosState, Listener, Write as BiosWrite};
+use wctrl_config::catalogue_build::{self, Freshness};
+use wctrl_config::nightly_only::{Change, NightlyOnly};
+use wctrl_config::{Flag, Place, Unsound};
 use wctrl_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout, Transport};
 use wctrl_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
@@ -22,6 +25,10 @@ use wctrl_hid::Device;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+    /// DCS-BIOS's `doc/json` folder, the catalogue's source. Only needed once
+    /// for an install outside Saved Games: the catalogue remembers it.
+    #[arg(long, global = true)]
+    bios: Option<PathBuf>,
 }
 
 #[derive(Subcommand)]
@@ -176,6 +183,10 @@ enum Command {
         /// not an error: most panels have none.
         #[arg(long, default_value = "data/displays")]
         displays: PathBuf,
+        /// Signals the shipped defaults need from the DCS-BIOS nightly, so a
+        /// warning can say so. Missing is fine: the warning is plainer.
+        #[arg(long, default_value = "data/nightly-only.json")]
+        nightly_only: PathBuf,
         /// Print what would be written without opening any device. Lets the
         /// whole pipeline be checked against live DCS with no hardware present.
         #[arg(long)]
@@ -206,6 +217,25 @@ enum Command {
         /// Case-insensitive filter on identifier or description.
         #[arg(long)]
         find: Option<String>,
+        /// Build the catalogue again even though it matches the installed
+        /// DCS-BIOS. It is rebuilt on its own whenever the version changes.
+        #[arg(long)]
+        rebuild: bool,
+    },
+    /// List the signals the shipped defaults read that the latest stable
+    /// DCS-BIOS lacks or reports differently. A release step: see
+    /// `tools/nightly_only.py`, which fetches the stable release and runs this.
+    NightlyOnly {
+        /// The stable release's `doc/json` folder.
+        #[arg(long)]
+        stable: PathBuf,
+        #[arg(long, default_value = "data/defaults")]
+        defaults: PathBuf,
+        /// The nightly catalogue, built from the DCS-BIOS installed here.
+        #[arg(long, default_value = "data/catalogue")]
+        catalogue: PathBuf,
+        #[arg(long, default_value = "data/nightly-only.json")]
+        out: PathBuf,
     },
 }
 
@@ -305,7 +335,9 @@ fn mcdu_test(
 }
 
 fn main() -> Result<()> {
-    match Cli::parse().command {
+    let cli = Cli::parse();
+    let bios = cli.bios.as_deref();
+    match cli.command {
         Command::Devices => {
             let api = hidapi::HidApi::new()?;
             let found = wctrl_hid::enumerate(&api);
@@ -416,14 +448,14 @@ fn main() -> Result<()> {
             watch,
             module,
             catalogue,
-        } => listen(seconds, verbose, &watch, module.as_deref(), &catalogue)?,
+        } => listen(seconds, verbose, &watch, module.as_deref(), &catalogue, bios)?,
 
         Command::Learn {
             seconds,
             top,
             module,
             catalogue,
-        } => learn(seconds, top, module.as_deref(), &catalogue)?,
+        } => learn(seconds, top, module.as_deref(), &catalogue, bios)?,
 
         Command::Run {
             devices,
@@ -431,6 +463,7 @@ fn main() -> Result<()> {
             profiles,
             defaults,
             displays,
+            nightly_only,
             dry_run,
             verbose,
             seconds,
@@ -441,6 +474,8 @@ fn main() -> Result<()> {
             &profiles,
             &defaults,
             &displays,
+            &nightly_only,
+            bios,
             dry_run,
             verbose,
             seconds,
@@ -451,7 +486,15 @@ fn main() -> Result<()> {
             dir,
             aircraft,
             find,
-        } => catalogue(&dir, aircraft.as_deref(), find.as_deref())?,
+            rebuild,
+        } => catalogue(&dir, aircraft.as_deref(), find.as_deref(), bios, rebuild)?,
+
+        Command::NightlyOnly {
+            stable,
+            defaults,
+            catalogue,
+            out,
+        } => nightly_only(&stable, &defaults, &catalogue, &out, bios)?,
     }
     Ok(())
 }
@@ -607,16 +650,12 @@ fn listen(
     watch: &[String],
     module: Option<&str>,
     catalogue_dir: &PathBuf,
+    bios: Option<&Path>,
 ) -> Result<()> {
     // Only load the catalogue when a watch is given by name.
     let needs_names = watch.iter().any(|w| parse_watch_triple(w).is_none());
     let cat = if needs_names {
-        Some(Catalogue::load_dir(catalogue_dir).with_context(|| {
-            format!(
-                "loading {} (generated - build it with: python tools/build_catalogue.py)",
-                catalogue_dir.display()
-            )
-        })?)
+        Some(load_catalogue(catalogue_dir, bios)?)
     } else {
         None
     };
@@ -805,13 +844,14 @@ fn listen(
 /// would list every signal in the module; a table per window is one answer per
 /// thing the user did, and re-arming keeps the map so the second control is
 /// found as fast as the first.
-fn learn(seconds: u64, top: usize, module: Option<&str>, catalogue_dir: &PathBuf) -> Result<()> {
-    let cat = Catalogue::load_dir(catalogue_dir).with_context(|| {
-        format!(
-            "loading {} (generated - build it with: python tools/build_catalogue.py)",
-            catalogue_dir.display()
-        )
-    })?;
+fn learn(
+    seconds: u64,
+    top: usize,
+    module: Option<&str>,
+    catalogue_dir: &PathBuf,
+    bios: Option<&Path>,
+) -> Result<()> {
+    let cat = load_catalogue(catalogue_dir, bios)?;
 
     let mut listener = Listener::bind(Ipv4Addr::UNSPECIFIED)
         .context("joining the DCS-BIOS multicast group on 239.255.50.10:5010")?;
@@ -938,9 +978,133 @@ fn learn(seconds: u64, top: usize, module: Option<&str>, catalogue_dir: &PathBuf
     Ok(())
 }
 
-fn catalogue(dir: &PathBuf, aircraft: Option<&str>, find: Option<&str>) -> Result<()> {
-    let catalogue = Catalogue::load_dir(dir)
-        .with_context(|| format!("loading catalogue from {}", dir.display()))?;
+/// What the DCS-BIOS running inside DCS says it is, against the catalogue.
+enum Running {
+    /// Its version string has not arrived yet.
+    NotYet,
+    Matches,
+    /// It said something else. Also what a version read from the wrong
+    /// address looks like, which is itself a sign the catalogue is wrong.
+    Differs(String),
+    /// The catalogue has nowhere to read a version from.
+    Unreported,
+}
+
+fn running_version(engine: &Engine) -> Running {
+    let Some((address, len)) = engine.catalogue().version_signal() else {
+        return Running::Unreported;
+    };
+    let Some(running) = engine.state().string(address, len) else {
+        return Running::NotYet;
+    };
+    let running = running.trim().to_string();
+    if running.is_empty() {
+        return Running::NotYet;
+    }
+    if engine.catalogue().bios_version() == Some(running.as_str()) {
+        Running::Matches
+    } else {
+        Running::Differs(running)
+    }
+}
+
+/// Write `data/nightly-only.json`: what the defaults read that stable lacks.
+///
+/// The stable catalogue is built into a temporary folder with the same builder
+/// the apps use, so both sides are read the same way.
+fn nightly_only(
+    stable: &Path,
+    defaults: &Path,
+    catalogue_dir: &Path,
+    out: &Path,
+    bios: Option<&Path>,
+) -> Result<()> {
+    let nightly = load_catalogue(catalogue_dir, bios)?;
+    if nightly.bios_version().is_some_and(|v| !v.contains("nightly")) {
+        println!(
+            "note: the installed DCS-BIOS is {}, not a nightly",
+            nightly.bios_version().unwrap_or_default()
+        );
+    }
+    let version = catalogue_build::installed_version(stable)
+        .unwrap_or_else(|| catalogue_build::UNKNOWN_VERSION.to_string());
+    let scratch = std::env::temp_dir().join(format!("wctrl-stable-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&scratch);
+    catalogue_build::build(stable, &scratch, &version)
+        .with_context(|| format!("building a catalogue from {}", stable.display()))?;
+    let stable_cat = Catalogue::load_dir(&scratch);
+    let _ = std::fs::remove_dir_all(&scratch);
+    let stable_cat = stable_cat.context("reading the stable catalogue back")?;
+
+    let mut profiles = Vec::new();
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(defaults)
+        .with_context(|| format!("reading {}", defaults.display()))?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
+        .collect();
+    paths.sort();
+    for path in paths {
+        profiles.push(Profile::load(&path).with_context(|| format!("reading {}", path.display()))?);
+    }
+
+    let (list, unknown) = NightlyOnly::compare(&profiles, &nightly, &stable_cat);
+    for line in &unknown {
+        println!("not in the nightly either, fix the default: {line}");
+    }
+    println!("stable {}, nightly {}", list.stable, list.nightly);
+    for (module, signals) in &list.signals {
+        for (id, change) in signals {
+            let what = match change {
+                Change::Missing => "not in stable".to_string(),
+                Change::Range { stable, nightly } => format!(
+                    "range {} in stable, {} in the nightly",
+                    stable.map_or("none".into(), |v| v.to_string()),
+                    nightly.map_or("none".into(), |v| v.to_string())
+                ),
+                Change::Kind { stable, nightly } => format!("{stable} in stable, {nightly} in the nightly"),
+            };
+            println!("  {module:<18} {id:<32} {what}");
+        }
+    }
+    let count: usize = list.signals.values().map(|s| s.len()).sum();
+    let text = serde_json::to_string_pretty(&list)?.replace('\n', "\r\n") + "\r\n";
+    std::fs::write(out, text).with_context(|| format!("writing {}", out.display()))?;
+    println!("{count} signal(s) written to {}", out.display());
+    Ok(())
+}
+
+/// Bring the catalogue up to date with the installed DCS-BIOS, then load it.
+///
+/// Every command that reads the catalogue comes through here, so none of them
+/// can read addresses from a DCS-BIOS release that is no longer installed.
+/// Rebuilding is skipped when the versions already match, which is almost
+/// always, so this costs one small file read.
+fn load_catalogue(dir: &Path, bios: Option<&Path>) -> Result<Catalogue> {
+    let bios_json = catalogue_build::locate_bios_json(dir, bios);
+    let fresh = catalogue_build::ensure(&bios_json, dir)
+        .with_context(|| format!("updating the catalogue in {}", dir.display()))?;
+    match &fresh {
+        Freshness::Current { .. } => {}
+        Freshness::NoBios { have_catalogue: false, .. } => anyhow::bail!("{fresh}"),
+        _ => println!("{fresh}"),
+    }
+    Catalogue::load_dir(dir).with_context(|| format!("loading the catalogue from {}", dir.display()))
+}
+
+fn catalogue(
+    dir: &PathBuf,
+    aircraft: Option<&str>,
+    find: Option<&str>,
+    bios: Option<&Path>,
+    rebuild: bool,
+) -> Result<()> {
+    if rebuild {
+        let bios_json = catalogue_build::locate_bios_json(dir, bios);
+        let fresh = catalogue_build::rebuild(&bios_json, dir)
+            .with_context(|| format!("rebuilding the catalogue in {}", dir.display()))?;
+        println!("{fresh}");
+    }
+    let catalogue = load_catalogue(dir, bios)?;
 
     let Some(aircraft) = aircraft else {
         let mut modules: Vec<_> = catalogue.modules().collect();
@@ -1457,6 +1621,48 @@ mod tests {
         // command somehow produced no output.
         assert!(!process_listed(""));
     }
+
+    #[test]
+    fn a_profile_reading_a_missing_signal_loads_with_that_row_off() {
+        // One renamed signal used to cost the whole profile. Now it costs the
+        // row that reads it, and the rest of the profile runs.
+        use super::load_profiles;
+        use wctrl_config::nightly_only::NightlyOnly;
+        use wctrl_config::{DeviceInventory, DisplayCatalogue};
+
+        let (cat, _) = fixture();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let inventory = DeviceInventory::load(&root.join("data/devices.json")).unwrap();
+        let displays = DisplayCatalogue::load_dir(&root.join("data/displays")).unwrap();
+        let dir = std::env::temp_dir().join(format!("wctrl-flagged-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("hornet.json"),
+            r#"{"name": "Hornet", "aircraft": ["FA-18C_hornet"], "module": "FA-18C_hornet",
+                "bindings": [
+                  {"device": "TAKEOFF_PLANEL_2", "led": "Master_Caution", "off": 0,
+                   "conditions": [{"source": "MASTER_CAUTION_LT", "on_when": {"equals": 1}}]},
+                  {"device": "TAKEOFF_PLANEL_2", "led": "HOOK", "off": 0,
+                   "conditions": [{"source": "RENAMED_LT", "on_when": {"equals": 1}}]}
+                ]}"#,
+        )
+        .unwrap();
+
+        let loaded = load_profiles(&dir, &cat, &inventory, &displays, &NightlyOnly::default());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(loaded.skipped, 0, "{:?}", loaded.messages);
+        assert_eq!(loaded.profiles.len(), 1);
+        let p = &loaded.profiles[0];
+        assert_eq!(p.bindings[0].conditions.len(), 1, "the good row runs");
+        assert!(p.bindings[1].is_placeholder(), "the flagged row is off");
+        let warning = loaded.messages.iter().find(|m| m.starts_with("warning")).expect("a warning");
+        assert!(warning.contains("hornet.json"), "{warning}");
+        assert!(
+            loaded.messages.iter().any(|m| m.contains("RENAMED_LT") && m.contains("1 lamp(s) off")),
+            "{:?}",
+            loaded.messages
+        );
+    }
 }
 
 /// How often the profile directory is checked for edits.
@@ -1481,6 +1687,7 @@ fn load_profiles(
     cat: &Catalogue,
     inventory: &DeviceInventory,
     displays: &DisplayCatalogue,
+    nightly: &NightlyOnly,
 ) -> Loaded {
     let mut out = Loaded {
         profiles: Vec::new(),
@@ -1527,6 +1734,13 @@ fn load_profiles(
             out.skipped += 1;
             continue;
         }
+        // What this DCS-BIOS cannot back is turned off rather than costing the
+        // whole profile, and the copy that runs is the one without it.
+        let flags = p.flags(module);
+        if !flags.is_empty() {
+            out.messages.extend(flag_lines(&name, &p.module, &flags, cat.bios_version(), nightly));
+        }
+        let p = p.runnable(module);
 
         for note in p.inert() {
             out.messages.push(format!("note     {name}: {note}"));
@@ -1547,6 +1761,75 @@ fn load_profiles(
     if out.skipped > 0 {
         out.messages
             .push(format!("{} profile(s) skipped; the rest still run.", out.skipped));
+    }
+    out
+}
+
+/// One warning for a profile with flagged conditions, grouped by reason.
+///
+/// Says what is off and why, and, where the shipped list knows, that the
+/// DCS-BIOS nightly has it, so the user can choose between updating and doing
+/// without. Grouped because one missing signal is often read in many places:
+/// the F-14's CDNU lines appear on all three MCDU names, and 24 lines saying
+/// the same thing bury the one fact in them.
+fn flag_lines(
+    name: &str,
+    module: &str,
+    flags: &[Flag],
+    version: Option<&str>,
+    nightly: &NightlyOnly,
+) -> Vec<String> {
+    let mut out = vec![format!(
+        "warning  {name}: DCS-BIOS {} lacks what some rows read, so those rows are off. Everything else runs.",
+        version.unwrap_or("here")
+    )];
+    // Reason, then the sources with that reason and what turning them off cost.
+    let mut groups: Vec<(String, Vec<&str>, [usize; 3], Vec<&str>)> = Vec::new();
+    for f in flags {
+        let reason = match (&f.why, nightly.get(module, &f.source)) {
+            (Unsound::Missing, Some(_)) => {
+                format!("need the DCS-BIOS nightly; stable {} does not have them", nightly.stable)
+            }
+            (Unsound::Missing, None) => "are not in this DCS-BIOS".to_string(),
+            (Unsound::AboveRange { value, max }, Some(Change::Range { nightly: Some(n), .. })) => format!(
+                "tested against {value}, above the highest here, {max}; the DCS-BIOS nightly goes to {n}"
+            ),
+            (Unsound::AboveRange { value, max }, _) => {
+                format!("tested against {value}, above the highest, {max}")
+            }
+        };
+        let i = match groups.iter().position(|g| g.0 == reason) {
+            Some(i) => i,
+            None => {
+                groups.push((reason, Vec::new(), [0; 3], Vec::new()));
+                groups.len() - 1
+            }
+        };
+        let group = &mut groups[i];
+        if !group.1.contains(&f.source.as_str()) {
+            group.1.push(&f.source);
+        }
+        group.2[match f.place {
+            Place::Condition { .. } => 0,
+            Place::Branch { .. } => 1,
+            Place::Field { .. } => 2,
+        }] += 1;
+        if !group.3.contains(&f.device.as_str()) {
+            group.3.push(&f.device);
+        }
+    }
+    for (reason, sources, counts, devices) in groups {
+        let cost: Vec<String> = [(counts[0], "lamp(s) off"), (counts[1], "alternative(s) dropped"), (counts[2], "field(s) blank")]
+            .iter()
+            .filter(|(n, _)| *n > 0)
+            .map(|(n, what)| format!("{n} {what}"))
+            .collect();
+        out.push(format!(
+            "           {}: {reason}. {} on {}",
+            sources.join(", "),
+            cost.join(", "),
+            devices.join(", ")
+        ));
     }
     out
 }
@@ -1595,6 +1878,8 @@ fn run(
     profiles_dir: &PathBuf,
     defaults_dir: &PathBuf,
     displays_dir: &PathBuf,
+    nightly_path: &Path,
+    bios: Option<&Path>,
     dry_run: bool,
     verbose: bool,
     seconds: Option<u64>,
@@ -1602,14 +1887,14 @@ fn run(
 ) -> Result<()> {
     let inventory = DeviceInventory::load(devices_path)
         .with_context(|| format!("loading {}", devices_path.display()))?;
-    let cat = Catalogue::load_dir(catalogue_dir).with_context(|| {
-        format!(
-            "loading {} (generated - build it with: python tools/build_catalogue.py)",
-            catalogue_dir.display()
-        )
-    })?;
+    let cat = load_catalogue(catalogue_dir, bios)?;
+    let bios_json = catalogue_build::locate_bios_json(catalogue_dir, bios);
     let displays = DisplayCatalogue::load_dir(displays_dir)
         .with_context(|| format!("loading {}", displays_dir.display()))?;
+    let nightly = NightlyOnly::load(nightly_path).unwrap_or_else(|e| {
+        println!("could not read {}: {e}", nightly_path.display());
+        NightlyOnly::default()
+    });
 
     // Shipped profiles are copied in rather than read from a second folder, so
     // there is only ever one place profiles live and one place the user edits.
@@ -1642,7 +1927,7 @@ fn run(
         println!("updated  {note}");
     }
 
-    let loaded = load_profiles(profiles_dir, &cat, &inventory, &displays);
+    let loaded = load_profiles(profiles_dir, &cat, &inventory, &displays, &nightly);
     for line in &loaded.messages {
         println!("{line}");
     }
@@ -1755,6 +2040,12 @@ fn run(
     let mut writes: Vec<BiosWrite> = Vec::new();
     let mut last_aircraft: Option<String> = None;
 
+    // Each mission, the DCS-BIOS that DCS actually loaded is asked which
+    // release it is. `rebuilt` allows one catalogue rebuild per mission, so a
+    // mismatch that a rebuild cannot fix ends the run instead of looping.
+    let mut version_checked = false;
+    let mut rebuilt = false;
+
     // Silence only counts once the stream has been heard at least once, so
     // starting before DCS does not exit immediately. `None` means nothing has
     // arrived yet, which is a wait rather than a death.
@@ -1831,7 +2122,7 @@ fn run(
                     settling = None;
 
                     let reloaded =
-                        load_profiles(profiles_dir, engine.catalogue(), engine.devices(), &displays);
+                        load_profiles(profiles_dir, engine.catalogue(), engine.devices(), &displays, &nightly);
                     println!(
                         "reloaded {} profile(s) from {}",
                         reloaded.profiles.len(),
@@ -1898,6 +2189,8 @@ fn run(
                 }
             }
             last_aircraft = current;
+            version_checked = false;
+            rebuilt = false;
         }
 
         apply(
@@ -1906,6 +2199,50 @@ fn run(
             dry_run,
             verbose.then_some((&trace, elapsed)),
         )?;
+
+        if !version_checked && engine.aircraft().is_some() {
+            match running_version(&engine) {
+                Running::NotYet => {}
+                Running::Matches => version_checked = true,
+                Running::Unreported => {
+                    version_checked = true;
+                    println!("DCS-BIOS does not report its version, so it cannot be checked against the catalogue.");
+                }
+                Running::Differs(running) => {
+                    let built = engine.catalogue().bios_version().unwrap_or("unknown").to_string();
+                    let installed = catalogue_build::installed_version(&bios_json);
+                    // The catalogue is behind the installed DCS-BIOS: it was
+                    // updated between missions while this daemon ran. What DCS
+                    // loaded this mission is what is installed, so rebuilding
+                    // fixes it. The version is read again afterwards, through
+                    // the new catalogue's address.
+                    if !rebuilt && installed.as_deref() != Some(built.as_str()) {
+                        rebuilt = true;
+                        let cat = load_catalogue(catalogue_dir, bios)?;
+                        let reloaded = load_profiles(profiles_dir, &cat, engine.devices(), &displays, &nightly);
+                        for line in &reloaded.messages {
+                            println!("{line}");
+                        }
+                        let batch = engine.set_catalogue(cat, reloaded.profiles);
+                        apply(&batch, &mut panels, dry_run, verbose.then_some((&trace, elapsed)))?;
+                        if let Some(p) = engine.active_profile() {
+                            let p = p.clone();
+                            trace.follow(&p, engine.catalogue());
+                        }
+                    } else {
+                        // DCS runs a release that is not installed, which is an
+                        // update made while the mission was loaded, or one the
+                        // catalogue cannot even read the version of. No
+                        // catalogue matches the code DCS is running.
+                        println!(
+                            "DCS is running DCS-BIOS {running:?}, but the catalogue is built from {built} and {} is installed. Signals would be read from the wrong addresses, so wctrl is stopping. The next mission loads the installed DCS-BIOS and starts wctrl with a catalogue that matches it.",
+                            installed.as_deref().unwrap_or("no version")
+                        );
+                        break;
+                    }
+                }
+            }
+        }
     }
 
     println!();

@@ -17,6 +17,9 @@ pub struct Paths {
     pub catalogue: PathBuf,
     /// Cell and glyph maps for panels with glass. Usually absent.
     pub displays: PathBuf,
+    /// What the shipped defaults read that only the DCS-BIOS nightly has.
+    /// Built at release; absent in a checkout that has not generated one.
+    pub nightly_only: PathBuf,
     /// Shipped defaults and the active folder the user edits.
     pub profiles: Profiles,
 }
@@ -28,6 +31,7 @@ impl Paths {
             devices: root.join("devices.json"),
             catalogue: root.join("catalogue"),
             displays: root.join("displays"),
+            nightly_only: root.join("nightly-only.json"),
             profiles: Profiles::new(root.join("defaults"), root.join("profiles")),
         }
     }

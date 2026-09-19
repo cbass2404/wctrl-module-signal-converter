@@ -461,7 +461,7 @@ fn the_shipped_hornet_fields_land_on_named_regions() {
         let cells = r["cells"].as_str().unwrap();
         assert!(
             named.contains(&cells),
-            "shipped field on cells {cells} matches no region, so the editor would              show it as a custom range"
+            "shipped field on cells {cells} matches no region, so the editor would show it as a custom range"
         );
     }
 }

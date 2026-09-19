@@ -4,6 +4,7 @@
 import { invoke } from "@tauri-apps/api/core";
 
 import type {
+  CatalogueStatus,
   Device,
   Findings,
   LearnReport,
@@ -13,6 +14,8 @@ import type {
   SignalView,
 } from "./types";
 
+/** Whether the catalogue matched DCS-BIOS at startup, or was rebuilt, or why not. */
+export const catalogueStatus = () => invoke<CatalogueStatus>("catalogue_status");
 export const listDevices = () => invoke<Device[]>("devices");
 export const listModules = () => invoke<ModuleChoice[]>("modules");
 export const listProfiles = () => invoke<ProfileSummary[]>("profiles");

@@ -107,10 +107,26 @@ export interface Readout {
   note?: string;
 }
 
-/** What a check found. Problems stop the profile loading; cautions do not. */
+/**
+ * One condition or display field this DCS-BIOS cannot back, placed by index
+ * into the profile that was checked. It loads and stays off.
+ */
+export type FlagView = { text: string } & (
+  | { at: "condition"; binding: number; index: number }
+  | { at: "branch"; binding: number; branch: number; index: number }
+  | { at: "field"; readout: number }
+);
+
+/**
+ * What a check found. Problems stop the profile loading; cautions and flags
+ * do not.
+ */
 export interface Findings {
   problems: string[];
   cautions: string[];
+  flags: FlagView[];
+  /** One line for the page, only when a flagged row needs the DCS-BIOS nightly. */
+  notice: string | null;
 }
 
 export interface Profile {
@@ -216,6 +232,12 @@ export interface SignalView {
   reads: string;
   /** Non-empty for signals with few enough values to label individually. */
   values: ValueLabel[];
+}
+
+/** What the editor found when it checked the catalogue against DCS-BIOS. */
+export interface CatalogueStatus {
+  level: "ok" | "caution" | "error";
+  text: string;
 }
 
 export interface ModuleChoice {

@@ -259,7 +259,7 @@ def main():
     if not os.path.exists(os.path.join(ROOT, "target", "release", "wctrl.exe")):
         sys.exit("build it first: cargo build --release --bin wctrl")
     if not os.path.exists(args.catalogue):
-        sys.exit(f"{args.catalogue} missing - build it with: python tools/build_catalogue.py")
+        sys.exit(f"{args.catalogue} missing - build it with: cargo run --bin wctrl -- catalogue")
 
     mode = "live, panels driven" if args.live else "dry run"
     print(f"wctrl run ({mode}), {args.aircraft}, {args.seconds:g}s per scenario\n")

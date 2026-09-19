@@ -290,7 +290,10 @@ fn a_colour_line_is_checked_like_any_other_signal() {
         .iter()
         .map(|e| e.to_string())
         .collect();
-    assert!(problems.iter().any(|e| e.contains("PLT_CDU_LINE1_COLOUR")), "{problems:?}");
+    // A colour line this DCS-BIOS lacks is flagged, and the field left blank,
+    // rather than refusing the profile; a malformed code is still a problem.
+    let flags = p.flags(module);
+    assert!(flags.iter().any(|f| f.source == "PLT_CDU_LINE1_COLOUR"), "{flags:?}");
     assert!(problems.iter().any(|e| e.contains("\"gr\"")), "{problems:?}");
     assert_eq!(chinook().problems(module, &devices, &displays).len(), 0);
 }

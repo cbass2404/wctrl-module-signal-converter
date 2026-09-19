@@ -972,9 +972,14 @@ impl Profile {
         let text = serde_json::to_string_pretty(self)
             .map_err(|e| Error::Json(e, path.display().to_string()))?;
         let temp = path.with_extension("json.saving");
-        std::fs::write(&temp, text)?;
         // Rename replaces an existing file on Windows as well as on Unix.
-        std::fs::rename(&temp, path)?;
+        let written = std::fs::write(&temp, text).and_then(|()| std::fs::rename(&temp, path));
+        if written.is_err() {
+            // A half-written temporary is no use to anyone and the daemon
+            // would list it on every poll.
+            let _ = std::fs::remove_file(&temp);
+        }
+        written?;
         Ok(())
     }
 

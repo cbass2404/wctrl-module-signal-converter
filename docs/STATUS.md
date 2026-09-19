@@ -9,7 +9,7 @@ Everything below is background. This is what to actually do next.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 251 passing
+cargo test --workspace            # expect 254 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -501,7 +501,16 @@ nothing else. It listens only while the panel is open, which is deliberate, and
    see "One aircraft, one profile" in `CONFIG.md`. Aircraft move between
    profiles only within a family, which the shipped defaults define
    (`Profiles::families`). **Not yet seen in the window.**
-2. **Import and export a profile, next.** So users can share a setup. Export
+2. ~~**Import and export a profile.**~~ **Built 2026-09-19, not yet seen in
+   the window.** Export... on each row, Import... beside New profile; see
+   "Sharing a profile" in `CONFIG.md`. Beyond the plan below, decided with
+   Cory: taking an aircraft another profile flies is confirmed, a profile left
+   with none is deleted only once confirmed, and declining that cancels the
+   import. `claims::write_new_deleting` rolls every file back on a failure.
+   Export sits on the row rather than the edit page, so it never has to ask
+   about unsaved edits. Tests no longer leave `dsc-*` folders in `%TEMP%`,
+   and `Profile::save` removes its `.json.saving` file when a write fails.
+   The plan as written before: So users can share a setup. Export
    saves the open profile through a save dialog run by the backend (the window
    opens nothing itself). Import parses it, checks the module is in this
    catalogue, runs `Profile::problems`, always writes a new file name, and

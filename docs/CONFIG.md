@@ -427,6 +427,11 @@ be silent. Nothing may make one:
   deleted once its aircraft live elsewhere, and what keeps a default shipped in
   an update from doubling up on a profile the user already made.
 - New profile and Copy to... move a claimed aircraft rather than share it.
+- Import moves one too, but only once the user confirms the move. Unlike Copy
+  to..., it may take every aircraft a profile has; that profile is then
+  deleted, again only once confirmed, and declining cancels the import with
+  nothing written. The move is all or nothing: if any file cannot be written,
+  every file touched is put back and the new one removed.
 - A starter profile is written only for an aircraft no file claims, including
   one that was skipped for a fault.
 - A claim made anyway, by a file copied in by hand, is logged by the daemon and
@@ -435,6 +440,16 @@ be silent. Nothing may make one:
 A shipped default renamed between releases (`a-10c-2.json` to `a-10c.json`,
 after the DCS-BIOS module) no longer leaves two profiles behind: the new file
 finds its aircraft claimed by the old one and is not seeded.
+
+**Sharing a profile.** Export copies the file as it is on disk, so unsaved
+edits are not in it. Import checks the file the way Save does and refuses one
+that will not parse, reads a module the installed DCS-BIOS does not have, or
+has a problem the daemon would refuse it for. Rows the local DCS-BIOS cannot
+back are counted in the dialog, and load and stay off as usual. The import
+always gets a new file name from the name given, keeps its author and version,
+and may fly only aircraft it came with. Both file dialogs are run by the
+backend; the window has no permission to open one. `editor/src-tauri/src/share.rs`
+holds it.
 
 ## The source dropdown
 

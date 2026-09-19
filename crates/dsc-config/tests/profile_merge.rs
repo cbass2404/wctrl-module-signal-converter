@@ -8,7 +8,24 @@ use std::path::{Path, PathBuf};
 
 use dsc_config::{DeviceInventory, Profile, Profiles};
 
-fn scratch(name: &str) -> PathBuf {
+/// A folder of its own for one test, removed when the test ends, pass or fail,
+/// so a run leaves nothing in the temp folder.
+struct Scratch(PathBuf);
+
+impl std::ops::Deref for Scratch {
+    type Target = Path;
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
+fn scratch(name: &str) -> Scratch {
     let dir = std::env::temp_dir().join(format!(
         "dsc-merge-{name}-{}",
         std::time::SystemTime::now()
@@ -18,7 +35,7 @@ fn scratch(name: &str) -> PathBuf {
     ));
     std::fs::create_dir_all(dir.join("defaults")).unwrap();
     std::fs::create_dir_all(dir.join("active")).unwrap();
-    dir
+    Scratch(dir)
 }
 
 fn inventory() -> DeviceInventory {

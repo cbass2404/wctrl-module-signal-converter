@@ -636,6 +636,18 @@ use both, `always` for the PTO2 gates in the F-14, Mi-24P, FC3 and No aircraft
 profiles and `same_as` for both gates in the AH-64D, but neither has been
 watched driving a real lamp.
 
+## Release notes
+
+`CHANGELOG.md` is the user-facing record, and the release pipeline puts the
+section matching the version at the top of the release notes, above the
+provenance it already wrote. A version with no section still releases; the awk
+simply finds nothing.
+
+**A release that changes a shipped profile has to say which rows**, because an
+update never rewrites a row the user has changed: a fix reaches them only if
+they reset that lamp, and they cannot choose to unless the notes name it. The
+alpha.002 entry does that for the two MCDU dividers.
+
 ## Development mode, and two faults it uncovered
 
 **`.env` beside `data`, 2026-09-19.** `env=dev` makes `Paths::resolve` return

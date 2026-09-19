@@ -801,7 +801,7 @@ dependencies = [
 
 [[package]]
 name = "dsc-bios"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "socket2 0.5.10",
  "thiserror 1.0.69",
@@ -809,7 +809,7 @@ dependencies = [
 
 [[package]]
 name = "dsc-cli"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "anyhow",
  "clap",
@@ -824,7 +824,7 @@ dependencies = [
 
 [[package]]
 name = "dsc-config"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "serde",
  "serde_json",
@@ -834,7 +834,7 @@ dependencies = [
 
 [[package]]
 name = "dsc-editor"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "anyhow",
  "dsc-bios",
@@ -850,7 +850,7 @@ dependencies = [
 
 [[package]]
 name = "dsc-engine"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "dsc-bios",
  "dsc-config",
@@ -4370,7 +4370,7 @@ dependencies = [
 
 [[package]]
 name = "wctrl-hid"
-version = "1.0.0-alpha.1"
+version = "1.0.0-alpha.2"
 dependencies = [
  "hidapi",
  "serde_json",

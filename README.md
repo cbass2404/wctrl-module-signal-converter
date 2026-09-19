@@ -333,6 +333,7 @@ ships, and nothing you do while developing reaches the profiles you fly.
 | [docs/CONFIG.md](docs/CONFIG.md)           | The profile format, every binding form, and how the editor checks it |
 | [docs/PROTOCOL.md](docs/PROTOCOL.md)       | The reverse-engineered HID protocol and every panel's lamp map       |
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Memory, CPU and install size, and how they were measured             |
+| [CHANGELOG.md](CHANGELOG.md)               | What changed in each release, and which shipped profiles moved       |
 | [docs/STATUS.md](docs/STATUS.md)           | Development status, verified hardware facts, and what is next        |
 
 ---

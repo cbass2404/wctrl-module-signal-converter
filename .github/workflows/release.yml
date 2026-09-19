@@ -132,7 +132,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           pin="$(python -c "import json; print(json.load(open('tools/dcs-bios-pin.json'))['version'])")"
+          # This version's section of the changelog, if it has one: everything
+          # between its heading and the next release heading. A release with
+          # nothing written for it still gets the provenance below, rather than
+          # failing over a missing entry.
+          awk -v v="## $VERSION" '$0 == v {on = 1; next} /^## / {on = 0} on' CHANGELOG.md > entry.md
           {
+            if [ -s entry.md ]; then cat entry.md; echo; echo "---"; echo; fi
             echo "Built from \`$DSC_COMMIT\` on main by [this run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
             echo
             echo "Shipped defaults written against DCS-BIOS \`$pin\`."

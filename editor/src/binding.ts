@@ -273,6 +273,31 @@ function groupsOf(binding: Binding): Branch[] {
 }
 
 /**
+ * A whole lamp in words, a line per condition, for a question that has to say
+ * what a change will do before it is made rather than leave the user to find
+ * out after.
+ */
+function describeBinding(b: Binding, byId: Map<string, SignalView>): string {
+  const lines: string[] = [];
+  const groups = groupsOf(b).filter((g) => g.conditions.length > 0);
+  const condition = (c: Condition): string =>
+    c.source ? `${c.source} ${describeTest(c.on_when, byId.get(c.source))}` : "an unfinished condition";
+  if (b.always) lines.push("Always on, reading no signal");
+  else if (b.same_as) lines.push(`Matches ${b.same_as}`);
+  else if (groups.length === 0) lines.push("Unassigned, so driven off");
+  else if (groups.length === 1) lines.push(groups[0]!.conditions.map(condition).join("\nand "));
+  else {
+    const how = b.pick === "latest" ? "the one that changed last wins" : "the brightest wins";
+    lines.push(`Any of these, ${how}:`);
+    for (const g of groups) lines.push(`- ${g.conditions.map(condition).join(" and ")}`);
+  }
+  if (b.on !== null) lines.push(`Lit at ${b.on}`);
+  if (b.off !== 0) lines.push(`Off at ${b.off}`);
+  if (b.note) lines.push(`Note: ${b.note}`);
+  return lines.join("\n");
+}
+
+/**
  * The editable cell for one lamp: every condition, and the controls to add one.
  *
  * Conditions read as a sentence until the pencil is clicked. A profile is read
@@ -607,6 +632,7 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
         addCondition({ conditions: binding.conditions });
       });
       host.append(swap);
+      appendRevert();
       return;
     }
 
@@ -690,28 +716,43 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
   }
 
   /**
-   * Offered only where this lamp actually differs from the shipped profile, so
-   * the control is never a no-op and its presence means something.
+   * On every lamp that has a shipped version, so the way back is always in
+   * the same place. Disabled while the lamp already matches, so it is never a
+   * no-op. A profile the user made has no shipped version and no button.
    */
   function appendRevert(): void {
     const shipped = opts.shipped;
-    if (!shipped || meaningfulPart(shipped) === meaningfulPart(binding)) return;
+    if (!shipped) return;
     const revert = el("button", { class: "add revert", type: "button" }, "Reset this lamp");
-    revert.title = "Put this lamp back the way it shipped. No other lamp is touched.";
-    revert.addEventListener("click", () => {
-      binding.conditions = structuredClone(shipped.conditions);
-      binding.any_of = structuredClone(shipped.any_of ?? []);
-      if (shipped.pick) binding.pick = shipped.pick;
-      else delete binding.pick;
-      binding.always = shipped.always ?? false;
-      binding.same_as = shipped.same_as ?? null;
-      binding.on = shipped.on;
-      binding.off = shipped.off;
-      binding.note = shipped.note;
-      editing.clear();
-      committed();
-    });
+    if (meaningfulPart(shipped) === meaningfulPart(binding)) {
+      revert.disabled = true;
+      revert.title = "This lamp matches how it shipped.";
+    } else {
+      revert.title = "Put this lamp back the way it shipped. No other lamp is touched.";
+      revert.addEventListener("click", () => void confirmRevert(shipped));
+    }
     host.append(revert);
+  }
+
+  /** Asks first, showing both setups, so a revert is never made blind. */
+  async function confirmRevert(shipped: Binding): Promise<void> {
+    const question =
+      `Reset ${led.name} to how it shipped?\n\n` +
+      `Now:\n${describeBinding(binding, byId)}\n\n` +
+      `Shipped:\n${describeBinding(shipped, byId)}\n\n` +
+      "No other lamp is touched.";
+    if (!(await confirmAction(question, "Reset"))) return;
+    binding.conditions = structuredClone(shipped.conditions);
+    binding.any_of = structuredClone(shipped.any_of ?? []);
+    if (shipped.pick) binding.pick = shipped.pick;
+    else delete binding.pick;
+    binding.always = shipped.always ?? false;
+    binding.same_as = shipped.same_as ?? null;
+    binding.on = shipped.on;
+    binding.off = shipped.off;
+    binding.note = shipped.note;
+    editing.clear();
+    committed();
   }
 
   render();

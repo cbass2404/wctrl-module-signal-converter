@@ -188,6 +188,9 @@ Decided 2026-09-19:
   the hook and the catalogue; profiles and the recorded folders go only when
   "delete app data" is ticked.
 
+Before copying, an install clears `data\` and `hook\` and the named top-level
+files, so installing over an old version leaves nothing it dropped; a
+top-level file a release stops shipping keeps its name in that list.
 An install finding `DCS.exe` running says to restart DCS, which loads hooks
 only at launch. The app icon is `editor/src-tauri/icons/icon.svg`, the
 afterburner app's tile and palette with a lamp in place of the flame.
@@ -202,7 +205,13 @@ so an install path outside the system code page would not reach Lua intact.
 Still to do: **CI** on push and PR (Windows runner): `cargo test --workspace`,
 `tools/version.py --check`, the editor build. **Release** on a `v*` tag
 matching `VERSION.md`: tests, `nightly_only.py`, the installer renamed to
-carry `VERSION.md` as written, a draft GitHub release. No `cargo fmt` check.
+carry `VERSION.md` as written, a draft GitHub release. The release notes
+list every change to an existing default row: a row the user has changed is
+theirs, and no update rewrites it (decided 2026-09-19), so the notes are how
+they learn a fix exists and choose whether to reset that lamp or the profile.
+New profiles and new hardware rows still arrive on their own (`seed` and
+`merge_new`, run by both the daemon and the editor). The per-lamp reset
+asks first and shows the lamp's current and shipped setups side by side. No `cargo fmt` check.
 
 Found 2026-09-19: DCS-BIOS publishes nightlies only as one rolling `latest`
 pre-release whose single zip (`DCS-BIOS_nightly_2026-09-18.zip`) is replaced

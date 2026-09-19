@@ -70,6 +70,10 @@ fn modules() -> Reply<Vec<ModuleChoice>> {
 /// Seeding on every listing rather than once at install means a user who empties
 /// the folder, or who installs an update, arrives at the same place without
 /// having to be told to do anything.
+///
+/// The same goes for rows a release adds for new hardware: the daemon merges
+/// them in when it starts, and so does this, because after an update the editor
+/// is often opened before anything has been flown.
 #[tauri::command]
 fn profiles() -> Reply<Vec<ProfileSummary>> {
     let paths = Paths::resolve();
@@ -77,6 +81,10 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         .profiles
         .seed()
         .map_err(|e| fail("copying in the shipped profiles", e))?;
+    paths
+        .profiles
+        .merge_new(&inventory(&paths)?)
+        .map_err(|e| fail("adding new hardware to the profiles", e))?;
 
     let dir = &paths.profiles.active;
     let mut out = Vec::new();

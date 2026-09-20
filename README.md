@@ -335,6 +335,7 @@ ships, and nothing you do while developing reaches the profiles you fly.
 | [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Memory, CPU and install size, and how they were measured             |
 | [CHANGELOG.md](CHANGELOG.md)               | What changed in each release, and which shipped profiles moved       |
 | [docs/STATUS.md](docs/STATUS.md)           | Development status, verified hardware facts, and what is next        |
+| [docs/TODO.md](docs/TODO.md)               | The outstanding work as a checklist, linked into the docs above      |
 
 ---
 

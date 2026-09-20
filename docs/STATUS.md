@@ -1,10 +1,12 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-19. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-20. Enough context to resume cold.
 
 ## Resume here
 
-Everything below is background. This is what to actually do next.
+Everything below is background. This is what to actually do next, with the
+reasoning attached. [TODO.md](TODO.md) is the same outstanding work as a bare
+checklist, for when that is all that is wanted.
 
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
@@ -24,13 +26,13 @@ reads the catalogue builds it first if it is missing or out of date (see below).
 draws a fixed rule instead of reading a signal, and the A-10C and AH-64D
 defaults now carry one. Drawn in a live A-10C mission the same day, which
 changed it twice: spaced dashes read as a dotted line and became an unbroken
-run, and the colour became something the editor picks. Neither change has been
-back on the glass yet. See "Dividers" in `CONFIG.md`, and the entry under the
+run, and the colour became something the editor picks. Both changes were drawn
+on the glass 2026-09-20. See "Dividers" in `CONFIG.md`, and the entry under the
 MCDU below.
 
-**Built 2026-09-19, unproven: Manage Converter.** The editor can now stop and
-start the daemon, from a dialog on the profiles page. Built but not yet pressed
-in the window, and the stop path has not been run against a live daemon: only
+**Built 2026-09-19, proven 2026-09-20: Manage Converter.** The editor can stop
+and start the daemon, from a dialog on the profiles page. Pressed in the window
+and run against a live daemon, which cleared the panels on the way out. Only
 the netstat parser has tests, because the rest of it is process control and
 sockets. See below.
 
@@ -38,8 +40,8 @@ sockets. See below.
 while profiles bound them, the daemon and the editor both ran and everything
 else worked as normal.
 
-**Done 2026-09-19: DCS-BIOS version mismatch, all 5 steps.** Only a flight
-against live DCS is left, to see the per-mission version check stay quiet. The
+**Done 2026-09-19: DCS-BIOS version mismatch, all 5 steps.** Flown 2026-09-20,
+and the per-mission version check stayed quiet. The
 shipped defaults were written against DCS-BIOS `2026.09.18-nightly`. A user on
 another release, a stable one in particular, may have signals the defaults
 name missing, renamed or changed. Before this work that was all or nothing: `validate` reports
@@ -90,8 +92,8 @@ The plan:
    start is what runs. If the catalogue is behind the installed release, the
    daemon rebuilds and carries on. If DCS runs a release that is not installed,
    which is an update made mid-mission, it clears the panels and exits, and the
-   next mission starts it clean. **Not yet seen against live DCS:** the next
-   flight should show no version message at all.
+   next mission starts it clean. **Seen against live DCS 2026-09-20:** no
+   version message at all.
 2. ~~**The nightly-only list.**~~ **Done 2026-09-19.**
    `dsc-config::nightly_only` compares what the defaults read in the local
    nightly catalogue against a stable one; `dcs-signal nightly-only --stable <json>`
@@ -149,10 +151,13 @@ vendor strings such as the `WINCTRL ...` product names. WinCtrl and WinWing
 appear only to say which hardware this drives; the README says it is not
 affiliated. The repository and folder keep their names.
 
-**Next: the installer, the release process and a CI pipeline**, so the
-whole flow (first-run catalogue build, rebuild on a DCS-BIOS update, the
-nightly-only list) can be tested as a user would meet it. There is no release
-process yet: `VERSION.md` holds `1.0.0-alpha.001` and there are no workflows.
+**Done 2026-09-20: the installer, the release process and a CI pipeline**, so
+the whole flow (first-run catalogue build, rebuild on a DCS-BIOS update, the
+nightly-only list) has been tested as a user meets it. Written as the plan
+below; what is left of it is the release-notes list of changed default rows.
+**Next is text output fields**, the editor ticket at the end of "Next steps".
+When that work started there was no release process: `VERSION.md` held
+`1.0.0-alpha.001` and there were no workflows.
 The release process must run `tools/nightly_only.py`. Worth knowing for the
 installer: the editor finds `data` beside the executable once installed, and
 it writes the catalogue and profiles there, which Program Files does not allow.
@@ -183,7 +188,7 @@ Decided 2026-09-19:
   they drift. Add/Remove Programs shows that form, since Tauri's upgrade check
   compares it as semver.
 
-**Installer, built 2026-09-19, not yet installed on a real machine:**
+**Installer, built 2026-09-19, installed and tested 2026-09-20:**
 
 * `dsc-config::paths` is the one resolver for the daemon, the CLI and the
   editor (the editor's `paths.rs` is gone; CLI path flags now default from
@@ -210,14 +215,15 @@ An install finding `DCS.exe` running says to restart DCS, which loads hooks
 only at launch. The app icon is `editor/src-tauri/icons/icon.svg`, the
 afterburner app's tile and palette with a lamp in place of the flame.
 
-Left for the installer: testing, decided 2026-09-19 to be done on the
-pipeline's build rather than a local one, since that is how releases are
-compiled. Fresh install, fly, update over it, uninstall with and without
-"delete app data"; the folder prompts from a second Windows user who has
-never run DCS (Windows 11 Home has no Sandbox). The hook template is written as ANSI,
-so an install path outside the system code page would not reach Lua intact.
+**Tested 2026-09-20** on the pipeline's build rather than a local one, since
+that is how releases are compiled: fresh install, fly, update over it, and
+uninstall with and without "delete app data"; the folder prompts from a second
+Windows user who has never run DCS (Windows 11 Home has no Sandbox). The hook
+template is written as ANSI, so an install path outside the system code page
+would not reach Lua intact.
 
-Still to do: **CI** on push and PR (Windows runner): `cargo test --workspace`,
+What the pipeline had to do, all of it built below. **CI** on push and PR
+(Windows runner): `cargo test --workspace`,
 `tools/version.py --check`, the editor build. **Release** on a `v*` tag
 matching `VERSION.md`: tests, `nightly_only.py`, the installer renamed to
 carry `VERSION.md` as written, a draft GitHub release. The release notes
@@ -235,7 +241,7 @@ release need their own copy of the nightly the defaults were written against,
 for example attached to a release in this repository, before the
 shipped-defaults test and `nightly_only.py` can run there.
 
-**CI and release workflows written 2026-09-19, not yet run.** Decided: the
+**CI and release workflows written 2026-09-19, and run since.** Decided: the
 pipeline runs the tests for every PR and every release, since a local run can
 be skipped, and a release builds only from a commit on `main`, so every
 installer traces to its source.
@@ -269,7 +275,7 @@ repo's releases (`editor/src-tauri/src/update.rs`). If the newest published
 links to it. Pre-releases count only while the running version is one.
 Offline or any other failure shows nothing. The backend builds and opens the
 URL itself (`explorer`), so the window still opens no URLs. `reqwest` with
-Windows' own TLS. Not yet seen in the window: no release exists to differ.
+Windows' own TLS. Seen in the window 2026-09-20, against a published release.
 
 To release: `tools\release.cmd`, adapted from the afterburner project. It
 runs only on `main` in step with origin, pushes nothing but the tag, and
@@ -287,9 +293,11 @@ is covered without editing `version.py`. Last, `release.cmd` warns when
 `CHANGELOG.md` has no section for this version: the pipeline allows that and
 ships only provenance, which is almost never what was meant.
 
-Still to do: attach the zip to the `dcs-bios-2026.09.18-nightly` release;
-protect `main` (require CI) and `v*` tags on GitHub; the release-notes list
-of changed default rows; then test the installer from the first draft.
+Done 2026-09-20: the pinned nightly's zip is attached to the
+`dcs-bios-2026.09.18-nightly` release, and on GitHub `main` requires CI and
+`v*` tags are protected.
+
+Still to do: the release-notes list of changed default rows.
 
 **Then, in order:**
 
@@ -367,8 +375,8 @@ of changed default rows; then test the installer from the first draft.
    `Device::open` now chooses by report descriptor. Details in `PROTOCOL.md`.
    **Verified on hardware 2026-09-18** in the hardest case, split mode under
    the L name: `dcs-signal led` wrote 0, 255, 20 and 137 through `col01`, each
-   acked, and the backlight went dark, full and dim as sent. Not yet flown
-   from a profile in a mission.
+   acked, and the backlight went dark, full and dim as sent. Flown from a
+   profile in a mission 2026-09-20.
 
    The **Orion Combat Rudder Pedals** (`0xbef0`) went in alongside, same day:
    `Backlight_L` 0, `Backlight_R` 1 and `Logo` 3, all dimmers from a capture.
@@ -412,7 +420,7 @@ of changed default rows; then test the installer from the first draft.
    * F-14BU: the RIO's CDNU on rows 7 to 14, one column in, from either seat.
      Flown.
    * AH-64D: only the seated crew member's KU scratchpad, on row 14 one
-     column in (2026-09-18). **Not yet flown.**
+     column in (2026-09-18). Flown 2026-09-20.
 
    Font selection for aircraft without a CDU comes with the field
    customisation ticket.
@@ -639,13 +647,15 @@ place.
 * **`any_of` in the AH-64D**, including the seat swap, which is the half that
   cannot be proven any other way.
 
-The daemon exiting when `DCS.exe` disappears was proven from the command line
-rather than through the hook, which is not installed yet.
+**Proven through the hook 2026-09-20**, from an installed copy: launching DCS
+started the daemon, it drove the panels through the mission, and it exited on
+its own when DCS closed. Before that it had been proven only from the command
+line.
 
-**Still not confirmed on hardware:** `always` and `same_as`. Shipped profiles now
-use both, `always` for the PTO2 gates in the F-14, Mi-24P, FC3 and No aircraft
-profiles and `same_as` for both gates in the AH-64D, but neither has been
-watched driving a real lamp.
+**Confirmed on hardware 2026-09-20:** `always` and `same_as`, both watched
+driving a real lamp. Shipped profiles use `always` for the PTO2 gates in the
+F-14, Mi-24P, FC3 and No aircraft profiles and `same_as` for both gates in the
+AH-64D.
 
 ## Release notes
 
@@ -740,8 +750,8 @@ pid.
 `dcs-signal stop` is the same thing from the command line, and is how the stop
 path can be proven without the window.
 
-**Left to do:** press it in the window, and run a stop against a live daemon to
-watch it clear the panels on the way out.
+**Proven 2026-09-20:** pressed in the window, and a stop run against a live
+daemon, which cleared the panels on the way out.
 
 ## The UFC, and the first device with a display
 

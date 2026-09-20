@@ -27,13 +27,15 @@ installed program and the profiles folder chosen at install.
 | Flag | Default | What it does |
 | --- | --- | --- |
 | `--dry-run` | off | Prints every write and opens no device. Nothing touches the hardware. Worth one pass to confirm the aircraft is detected and the right profile is picked. |
-| `--verbose` | off | Logs every action as it happens. See below. Works with or without `--dry-run`, so it can be left on while actually flying. |
+| `--verbose` | off | Puts every action on the console as it happens. See below. The session log holds it either way, so this is only for watching a run live. |
 | `--seconds <N>` | runs until Ctrl-C | Stops after N seconds. Useful for a quick check without having to interrupt it. |
 | `--exit-when-idle <N>` | off | Clears the panels and exits after N seconds with no export stream, once it has seen the stream at least once. Used by the DCS hook. |
 | `--profiles <DIR>` | `data/profiles` | Where profiles are read from, and where a starter profile is written for an aircraft that has none. Seeded from `--defaults` at startup. |
 | `--defaults <DIR>` | `data/defaults` | Shipped profiles. Copied into `--profiles` for any name not already there, and never over one that is. |
 | `--catalogue <DIR>` | `data/catalogue` | Generated signal catalogue. See above. |
 | `--devices <FILE>` | `data/devices.json` | Hardware inventory: which LEDs exist, and what values each accepts. |
+| `--log-dir <DIR>` | `Saved Games\DCS\Logs` installed, `data/logs` in a checkout | Where the session log goes. |
+| `--no-log` | off | Writes no session log at all. |
 
 From a checkout, the two runs worth knowing. Both are the `run` command, which
 is the daemon; everything after the bare `--` is passed to it rather than to
@@ -146,6 +148,60 @@ aircraft F-14BU  ->  profile F-14BU
 One address, from a profile with two lamps on one word and no display fields,
 will log twice in a sortie. A profile with several display fields logs
 constantly. Both are working.
+
+### The session log
+
+Every run writes one, to `Saved Games\DCS\Logs\dcs-signal.log`. That is DCS's
+own log folder, beside `dcs.log`: the folder to zip up when reporting a problem,
+and the two line up against each other by their timestamps.
+
+Started by the DCS hook, the daemon has no console, so this is the only account
+of a flight there is. It holds everything `--verbose` puts on the console, and
+more besides: where every file was read from, every WinCtrl device plugged in
+whether this build knows it or not, which profiles loaded and which were thrown
+out, and the error behind an exit.
+
+**Two sessions are kept.** Each start makes the last log `dcs-signal.log.bak`
+and deletes the one before that. Notice something wrong, land, and read it,
+rather than flying on and rolling it away.
+
+Each line is the local time, how loud it is, and the text:
+
+```text
+2026-09-20 11:47:51.534  INFO   paths    catalogue C:\Users\you\...\data\catalogue
+2026-09-20 11:47:51.725  INFO   usb      pid 0xbf05  WINCTRL CarrierAce PTO 2  serial 56E5...
+2026-09-20 11:47:53.568  INFO   aircraft A-10C_2  ->  profile A-10C
+2026-09-20 11:47:53.881  TRACE      2151 ms  signal  LCP_CONSOLE                  = 0
+2026-09-20 11:47:53.881  TRACE      2151 ms  write   CarrierAce_UFC.INST_PNL_Backlight = 255
+2026-09-20 11:47:59.759  INFO   status   93 frame(s), 126 word(s) in, 45 lamp write(s), 27 paint(s), longest pass 1 ms
+```
+
+Search `ERROR` and `WARN` first: those are a device that would not open, a
+profile that was skipped, a signal this DCS-BIOS does not have. `INFO` is what
+the daemon did, `TRACE` is the traffic, and the traffic reads exactly as the
+`--verbose` timeline above does.
+
+**One line a second per thing.** A gauge moves on every export frame and a
+screen repaints nearly as often, so each signal, lamp and screen gets at most
+one line a second, carrying the latest value with the rest counted:
+
+```text
+    9601 ms  signal  PLT_RV5_ALT                  = 8738 -> 100  (x14)
+```
+
+Fourteen changes in that second, and the one shown is where it ended up. A
+screen is logged as the rows it says, once a second; a segment or pixel display
+is a bitmap, so the log keeps its first sixteen bytes and its length rather than
+a screen of hex a second.
+
+**A status line every minute**, whether or not anything happened. An idle
+daemon and a wedged one look alike otherwise, and which of the two it was is
+usually the whole question. `longest pass` is the slowest trip round the main
+loop in that minute, which is the number to watch if the panels feel behind.
+
+At ten megabytes it rolls over, keeping one behind exactly as a restart does,
+and repeats the startup lines at the top of the new file so it still says what
+was flying.
 
 ### Stopping
 

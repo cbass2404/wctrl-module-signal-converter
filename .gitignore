@@ -45,6 +45,7 @@
 *.pcap
 *.pcapng
 *.log
+*.bak
 /captures/
 
 # Local tool state

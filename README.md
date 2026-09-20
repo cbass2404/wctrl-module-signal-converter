@@ -278,7 +278,18 @@ If SimAppPro is running with "Sync with DCS" on, it can drive the same backlight
 Turn that off, or close SimAppPro.
 
 **Reporting a bug.** Include the version (`dcs-signal --version`, or the bar at the
-foot of the editor), the aircraft, and the `DCS-SIGNAL` lines from `dcs.log`.
+foot of the editor), the aircraft, and this file:
+
+```text
+Saved Games\DCS\Logs\dcs-signal.log
+```
+
+The converter writes it every time it starts, beside DCS's own `dcs.log`, and it
+is the whole account of what it read and what it sent the panels. The session
+before it is kept as `dcs-signal.log.bak` and the one before that is deleted, so
+if the flight that went wrong was two flights ago it is gone: send it while it
+is still there. What is in it, and how to read it, is in
+[docs/CLI.md](docs/CLI.md#the-session-log).
 
 ---
 

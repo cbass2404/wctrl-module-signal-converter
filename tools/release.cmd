@@ -8,10 +8,12 @@ rem    1. on main, and main matches origin - releases build only from main,
 rem       and main takes changes through pull requests, so nothing is pushed
 rem       but the tag. Uncommitted changes warn and ask.
 rem    2. tag from VERSION.md must not already exist, locally or on origin
-rem    3. the checks the pipeline would fail on: the manifests agree with
-rem       VERSION.md, and data\nightly-only.json is current
-rem    4. asks for a release message; submitting an empty one cancels
-rem    5. pushes the tag
+rem    3. the checks the pipeline would fail on: every version in the repo
+rem       agrees with VERSION.md, in HEAD as well as in the working tree, and
+rem       data\nightly-only.json is current
+rem    4. CHANGELOG.md has a section for this version, or you say go anyway
+rem    5. asks for a release message; submitting an empty one cancels
+rem    6. pushes the tag
 rem
 rem  Pushing the tag is what triggers .github/workflows/release.yml, which
 rem  checks the tag again, runs the tests, builds and drafts the release. The
@@ -126,12 +128,29 @@ if not exist "VERSION.md" (
     goto :fail
 )
 
+rem Read it through version.py, which is what the workflow reads it with, so
+rem the tag cannot come out different here over whitespace or a version string
+rem that is not one. From HEAD rather than the working tree: the tag names its
+rem commit's VERSION.md, and the workflow reads it there.
 set "VERSION="
-for /f "usebackq tokens=* delims= " %%v in ("VERSION.md") do (
-    if not defined VERSION set "VERSION=%%v"
-)
+for /f "usebackq tokens=* delims= " %%v in (`python tools\version.py --print --ref HEAD`) do set "VERSION=%%v"
 if not defined VERSION (
-    echo ERROR: VERSION.md is empty.
+    echo(
+    echo ERROR: could not read a version out of HEAD:VERSION.md.
+    goto :fail
+)
+
+set "TREE="
+for /f "usebackq tokens=* delims= " %%v in (`python tools\version.py --print`) do set "TREE=%%v"
+
+rem Only reachable by continuing past a dirty tree above. The tag would name a
+rem version its own commit does not hold, and the workflow rejects that.
+if not "!VERSION!"=="!TREE!" (
+    echo(
+    echo ERROR: VERSION.md says !TREE! here, but HEAD holds !VERSION!.
+    echo(
+    echo   A tag can only name what its commit holds. Get the bump onto main,
+    echo   or put VERSION.md back.
     goto :fail
 )
 
@@ -188,16 +207,46 @@ rem ==========================================================================
 rem  3. what the pipeline would fail on, caught before a tag exists
 rem ==========================================================================
 
-echo   checking the manifests agree with VERSION.md ...
-python tools\version.py --check
+rem Every version in the repo, not the few a person thinks to look at:
+rem Cargo.toml, Cargo.lock, tauri.conf.json, package.json, package-lock.json,
+rem and any workspace crate holding a version of its own. The lock files count
+rem - `cargo --locked` and `npm ci` both fail on one that disagrees with its
+rem manifest, and they fail deep into the build, long after the tag exists.
+rem
+rem HEAD, not the working tree, because that is what the tag captures. A stamp
+rem that was run but never committed passes a working-tree check and then fails
+rem in the pipeline, leaving a tag to delete here and on origin. Catching that
+rem here is the point of the whole check.
+echo   checking every version in HEAD against VERSION.md ...
+echo(
+python tools\version.py --check --ref HEAD
 if errorlevel 1 (
     echo(
-    echo ERROR: the manifests are out of step with VERSION.md. Run
-    echo     python tools\version.py
-    echo   and merge the result to main.
+    echo ERROR: HEAD is out of step with VERSION.md. Stamp it and get the
+    echo   result onto main before tagging:
+    echo       python tools\version.py
+    echo       git commit -a
+    echo   then open a pull request, merge it, pull and re-run.
     goto :fail
 )
 echo(
+
+rem The working tree as well, when it differs from HEAD. It is not what gets
+rem released, but a half-finished stamp sitting there is how the next release
+rem goes wrong, so it is worth saying now.
+if not defined DIRTY goto :versions_ok
+echo   checking the working tree too, since it has uncommitted changes ...
+echo(
+python tools\version.py --check
+if errorlevel 1 (
+    echo(
+    echo ERROR: HEAD agrees with VERSION.md but your working tree does not.
+    echo   Sort that out first, so what you test next is what you shipped.
+    goto :fail
+)
+echo(
+
+:versions_ok
 
 rem nightly_only.py rewrites data\nightly-only.json from the latest stable
 rem DCS-BIOS. The release ships the committed file and fails if this would
@@ -224,7 +273,40 @@ echo   ok, current.
 echo(
 
 rem ==========================================================================
-rem  4. message doubles as the final confirmation
+rem  4. release notes
+rem ==========================================================================
+
+rem The workflow puts this version's section of CHANGELOG.md at the top of the
+rem release notes, and does not fail when there is none: a release nobody wrote
+rem an entry for still gets its provenance. Right for the pipeline, wrong for a
+rem person, who nearly always meant to write one.
+findstr /b /l /c:"## %VERSION%" CHANGELOG.md >nul 2>&1
+if not errorlevel 1 (
+    echo   CHANGELOG.md has a section for %VERSION%.
+    echo(
+    goto :notes_ok
+)
+
+echo   -----------------------------------------------
+echo     Heads up
+echo   -----------------------------------------------
+echo(
+echo   CHANGELOG.md has no '## %VERSION%' section, so the release notes would
+echo   carry nothing but the build provenance.
+echo(
+echo   -----------------------------------------------
+set "SURE="
+set /p "SURE=Release with no notes? (y/N): "
+if /i "!SURE!"=="y"   goto :notes_ok
+if /i "!SURE!"=="yes" goto :notes_ok
+echo(
+echo Cancelled - nothing was tagged or pushed.
+goto :end
+
+:notes_ok
+
+rem ==========================================================================
+rem  5. message doubles as the final confirmation
 rem ==========================================================================
 
 echo Enter a release message for %TAG%.
@@ -240,7 +322,7 @@ if not defined MSG (
 )
 
 rem ==========================================================================
-rem  5. tag and push
+rem  6. tag and push
 rem ==========================================================================
 
 echo(

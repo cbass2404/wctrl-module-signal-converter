@@ -717,20 +717,24 @@ function shippedFor(readout: Readout, shipped: Readout[]): Readout | undefined {
  * made has no shipped version and no button.
  */
 function resetButton(opts: RowOptions): HTMLElement | null {
+  const { readout, display } = opts;
   const shipped = opts.shipped;
   if (!shipped) return null;
   const button = el("button", { class: "add revert", type: "button" }, "Reset this field");
-  if (fieldShape(shipped) === fieldShape(opts.readout)) {
+  if (fieldShape(shipped) === fieldShape(readout)) {
     button.disabled = true;
     button.title = "This field matches how it shipped.";
     return button;
   }
   button.title = "Put this field back the way it shipped. No other field is touched.";
   button.addEventListener("click", () => {
+    // Both sides, the way a lamp's reset shows them. Saying only that colours
+    // and sizes go back leaves the decision to be made blind.
     void confirmAction(
-      `Reset ${describe(opts.readout.cells, opts.display)} to how it shipped?\n\n` +
-        "Everything on this field goes back: what it draws, its colours and " +
-        "sizes, and its note. No other field is touched.",
+      `Reset ${describe(readout.cells, display)} to how it shipped?\n\n` +
+        `Now:\n${describeField(readout, display)}\n\n` +
+        `Shipped:\n${describeField(shipped, display)}\n\n` +
+        "Its colours, sizes and note go back with it. No other field is touched.",
       "Reset",
     ).then((ok) => {
       if (ok) opts.onReplace(structuredClone(shipped));

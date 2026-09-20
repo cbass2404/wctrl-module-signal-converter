@@ -87,8 +87,9 @@ starter profile the first time you fly it, ready to fill in with the
 | No aircraft | Spectator and free camera             |
 
 The A-10C, AH-64D, CH-47F and F-14B (Upgrade) also put their own CDU on the MCDU
-screen. Open a profile in the [editor](#4-make-it-yours) to see exactly what it
-drives.
+screen. On any other aircraft the screen is yours to fill in the
+[editor](#4-make-it-yours): a label you type, a reading beside it, each in the
+colour and size you choose. Open a profile to see exactly what it drives.
 
 Every profile puts every panel backlight on one cockpit knob, so the whole pit
 dims together until you decide otherwise.
@@ -98,12 +99,14 @@ dims together until you decide otherwise.
 ## Setup
 
 - [ ] [Install DCS-BIOS](#1-install-dcs-bios) into `Saved Games\DCS\Scripts`
+- [ ] [Copy the line that ships with DCS-BIOS](#1-install-dcs-bios) into
+      `Saved Games\DCS\Scripts\Export.lua`
 - [ ] Close DCS
 - [ ] [Run the installer](#2-install) from the latest release
 - [ ] [Start DCS and fly](#3-fly)
 - [ ] **Optional** [Open the editor](#4-make-it-yours) to change what a lamp does
 
-Four steps, about five minutes. **SimAppPro is not needed for any of them**, and
+Five steps, about five minutes. **SimAppPro is not needed for any of them**, and
 can stay closed.
 
 ### 1. Install DCS-BIOS
@@ -111,8 +114,9 @@ can stay closed.
 DCS Signal Converter reads the cockpit through
 [DCS-BIOS](https://github.com/DCS-Skunkworks/dcs-bios). Without it there is nothing
 to read and nothing lights. Install it as its own instructions say, into
-`Saved Games\DCS\Scripts`. Update your exports.lua to include the line inside your
-DCS-BIOS download.
+`Saved Games\DCS\Scripts`, then copy the line that ships with it into
+`Saved Games\DCS\Scripts\Export.lua`. That line is what makes DCS load it, so
+without it DCS-BIOS is installed and sending nothing.
 
 **Stable or nightly both work.** The shipped profiles were written against a
 DCS-BIOS nightly. On a stable release everything works except the few lamps and
@@ -198,13 +202,25 @@ A few more things the editor does:
 - **Delete** removes a profile. If that leaves an aircraft with no profile, you
   choose which profile takes it, so splitting a profile and deleting a half
   gives its aircraft back.
-- **Add a divider** on the MCDU screen draws a rule across a row, for an
-  aircraft whose page does not fill the glass. The A-10C and AH-64D profiles
-  ship with one, and you choose its colour.
+- **Put your own text on a screen.** Where an aircraft leaves rows free, or has
+  no CDU of its own, a row is yours. Start one with `+ text` for characters you
+  type or `+ a reading` for a cockpit signal, then add more pieces to it: a
+  field is a chain drawn end to end, and each piece takes its own colour and
+  size, so a row can read `RALT` small and red with the altimeter beside it.
+  `+ a gap` inside a field draws nothing and takes whatever the rest of the row
+  leaves, which is how you put one piece at each end of a line without counting
+  the blanks. The editor draws the row in the font the panel will use and says
+  how many cells it needs.
+- **`+ a rule`** draws a line across a row, for a page that does not fill the
+  glass, and can carry a label in the middle naming what it divides. The rule
+  and the label each take their own colour. The A-10C and AH-64D profiles ship
+  with one.
 - **Manage Converter** is for the rare times the converter needs restarting.
   Saving a profile is not one of them. See below.
-- **Reset** puts a profile back to the shipped one. **Reset this lamp** does the
-  same for a single lamp, and shows you what it will reset to before it does.
+- **Reset** puts a profile back to the shipped one. **Reset this lamp** and
+  **Reset this field** do the same for a single one, and show you what they
+  will reset to before they do. An area whose shipped field you deleted offers
+  it back.
 - **Drive this panel** per panel. Untick it and the profile leaves that panel
   alone entirely, so another program can have it.
 - **Problems** in red stop a save until they are fixed. **Cautions** in yellow are
@@ -225,6 +241,13 @@ remembers your folders and asks nothing it asked before.
 its own, but never rewrites a lamp you have changed. When a release fixes a
 shipped lamp, its release notes say so, and you choose whether to reset that lamp
 to pick up the fix.
+
+**Screen fields are the one exception, and only where you have not touched
+them.** A field still exactly as it shipped is corrected for you, so a fix to a
+shipped row arrives without you doing anything. Change a field in any way and it
+is yours: it is left alone, and **Reset this field** is how you take the new one
+if you decide you want it. Delete a shipped field and it stays deleted. The
+release notes name every shipped row that moved either way.
 
 **Uninstalling.** From **Settings → Apps**, like any other program. It removes the
 program and the DCS hook. Your profiles are kept unless you tick **delete app
@@ -275,7 +298,9 @@ everything else works, and they come back when you update DCS-BIOS. See
 
 **Something in SimAppPro fights it.**
 If SimAppPro is running with "Sync with DCS" on, it can drive the same backlights.
-Turn that off, or close SimAppPro.
+Turn that off for each panel, or close SimAppPro. In the Hornet and the Viper
+both programs also draw the UFC and the DED; to leave those to SimAppPro, untick
+**drive this panel** for that panel in the profile, or clear its screen fields.
 
 **Reporting a bug.** Include the version (`dcs-signal --version`, or the bar at the
 foot of the editor), the aircraft, and this file:

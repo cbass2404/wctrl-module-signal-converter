@@ -122,9 +122,18 @@ impl Cache {
     /// Empty when the inventory cannot be read. `problems` already says so, and
     /// saying it twice would only lengthen the list.
     pub fn cautions(&self, paths: &Paths, profile: &Profile) -> Vec<String> {
-        DeviceInventory::load(&paths.devices)
+        let mut out = DeviceInventory::load(&paths.devices)
             .map(|devices| profile.cautions(&devices))
-            .unwrap_or_default()
+            .unwrap_or_default();
+        // Content that will not fit its cells is the other kind: it loads, it
+        // runs, and the only sign of it is a reading with its end missing.
+        // Needs the module rather than the inventory, for how wide a signal
+        // can draw, so it is asked for separately.
+        if let Ok(widths) = self.with_module(paths, &profile.module, |m| profile.width_cautions(m))
+        {
+            out.extend(widths);
+        }
+        out
     }
 }
 

@@ -119,6 +119,40 @@ impl TextGrid {
         self.native_fonts.get(aircraft).map(String::as_str)
     }
 
+    /// The font to actually upload for an aircraft, given what the profile
+    /// chose.
+    ///
+    /// The aircraft's own font wins wherever there is one. A module that draws
+    /// its CDU has glyphs drawn to match what it sends, and overriding that
+    /// with a font picked for its looks would put the wrong symbol on the
+    /// glass rather than a differently shaped right one.
+    pub fn font_with(&self, aircraft: &str, chosen: Option<&str>) -> Option<&str> {
+        if let Some(native) = self.font_for(aircraft) {
+            return Some(native);
+        }
+        let chosen = chosen?;
+        self.charsets
+            .get_key_value(chosen)
+            .map(|(name, _)| name.as_str())
+    }
+
+    /// Every font this display can be given, in a stable order.
+    ///
+    /// The aircraft fonts are the list: they are the only ones drawn for this
+    /// panel, and each is a complete set of glyphs at both sizes. A profile
+    /// for an aircraft without a CDU of its own picks one of them.
+    pub fn fonts(&self) -> Vec<&str> {
+        let mut out: Vec<&str> = self.charsets.keys().map(String::as_str).collect();
+        out.sort_unstable();
+        out
+    }
+
+    /// What one font can draw at the size asked for.
+    pub fn charset(&self, font: &str, small: bool) -> Option<&std::collections::HashSet<char>> {
+        let chars = self.charsets.get(font)?;
+        Some(if small { &chars.small } else { &chars.large })
+    }
+
     pub fn path(&self, relative: &str) -> std::path::PathBuf {
         self.dir.join(relative)
     }
@@ -865,76 +899,119 @@ pub enum Align {
     Right,
 }
 
-/// The narrowest run a divider can rule: a dash with a blank each side.
-pub const MIN_DIVIDER_CELLS: usize = 3;
+/// One cell of a rule: the glyph, and whether it is part of the label.
+///
+/// The label is marked rather than measured out again by each caller, because
+/// it is drawn in its own colour and the editor has to show the same thing.
+/// The blanks each side of the label are not part of it: they draw nothing
+/// whichever colour they are given.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuleCell {
+    pub text: String,
+    pub label: bool,
+}
+
+/// The narrowest run a rule carrying `label` can be drawn in.
+///
+/// A dash, a blank, the label, a blank, a dash. The blank each side of the
+/// label is what keeps it from reading as part of the line, and a side with no
+/// dash left on it is not a rule any more, so both are required rather than
+/// dropped to make a long label fit.
+///
+/// One for an unlabelled rule, which is to say no constraint at all: a single
+/// cell draws a single dash, and a `CellRange` is never shorter than that.
+pub fn min_divider_cells(label: &str) -> usize {
+    if label.is_empty() {
+        return 1;
+    }
+    label.chars().count() + 4
+}
 
 /// The rule a divider draws across `width` cells, one glyph per cell.
 ///
-/// A blank cell at each end, so the line never runs into the frame or into
-/// whatever sits beside it, and an unbroken run of dashes between them:
-/// ` ------- `. Spaced dashes were tried first, on the glass, and read as a
-/// dotted line rather than a rule.
+/// An unbroken run of dashes, corner to corner of its run: `--------`. Spaced
+/// dashes were tried first, on the glass, and read as a dotted line rather
+/// than a rule. It was inset by a blank at each end for a while, which was
+/// reasoned about rather than looked at: a CDU line and a piece of typed text
+/// both start in the first cell of their run, so the rule was the one thing on
+/// the screen not lining up with what sat above and below it.
 ///
-/// A run too narrow to hold a dash between two margins draws blank rather than
-/// crowding the ends, and `problems` refuses one before it gets here. This is a
-/// function of the width alone so the editor can show the same rule it will
-/// draw, by asking rather than working it out again.
-pub fn divider_rule(width: usize) -> Vec<String> {
-    let mut out = vec![" ".to_string(); width];
-    if width < MIN_DIVIDER_CELLS {
+/// A label is set into the middle of that, with a blank each side of it:
+/// `--- FUEL ---`. It is centred, and where the dashes cannot be split evenly
+/// the odd one goes to the left, the way a gap gives its remainder to the
+/// earlier side.
+///
+/// A label with no room for its blanks and a dash each side is left off,
+/// leaving a plain rule, and `problems` refuses one before it gets here. This
+/// is a function of the width and the label alone so the editor can show the
+/// same rule it will draw, by asking rather than working it out again.
+pub fn divider_rule(width: usize, label: &str) -> Vec<RuleCell> {
+    let plain = |text: &str| RuleCell { text: text.to_string(), label: false };
+    let mut out: Vec<RuleCell> = std::iter::repeat_with(|| plain("-")).take(width).collect();
+    let chars: Vec<char> = label.chars().collect();
+    if chars.is_empty() || width < min_divider_cells(label) {
         return out;
     }
-    for cell in out.iter_mut().take(width - 1).skip(1) {
-        *cell = "-".to_string();
+    // The dashes on both sides, which the guard above has put at two or more.
+    let spare = width - chars.len() - 2;
+    let at = (spare - spare / 2) + 1;
+    out[at - 1] = plain(" ");
+    out[at + chars.len()] = plain(" ");
+    for (i, c) in chars.iter().enumerate() {
+        out[at + i] = RuleCell { text: c.to_string(), label: true };
     }
     out
 }
 
-/// One field of a display, and the signal that feeds it.
+/// The whole rule as one string, for a caller that only wants to read it.
+pub fn divider_text(width: usize, label: &str) -> String {
+    divider_rule(width, label).into_iter().map(|c| c.text).collect()
+}
+
+//// One piece of a field's content: characters the user typed, or a signal.
 ///
-/// A field has exactly one owner. Nothing chooses between two sources for the
-/// same cells at runtime: on an aircraft that drives its own display, the
-/// cockpit has already decided what belongs there, and on any other the user
-/// has.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Readout {
-    pub device: String,
-    /// Which display on that device, matching a key in `data/displays`.
-    pub display: String,
-    pub cells: CellRange,
-    /// Catalogue signal id. Empty on a divider, which reads nothing, and on a
-    /// field nobody has finished yet, which `problems` says so about.
+/// A field is a chain of these, drawn end to end, because a reading on its own
+/// is rarely a readout. `250` says nothing that `RALT 250M` does not say
+/// better, and the label, the number and the unit each want their own colour
+/// and size. Writing them as three fields would mean counting cells by hand,
+/// and would come apart the moment the number changed width.
+///
+/// A part carries `text` or `source`, never both. Everything else on it shapes
+/// the one value it draws, which is why `reads`, `replace` and the rest belong
+/// here rather than on the field: one chain can hold two signals that need
+/// different treatment.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Span {
+    /// Characters drawn exactly as given, reading nothing.
+    ///
+    /// Every one of them has to be a character the font draws, which is not
+    /// the same as a character you can type: only the F-14BU font has
+    /// lowercase, and in the A-10C font `%` draws a question mark. The editor
+    /// draws the font's own glyphs rather than the typed string for that
+    /// reason.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub text: String,
+    /// Catalogue signal id. Empty on a literal part, and on a part nobody has
+    /// finished yet, which `problems` says so about.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub source: String,
-    /// Draw a fixed rule across these cells instead of reading a signal.
+    /// Draw nothing, and take whatever cells the rest of the chain leaves.
     ///
-    /// A screen only half used needs somewhere for the eye to stop. The Apache
-    /// puts its keyboard unit on the bottom line and the A-10C starts ten lines
-    /// down, and with the rest of the glass dark the page has no edge. A rule
-    /// gives it one. It names no signal, so it is drawn from the moment the
-    /// aircraft loads and never changes afterwards.
+    /// How content reaches both ends of a line. A CDU page puts a label at the
+    /// left and its value hard against the right, and counting the blanks by
+    /// hand only works until the value changes width, which is the moment it
+    /// matters. A gap is measured after everything else is laid out, so the
+    /// two ends stay put whatever happens between them.
     ///
-    /// Text grids only, like `colour` and `small`: a segment display draws from
-    /// a glyph table, and none of them has a rule in it.
+    /// Two or more gaps split what is left evenly, the remainder going to the
+    /// earlier ones, which spaces three pieces across a line. A gap with
+    /// nothing spare draws nothing at all rather than pushing anything off the
+    /// end.
+    ///
+    /// Carries no text and no source, and `align` stops meaning anything
+    /// beside one: the content already fills the run exactly.
     #[serde(default, skip_serializing_if = "is_false")]
-    pub divider: bool,
-    /// Only paint this field from one crew station.
-    ///
-    /// DCS-BIOS exports the whole cockpit whatever seat you are sitting in, so
-    /// a multicrew aircraft publishes both stations at once and a field has no
-    /// way to know which one you want. `SEAT_POSITION` is how DCS-BIOS reports
-    /// the seat, and it names it the same way in every module that has one, so
-    /// this is a convention rather than knowledge of any aircraft.
-    ///
-    /// Two fields may share cells when their seats differ, which is the point:
-    /// the same window shows the pilot one thing and the gunner another. A
-    /// field with no seat is always painted, and shares with nothing.
-    ///
-    /// Only meaningful on a module that reports a seat at all, which is 5 of
-    /// the 50 catalogued. Validation rejects it elsewhere rather than silently
-    /// never painting.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub seat: Option<u32>,
+    pub gap: bool,
     /// What the gauge reads in the cockpit, for a numeric source: the real
     /// values at the bottom and top of its travel.
     ///
@@ -948,8 +1025,6 @@ pub struct Readout {
     /// Decimal places for a numeric source.
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub decimals: u8,
-    #[serde(default, skip_serializing_if = "is_left")]
-    pub align: Align,
     /// Values this module words differently from the glyph table.
     ///
     /// DCS-BIOS does not always report what DCS's own indication does: the
@@ -967,12 +1042,22 @@ pub struct Readout {
     /// font.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub format: Option<String>,
-    /// The colour a text grid draws this field in. Text grids only.
+    /// The colour a text grid draws this part in. Text grids only.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colour: Option<Colour>,
     /// Draw in the text grid's small font. Text grids only.
+    ///
+    /// Every font here draws fewer characters small than large, so marking a
+    /// part small can take away a character that was fine at full size.
     #[serde(default, skip_serializing_if = "is_false")]
     pub small: bool,
+    /// Draw this whole part inverse, on glass that draws inverse at all.
+    ///
+    /// The `format` signal does this per character for a source the module
+    /// highlights itself. This is the same thing for a part the user wrote,
+    /// where there is no signal to ask.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub inverse: bool,
     /// A second string signal, laid out like `source`, whose characters pick
     /// each cell's colour through `codes`. Text grids only.
     ///
@@ -983,7 +1068,7 @@ pub struct Readout {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub colours: Option<ColourSource>,
     /// Characters this module sends in place of the ones it means, rewritten
-    /// one for one before the field is laid out.
+    /// one for one before the part is laid out.
     ///
     /// DCS-BIOS cannot export every symbol a CDU draws, so it sends a
     /// stand-in: the A-10C's arrows arrive as `»` and `«`. Unlike `aliases`,
@@ -991,29 +1076,25 @@ pub struct Readout {
     /// and value is one character.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub replace: HashMap<String, String>,
-    #[serde(default, skip_serializing_if = "String::is_empty")]
-    pub note: String,
 }
 
-/// Where a readout's per-character colours come from.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ColourSource {
-    /// Catalogue signal id, a string one character per cell.
-    pub source: String,
-    /// Each letter the module sends, and the colour it means.
-    pub codes: HashMap<String, Colour>,
-}
+impl Span {
+    /// Whether this part reads a signal rather than drawing what it was given.
+    pub fn is_signal(&self) -> bool {
+        !self.source.is_empty()
+    }
 
-fn is_zero_u8(n: &u8) -> bool {
-    *n == 0
-}
+    /// Whether the user has finished saying what this part draws.
+    ///
+    /// An empty part is unfinished work rather than a mistake, but it still
+    /// stops the profile loading, so it is said plainly and in those terms. A
+    /// gap is finished the moment it exists: drawing nothing is the whole of
+    /// what it does.
+    pub fn is_empty(&self) -> bool {
+        self.text.is_empty() && self.source.is_empty() && !self.gap
+    }
 
-fn is_left(a: &Align) -> bool {
-    *a == Align::Left
-}
-
-impl Readout {
-    /// Turn a raw signal value into the characters this field should show.
+    /// Turn a raw signal value into the characters this part should show.
     ///
     /// `max` is the source's own declared maximum, so a needle at 0..65535 and
     /// a selector at 0..10 go through the same arithmetic. A selector whose
@@ -1025,61 +1106,7 @@ impl Readout {
         format!("{:.*}", self.decimals as usize, low + travel * (high - low))
     }
 
-    /// Lay `text` out across the run, one glyph per cell.
-    ///
-    /// Longer text is cropped from the end the alignment anchors away from,
-    /// which is what makes a right aligned scratchpad drop its leading pad
-    /// rather than its last digit. Shorter text is padded with blanks, so a
-    /// field that shrinks never leaves the old character behind.
-    ///
-    /// A run of exactly one cell takes the whole value as a single glyph. That
-    /// is not a convenience: a two-character field really does occupy one cell
-    /// on this hardware, and its glyph is not the union of the two characters.
-    pub fn lay_out(&self, text: &str) -> Vec<String> {
-        let width = self.cells.len();
-        if width == 1 {
-            return vec![text.to_string()];
-        }
-        let chars: Vec<char> = text.chars().collect();
-        let mut out = Vec::with_capacity(width);
-        if self.align == Align::Right {
-            let start = chars.len().saturating_sub(width);
-            let pad = width.saturating_sub(chars.len());
-            out.extend(std::iter::repeat_n(" ".to_string(), pad));
-            out.extend(chars[start..].iter().map(|c| c.to_string()));
-        } else {
-            out.extend(chars.iter().take(width).map(|c| c.to_string()));
-            while out.len() < width {
-                out.push(" ".to_string());
-            }
-        }
-        out
-    }
-
-    /// The rule this divider draws, one glyph per cell.
-    pub fn divider_cells(&self) -> Vec<String> {
-        divider_rule(self.cells.len())
-    }
-
-    /// Which cells of the run draw inverse, given the format signal's text.
-    pub fn inverse_cells(&self, format: &str) -> Vec<bool> {
-        self.lay_out(format).iter().map(|m| m == "i").collect()
-    }
-
-    /// The colour of each cell of the run, given the colour signal's text.
-    ///
-    /// None where the text names no colour, so the field's own applies.
-    pub fn colour_cells(&self, codes: &str) -> Vec<Option<Colour>> {
-        let Some(source) = &self.colours else {
-            return Vec::new();
-        };
-        self.lay_out(codes)
-            .iter()
-            .map(|c| source.codes.get(c).copied())
-            .collect()
-    }
-
-    /// Apply this module's wording fixes.
+    /// The glyph this part draws in place of `value`, where it has one.
     pub fn alias<'a>(&'a self, value: &'a str) -> &'a str {
         self.aliases.get(value).map(String::as_str).unwrap_or(value)
     }
@@ -1099,4 +1126,541 @@ impl Readout {
             })
             .collect()
     }
+
+    /// The widest this part can ever draw, in cells, where that is knowable.
+    ///
+    /// None for a numeric source with no range, which is the one case nothing
+    /// bounds: without `reads` the value could be any width the needle allows.
+    /// Everything else is known ahead of a single frame arriving, which is what
+    /// lets the editor say how many characters will be dropped rather than
+    /// warning vaguely that some might be.
+    pub fn widest(&self, max_length: Option<usize>, numeric: bool) -> Option<usize> {
+        // A gap takes what is left over, so it never asks for room of its own
+        // and can never be the reason content will not fit.
+        if self.gap {
+            return Some(0);
+        }
+        if !self.is_signal() {
+            return Some(self.text.chars().count());
+        }
+        if !numeric {
+            return max_length;
+        }
+        let [low, high] = self.reads?;
+        let ends = [
+            self.format_number_at(low),
+            self.format_number_at(high),
+        ];
+        Some(ends.iter().map(|s| s.chars().count()).max().unwrap_or(0))
+    }
+
+    /// The characters this part would draw for one real reading, used to
+    /// measure the ends of its range.
+    fn format_number_at(&self, reading: f64) -> String {
+        format!("{:.*}", self.decimals as usize, reading)
+    }
+}
+
+/// One cell's worth of drawn content: what to draw there and how.
+///
+/// Usually one character. A run of exactly one cell takes the whole value as a
+/// single glyph, which is not a convenience: a two-character field really does
+/// occupy one cell on this hardware, and its glyph is not the union of the two
+/// characters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Glyph {
+    pub text: String,
+    pub colour: Option<Colour>,
+    pub small: bool,
+    pub inverse: bool,
+}
+
+impl Glyph {
+    /// A blank cell, which is what a field pads with when its content is
+    /// shorter than its run.
+    pub fn blank() -> Self {
+        Glyph {
+            text: " ".to_string(),
+            colour: None,
+            small: false,
+            inverse: false,
+        }
+    }
+}
+
+/// What the state of the world says a signal currently reads.
+///
+/// The engine looks it up; everything done with it afterwards is policy and
+/// belongs here, so a field composes the same way in a test as on the glass.
+#[derive(Debug, Clone)]
+pub enum Reading {
+    Text(String),
+    Number { value: u16, max: u16 },
+}
+
+/// One field of a display, and the content that fills it.
+///
+/// A field has exactly one owner. Nothing chooses between two sources for the
+/// same cells at runtime: on an aircraft that drives its own display, the
+/// cockpit has already decided what belongs there, and on any other the user
+/// has.
+///
+/// On disk a field with one part is written flat, with that part's `source` and
+/// styling beside the cells, and only a chain of two or more is written as
+/// `content`. That is not cosmetic: every profile written before chains existed
+/// is in the flat shape, and it has to keep loading, and keep saving back
+/// unchanged, or an update would rewrite rows the user owns.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(from = "ReadoutRepr", into = "ReadoutRepr")]
+pub struct Readout {
+    pub device: String,
+    /// Which display on that device, matching a key in `data/displays`.
+    pub display: String,
+    pub cells: CellRange,
+    /// Draw a fixed rule across these cells instead of drawing content.
+    ///
+    /// A screen only half used needs somewhere for the eye to stop. The Apache
+    /// puts its keyboard unit on the bottom line and the A-10C starts ten lines
+    /// down, and with the rest of the glass dark the page has no edge. A rule
+    /// gives it one. It reads nothing, so it is drawn from the moment the
+    /// aircraft loads and never changes afterwards.
+    ///
+    /// Text grids only, like `colour` and `small`: a segment display draws from
+    /// a glyph table, and none of them has a rule in it.
+    pub divider: bool,
+    /// The rule's colour. A divider is the user's own addition rather than
+    /// something the cockpit decided, so unlike a field's colour it is theirs
+    /// to choose. Meaningless, and left None, on anything else.
+    pub colour: Option<Colour>,
+    /// Characters set into the middle of the rule, naming what it divides.
+    ///
+    /// A rule ends a page; a labelled rule says what the page was. It reads
+    /// nothing, like the rest of a divider, so it is on the glass from the
+    /// moment the aircraft loads. Empty on anything that is not a divider.
+    pub label: String,
+    /// The label's colour, which is its own rather than the rule's: a label
+    /// drawn in the line's colour reads as part of the line. Falls back to the
+    /// rule's colour when nobody has said, which is what a label added to a
+    /// rule that already had a colour should look like until it is told
+    /// otherwise.
+    pub label_colour: Option<Colour>,
+    /// Only paint this field from one crew station.
+    ///
+    /// DCS-BIOS exports the whole cockpit whatever seat you are sitting in, so
+    /// a multicrew aircraft publishes both stations at once and a field has no
+    /// way to know which one you want. `SEAT_POSITION` is how DCS-BIOS reports
+    /// the seat, and it names it the same way in every module that has one, so
+    /// this is a convention rather than knowledge of any aircraft.
+    ///
+    /// Two fields may share cells when their seats differ, which is the point:
+    /// the same window shows the pilot one thing and the gunner another. A
+    /// field with no seat is always painted, and shares with nothing.
+    ///
+    /// Only meaningful on a module that reports a seat at all, which is 5 of
+    /// the 50 catalogued. Validation rejects it elsewhere rather than silently
+    /// never painting.
+    pub seat: Option<u32>,
+    /// Which end of the run the composed content anchors to.
+    pub align: Align,
+    /// The parts of this field, drawn end to end. Empty on a divider, which
+    /// draws a rule instead.
+    pub content: Vec<Span>,
+    pub note: String,
+}
+
+/// A field as it is written on disk.
+///
+/// Both shapes at once: the flat one, which is every profile written before
+/// chains and every field that still has one part, and `content`, which is a
+/// chain. `Readout` converts through this in both directions, so the flat shape
+/// cannot be forgotten about by some code path that builds a field by hand.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct ReadoutRepr {
+    device: String,
+    display: String,
+    cells: CellRange,
+    #[serde(default, skip_serializing_if = "is_false")]
+    divider: bool,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    text: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    source: String,
+    #[serde(default, skip_serializing_if = "is_false")]
+    gap: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    seat: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    reads: Option<[f64; 2]>,
+    #[serde(default, skip_serializing_if = "is_zero_u8")]
+    decimals: u8,
+    #[serde(default, skip_serializing_if = "is_left")]
+    align: Align,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    format: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    colour: Option<Colour>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    label: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    label_colour: Option<Colour>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    small: bool,
+    #[serde(default, skip_serializing_if = "is_false")]
+    inverse: bool,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    aliases: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    colours: Option<ColourSource>,
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    replace: HashMap<String, String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    content: Vec<Span>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    note: String,
+}
+
+impl From<ReadoutRepr> for Readout {
+    fn from(r: ReadoutRepr) -> Self {
+        // A divider draws a rule and holds no content. Everything else holds
+        // either the chain it was written with, or the one part the flat shape
+        // describes, which is also what an unfinished field gets: one empty
+        // part, so there is a row for the user to finish rather than nothing.
+        let content = if !r.content.is_empty() {
+            r.content
+        } else {
+            vec![Span {
+                text: r.text,
+                source: r.source,
+                gap: r.gap,
+                reads: r.reads,
+                decimals: r.decimals,
+                aliases: r.aliases,
+                format: r.format,
+                colour: r.colour,
+                small: r.small,
+                inverse: r.inverse,
+                colours: r.colours,
+                replace: r.replace,
+            }]
+        };
+        Readout {
+            device: r.device,
+            display: r.display,
+            cells: r.cells,
+            divider: r.divider,
+            colour: if r.divider { r.colour } else { None },
+            // Only a rule draws a label. Dropped rather than kept on anything
+            // else, for the same reason its colour is: it would be a setting
+            // the window never shows and nothing ever draws.
+            label: if r.divider { r.label } else { String::new() },
+            label_colour: if r.divider { r.label_colour } else { None },
+            seat: r.seat,
+            align: r.align,
+            content,
+            note: r.note,
+        }
+    }
+}
+
+impl From<Readout> for ReadoutRepr {
+    fn from(r: Readout) -> Self {
+        // One span goes back flat, which is how it arrived and how every
+        // shipped default is written. Only a real chain needs `content`, so
+        // opening a profile and saving it changes nothing.
+        //
+        // A rule draws itself and has no content. What it carries is only kept
+        // so that a signal written on one can still be refused rather than
+        // quietly dropped, and it goes back beside the cells the way it came.
+        let (one, chain) = if r.divider || r.content.len() == 1 {
+            (r.content.first().cloned(), Vec::new())
+        } else {
+            (None, r.content)
+        };
+        let span = one.unwrap_or_default();
+        ReadoutRepr {
+            device: r.device,
+            display: r.display,
+            cells: r.cells,
+            divider: r.divider,
+            text: span.text,
+            source: span.source,
+            gap: span.gap,
+            seat: r.seat,
+            reads: span.reads,
+            decimals: span.decimals,
+            align: r.align,
+            format: span.format,
+            colour: if r.divider { r.colour } else { span.colour },
+            // A colour for a label that is not there is a setting nothing
+            // draws. The window holds on to it while the text is being edited,
+            // so clearing it to retype costs nothing, but it stops there.
+            label_colour: if r.label.is_empty() { None } else { r.label_colour },
+            label: r.label,
+            small: span.small,
+            inverse: span.inverse,
+            aliases: span.aliases,
+            colours: span.colours,
+            replace: span.replace,
+            content: chain,
+            note: r.note,
+        }
+    }
+}
+
+impl Default for Readout {
+    /// An unfinished field on nothing in particular, which is what the editor
+    /// starts from and what a test fills in the two or three parts it cares
+    /// about. One empty span rather than none, so there is a piece to fill.
+    fn default() -> Self {
+        Readout {
+            device: String::new(),
+            display: String::new(),
+            cells: CellRange { first: 0, last: 0 },
+            divider: false,
+            colour: None,
+            label: String::new(),
+            label_colour: None,
+            seat: None,
+            align: Align::Left,
+            content: vec![Span::default()],
+            note: String::new(),
+        }
+    }
+}
+
+impl Readout {
+    /// A field of one span reading `source`, which is how nearly every field
+    /// in a shipped profile is written.
+    pub fn reading(device: &str, display: &str, cells: CellRange, source: &str) -> Self {
+        Readout {
+            device: device.to_string(),
+            display: display.to_string(),
+            cells,
+            content: vec![Span {
+                source: source.to_string(),
+                ..Span::default()
+            }],
+            ..Readout::default()
+        }
+    }
+}
+
+fn is_zero_u8(n: &u8) -> bool {
+    *n == 0
+}
+
+fn is_left(a: &Align) -> bool {
+    *a == Align::Left
+}
+
+impl Readout {
+    /// Every signal this field reads, in the order the parts are drawn.
+    ///
+    /// Includes the second signals, `format` and `colours`, because a profile
+    /// that names one the module does not have is as broken as one that names
+    /// a missing source.
+    pub fn sources(&self) -> Vec<&str> {
+        let mut out = Vec::new();
+        for span in &self.content {
+            if span.is_signal() {
+                out.push(span.source.as_str());
+            }
+            if let Some(f) = &span.format {
+                out.push(f.as_str());
+            }
+            if let Some(c) = &span.colours {
+                out.push(c.source.as_str());
+            }
+        }
+        out
+    }
+
+    /// Whether anything here reads a signal at all.
+    pub fn reads_anything(&self) -> bool {
+        self.content.iter().any(Span::is_signal)
+    }
+
+    /// The rule this divider draws, one glyph per cell, its label marked.
+    pub fn divider_cells(&self) -> Vec<RuleCell> {
+        divider_rule(self.cells.len(), &self.label)
+    }
+
+    /// The glyphs this field draws right now, one per cell, or None while it
+    /// is still waiting on every signal it reads.
+    ///
+    /// None rather than a run of blanks, so a field whose signal has not
+    /// arrived leaves the cells alone instead of writing spaces over them. A
+    /// chain that has some of its signals draws what it has: a label should be
+    /// on the glass before the reading beside it is.
+    pub fn compose<F>(&self, read: F) -> Option<Vec<Glyph>>
+    where
+        F: Fn(&str) -> Option<Reading>,
+    {
+        if self.divider {
+            return Some(
+                self.divider_cells()
+                    .into_iter()
+                    .map(|cell| Glyph {
+                        colour: if cell.label {
+                            self.label_colour.or(self.colour)
+                        } else {
+                            self.colour
+                        },
+                        text: cell.text,
+                        small: false,
+                        inverse: false,
+                    })
+                    .collect(),
+            );
+        }
+        let width = self.cells.len();
+        // One group per piece rather than one flat run, because a gap cannot
+        // be measured until everything that is not a gap has been laid out.
+        let mut groups: Vec<Vec<Glyph>> = Vec::new();
+        let mut gaps: Vec<usize> = Vec::new();
+        let mut waiting = false;
+        for span in &self.content {
+            if span.gap {
+                gaps.push(groups.len());
+                groups.push(Vec::new());
+                continue;
+            }
+            let mut glyphs: Vec<Glyph> = Vec::new();
+            let value = if span.is_signal() {
+                match read(&span.source) {
+                    Some(Reading::Text(t)) => t,
+                    Some(Reading::Number { value, max }) => span.format_number(value, max),
+                    None => {
+                        waiting = true;
+                        groups.push(glyphs);
+                        continue;
+                    }
+                }
+            } else {
+                span.text.clone()
+            };
+            let value = span.replace_chars(&value);
+            // Which of this part's own characters draw inverse, and in what
+            // colour, where the module says so per character. A second signal
+            // that has not arrived leaves the part drawing plainly rather than
+            // holding it back.
+            let inverse: Vec<bool> = span
+                .format
+                .as_ref()
+                .and_then(|f| match read(f) {
+                    Some(Reading::Text(t)) => Some(t),
+                    _ => None,
+                })
+                .map(|t| t.chars().map(|c| c == 'i').collect())
+                .unwrap_or_default();
+            let colours: Vec<Option<Colour>> = span
+                .colours
+                .as_ref()
+                .and_then(|cs| {
+                    let text = match read(&cs.source) {
+                        Some(Reading::Text(t)) => t,
+                        _ => return None,
+                    };
+                    Some(
+                        text.chars()
+                            .map(|c| {
+                                let mut buf = [0u8; 4];
+                                cs.codes.get(c.encode_utf8(&mut buf) as &str).copied()
+                            })
+                            .collect(),
+                    )
+                })
+                .unwrap_or_default();
+            // A one cell run takes the part's whole value as a single glyph,
+            // because a two character field really does occupy one cell here.
+            if width == 1 {
+                glyphs.push(Glyph {
+                    text: span.alias(&value).to_string(),
+                    colour: colours.first().copied().flatten().or(span.colour),
+                    small: span.small,
+                    inverse: span.inverse || inverse.first().copied().unwrap_or(false),
+                });
+                groups.push(glyphs);
+                continue;
+            }
+            for (i, ch) in value.chars().enumerate() {
+                let one = ch.to_string();
+                glyphs.push(Glyph {
+                    text: span.alias(&one).to_string(),
+                    colour: colours.get(i).copied().flatten().or(span.colour),
+                    small: span.small,
+                    inverse: span.inverse || inverse.get(i).copied().unwrap_or(false),
+                });
+            }
+            groups.push(glyphs);
+        }
+
+        // What the gaps get: whatever the rest of the line did not use, split
+        // evenly, the remainder going to the earlier ones. Nothing spare means
+        // a gap of nothing, which is a line that has simply filled up rather
+        // than a reason to push anything off the end.
+        if !gaps.is_empty() {
+            let fixed: usize = groups.iter().map(Vec::len).sum();
+            let spare = width.saturating_sub(fixed);
+            let each = spare / gaps.len();
+            let extra = spare % gaps.len();
+            for (n, &at) in gaps.iter().enumerate() {
+                let take = each + usize::from(n < extra);
+                groups[at] = vec![Glyph::blank(); take];
+            }
+        }
+
+        let glyphs: Vec<Glyph> = groups.into_iter().flatten().collect();
+        // Nothing to show and still waiting is a field whose signals have not
+        // arrived, which leaves its cells alone. Nothing to show with nothing
+        // to wait for is an empty field, which draws blanks like any other.
+        if glyphs.is_empty() && waiting {
+            return None;
+        }
+        Some(self.fit(glyphs))
+    }
+
+    /// Lay composed glyphs across the run, one per cell.
+    ///
+    /// Longer content is cropped from the end the alignment anchors away from,
+    /// which is what makes a right aligned scratchpad drop its leading pad
+    /// rather than its last digit. Shorter content is padded with blanks, so a
+    /// field that shrinks never leaves the old character behind.
+    fn fit(&self, mut glyphs: Vec<Glyph>) -> Vec<Glyph> {
+        let width = self.cells.len();
+        if width == 1 {
+            // Two parts on one cell is not something the hardware can draw, so
+            // they are joined and the cell's glyph table decides whether the
+            // result exists. It usually does not, and `problems` says so.
+            if glyphs.len() > 1 {
+                let text: String = glyphs.iter().map(|g| g.text.as_str()).collect();
+                let first = glyphs.swap_remove(0);
+                return vec![Glyph { text, ..first }];
+            }
+            return glyphs;
+        }
+        if self.align == Align::Right {
+            let excess = glyphs.len().saturating_sub(width);
+            glyphs.drain(..excess);
+            let pad = width - glyphs.len();
+            let mut out = vec![Glyph::blank(); pad];
+            out.extend(glyphs);
+            out
+        } else {
+            glyphs.truncate(width);
+            while glyphs.len() < width {
+                glyphs.push(Glyph::blank());
+            }
+            glyphs
+        }
+    }
+}
+
+/// Where a readout's per-character colours come from.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ColourSource {
+    /// Catalogue signal id, a string one character per cell.
+    pub source: String,
+    /// Each letter the module sends, and the colour it means.
+    pub codes: HashMap<String, Colour>,
 }

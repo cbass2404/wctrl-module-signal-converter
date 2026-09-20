@@ -171,5 +171,5 @@ fn a_display_field_reading_a_missing_signal_is_left_out() {
     assert_eq!(flags[0].place, Place::Field { readout: 1 });
     let run = p.runnable(&module());
     assert_eq!(run.readouts.len(), 1);
-    assert_eq!(run.readouts[0].source, "CHAN");
+    assert_eq!(run.readouts[0].sources(), vec!["CHAN"]);
 }

@@ -38,9 +38,9 @@ pub fn build_label() -> &'static str {
 }
 
 pub use display::{
-    divider_rule, text_cells, Align, Cell, CellRange, Colour, ColourSource, Display,
-    DisplayCatalogue, Grid, Readout, Region, Screen, TextCell, TextGrid, Transport,
-    MIN_DIVIDER_CELLS, SEAT_SIGNAL,
+    divider_rule, divider_text, min_divider_cells, text_cells, Align, Cell, CellRange, Colour,
+    ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, RuleCell,
+    Screen, Span, TextCell, TextGrid, Transport, SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -53,7 +53,7 @@ pub enum Error {
     UnknownAircraft(String),
     #[error("LED {0:?} has a condition with no signal chosen yet; pick one or delete the condition")]
     UnfinishedCondition(String),
-    #[error("the field on {1} of display {0:?} has no signal chosen yet; pick one or remove the field")]
+    #[error("the field on {1} of display {0:?} has a piece with nothing in it; give it characters or a signal, or take the piece out")]
     UnfinishedField(String, String),
     #[error("profile references unknown LED {0:?} on device {1:?}")]
     UnknownLed(String, String),
@@ -89,6 +89,12 @@ pub enum Error {
     NotInFont(char, String, String),
     #[error("a replacement swaps one character for one character; {0:?} to {1:?} is not that")]
     ReplaceNotOneChar(String, String),
+    #[error("a piece of cells {1} on display {0:?} has both characters to draw and the signal {2:?} to read; it can have one")]
+    SpanReadsAndWrites(String, String, String),
+    #[error("a gap on cells {1} of display {0:?} also has something to draw; a gap is the blank space left over and draws nothing of its own")]
+    GapHasContent(String, String),
+    #[error("cells {1} of display {0:?} hold nothing but gaps, which would draw an empty run")]
+    NothingButGaps(String, String),
     #[error("a colour code is one character; {0:?} is not")]
     ColourCodeNotOneChar(String),
     #[error("cells {1} of display {0:?} are given a colour or size, which only a text grid draws")]
@@ -97,8 +103,9 @@ pub enum Error {
     DividerNotDrawn(String, String),
     #[error("the divider on {1} of display {0:?} also names a signal {2:?}; a divider draws a fixed rule and reads nothing")]
     DividerReadsSignal(String, String, String),
-    #[error("the divider on {1} of display {0:?} has {2} cells; a rule needs {3}, a dash with a blank each side")]
-    DividerTooNarrow(String, String, usize, usize),
+    #[error("the label {4:?} on the divider on {1} of display {0:?} does not fit: it has {2} cells and needs {3}, a dash and a blank each side of the label")]
+    DividerLabelTooWide(String, String, usize, usize, String),
+
     #[error("display {0:?} has no cell {1}")]
     NoSuchCell(String, usize),
     #[error("{0:?} cannot be drawn on a {1} cell of display {2:?}")]
@@ -696,11 +703,84 @@ fn unsound(module: &Module, c: &Condition) -> Option<Unsound> {
     (value > max).then_some(Unsound::AboveRange { value, max })
 }
 
+/// How much room a field's content needs, against how much it has.
+///
+/// A run of cells is a fixed width and nothing on the panel says when content
+/// ran past it: the write goes out looking healthy and the tail is simply not
+/// there, cut from whichever end the alignment anchors away from. So this is
+/// worked out ahead of a single frame arriving, and the editor says how many
+/// characters will be lost rather than warning that some might be.
+///
+/// It is a warning and never a refusal. Getting the length right is the user's
+/// to judge: they know which readings their aircraft actually shows, and a
+/// range wide enough to overflow in theory may never do it in the air.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct Width {
+    /// The most cells this content can ever need.
+    pub widest: usize,
+    /// How many cells it has.
+    pub cells: usize,
+    /// A piece reads a number with no range, so nothing bounds how wide it
+    /// gets and `widest` is a floor rather than a maximum.
+    pub unbounded: bool,
+}
+
+impl Width {
+    /// Whether the content is known to run past its cells.
+    pub fn overflows(&self) -> bool {
+        self.widest > self.cells
+    }
+
+    /// How many characters would be dropped, where that is known.
+    pub fn dropped(&self) -> usize {
+        self.widest.saturating_sub(self.cells)
+    }
+
+    /// Cells the content cannot fill, where every piece is bounded.
+    pub fn spare(&self) -> usize {
+        self.cells.saturating_sub(self.widest)
+    }
+}
+
+impl Readout {
+    /// What this field needs against what it has.
+    ///
+    /// A string signal is bounded by the `max_length` DCS-BIOS declares for
+    /// it, and a gauge by the range the user gave it, so both are known. A
+    /// gauge with no range is the one thing nothing bounds, and it is reported
+    /// rather than guessed at.
+    pub fn width(&self, module: &Module) -> Width {
+        let cells = self.cells.len();
+        if self.divider {
+            return Width { widest: cells, cells, unbounded: false };
+        }
+        let mut widest = 0;
+        let mut unbounded = false;
+        for span in &self.content {
+            if !span.is_signal() {
+                widest += span.text.chars().count();
+                continue;
+            }
+            let Some(output) = module.signal(&span.source).and_then(|s| s.primary()) else {
+                // A source this DCS-BIOS does not have draws nothing at all,
+                // and is already flagged as its own problem.
+                continue;
+            };
+            let numeric = output.r#type != "string";
+            let max_length = output.max_length.map(usize::from);
+            match span.widest(max_length, numeric) {
+                Some(n) => widest += n,
+                None => unbounded = true,
+            }
+        }
+        Width { widest, cells, unbounded }
+    }
+}
+
 /// Every source a display field reads that this module lacks.
 fn missing_in_field<'a>(module: &Module, r: &'a Readout) -> Vec<&'a str> {
-    std::iter::once(r.source.as_str())
-        .chain(r.format.as_deref())
-        .chain(r.colours.as_ref().map(|c| c.source.as_str()))
+    r.sources()
+        .into_iter()
         .filter(|s| !s.is_empty() && module.signal(s).is_none())
         .collect()
 }
@@ -894,6 +974,21 @@ pub struct Profile {
     pub aircraft: Vec<String>,
     /// Catalogue key the signal ids resolve against.
     pub module: String,
+    /// The text grid font to upload, for an aircraft whose own CDU is not one
+    /// DCS-BIOS exports.
+    ///
+    /// An aircraft with a CDU of its own has a font drawn to match what the
+    /// module sends for it, named in the display's `native_fonts`, and that
+    /// font is the aircraft's rather than the user's: the choice would only be
+    /// a way to get it wrong. This is for every other aircraft, where the
+    /// screen holds whatever the user decided to put there and nothing has an
+    /// opinion about which glyphs it should be drawn with.
+    ///
+    /// Named by font file, relative to the display, so it means the same thing
+    /// as a `native_fonts` value. Ignored for an aircraft that has a native
+    /// font, which keeps its own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font: Option<String>,
     #[serde(default)]
     pub bindings: Vec<Binding>,
     /// Fields of a segment display, and what feeds each of them.
@@ -961,10 +1056,12 @@ impl Profile {
             profile_version: "0.1.0".to_string(),
             aircraft: vec![aircraft.to_string()],
             module: module.to_string(),
+            font: None,
             bindings,
             // A stub lists hardware, and a display field is not hardware: it is
-            // a decision about what to show. There is no useful blank row for
-            // one, so the editor offers to add them instead.
+            // a decision about what to show. The editor shows a row for every
+            // region of every screen regardless, the way it shows every lamp,
+            // so an empty field needs no record here to be offered.
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
         }
@@ -1018,11 +1115,7 @@ impl Profile {
     /// conditions and fields, which name nothing yet, are left out.
     pub fn signals_read(&self) -> Vec<&str> {
         let lamps = self.bindings.iter().flat_map(|b| b.sources());
-        let fields = self.readouts.iter().flat_map(|r| {
-            std::iter::once(r.source.as_str())
-                .chain(r.format.as_deref())
-                .chain(r.colours.as_ref().map(|c| c.source.as_str()))
-        });
+        let fields = self.readouts.iter().flat_map(Readout::sources);
         let mut out: Vec<&str> = lamps.chain(fields).filter(|s| !s.is_empty()).collect();
         out.sort_unstable();
         out.dedup();
@@ -1318,6 +1411,47 @@ impl Profile {
         out
     }
 
+    /// Fields whose content will not fit the cells they were given.
+    ///
+    /// Never a refusal. A run is a fixed width and the tail is simply cut,
+    /// from whichever end the alignment anchors away from, with nothing on the
+    /// panel to say it happened. So it is said here instead, with the count,
+    /// because a field that silently loses its last two digits reads as a
+    /// working field showing the wrong number.
+    ///
+    /// Only what is known. A gauge with no range is unbounded and gets the
+    /// shorter warning, since the widest it can draw depends on what the
+    /// needle does rather than on anything written down.
+    pub fn width_cautions(&self, module: &Module) -> Vec<String> {
+        let mut out = Vec::new();
+        for r in &self.readouts {
+            if r.divider {
+                continue;
+            }
+            let width = r.width(module);
+            let where_ = format!("{} cells {}", r.display, r.cells);
+            if width.overflows() {
+                let n = width.dropped();
+                let end = match r.align {
+                    Align::Right => "first",
+                    Align::Left => "last",
+                };
+                out.push(format!(
+                    "{where_} needs up to {} cells and has {}, so the {end} {n} character{} would be dropped with nothing shown on the panel to say so.",
+                    width.widest,
+                    width.cells,
+                    if n == 1 { "" } else { "s" }
+                ));
+            } else if width.unbounded {
+                out.push(format!(
+                    "{where_} reads a gauge with no range, so how wide it draws is not known ahead of time and it may run past its {} cells.",
+                    width.cells
+                ));
+            }
+        }
+        out
+    }
+
     /// Check the display fields: that they name real glass, sit inside it, do
     /// not fight over cells, and read a source that can actually fill them.
     ///
@@ -1414,97 +1548,172 @@ impl Profile {
                         r.cells.to_string(),
                     ));
                 }
-                if !r.source.is_empty() {
+                if let Some(source) = r.sources().first() {
                     out.push(Error::DividerReadsSignal(
                         r.display.clone(),
                         r.cells.to_string(),
-                        r.source.clone(),
+                        (*source).to_string(),
                     ));
                 }
-                if r.cells.len() < MIN_DIVIDER_CELLS {
-                    out.push(Error::DividerTooNarrow(
+                // There is no minimum for the rule itself: it runs corner
+                // to corner of its cells, and one cell is one dash. A label is
+                // the only thing here that needs room.
+                if !r.label.is_empty() && r.cells.len() < min_divider_cells(&r.label) {
+                    // A label with no room is left off the rule rather than
+                    // crowding it, so without this the rule would quietly draw
+                    // plain and nothing would say where the label went.
+                    out.push(Error::DividerLabelTooWide(
                         r.display.clone(),
                         r.cells.to_string(),
                         r.cells.len(),
-                        MIN_DIVIDER_CELLS,
+                        min_divider_cells(&r.label),
+                        r.label.clone(),
                     ));
                 }
                 self.text_problems(r, display, out);
                 continue;
             }
 
-            // A field with nothing chosen yet is unfinished work rather than a
+            // A field with nothing in it is unfinished work rather than a
             // mistake, but it still stops the profile loading, so it is said
-            // plainly and in those terms.
-            if r.source.is_empty() {
+            // plainly and in those terms. A chain with an empty span in the
+            // middle is the same thing: a piece somebody started and left.
+            if r.content.is_empty() || r.content.iter().any(Span::is_empty) {
                 out.push(Error::UnfinishedField(r.display.clone(), r.cells.to_string()));
                 continue;
             }
-            // Flagged rather than refused, as for a lamp condition.
-            let Some(output) = module.signal(&r.source).and_then(|s| s.primary()) else {
-                continue;
-            };
-            // A needle reports a position, not a quantity, and nothing in the
-            // catalogue says what its face is marked with. So the range is the
-            // user's to give, and asking for it beats printing 0 to 65535 and
-            // letting them wonder what broke.
-            if output.r#type == "string" {
-                if r.reads.is_some() {
-                    out.push(Error::RangeOnText(r.source.clone()));
-                }
-            } else if r.reads.is_none() {
-                out.push(Error::RangeMissing(r.source.clone()));
-            }
 
-            if let Some(format) = &r.format {
-                if !display.draws_inverse() {
-                    out.push(Error::FormatNotDrawn(r.display.clone(), r.cells.to_string()));
+            for span in &r.content {
+                // A gap draws nothing and measures itself from what is left,
+                // so anything written on one is something that will never be
+                // seen. Refused rather than ignored, for the same reason a
+                // signal on a divider is.
+                if span.gap {
+                    if !span.text.is_empty() || span.is_signal() {
+                        out.push(Error::GapHasContent(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                        ));
+                    }
+                    continue;
                 }
-                if let Some(o) = module.signal(format).and_then(|s| s.primary()) {
-                    if o.r#type != "string" {
-                        out.push(Error::FormatNotText(format.clone()));
+                // Characters and a signal are two different answers to what
+                // this span draws, so a span holding both is one somebody
+                // half changed rather than one that means anything.
+                if !span.text.is_empty() && span.is_signal() {
+                    out.push(Error::SpanReadsAndWrites(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                        span.source.clone(),
+                    ));
+                    continue;
+                }
+                // What a span writes is only shaped by what it reads, so
+                // nothing below applies to characters the user typed. Their
+                // one rule, that the font can draw them, is in text_problems
+                // where the font is known.
+                if !span.is_signal() {
+                    if span.reads.is_some() || span.decimals != 0 {
+                        out.push(Error::RangeOnText(span.text.clone()));
+                    }
+                    continue;
+                }
+                // Flagged rather than refused, as for a lamp condition.
+                let Some(output) = module.signal(&span.source).and_then(|s| s.primary()) else {
+                    continue;
+                };
+                // A needle reports a position, not a quantity, and nothing in
+                // the catalogue says what its face is marked with. So the
+                // range is the user's to give, and asking for it beats
+                // printing 0 to 65535 and letting them wonder what broke.
+                if output.r#type == "string" {
+                    if span.reads.is_some() {
+                        out.push(Error::RangeOnText(span.source.clone()));
+                    }
+                } else if span.reads.is_none() {
+                    out.push(Error::RangeMissing(span.source.clone()));
+                }
+
+                if let Some(format) = &span.format {
+                    if !display.draws_inverse() {
+                        out.push(Error::FormatNotDrawn(r.display.clone(), r.cells.to_string()));
+                    }
+                    if let Some(o) = module.signal(format).and_then(|s| s.primary()) {
+                        if o.r#type != "string" {
+                            out.push(Error::FormatNotText(format.clone()));
+                        }
+                    }
+                }
+
+                if let Some(colours) = &span.colours {
+                    if let Some(o) = module.signal(&colours.source).and_then(|s| s.primary()) {
+                        if o.r#type != "string" {
+                            out.push(Error::FormatNotText(colours.source.clone()));
+                        }
+                    }
+                    for code in colours.codes.keys() {
+                        if code.chars().count() != 1 {
+                            out.push(Error::ColourCodeNotOneChar(code.clone()));
+                        }
+                    }
+                }
+
+                for (from, to) in &span.replace {
+                    if from.chars().count() != 1 || to.chars().count() != 1 {
+                        out.push(Error::ReplaceNotOneChar(from.clone(), to.clone()));
                     }
                 }
             }
 
-            if let Some(colours) = &r.colours {
-                if let Some(o) = module.signal(&colours.source).and_then(|s| s.primary()) {
-                    if o.r#type != "string" {
-                        out.push(Error::FormatNotText(colours.source.clone()));
-                    }
-                }
-                for code in colours.codes.keys() {
-                    if code.chars().count() != 1 {
-                        out.push(Error::ColourCodeNotOneChar(code.clone()));
-                    }
-                }
+            // Gaps space out what is around them. With nothing around them
+            // they are an elaborate way of writing blanks, which is what an
+            // empty run already does.
+            if !r.content.is_empty() && r.content.iter().all(|s| s.gap) {
+                out.push(Error::NothingButGaps(
+                    r.display.clone(),
+                    r.cells.to_string(),
+                ));
             }
 
-            for (from, to) in &r.replace {
-                if from.chars().count() != 1 || to.chars().count() != 1 {
-                    out.push(Error::ReplaceNotOneChar(from.clone(), to.clone()));
-                }
+            // Inverse is the one piece of styling a span can ask for on glass
+            // that is not a text grid, so it is checked against what the
+            // display can actually do rather than lumped in with colour.
+            if !display.draws_inverse() && r.content.iter().any(|s| s.inverse) {
+                out.push(Error::FormatNotDrawn(r.display.clone(), r.cells.to_string()));
             }
+
             self.text_problems(r, display, out);
         }
     }
 
     /// What only a text grid can take, and what a text grid needs.
     ///
-    /// Its font is fixed by the aircraft, not chosen here: an aircraft with a
-    /// CDU of its own has glyphs drawn to match what DCS-BIOS sends for it. So
-    /// every aircraft this profile covers must have one, and every character
-    /// the field is told to substitute in must be one that font can draw.
+    /// An aircraft with a CDU of its own takes its font from the aircraft:
+    /// the glyphs are drawn to match what DCS-BIOS sends for that module, so
+    /// the choice would only be a way to get it wrong. An aircraft without one
+    /// takes the profile's `font`, because nothing else has an opinion about
+    /// what its screen should look like, and until one is picked there is no
+    /// alphabet to check anything against.
+    ///
+    /// Every character the field puts on the glass has to be one that font
+    /// draws, whether the user typed it or a `replace` rewrote a signal into
+    /// it. A character the font lacks is a blank cell on the panel with
+    /// nothing to say why.
     fn text_problems(&self, r: &Readout, display: &Display, out: &mut Vec<Error>) {
         let Some(text) = &display.text else {
-            if r.colour.is_some() || r.colours.is_some() || r.small {
+            let styled = r
+                .content
+                .iter()
+                .any(|s| s.colour.is_some() || s.colours.is_some() || s.small);
+            let ruled = r.divider && (r.colour.is_some() || r.label_colour.is_some());
+            if styled || ruled {
                 out.push(Error::StyleNotDrawn(r.display.clone(), r.cells.to_string()));
             }
             return;
         };
         let mut fonts = Vec::new();
         for aircraft in &self.aircraft {
-            match text.font_for(aircraft) {
+            match text.font_with(aircraft, self.font.as_deref()) {
                 Some(file) => fonts.push(file),
                 None => out.push(Error::NoNativeFont(r.display.clone(), aircraft.clone())),
             }
@@ -1515,16 +1724,39 @@ impl Profile {
             let Some(chars) = text.charsets.get(file) else {
                 continue;
             };
-            let set = if r.small { &chars.small } else { &chars.large };
-            for to in r.replace.values() {
-                if let Some(c) = to.chars().next().filter(|c| !set.contains(c)) {
-                    out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
-                }
-            }
             // A rule is drawn from the font like any other character, so a font
             // without a dash would rule the line in blanks and look broken.
             if r.divider {
-                for c in ['-', ' '] {
+                // The label is drawn from the same font as the rule, at full
+                // size, so a character it lacks is a blank cell in the middle
+                // of the line with nothing to say why. The blank is only drawn
+                // where there is a label to set apart from the line.
+                let spaced = if r.label.is_empty() { None } else { Some(' ') };
+                for c in std::iter::once('-').chain(spaced).chain(r.label.chars()) {
+                    if !chars.large.contains(&c) {
+                        out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
+                    }
+                }
+                continue;
+            }
+            for span in &r.content {
+                // A gap is drawn as blank cells like any other character, so a
+                // font without a space would leave a hole rather than a gap.
+                if span.gap {
+                    if !chars.large.contains(&' ') {
+                        out.push(Error::NotInFont(' ', file.to_string(), r.cells.to_string()));
+                    }
+                    continue;
+                }
+                // Each size has its own alphabet, and small is the smaller one
+                // in every font here, so a span marked small can lose a
+                // character that was fine at full size.
+                let set = if span.small { &chars.small } else { &chars.large };
+                let written = span
+                    .text
+                    .chars()
+                    .chain(span.replace.values().filter_map(|to| to.chars().next()));
+                for c in written {
                     if !set.contains(&c) {
                         out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
                     }
@@ -1582,14 +1814,140 @@ fn sort_bindings(bindings: &mut [Binding], devices: &DeviceInventory) -> bool {
 /// folder is in use, which means what a user sees in it is what runs: nothing is
 /// shadowed and no lookup order has to be explained.
 ///
-/// Seeding only ever adds. A profile the user has is theirs, and an update never
-/// rewrites it. The deliberate cost is that a correction shipped to a default
-/// never reaches someone who already has that profile, including someone who
-/// never opened it. [`reset_to_default`] is the remedy, and it is the only path
-/// that overwrites.
+/// Seeding only ever adds, and a profile the user has is theirs. An update may
+/// still correct a field they never touched, which is what `previous` is for: a
+/// copy of the defaults as the last release shipped them, so a field can be
+/// told apart from one somebody edited. Everything else is left alone, and
+/// [`reset_to_default`] remains the only path that overwrites wholesale.
 pub struct Profiles {
     pub defaults: PathBuf,
+    /// The defaults as the last release shipped them, or empty for none.
+    ///
+    /// Empty, missing or stale all mean the same thing and are all safe: no
+    /// field matches anything, so nothing is corrected and nothing is removed.
+    pub previous: PathBuf,
     pub active: PathBuf,
+}
+
+/// The file in the active folder naming the version that last reconciled it.
+///
+/// Not `.json`, so every path that walks the folder for profiles skips it.
+const UPDATED: &str = ".updated";
+
+/// What reconciling one profile's fields came to.
+#[derive(Default)]
+struct FieldWork {
+    added: usize,
+    updated: usize,
+    removed: usize,
+}
+
+impl FieldWork {
+    fn nothing(&self) -> bool {
+        self.added == 0 && self.updated == 0 && self.removed == 0
+    }
+}
+
+/// The snapshot folder for a defaults folder: the same name, `-previous`.
+///
+/// One rule rather than one per layout, because the daemon lets `--defaults`
+/// point anywhere and a snapshot that did not follow it would be read from the
+/// install while the defaults came from somewhere else. Empty for a path with
+/// no file name, which is how callers that only read profiles pass no defaults
+/// at all.
+fn snapshot_beside(defaults: &Path) -> PathBuf {
+    match defaults.file_name().and_then(|n| n.to_str()) {
+        Some(name) => defaults.with_file_name(format!("{name}-previous")),
+        None => PathBuf::new(),
+    }
+}
+
+/// What identifies a field across two versions of a default.
+///
+/// The cells are part of it, so a field that moved reads as the old one gone
+/// and a new one arriving. That is what stops a moved field being drawn twice.
+fn field_key(r: &Readout) -> (String, String, String) {
+    (r.device.clone(), r.display.clone(), r.cells.to_string())
+}
+
+fn at<'a>(list: &'a [Readout], key: &(String, String, String)) -> Option<&'a Readout> {
+    list.iter().find(|r| &field_key(r) == key)
+}
+
+/// Whether two fields say the same thing.
+///
+/// Compared as values rather than text: `replace` and `aliases` are hash maps
+/// and their key order on disk is arbitrary, and a field of one piece is
+/// written flat while a chain is written as an array. Both sides go through
+/// the same types first, so neither difference is mistaken for an edit.
+fn same_field(a: &Readout, b: &Readout) -> bool {
+    match (serde_json::to_value(a), serde_json::to_value(b)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// Bring one profile's fields up to what the default now ships, keeping
+/// anything the user has made their own.
+///
+/// `was` is what the last release shipped and is the whole basis for telling
+/// those apart. Five cases, and the last one is the reason this needs a
+/// snapshot at all:
+///
+/// * still what we shipped, and still shipped: take the new one
+/// * still what we shipped, no longer shipped: take it out
+/// * changed from what we shipped: leave it, it is theirs
+/// * missing, and we never shipped it: add it
+/// * missing, and we did ship it: leave it missing, they deleted it
+///
+/// With no snapshot the first, second and last collapse into "add what does
+/// not clash", which is where this started and is still the safe answer.
+fn reconcile_fields(profile: &mut Profile, shipped: &[Readout], was: &[Readout]) -> FieldWork {
+    let mut work = FieldWork::default();
+
+    let mut kept: Vec<Readout> = Vec::with_capacity(profile.readouts.len());
+    for r in std::mem::take(&mut profile.readouts) {
+        let key = field_key(&r);
+        let Some(before) = at(was, &key) else {
+            kept.push(r);
+            continue;
+        };
+        if !same_field(&r, before) {
+            kept.push(r);
+            continue;
+        }
+        match at(shipped, &key) {
+            Some(now) => {
+                if !same_field(now, before) {
+                    work.updated += 1;
+                }
+                kept.push(now.clone());
+            }
+            None => work.removed += 1,
+        }
+    }
+    profile.readouts = kept;
+
+    for r in shipped {
+        // Shipped before and not here now is a field the user took out, and
+        // taking one out is as much a decision as editing one.
+        if at(was, &field_key(r)).is_some() {
+            continue;
+        }
+        // Otherwise it is new, and lands only where it cannot collide: the
+        // user may have claimed those cells, and a suggestion does not
+        // outrank that.
+        let clash = profile.readouts.iter().any(|o| {
+            o.device == r.device && o.display == r.display && o.cells.overlaps(&r.cells)
+        });
+        if clash {
+            continue;
+        }
+        profile.readouts.push(r.clone());
+        work.added += 1;
+    }
+
+    work
 }
 
 /// The file name, without `.json`, for a profile named after `name`.
@@ -1660,10 +2018,36 @@ impl Families {
 
 impl Profiles {
     pub fn new(defaults: impl Into<PathBuf>, active: impl Into<PathBuf>) -> Self {
+        let defaults = defaults.into();
         Profiles {
-            defaults: defaults.into(),
+            previous: snapshot_beside(&defaults),
+            defaults,
             active: active.into(),
         }
+    }
+
+    /// Point somewhere else for the defaults as the last release shipped them.
+    ///
+    /// Only tests need this. Everything else takes the folder beside the
+    /// defaults, which is where it ships and where `--defaults` keeps it.
+    pub fn with_previous(mut self, previous: impl Into<PathBuf>) -> Self {
+        self.previous = previous.into();
+        self
+    }
+
+    /// The version that last reconciled the active folder, if it says.
+    fn last_update(&self) -> Option<String> {
+        std::fs::read_to_string(self.active.join(UPDATED))
+            .ok()
+            .map(|s| s.trim().to_string())
+    }
+
+    /// What the last release shipped for this profile, or nothing.
+    fn previously_shipped(&self, name: &str) -> Vec<Readout> {
+        if self.previous.as_os_str().is_empty() {
+            return Vec::new();
+        }
+        Profile::load(&self.previous.join(name)).map(|p| p.readouts).unwrap_or_default()
     }
 
     /// Every aircraft an active profile already claims, with the name of the
@@ -1833,14 +2217,40 @@ impl Profiles {
     /// editor asks is "what should this lamp do", and it cannot ask about a
     /// lamp that is not listed.
     ///
-    /// Existing rows are never touched, in either direction: not rewritten, not
+    /// Lamp rows are never touched, in either direction: not rewritten, not
     /// removed, not reordered relative to what they say. A profile whose device
     /// has been unplugged keeps its rows, because unplugging a panel for an
     /// evening is not a decision to discard its configuration.
-    pub fn merge_new(&self, devices: &DeviceInventory) -> Result<Vec<String>> {
+    ///
+    /// Display fields are the one exception, and only against [`previous`]:
+    /// a field still identical to what the last release shipped is ours to
+    /// correct or retire, and anything else is the user's. See
+    /// [`reconcile_fields`] for the five cases.
+    ///
+    /// That runs once per `version`, recorded in the active folder, rather than
+    /// every start. Otherwise a user who puts a field back the way they liked
+    /// it would have it taken away again at the next launch, and every launch
+    /// after that. It is skipped entirely where the defaults and the active
+    /// folder are one folder, which is a development checkout: there is nothing
+    /// to reconcile against and the files are tracked.
+    ///
+    /// The cost of keeping one snapshot rather than all of them: somebody two
+    /// releases behind has fields matching a snapshot we no longer hold, so
+    /// they read as edited and stay as they are. A frozen field still works,
+    /// and the alternative is overwriting someone who deliberately went back to
+    /// an older layout.
+    ///
+    /// [`previous`]: Self::previous
+    pub fn merge_new(&self, devices: &DeviceInventory, version: &str) -> Result<Vec<String>> {
         if !self.active.is_dir() {
             return Ok(Vec::new());
         }
+        // Same folder means a development checkout, where the default and the
+        // profile being flown are the same file and correcting one against
+        // itself is noise at best.
+        let upgrading =
+            self.defaults != self.active && self.last_update().as_deref() != Some(version);
+
         let mut notes = Vec::new();
         let mut files: Vec<PathBuf> = std::fs::read_dir(&self.active)?
             .filter_map(|e| e.ok().map(|e| e.path()))
@@ -1864,8 +2274,8 @@ impl Profiles {
                 .map(|b| (b.device.clone(), b.led.clone()))
                 .collect();
             let before = profile.bindings.len();
-            let before_fields = profile.readouts.len();
             let mut from_default = 0usize;
+            let mut work = FieldWork::default();
 
             if let Ok(shipped) = Profile::load(&self.defaults.join(&name)) {
                 for b in shipped.bindings {
@@ -1874,16 +2284,9 @@ impl Profiles {
                         from_default += 1;
                     }
                 }
-                // A readout is added only where it cannot collide. The user may
-                // have claimed those cells for something of their own, and a
-                // shipped suggestion does not outrank that.
-                for r in shipped.readouts {
-                    let clash = profile.readouts.iter().any(|o| {
-                        o.device == r.device && o.display == r.display && o.cells.overlaps(&r.cells)
-                    });
-                    if !clash {
-                        profile.readouts.push(r);
-                    }
+                if upgrading {
+                    let was = self.previously_shipped(&name);
+                    work = reconcile_fields(&mut profile, &shipped.readouts, &was);
                 }
             }
 
@@ -1896,29 +2299,48 @@ impl Profiles {
             }
 
             let added = profile.bindings.len() - before;
-            // Counted, because a default that gains a display field and no lamp
-            // is a real case: the A-10C and AH-64D both gained an MCDU divider
-            // that way. Left out of this sum, the field was merged in memory
-            // and then dropped by the check below, silently, on every start.
-            let fields = profile.readouts.len() - before_fields;
             let order_changed = sort_bindings(&mut profile.bindings, devices);
-            if added == 0 && fields == 0 && !order_changed {
+            // Field work is counted rather than measured as a change in length:
+            // a release that retires one field and adds another nets to zero
+            // and would save nothing, and a release that retires two would
+            // underflow the subtraction it used to be.
+            if added == 0 && work.nothing() && !order_changed {
                 continue;
             }
             profile.save(&path)?;
             let mut what = Vec::new();
             if added > 0 {
                 what.push(format!(
-                    "{added} row(s), {from_default} from the shipped default"
+                    "added {added} row(s), {from_default} from the shipped default"
                 ));
             }
-            if fields > 0 {
-                what.push(format!("{fields} display field(s) from the shipped default"));
+            if work.added > 0 {
+                what.push(format!(
+                    "added {} display field(s) from the shipped default",
+                    work.added
+                ));
+            }
+            if work.updated > 0 {
+                what.push(format!(
+                    "updated {} unchanged display field(s) to the new default",
+                    work.updated
+                ));
+            }
+            if work.removed > 0 {
+                what.push(format!(
+                    "removed {} display field(s) the default no longer ships",
+                    work.removed
+                ));
             }
             match what.is_empty() {
                 true => notes.push(format!("{name}: reordered")),
-                false => notes.push(format!("{name}: added {}", what.join(" and "))),
+                false => notes.push(format!("{name}: {}", what.join(", "))),
             }
+        }
+        // Written whether or not anything changed: the question it answers is
+        // "has this version had its turn", not "did it find work".
+        if upgrading {
+            std::fs::write(self.active.join(UPDATED), format!("{version}\r\n"))?;
         }
         Ok(notes)
     }
@@ -2287,6 +2709,7 @@ mod tests {
             profile_version: String::new(),
             aircraft: vec!["A".into()],
             module: "M".into(),
+            font: None,
             bindings: vec![
                 Binding {
                     device: "D".into(),

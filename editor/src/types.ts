@@ -68,7 +68,58 @@ export interface Binding {
 }
 
 /**
- * One field of a segment display, and the signal that feeds it.
+ * One piece of a field's content: characters the user typed, or a signal.
+ *
+ * A field is a chain of these drawn end to end, because a reading on its own
+ * is rarely a readout. `250` says nothing that `RALT 250M` does not say
+ * better, and the label, the number and the unit each want their own colour
+ * and size.
+ *
+ * A piece carries `text` or `source`, never both. Everything else on it shapes
+ * the one value it draws, so a chain can hold two signals that need different
+ * treatment.
+ */
+export interface Span {
+  /** Characters drawn exactly as given, reading nothing. */
+  text?: string;
+  /** Catalogue signal id. */
+  source?: string;
+  /**
+   * Draw nothing, and take whatever cells the rest of the chain leaves.
+   *
+   * How content reaches both ends of a line. A label at the left and its value
+   * hard against the right is a thing a CDU page does constantly, and counting
+   * the blanks by hand only works until the value changes width, which is the
+   * moment it matters. Two or more gaps split what is left evenly, which
+   * spaces three pieces across a line.
+   */
+  gap?: boolean;
+  /** What the gauge reads at each end of its travel. Numbers only. */
+  reads?: [number, number];
+  decimals?: number;
+  /** Values this module words differently from the glyph table. */
+  aliases?: Record<string, string>;
+  /** A second text signal whose `i` marks the characters to draw inverse. */
+  format?: string;
+  /** What colour a text grid draws this piece in. */
+  colour?: string;
+  /**
+   * Draw in the grid's small font.
+   *
+   * Every font here draws fewer characters small than large, so marking a
+   * piece small can take away a character that was fine at full size.
+   */
+  small?: boolean;
+  /** Draw this whole piece inverse, on glass that draws inverse at all. */
+  inverse?: boolean;
+  /** A second text signal picking each cell's colour through `codes`. */
+  colours?: { source: string; codes: Record<string, string> };
+  /** Stand-in characters this module sends, rewritten one for one. */
+  replace?: Record<string, string>;
+}
+
+/**
+ * One field of a display, and the content that fills it.
  *
  * A field has exactly one owner: nothing chooses between two sources for the
  * same cells at runtime, because the cockpit has already decided what belongs
@@ -79,7 +130,28 @@ export interface Readout {
   display: string;
   /** `"34"` for one cell, `"2-8"` for a run. */
   cells: string;
+  /**
+   * The pieces of this field, when it has more than one.
+   *
+   * A field of one piece is written flat instead, with that piece's `source`
+   * and styling beside the cells, which is how every profile written before
+   * chains is stored and how they have to stay: an update never rewrites a row
+   * the user has changed, so a field that came back as a `content` array where
+   * a `source` used to be would freeze every row against every later fix.
+   *
+   * Use `contentOf` rather than reading this, which gives the pieces whichever
+   * way the field happens to be written.
+   */
+  content?: Span[];
   source: string;
+  /** Characters drawn as given, for a field of one literal piece. */
+  text?: string;
+  /** A field of one gap, which is a blank run and refused as such. */
+  gap?: boolean;
+  small?: boolean;
+  inverse?: boolean;
+  replace?: Record<string, string>;
+  colours?: { source: string; codes: Record<string, string> };
   /**
    * Draw a fixed rule across these cells instead of reading a signal.
    *
@@ -99,6 +171,20 @@ export interface Readout {
    * screen.
    */
   colour?: string;
+  /**
+   * Characters set into the middle of a rule, naming what it divides.
+   *
+   * A rule ends a page; a labelled rule says what the page was. It reads
+   * nothing, like the rest of a divider. Dividers only.
+   */
+  label?: string;
+  /**
+   * The label's colour, which is its own rather than the rule's: a label drawn
+   * in the line's colour reads as part of the line. Absent means it follows
+   * the rule, which is what a label on an already coloured rule should look
+   * like until somebody says otherwise.
+   */
+  label_colour?: string;
   /**
    * What the gauge reads in the cockpit at each end of its travel.
    *
@@ -172,6 +258,15 @@ export interface Profile {
   profile_version: string;
   aircraft: string[];
   module: string;
+  /**
+   * The text grid font to upload, for an aircraft whose own CDU is not one
+   * DCS-BIOS exports.
+   *
+   * An aircraft with a CDU of its own takes its font from the aircraft and is
+   * offered no choice. This is for every other one, where nothing has an
+   * opinion about what the screen should look like.
+   */
+  font?: string;
   bindings: Binding[];
   readouts?: Readout[];
   /**
@@ -231,6 +326,51 @@ export interface DisplayInfo {
    *  on anything but a text grid. Named by the backend so the window cannot
    *  offer one the hardware has no index for. */
   colours: string[];
+  /** Every font this glass can be given. Empty on anything but a text grid. */
+  fonts: FontChoice[];
+  /**
+   * Runtime aircraft name to the font its own CDU matches.
+   *
+   * An aircraft in here takes that font and is offered no choice: the glyphs
+   * were drawn to match what its module sends, so picking another would only
+   * be a way to draw the wrong symbol.
+   */
+  native_fonts: Record<string, string>;
+}
+
+/** One cell of a rule, as the backend lays it out. */
+export interface RuleCell {
+  text: string;
+  /** Part of the label rather than the line, so it takes the label's colour. */
+  label: boolean;
+}
+
+/** One font a text grid can be given. */
+export interface FontChoice {
+  /** Path relative to the display, which is what a profile stores. */
+  file: string;
+  /** The font's own name, which is the aircraft it was drawn for. */
+  name: string;
+  /** Every character it draws at full size. */
+  large: string;
+  /** Every character it draws small, a subset of `large` in all of them. */
+  small: string;
+}
+
+/**
+ * One font's glyphs, for drawing a line the way the panel will.
+ *
+ * Checking the typed characters against the alphabet is not enough, because
+ * these fonts reuse slots: in the A-10C font `%` draws a question mark. A
+ * window that showed the typed string would agree with the user and disagree
+ * with the panel.
+ */
+export interface FontGlyphs {
+  width: number;
+  height: number;
+  /** Character to its rows, `.` dark and `X` lit, at full size. */
+  large: Record<string, string[]>;
+  small: Record<string, string[]>;
 }
 
 export interface Device {

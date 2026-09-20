@@ -38,6 +38,10 @@ Aircraft: AH-64D_BLK_II                              Devices: PTO2, Orion II
   "profile_version": "1.0.0",
   "aircraft": ["AH-64D_BLK_II"],
   "module": "AH-64D", // catalogue key the signal ids resolve against
+  // Which font to upload to a text grid, for an aircraft whose own CDU is not
+  // one DCS-BIOS exports. Left out where every aircraft here has its own,
+  // which this one does. See "Text grids".
+  // "font": "../mcdu/f14bu-font-21x31.json",
 
   "bindings": [
     {
@@ -403,7 +407,8 @@ is a separate, writable one, and it starts as a copy of `data/defaults`.
 - **Install** copies every default in.
 - **Update** copies in only the names that are not already there, and only for
   the aircraft no profile already claims. A profile the user has is theirs, and
-  an update never rewrites it.
+  an update never rewrites its lamp rows. Display fields are reconciled, which
+  is the one exception and has a section of its own below.
 - **Reset** copies one default back over the active file, except for aircraft
   another profile has taken since, which stay where they are.
 - **Delete** removes a profile the user made, or a shipped one when another
@@ -426,6 +431,54 @@ is a separate, writable one, and it starts as a copy of `data/defaults`.
 
 There is exactly one folder in use, so what a user sees in it is what runs.
 Nothing is shadowed at load time and `--profiles` keeps pointing at one place.
+
+## Correcting a display field an update changed
+
+Never rewriting anything has a cost that took a while to become visible: a fix
+shipped to a default reached nobody who already had that profile, including
+somebody who had never opened it. Nothing recorded what a field said when it
+shipped, so a field sitting exactly as delivered and a field somebody had spent
+an evening on looked identical.
+
+`data/defaults-previous` is that record: the defaults as the **last release**
+shipped them, beside the current ones. A field is ours to correct only while it
+still matches that exactly. Five cases, keyed on device, display and cells:
+
+| In the profile | Last release | Now | What happens |
+| --- | --- | --- | --- |
+| matches what shipped | yes | yes | takes the new one |
+| matches what shipped | yes | no | taken out |
+| changed | yes | either | left alone, it is theirs |
+| missing | no | yes | added, it is new |
+| missing | yes | yes | stays missing, they deleted it |
+
+The last row is why a snapshot is needed rather than a flag. Deleting a field
+used to be undone on the next start, because "deleted" and "never had it" were
+the same thing to look at. The fourth and fifth rows differ only in what the
+last release shipped.
+
+The cells being part of the key is what handles a field that **moved**: the old
+one reads as retired and the new one as new, so it is drawn once at its new row
+rather than twice. Comparison is by parsed value, not text, so the arbitrary key
+order of `replace` and `aliases` and the choice between a field written flat and
+one written as a chain of one are not mistaken for somebody's edit.
+
+**It runs once per version**, recorded in `.updated` in the profiles folder,
+not on every start. Otherwise somebody who put a field back the way they liked
+it would have it taken away again at the next launch, and every launch after
+that. Between releases their file is entirely theirs.
+
+Two deliberate costs. Only one snapshot is kept, so a profile two releases
+behind matches nothing and is left alone for good; a frozen field still works,
+and the alternative is overwriting somebody who deliberately went back to an
+older layout. And a missing, empty or stale snapshot silently means "correct
+nothing", which is the safe direction but says nothing, so `tools/snapshot.py
+--check` runs in `tools/release.cmd` before the tag and the refresh runs after
+the push. Lamp rows are not part of any of this.
+
+In a development checkout the defaults and the active profiles are one folder,
+so the whole thing is skipped: there is nothing to reconcile against and the
+files are tracked.
 
 The cost, accepted deliberately: a correction shipped to a default never reaches
 a user who already has that profile, including one who never opened it. Reset is
@@ -772,6 +825,92 @@ case: DCS-BIOS sends each line as `DED_Ln` and its highlighting as
 `DED_Ln_FORMAT`. Only a display that can draw inverse accepts it, which today
 is the ICP's DED, and any other mark draws normally.
 
+### Content: what fills a field
+
+A field's content is a chain of pieces drawn end to end, each one either
+characters the user typed or a signal:
+
+```jsonc
+{
+  "device": "MCDU_Captain",
+  "display": "MCDU",
+  "cells": "0-23", // row 1, which the A-10C's own CDU does not use
+  "content": [
+    { "text": "RALT", "small": true, "colour": "red" },
+    { "source": "PLT_RV5_ALT", "reads": [0, 300], "colour": "green" },
+    { "text": "M", "small": true, "colour": "green" },
+  ],
+}
+```
+
+A reading on its own is rarely a readout. `250` says nothing that `RALT 250M`
+does not say better, and the label, the number and the unit each want their own
+colour and size. Writing them as three fields would mean counting cells by hand
+and would come apart the moment the number changed width.
+
+**A piece carries `text` or `source`, never both**, and naming both is refused
+rather than resolved one way. Everything else on a piece shapes the one value
+it draws, which is why `reads`, `decimals`, `aliases`, `format`, `colours`,
+`replace`, `colour` and `small` all belong to the piece: one chain can hold two
+signals that need different treatment. What belongs to the field is what is
+about the run of cells as a whole, which is `cells`, `align`, `seat` and `note`.
+
+**A field with one piece is written flat**, with that piece's `source` and
+styling beside the cells, and only a chain of two or more is written as
+`content`:
+
+```jsonc
+{ "device": "MCDU_Captain", "display": "MCDU", "cells": "96-119", "source": "CDU_LINE0", "colour": "green" }
+```
+
+That is not cosmetic. Every profile written before chains existed is in the
+flat shape, and an update never rewrites a row the user has changed, so a field
+that came back from a save as a `content` array where a `source` used to be
+would turn every row into a row the user owns and freeze it against every later
+fix. `crates/dsc-config/tests/profile_round_trip.rs` holds that shut.
+
+**Nothing says when content runs past its cells.** A run is a fixed width: the
+content is cropped from whichever end `align` anchors away from, the write goes
+out looking healthy, and the panel shows a reading with its end missing. So the
+editor works the width out ahead of time and warns, with the count, wherever
+every piece is bounded. A string signal is bounded by the `max_length`
+DCS-BIOS declares, and a gauge by the `reads` range it was given; a gauge with
+no range is the one thing nothing bounds, and that is said rather than guessed
+at. It is a warning and never a refusal: whether the aircraft ever sends a
+reading that wide is the user's to judge.
+
+**A gap takes whatever the rest of the line leaves.** It carries no `text` and
+no `source`, draws blank cells, and is measured after everything else is laid
+out:
+
+```jsonc
+{
+  "cells": "0-23",
+  "content": [
+    { "text": "FUEL" },
+    { "gap": true },
+    { "source": "FUEL_TOTAL", "reads": [0, 11000] },
+  ],
+}
+```
+
+That is the thing a CDU page does constantly: a label at the left and its value
+hard against the right. Typing the blanks in works until the value changes
+width, which is the moment it matters, and a gap holds both ends in place
+whatever happens between them. Two or more gaps split what is left evenly, the
+remainder going to the earlier ones, which spaces three pieces across a line.
+
+A gap asks for no room of its own, so it never causes an overflow warning, and
+where nothing is spare it draws nothing rather than pushing anything off the
+end. `align` stops meaning anything beside one, since the content already fills
+the run exactly, and the editor hides it. A gap with anything written on it is
+refused, as is a field of nothing but gaps: that is a blank run with extra
+steps.
+
+**A piece with nothing in it is refused**, the same as an unfinished lamp. It
+is work somebody started and left, and drawing the rest of the chain around a
+hole would hide it.
+
 ### Text grids
 
 The MCDU's screen is a grid of 24 by 14 characters that the panel draws from
@@ -801,11 +940,25 @@ The colours are black, amber, white, cyan, green, magenta, red, yellow, brown,
 grey and khaki. Cell n is row n / 24 and column n % 24, counting from 0, so row
 14 is cells 312 to 335.
 
-**The font belongs to the aircraft.** DCS-BIOS cannot export every symbol a
-CDU draws, so each module sends stand-ins, and each font files those symbols
-under characters of its own choosing. `data/displays/mcdu.json` names the font
-for each aircraft whose CDU it matches, in `native_fonts`, and a profile that
-puts fields on the MCDU for an aircraft without one is refused.
+**The font belongs to the aircraft, where the aircraft has one.** DCS-BIOS
+cannot export every symbol a CDU draws, so each module sends stand-ins, and
+each font files those symbols under characters of its own choosing.
+`data/displays/mcdu.json` names the font for each aircraft whose CDU it
+matches, in `native_fonts`, and that font wins over anything the profile says:
+the glyphs were drawn to match what the module sends, so another font would
+draw the wrong symbol rather than the same one differently.
+
+**An aircraft with no CDU of its own takes the profile's `font`.** Nothing has
+an opinion about what that screen should look like, so the choice is the
+user's, named by font file exactly as a `native_fonts` value is. Until one is
+picked there is no alphabet to check anything against and fields there are
+refused, which is the same refusal as before and now has an answer.
+
+**The fonts differ in what they can draw**, and not only in shape. Only the
+F-14BU font has lowercase, `!`, `#`, `?` or `@`; the other three are uppercase
+only. Every one of them draws fewer characters small than large, so marking a
+piece `small` can take away a character that was fine at full size. Both sizes
+are checked, against the size the piece actually asks for.
 
 **`replace` joins the two.** It rewrites the module's stand-ins, one character
 for one, into the characters the font draws the symbol under: the A-10C sends
@@ -840,28 +993,67 @@ never changes, so a signal on one is a field somebody meant to finish. There is
 no range, no highlighting, no alignment and no seat worth setting, since it
 draws the same thing for every station and at every moment.
 
-**`colour` is the one thing to choose**, and the editor offers it here and
-nowhere else. A field's colour belongs to the aircraft, matching what its own
-CDU draws, so the window leaves it alone; a rule is the user's own addition. A
-new one starts on the colour the display's other fields agree on. Black is the
-screen's own background, so a rule drawn in it cannot be seen.
+**`colour` and `label` are what there is to choose**, and the editor offers
+both here and nowhere else. A field's colour belongs to the aircraft, matching
+what its own CDU draws, so the window leaves it alone; a rule is the user's own
+addition. A new one starts on the colour the display's other fields agree on.
+Black is the screen's own background, so a rule drawn in it cannot be seen.
 
-**The rule is a blank cell at each end and an unbroken run of dashes between
-them**, `-------`. Spaced dashes were tried first and read as a dotted line on
-the glass rather than a rule. A run of fewer than three cells has no room for a
-dash between two margins and is refused. The editor shows the rule as the panel
-will draw it, asked of the same code that draws it.
+**The rule is an unbroken run of dashes, corner to corner of its cells**,
+`--------`. Spaced dashes were tried first and read as a dotted line on the
+glass rather than a rule. It was inset by a blank at each end for a while,
+which was reasoned about rather than looked at: flown beside real CDU lines,
+which start in the first cell of their run, the rule was the one thing on the
+screen that did not line up with what sat above and below it. There is no
+minimum width, since one cell is one dash. The editor shows the rule as the
+panel will draw it, asked of the same code that draws it.
+
+**A `label` is set into the middle of that**, naming what the rule divides the
+way a CDU does with its own:
+
+```jsonc
+{
+  "cells": "72-95",
+  "divider": true,
+  "colour": "green",
+  "label": "FUEL",
+  "label_colour": "amber",
+}
+```
+
+`---------- FUEL ---------`. It is centred, and where the dashes will not
+divide evenly the odd one goes to the left, the way a gap gives its remainder
+to the earlier side. The blank each side of it is what keeps it from reading as
+part of the line, and a side with no dash left on it is not a rule any more, so
+a label needs its own width plus four cells and one that does not have them is
+refused rather than crowded in. Those two blanks are the only ones a rule
+draws. Its characters go through the same font check as anything else drawn.
+
+**`label_colour` is its own**, because a label drawn in the line's colour reads
+as part of the line, which is the one thing a label should not do. Left out, it
+follows the rule, which is what a label added to a rule that already had a
+colour should look like until somebody says otherwise. The editor offers "same
+as the rule" as a choice rather than leaving it as the only behaviour.
+
+A label reads nothing, like the rest of a divider, so it is on the glass from
+the moment the aircraft loads and never changes. Both keys are dropped from
+anything that is not a divider, the same way `colour` is, and `label_colour`
+goes too where there is no `label` to colour: kept, they would be settings the
+window never shows and nothing ever draws. The editor holds on to the colour
+while the text is being edited, so clearing a label to retype it costs nothing,
+but that does not reach the file.
 
 **Text grids only**, like `colour` and `small`. A segment display draws from a
 fixed glyph table and none of them holds a rule, so `validate` refuses one
 there rather than leaving a row of dark cells with nothing saying why. The dash
-and the blank must both be in the aircraft's font, which is checked the same way
-`replace` is.
+must be in the aircraft's font, and the blank too where there is a label to set
+apart, which is checked the same way `replace` is.
 
 **The shipped A-10C and AH-64D profiles carry one.** The A-10C's CDU is ten
 lines on a screen of fourteen, so its rule sits on row 4, above the first line.
 The Apache exports only its keyboard unit, on the bottom row, so its rule sits
-on row 13 directly above, inset to the same 22 cells. The F-14B (Upgrade) has
+on row 13 directly above, inset to the same 22 cells the keyboard unit uses, so
+the two line up. The F-14B (Upgrade) has
 none: its CDNU comes within two rows of filling the glass. A screen showing
 only a rule still counts as a screen with something on it, so the backlight
 comes up with it.

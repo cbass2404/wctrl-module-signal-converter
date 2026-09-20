@@ -98,7 +98,7 @@ fn a_profile_gains_a_display_field_the_default_has_added() {
     std::fs::write(dir.join("active/a-10c.json"), mine).unwrap();
 
     let notes = Profiles::new(dir.join("defaults"), dir.join("active"))
-        .merge_new(&inventory())
+        .merge_new(&inventory(), "test")
         .expect("merge runs");
     assert!(
         notes.iter().any(|n| n.contains("display field")),
@@ -113,7 +113,7 @@ fn a_profile_gains_a_display_field_the_default_has_added() {
         after.readouts.iter().map(|r| r.cells.to_string()).collect::<Vec<_>>()
     );
     assert!(
-        after.readouts.iter().any(|r| r.source == "CDU_LINE0"),
+        after.readouts.iter().any(|r| r.sources() == vec!["CDU_LINE0"]),
         "and the user's own field is still there"
     );
 }
@@ -149,12 +149,12 @@ fn a_shipped_field_never_displaces_one_the_user_put_there() {
     std::fs::write(dir.join("active/a-10c.json"), mine).unwrap();
 
     Profiles::new(dir.join("defaults"), dir.join("active"))
-        .merge_new(&inventory())
+        .merge_new(&inventory(), "test")
         .expect("merge runs");
 
     let after = Profile::load(&dir.join("active/a-10c.json")).expect("still loads");
     assert_eq!(after.readouts.len(), 1, "nothing was added over the user's field");
-    assert_eq!(after.readouts[0].source, "CDU_LINE9");
+    assert_eq!(after.readouts[0].sources(), vec!["CDU_LINE9"]);
 }
 
 #[test]
@@ -164,7 +164,7 @@ fn a_profile_written_before_a_device_existed_gains_rows_for_it() {
     std::fs::write(&active, old_profile()).unwrap();
 
     let notes = Profiles::new(dir.join("defaults"), dir.join("active"))
-        .merge_new(&inventory())
+        .merge_new(&inventory(), "test")
         .expect("merge runs");
     assert_eq!(notes.len(), 1, "one profile was touched: {notes:?}");
 
@@ -201,7 +201,7 @@ fn what_the_user_already_decided_is_untouched() {
 
     let before = Profile::load(&active).unwrap();
     Profiles::new(dir.join("defaults"), dir.join("active"))
-        .merge_new(&inventory())
+        .merge_new(&inventory(), "test")
         .unwrap();
     let after = Profile::load(&active).unwrap();
 
@@ -226,9 +226,9 @@ fn running_it_twice_changes_nothing_the_second_time() {
     std::fs::write(&active, old_profile()).unwrap();
     let profiles = Profiles::new(dir.join("defaults"), dir.join("active"));
 
-    profiles.merge_new(&inventory()).unwrap();
+    profiles.merge_new(&inventory(), "test").unwrap();
     let once = std::fs::read_to_string(&active).unwrap();
-    let notes = profiles.merge_new(&inventory()).unwrap();
+    let notes = profiles.merge_new(&inventory(), "test").unwrap();
 
     assert!(notes.is_empty(), "nothing left to do: {notes:?}");
     assert_eq!(once, std::fs::read_to_string(&active).unwrap());
@@ -257,7 +257,7 @@ fn bindings_a_shipped_default_gained_are_carried_across() {
     .unwrap();
 
     Profiles::new(dir.join("defaults"), dir.join("active"))
-        .merge_new(&inventory())
+        .merge_new(&inventory(), "test")
         .unwrap();
     let after = Profile::load(&dir.join("active/old.json")).unwrap();
 
@@ -284,7 +284,7 @@ fn a_profile_that_will_not_parse_is_left_alone() {
     std::fs::write(&broken, "{ this is not json").unwrap();
 
     let notes = Profiles::new(dir.join("defaults"), dir.join("active"))
-        .merge_new(&inventory())
+        .merge_new(&inventory(), "test")
         .expect("a broken file does not fail the whole merge");
 
     assert!(notes.is_empty());
@@ -313,7 +313,7 @@ fn rows_for_an_unplugged_panel_are_kept() {
     .unwrap();
 
     Profiles::new(dir.join("defaults"), dir.join("active"))
-        .merge_new(&inventory())
+        .merge_new(&inventory(), "test")
         .unwrap();
     let after = Profile::load(&active).unwrap();
 

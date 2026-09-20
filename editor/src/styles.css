@@ -815,15 +815,32 @@ button.icon.cancel:hover {
   border-color: var(--muted);
 }
 
-/* Red, and only reachable once a row has deliberately been opened. */
-button.icon.trash {
+/* Red, and only reachable once a row has deliberately been opened. `danger`
+   is the same thing on the smaller controls inside a field, which were asking
+   for the colour by a name nothing styled. */
+button.icon.trash,
+button.icon.danger {
   color: var(--danger);
   border-color: color-mix(in srgb, var(--danger) 45%, var(--line));
 }
 
-button.icon.trash:hover {
+button.icon.trash:hover,
+button.icon.danger:hover {
   background: color-mix(in srgb, var(--danger) 14%, transparent);
   border-color: var(--danger);
+}
+
+/* Nothing said which of these were live: the arrows at the ends of a chain and
+   the delete on a field of one piece are all disabled, and all looked exactly
+   like the ones that work. */
+button.icon:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+button.icon:disabled:hover {
+  background: none;
+  border-color: var(--line);
 }
 
 button.add {
@@ -1077,6 +1094,28 @@ input.alias {
   overflow-x: auto;
 }
 
+/* The label set into a rule: the text and its colour side by side, with
+   whatever is wrong with it underneath. The row wraps rather than squeezing
+   the box, since a label is read as much as it is typed. */
+.rule-label {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  margin-top: 4px;
+}
+
+.rule-label .meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rule-label .bad {
+  flex-basis: 100%;
+}
+
 /* Laid out like .aliases, which is the same shape of thing: a labelled control
    with the reason for it underneath. */
 .highlighting,
@@ -1150,6 +1189,146 @@ button.add.small {
 
 .readout-extras .block {
   flex-basis: 100%;
+}
+
+/* A field's content: the pieces it is drawn from, end to end.
+
+   Each piece is a small stack rather than a row, because a piece carries more
+   than fits on a line once it has a source, a range and a colour, and stacking
+   them keeps the order of the chain readable down the page. The order down the
+   page is the order across the glass. */
+.chain {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.span {
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line);
+  border-radius: 5px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.span-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.span-head .spacer {
+  flex: 1;
+}
+
+select.span-kind {
+  font-size: 12.5px;
+}
+
+.span-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: center;
+}
+
+.span-body label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.span-body .block,
+.span-style .block {
+  flex-basis: 100%;
+}
+
+.span-body .aliases {
+  flex-basis: 100%;
+}
+
+input.span-text {
+  font-family: var(--mono, ui-monospace, "Cascadia Mono", Consolas, monospace);
+  min-width: 12em;
+}
+
+.span-style {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  align-items: center;
+}
+
+.span-style label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chain-add {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* The line as the panel will draw it, in the font it will be drawn with.
+
+   On the glass's own black rather than the page's, so a white character is
+   not invisible in light mode and every colour reads the way it will on the
+   panel. Pixelated, because these are 21 by 31 bitmaps and smoothing them
+   would show a rounder letter than the hardware draws. */
+.preview-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+canvas.glyph-preview {
+  background: #05070a;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 4px;
+  align-self: flex-start;
+  image-rendering: pixelated;
+  max-width: 100%;
+}
+
+/* An area of the glass with nothing on it yet.
+
+   Listed like every other, and like every lamp of a device, because a screen
+   the user cannot see the empty rows of is a screen they have to already know
+   the shape of. Dimmed so the areas in use still read first. */
+tr.region-empty td {
+  color: var(--muted);
+}
+
+tr.region-empty .region-name {
+  font-weight: 500;
+  color: var(--fg);
+}
+
+tr.region-head td {
+  padding-top: 12px;
+}
+
+/* Which font this screen is drawn with. Sits at the end of the display's
+   heading, where the lamp count sits on a device. */
+.font-pick,
+.font-fixed {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  max-width: 26em;
+}
+
+.font-pick .block {
+  flex-basis: 100%;
+  text-align: right;
 }
 
 input.small {

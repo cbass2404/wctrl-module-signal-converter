@@ -35,6 +35,7 @@
       "../../data/devices.json": "data/devices.json",
       "../../data/nightly-only.json": "data/nightly-only.json",
       "../../data/defaults/": "data/defaults/",
+      "../../data/defaults-previous/": "data/defaults-previous/",
       "../../data/displays/": "data/displays/",
       "../../data/mcdu/": "data/mcdu/",
       "../../LICENSE": "LICENSE",

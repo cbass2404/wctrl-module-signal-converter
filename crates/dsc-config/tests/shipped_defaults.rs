@@ -28,6 +28,31 @@ fn inventory() -> DeviceInventory {
     DeviceInventory::load(&root().join("data/devices.json")).expect("devices.json loads")
 }
 
+/// `data/defaults-previous` is what an update compares a user's display fields
+/// against, and it fails safe: a file that will not parse reads as no snapshot
+/// at all, so corrections quietly stop reaching that profile and nothing says
+/// so. Names are not required to match `data/defaults`, since a default added
+/// this release is not in it yet and a retired one is still in it.
+#[test]
+fn every_snapshotted_default_still_parses() {
+    let dir = root().join("data/defaults-previous");
+    assert!(
+        dir.is_dir(),
+        "data/defaults-previous is missing; it holds the defaults the last \
+         release shipped, and without it no display field is ever corrected"
+    );
+    let mut seen = 0;
+    for entry in std::fs::read_dir(&dir).expect("readable") {
+        let path = entry.expect("entry").path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        Profile::load(&path).unwrap_or_else(|e| panic!("{} does not parse: {e}", path.display()));
+        seen += 1;
+    }
+    assert!(seen > 0, "the snapshot folder is empty");
+}
+
 #[test]
 fn every_default_has_a_row_for_every_profile_lamp() {
     let inventory = inventory();
@@ -72,7 +97,7 @@ fn the_startup_merge_leaves_every_default_untouched() {
         std::fs::copy(&path, dir.join("active").join(path.file_name().unwrap())).unwrap();
     }
 
-    let notes = Profiles::new(dir.join("none"), dir.join("active")).merge_new(&inventory());
+    let notes = Profiles::new(dir.join("none"), dir.join("active")).merge_new(&inventory(), "test");
     let _ = std::fs::remove_dir_all(&dir);
     let notes = notes.expect("merge runs");
     assert!(notes.is_empty(), "the merge would change shipped defaults: {notes:#?}");

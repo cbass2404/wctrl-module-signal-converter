@@ -468,27 +468,34 @@ fn the_shipped_hornet_fields_land_on_named_regions() {
 
 // ------------------------------------------------------- readouts
 
-use dsc_config::{divider_rule, Align, CellRange, Readout, MIN_DIVIDER_CELLS};
+use dsc_config::{
+    divider_rule, divider_text, min_divider_cells, Align, CellRange, Colour, Reading, Readout, Span,
+};
 
 fn readout(cells: &str, source: &str) -> Readout {
-    Readout {
-        device: "CarrierAce_UFC".into(),
-        display: "UFC1".into(),
-        cells: cells.parse::<CellRange>().expect("a cell run parses"),
-        source: source.into(),
-        divider: false,
-        seat: None,
-        reads: None,
-        decimals: 0,
-        align: Align::Left,
-        aliases: Default::default(),
-        format: None,
-        colour: None,
-        small: false,
-        replace: Default::default(),
-        colours: None,
-        note: String::new(),
-    }
+    Readout::reading(
+        "CarrierAce_UFC",
+        "UFC1",
+        cells.parse::<CellRange>().expect("a cell run parses"),
+        source,
+    )
+}
+
+/// The one span of a field written the ordinary way, to set what shapes it.
+fn span(r: &mut Readout) -> &mut Span {
+    r.content.first_mut().expect("a field has a span")
+}
+
+/// What the field puts on its cells when the signal it reads says `value`.
+///
+/// Goes through `compose`, so these are the glyphs the panel would be sent
+/// rather than the output of a layout step looked at on its own.
+fn drawn(r: &Readout, value: &str) -> Vec<String> {
+    r.compose(|_| Some(Reading::Text(value.to_string())))
+        .expect("the signal has arrived")
+        .into_iter()
+        .map(|g| g.text)
+        .collect()
 }
 
 #[test]
@@ -506,29 +513,21 @@ fn a_cell_run_reads_and_writes_the_way_it_is_written() {
 }
 
 #[test]
-fn a_divider_rules_every_cell_between_a_blank_at_each_end() {
-    // The shape the panel gets: one blank each side and an unbroken line
-    // between. Spaced dashes read as a dotted line on the glass.
-    assert_eq!(divider_rule(9).concat(), " ------- ");
-    assert_eq!(divider_rule(3).concat(), " - ");
-    assert_eq!(divider_rule(24).concat(), " ---------------------- ");
+fn a_divider_rules_every_cell_of_its_run() {
+    // The shape the panel gets: an unbroken line, corner to corner. Spaced
+    // dashes read as a dotted line on the glass. It was inset by a blank at
+    // each end until it was flown beside real CDU lines, which start in the
+    // first cell of their run and left the rule the one thing out of line.
+    assert_eq!(divider_text(9, ""), "---------");
+    assert_eq!(divider_text(1, ""), "-");
+    assert_eq!(divider_text(24, ""), "------------------------");
     // Every rule is exactly as wide as the run it was asked for, so a divider
-    // can never spill into the field beside it, and the margins never close up.
-    for width in MIN_DIVIDER_CELLS..40 {
-        let rule = divider_rule(width);
+    // can never spill into the field beside it.
+    for width in 1..40 {
+        let rule = divider_rule(width, "");
         assert_eq!(rule.len(), width);
-        assert_eq!(rule[0], " ", "{width} cells: a blank at the start");
-        assert_eq!(rule[width - 1], " ", "{width} cells: a blank at the end");
-        assert!(rule[1..width - 1].iter().all(|c| c == "-"), "{width} cells");
-    }
-}
-
-#[test]
-fn a_run_with_no_room_for_a_dash_between_two_margins_draws_blank() {
-    // Refused by `problems` long before this, but a rule that crowded the ends
-    // would look like a fault on the glass rather than an unfinished profile.
-    for width in 0..MIN_DIVIDER_CELLS {
-        assert!(divider_rule(width).iter().all(|c| c == " "), "{width} cells");
+        assert!(rule.iter().all(|c| c.text == "-"), "{width} cells");
+        assert!(rule.iter().all(|c| !c.label), "{width} cells: nothing is a label");
     }
 }
 
@@ -536,7 +535,94 @@ fn a_run_with_no_room_for_a_dash_between_two_margins_draws_blank() {
 fn a_divider_draws_its_own_run_whatever_the_field_says() {
     let mut r = readout("2-10", "IGNORED");
     r.divider = true;
-    assert_eq!(r.divider_cells().concat(), " ------- ");
+    assert_eq!(r.divider_cells().into_iter().map(|c| c.text).collect::<String>(), "---------");
+}
+
+// --------------------------------------------------------------- rule labels
+
+#[test]
+fn a_label_sits_in_the_middle_of_the_rule_with_a_blank_each_side() {
+    // The blanks are what keep the label from reading as part of the line.
+    // They are the only blanks a rule draws: the line itself runs to the edge.
+    assert_eq!(divider_text(14, "FUEL"), "---- FUEL ----");
+    // An odd number of dashes puts the extra one on the left, the way a gap
+    // gives its remainder to the earlier side.
+    assert_eq!(divider_text(15, "FUEL"), "----- FUEL ----");
+    // The narrowest a label can be drawn in: one dash each side.
+    assert_eq!(divider_text(min_divider_cells("FUEL"), "FUEL"), "- FUEL -");
+}
+
+#[test]
+fn a_labelled_rule_is_still_exactly_as_wide_as_its_run() {
+    // The one thing a rule may never do is spill into the field beside it.
+    for label in ["A", "FUEL", "WAYPOINT"] {
+        for width in min_divider_cells(label)..48 {
+            let rule = divider_rule(width, label);
+            assert_eq!(rule.len(), width, "{label} in {width} cells");
+            assert_eq!(rule[0].text, "-", "{label} in {width}: the line starts at the edge");
+            assert_eq!(rule[width - 1].text, "-", "{label} in {width}: and ends at it");
+            let drawn: String = rule.iter().filter(|c| c.label).map(|c| c.text.as_str()).collect();
+            assert_eq!(drawn, label, "{label} in {width} cells is drawn whole");
+            // The label is one run, not scattered, and has a blank each side.
+            let at = rule.iter().position(|c| c.label).expect("the label is drawn");
+            assert_eq!(rule[at - 1].text, " ", "{label} in {width}: a blank before it");
+            assert_eq!(rule[at + label.chars().count()].text, " ", "{label} in {width}: a blank after it");
+            assert!(rule[..at - 1].iter().all(|c| c.text == "-"), "{label} in {width}");
+            let after = at + label.chars().count() + 1;
+            assert!(rule[after..].iter().all(|c| c.text == "-"), "{label} in {width}");
+            assert!(after < width, "{label} in {width}: a dash is left on the right");
+        }
+    }
+}
+
+#[test]
+fn a_label_with_no_room_leaves_a_plain_rule() {
+    // Refused by `problems`, which is where the user is told. Drawing it anyway
+    // would mean crowding the line or running past the run, and a rule that
+    // quietly loses its margins looks like a fault on the glass.
+    for width in 0..min_divider_cells("FUEL") {
+        let rule = divider_rule(width, "FUEL");
+        assert_eq!(rule.len(), width, "{width} cells");
+        assert!(rule.iter().all(|c| !c.label), "{width} cells: no label is drawn");
+    }
+}
+
+#[test]
+fn a_label_takes_its_own_colour_and_leaves_the_rule_its_own() {
+    // The point of a label is that it is not the line, so a label drawn in the
+    // line's colour is the one thing this should not quietly do.
+    let mut r = readout("0-13", "IGNORED");
+    r.divider = true;
+    r.colour = Some(Colour::Green);
+    r.label = "FUEL".to_string();
+    r.label_colour = Some(Colour::Amber);
+    let drawn = r.compose(|_| None).expect("a rule reads nothing and always draws");
+    let colours: Vec<Option<Colour>> = drawn.iter().map(|g| g.colour).collect();
+    let label: Vec<Option<Colour>> = drawn
+        .iter()
+        .filter(|g| g.text.chars().all(|c| c.is_ascii_alphabetic()) && !g.text.is_empty())
+        .map(|g| g.colour)
+        .collect();
+    assert_eq!(label, vec![Some(Colour::Amber); 4], "the label is drawn in its own colour");
+    assert!(
+        colours.iter().filter(|c| **c == Some(Colour::Green)).count() > 4,
+        "the rest of the rule keeps the rule's colour"
+    );
+}
+
+#[test]
+fn a_label_nobody_coloured_follows_the_rule() {
+    // A label added to a rule that already had a colour should look like part
+    // of the same thing until somebody says otherwise.
+    let mut r = readout("0-13", "IGNORED");
+    r.divider = true;
+    r.colour = Some(Colour::Green);
+    r.label = "FUEL".to_string();
+    let drawn = r.compose(|_| None).expect("a rule always draws");
+    assert!(
+        drawn.iter().all(|g| g.colour == Some(Colour::Green)),
+        "every cell of it is the rule's colour"
+    );
 }
 
 #[test]
@@ -551,10 +637,11 @@ fn runs_overlap_only_when_they_share_a_cell() {
 #[test]
 fn a_gauge_is_converted_between_the_values_its_face_is_marked_with() {
     let mut r = readout("2-8", "OIL_TEMP");
-    r.reads = Some([0.0, 300.0]);
-    assert_eq!(r.format_number(0, 65535), "0");
-    assert_eq!(r.format_number(65535, 65535), "300");
-    assert_eq!(r.format_number(32767, 65535), "150");
+    span(&mut r).reads = Some([0.0, 300.0]);
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(0, 65535), "0");
+    assert_eq!(s.format_number(65535, 65535), "300");
+    assert_eq!(s.format_number(32767, 65535), "150");
 }
 
 #[test]
@@ -562,21 +649,23 @@ fn a_gauge_that_reads_below_zero_converts_too() {
     // A g meter does not start at zero, and the conversion interpolates
     // between the two ends of the face rather than scaling up from nothing.
     let mut r = readout("2-8", "ACCEL_G");
-    r.reads = Some([-10.0, 12.0]);
-    r.decimals = 1;
-    assert_eq!(r.format_number(0, 65535), "-10.0");
-    assert_eq!(r.format_number(65535, 65535), "12.0");
+    span(&mut r).reads = Some([-10.0, 12.0]);
+    span(&mut r).decimals = 1;
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(0, 65535), "-10.0");
+    assert_eq!(s.format_number(65535, 65535), "12.0");
     // Level flight is 1 g, which sits 11/22 of the way up a -10..12 face.
     let one_g = (11.0f64 / 22.0 * 65535.0).round() as u16;
-    assert_eq!(r.format_number(one_g, 65535), "1.0");
+    assert_eq!(s.format_number(one_g, 65535), "1.0");
 }
 
 #[test]
 fn a_gauge_whose_face_runs_backwards_converts_too() {
     let mut r = readout("2-8", "BACKWARDS");
-    r.reads = Some([100.0, 0.0]);
-    assert_eq!(r.format_number(0, 65535), "100");
-    assert_eq!(r.format_number(65535, 65535), "0");
+    span(&mut r).reads = Some([100.0, 0.0]);
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(0, 65535), "100");
+    assert_eq!(s.format_number(65535, 65535), "0");
 }
 
 #[test]
@@ -585,9 +674,10 @@ fn a_selector_whose_value_is_already_the_number_needs_no_special_case() {
     // own range makes the conversion an identity, through the same arithmetic
     // a needle uses.
     let mut r = readout("2", "TACAN_1");
-    r.reads = Some([0.0, 10.0]);
+    span(&mut r).reads = Some([0.0, 10.0]);
+    let s = span(&mut r).clone();
     for n in 0..=10u16 {
-        assert_eq!(r.format_number(n, 10), n.to_string());
+        assert_eq!(s.format_number(n, 10), n.to_string());
     }
 }
 
@@ -596,23 +686,23 @@ fn a_right_aligned_field_drops_its_leading_pad_not_its_last_digit() {
     let mut r = readout("2-8", "UFC_SCRATCHPAD_NUMBER_DISPLAY");
     r.align = Align::Right;
     // DCS-BIOS gives 8 characters for 7 cells. Observed live.
-    assert_eq!(r.lay_out(" 264.000").concat(), "264.000");
+    assert_eq!(drawn(&r, " 264.000").concat(), "264.000");
     // And a short value is pushed to the right, which is where keypresses land.
-    assert_eq!(r.lay_out("1").concat(), "      1");
+    assert_eq!(drawn(&r, "1").concat(), "      1");
 }
 
 #[test]
 fn a_left_aligned_field_pads_on_the_right() {
     let r = readout("10-13", "UFC_OPTION_DISPLAY_1");
-    assert_eq!(r.lay_out("AM").concat(), "AM  ");
-    assert_eq!(r.lay_out("GRCV").concat(), "GRCV");
-    assert_eq!(r.lay_out("TOOLONG").concat(), "TOOL");
+    assert_eq!(drawn(&r, "AM").concat(), "AM  ");
+    assert_eq!(drawn(&r, "GRCV").concat(), "GRCV");
+    assert_eq!(drawn(&r, "TOOLONG").concat(), "TOOL");
 }
 
 #[test]
 fn a_shrinking_field_blanks_the_cells_it_gives_up() {
     let r = readout("10-13", "UFC_OPTION_DISPLAY_1");
-    let now = r.lay_out("AM");
+    let now = drawn(&r, "AM");
     assert_eq!(now.len(), 4, "every cell is written, not just the used ones");
     assert_eq!(now[2], " ");
     assert_eq!(now[3], " ");
@@ -623,15 +713,90 @@ fn a_single_cell_field_is_laid_out_as_one_whole_glyph() {
     let r = readout("34", "UFC_COMM1_DISPLAY");
     // Not [" ", "2"]: the pair is one glyph on one cell, which is how the
     // hardware was observed being driven.
-    assert_eq!(r.lay_out(" 2"), vec![" 2".to_string()]);
+    assert_eq!(drawn(&r, " 2"), vec![" 2".to_string()]);
 }
 
 #[test]
 fn an_alias_rewrites_a_value_the_glyph_table_does_not_know() {
     let mut r = readout("1", "UFC_SCRATCHPAD_STRING_2_DISPLAY");
-    r.aliases.insert("--".into(), "_".into());
+    span(&mut r).aliases.insert("--".into(), "_".into());
     // DCS-BIOS says "--" where DCS's own indication says "_", and "--" is not
     // a glyph. Without this the cell would fall back to a single dash.
-    assert_eq!(r.alias("--"), "_");
-    assert_eq!(r.alias(" 2"), " 2", "anything not aliased passes through");
+    assert_eq!(drawn(&r, "--"), vec!["_".to_string()]);
+    assert_eq!(
+        drawn(&r, " 2"),
+        vec![" 2".to_string()],
+        "anything not aliased passes through"
+    );
+}
+
+#[test]
+fn a_chain_draws_its_pieces_end_to_end() {
+    // The case the chain exists for: a label the user typed, the reading
+    // beside it, and a unit after it, all on one run of cells.
+    let mut r = readout("10-13", "RALT");
+    r.content = vec![
+        Span { text: "R".into(), ..Span::default() },
+        Span { source: "RALT".into(), ..Span::default() },
+        Span { text: "M".into(), ..Span::default() },
+    ];
+    assert_eq!(drawn(&r, "25").concat(), "R25M");
+}
+
+#[test]
+fn a_chain_longer_than_its_run_loses_the_end_and_says_nothing() {
+    // Nothing refuses this and nothing on the panel shows it happened, which
+    // is why the editor works the width out ahead of time.
+    let mut r = readout("10-13", "RALT");
+    r.content = vec![
+        Span { text: "RALT".into(), ..Span::default() },
+        Span { source: "RALT".into(), ..Span::default() },
+    ];
+    assert_eq!(drawn(&r, "250").concat(), "RALT");
+}
+
+#[test]
+fn a_chain_draws_what_has_arrived_while_the_rest_is_still_coming() {
+    // A label belongs on the glass before the reading beside it, so one span
+    // still waiting does not hold back the ones that are ready.
+    let mut r = readout("10-13", "RALT");
+    r.content = vec![
+        Span { text: "R".into(), ..Span::default() },
+        Span { source: "RALT".into(), ..Span::default() },
+    ];
+    let glyphs = r.compose(|_| None).expect("the literal piece is ready");
+    let text: String = glyphs.iter().map(|g| g.text.as_str()).collect();
+    assert_eq!(text, "R   ", "the label is drawn and the rest is blank");
+}
+
+#[test]
+fn a_field_with_nothing_but_an_unread_signal_leaves_its_cells_alone() {
+    // None rather than a run of blanks: writing spaces over a cell is not the
+    // same as not writing it, and a field that has never read anything has
+    // nothing to say about what is there.
+    let r = readout("10-13", "RALT");
+    assert!(r.compose(|_| None).is_none());
+}
+
+#[test]
+fn each_piece_of_a_chain_keeps_its_own_colour_and_size() {
+    let mut r = readout("10-13", "RALT");
+    r.content = vec![
+        Span {
+            text: "R".into(),
+            colour: Some(dsc_config::Colour::Red),
+            small: true,
+            ..Span::default()
+        },
+        Span {
+            source: "RALT".into(),
+            colour: Some(dsc_config::Colour::Green),
+            ..Span::default()
+        },
+    ];
+    let glyphs = r.compose(|_| Some(Reading::Text("25".into()))).unwrap();
+    assert_eq!(glyphs[0].colour, Some(dsc_config::Colour::Red));
+    assert!(glyphs[0].small, "the label is small and the reading is not");
+    assert_eq!(glyphs[1].colour, Some(dsc_config::Colour::Green));
+    assert!(!glyphs[1].small);
 }

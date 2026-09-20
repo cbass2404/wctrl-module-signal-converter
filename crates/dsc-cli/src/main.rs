@@ -19,7 +19,7 @@ use dsc_config::log::{self as dlog, Level};
 use dsc_config::nightly_only::{Change, NightlyOnly};
 use dsc_config::paths::{Layout, Paths};
 use dsc_config::{Flag, Place, Unsound};
-use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout, Transport};
+use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout, Span, Transport};
 use dsc_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
@@ -1398,7 +1398,7 @@ struct Trace {
     /// The readout itself is kept rather than its numbers copied out, so the
     /// line and the glass cannot drift apart: both go through
     /// `Readout::format_number`.
-    converts: HashMap<String, (Readout, u16)>,
+    converts: HashMap<String, (Span, u16)>,
 }
 
 /// One signal the active profile reads, and how to read it.
@@ -1504,7 +1504,7 @@ impl Trace {
             // A display field reads the stream exactly as a lamp condition
             // does. Leaving it out meant a paint line appeared with nothing
             // above it saying what had moved.
-            .chain(profile.readouts.iter().map(|r| r.source.as_str()));
+            .chain(profile.readouts.iter().flat_map(Readout::sources));
 
         for source in sources {
             let Some(o) = module.signal(source).and_then(|s| s.primary()) else {
@@ -1533,17 +1533,18 @@ impl Trace {
                 // with. Held by name rather than folded into the entry, so a
                 // signal that is both a lamp condition and a display field
                 // still registers once and still logs once.
-                if let Some(r) = profile
+                if let Some(span) = profile
                     .readouts
                     .iter()
-                    .find(|r| r.source == source && r.reads.is_some())
+                    .flat_map(|r| r.content.iter())
+                    .find(|s| s.source == source && s.reads.is_some())
                 {
                     let max = o
                         .max_value
                         .unwrap_or(u32::from(u16::MAX))
                         .min(u32::from(u16::MAX)) as u16;
                     self.converts
-                        .insert(source.to_string(), (r.clone(), max));
+                        .insert(source.to_string(), (span.clone(), max));
                 }
                 let entry = Followed::Number {
                     name: source.to_string(),
@@ -1583,7 +1584,9 @@ impl Trace {
                         // against the stream and the converted one against the
                         // gauge in the cockpit.
                         match self.converts.get(name) {
-                            Some((r, max)) => format!("{raw} -> {}", r.format_number(raw, *max)),
+                            Some((span, max)) => {
+                                format!("{raw} -> {}", span.format_number(raw, *max))
+                            }
                             None => raw.to_string(),
                         }
                     }
@@ -2269,7 +2272,7 @@ fn run(
     // and their file is the one that runs, so without this the lamps on that
     // panel could never be configured at all.
     for note in Profiles::new(defaults_dir, profiles_dir)
-        .merge_new(&inventory)
+        .merge_new(&inventory, env!("CARGO_PKG_VERSION"))
         .with_context(|| format!("updating profiles in {}", profiles_dir.display()))?
     {
         say!("updated  {note}");

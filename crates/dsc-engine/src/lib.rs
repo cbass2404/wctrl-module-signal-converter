@@ -491,10 +491,16 @@ impl Engine {
                 // matches, and one with none has nothing to draw with. The
                 // profile check says so; here the screen is blanked, so the
                 // last aircraft's page does not stay up under this one.
-                let font = map
-                    .text
-                    .as_ref()
-                    .and_then(|t| self.aircraft.as_deref().and_then(|a| t.font_for(a)));
+                // The aircraft's own font where it has one, and the font the
+                // profile picked where it does not. An aircraft with a CDU
+                // keeps its own either way: the glyphs are drawn to match what
+                // the module sends, and overriding that puts the wrong symbol
+                // on the glass rather than a differently shaped right one.
+                let font = map.text.as_ref().and_then(|t| {
+                    self.aircraft
+                        .as_deref()
+                        .and_then(|a| t.font_with(a, profile.font.as_deref()))
+                });
                 let drawable = map.text.is_none() || font.is_some();
                 let used = drawable
                     && profile
@@ -549,75 +555,47 @@ impl Engine {
                             continue;
                         }
                     }
-                    // Which cells draw inverse. A format that has not arrived
-                    // yet draws the field plainly rather than holding it back.
-                    let inverse = r
-                        .format
-                        .as_ref()
-                        .and_then(|f| self.catalogue.module(&profile.module)?.signal(f)?.primary())
-                        .and_then(|o| self.state.text(o.address, o.max_length.unwrap_or(0)))
-                        .map(|t| r.inverse_cells(&t))
-                        .unwrap_or_default();
-                    // Each cell's colour, where the module sends one. Until it
-                    // arrives the field draws in its own colour, like format.
-                    let colours = r
-                        .colours
-                        .as_ref()
-                        .and_then(|c| {
-                            self.catalogue
-                                .module(&profile.module)?
-                                .signal(&c.source)?
-                                .primary()
-                        })
-                        .and_then(|o| self.state.text(o.address, o.max_length.unwrap_or(0)))
-                        .map(|t| r.colour_cells(&t))
-                        .unwrap_or_default();
-                    // A divider reads nothing. It is a fixed rule the profile
-                    // asked for, so it is laid out without looking for a source
-                    // and is on the glass from the moment the aircraft loads.
-                    let value = if r.divider {
-                        r.divider_cells()
-                    } else {
-                        let Some(output) = self
-                            .catalogue
-                            .module(&profile.module)
-                            .and_then(|m| m.signal(&r.source))
-                            .and_then(|s| s.primary())
-                        else {
-                            continue;
-                        };
-                        let text = if output.r#type == "string" {
-                            match self.state.text(output.address, output.max_length.unwrap_or(0)) {
-                                Some(t) => t,
-                                None => continue, // not arrived yet; leave it blank
-                            }
-                        } else {
-                            let mask = output.mask.unwrap_or(u16::MAX);
-                            match self.state.value(output.address, mask, output.shift) {
-                                Some(v) => r.format_number(
-                                    v,
-                                    output.max_value.unwrap_or(u32::from(u16::MAX)).min(u32::from(u16::MAX)) as u16,
-                                ),
-                                None => continue,
-                            }
-                        };
-                        r.lay_out(&r.replace_chars(&text))
+                    // What the field draws right now, one glyph per cell,
+                    // composed from its spans. How a reading turns into
+                    // characters is policy and lives in the config crate; all
+                    // that happens here is looking up what a signal says.
+                    //
+                    // None means every signal it reads is still to arrive, so
+                    // the cells are left alone rather than written blank. A
+                    // chain that has some of its signals draws what it has: a
+                    // label belongs on the glass before the reading beside it.
+                    let module = self.catalogue.module(&profile.module);
+                    let state = &self.state;
+                    let Some(glyphs) = r.compose(|id| {
+                        let output = module?.signal(id)?.primary()?;
+                        if output.r#type == "string" {
+                            return state
+                                .text(output.address, output.max_length.unwrap_or(0))
+                                .map(dsc_config::Reading::Text);
+                        }
+                        let mask = output.mask.unwrap_or(u16::MAX);
+                        state
+                            .value(output.address, mask, output.shift)
+                            .map(|value| dsc_config::Reading::Number {
+                                value,
+                                max: output
+                                    .max_value
+                                    .unwrap_or(u32::from(u16::MAX))
+                                    .min(u32::from(u16::MAX))
+                                    as u16,
+                            })
+                    }) else {
+                        continue;
                     };
                     for (offset, cell) in r.cells.cells().enumerate() {
-                        let Some(glyph) = value.get(offset) else { continue };
-                        let flip = inverse.get(offset).copied().unwrap_or(false);
-                        let glyph = r.alias(glyph);
+                        let Some(glyph) = glyphs.get(offset) else { continue };
                         if map.transport == Transport::Text {
-                            let ch = glyph.chars().next().unwrap_or(' ');
-                            let colour = colours
-                                .get(offset)
-                                .copied()
-                                .flatten()
-                                .or(r.colour)
-                                .unwrap_or_default();
-                            let _ = next.draw_text(map, cell, ch, colour, r.small, flip);
+                            let ch = glyph.text.chars().next().unwrap_or(' ');
+                            let colour = glyph.colour.unwrap_or_default();
+                            let _ =
+                                next.draw_text(map, cell, ch, colour, glyph.small, glyph.inverse);
                         } else {
-                            let _ = next.draw_styled(map, cell, glyph, flip);
+                            let _ = next.draw_styled(map, cell, &glyph.text, glyph.inverse);
                         }
                     }
                 }

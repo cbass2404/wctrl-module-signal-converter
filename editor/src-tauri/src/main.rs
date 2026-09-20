@@ -17,7 +17,7 @@ mod view;
 
 use dsc_config::paths::Paths;
 use view::{DeviceView, ModuleChoice, ProfileSummary, SignalView};
-use dsc_config::{divider_rule as rule_for, DeviceInventory, Module, Profile};
+use dsc_config::{divider_rule as rule_for, DeviceInventory, Module, Profile, RuleCell};
 
 /// Commands return a message rather than an error type, because the only useful
 /// thing the window can do with a failure is show it to the user.
@@ -86,7 +86,7 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         .map_err(|e| fail("copying in the shipped profiles", e))?;
     paths
         .profiles
-        .merge_new(&inventory(&paths)?)
+        .merge_new(&inventory(&paths)?, env!("CARGO_PKG_VERSION"))
         .map_err(|e| fail("adding new hardware to the profiles", e))?;
 
     let dir = &paths.profiles.active;
@@ -126,11 +126,13 @@ fn signals(module: String) -> Reply<Vec<SignalView>> {
 /// What a divider of this many cells will draw, for the window to show.
 ///
 /// Asked of the backend rather than worked out again in TypeScript, so there is
-/// one rule for where the dashes fall and the preview cannot drift from what
-/// the panel gets.
+/// one rule for where the dashes fall and where a label sits between them, and
+/// the preview cannot drift from what the panel gets. One cell at a time rather
+/// than one string, because the label is drawn in its own colour and the window
+/// has to know which cells are it.
 #[tauri::command]
-fn divider_rule(cells: usize) -> Reply<String> {
-    Ok(rule_for(cells).concat())
+fn divider_rule(cells: usize, label: String) -> Reply<Vec<RuleCell>> {
+    Ok(rule_for(cells, &label))
 }
 
 #[tauri::command]
@@ -427,6 +429,30 @@ fn catalogue_status(status: tauri::State<CatalogueStatus>) -> Reply<CatalogueSta
     Ok(status.inner().clone())
 }
 
+/// One font's glyphs, so the window can draw a line the way the panel will.
+///
+/// Checking the typed characters against the alphabet is not enough. These
+/// fonts reuse slots: in the A-10C font `%` draws a question mark, and a
+/// window that showed the typed string would agree with the user and disagree
+/// with the panel. So the real bitmaps go up and the preview is drawn from
+/// them.
+///
+/// Asked for per font rather than sent with the displays, because four fonts
+/// of glyph bitmaps is a great deal of data to hand over for a screen nobody
+/// may open.
+#[tauri::command]
+fn font_glyphs(display: String, font: String) -> Reply<view::FontGlyphs> {
+    let paths = Paths::resolve();
+    let maps = dsc_config::DisplayCatalogue::load_dir(&paths.displays)
+        .map_err(|e| format!("loading {}: {e}", paths.displays.display()))?;
+    let map = maps.get(&display).ok_or_else(|| format!("no display named {display}"))?;
+    let text = map
+        .text
+        .as_ref()
+        .ok_or_else(|| format!("{display} draws from a glyph table, not from a font"))?;
+    view::FontGlyphs::load(text, &font)
+}
+
 fn main() {
     let status = refresh_catalogue(&Paths::resolve());
     tauri::Builder::default()
@@ -442,6 +468,7 @@ fn main() {
             profiles,
             signals,
             divider_rule,
+            font_glyphs,
             converter::converter_state,
             converter::converter_restart,
             converter::converter_kill,

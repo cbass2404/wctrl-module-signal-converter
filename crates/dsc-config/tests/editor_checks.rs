@@ -145,8 +145,8 @@ fn a_condition_with_no_signal_chosen_is_said_in_those_terms() {
 
 #[test]
 fn a_field_with_no_signal_chosen_names_where_it_is() {
-    // "Add a field" lands on a run of cells before it has a source, and the
-    // cells are the only thing on screen that identifies it.
+    // Adding a field lands on a run of cells before it has anything in it,
+    // and the cells are the only thing on screen that identifies it.
     let p = profile(
         r#""readouts": [
             {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": ""}
@@ -155,7 +155,7 @@ fn a_field_with_no_signal_chosen_names_where_it_is() {
     let problems = found(&p);
     assert_eq!(problems.len(), 1, "{problems:?}");
     assert!(problems[0].contains("30-33"), "{:?}", problems[0]);
-    assert!(problems[0].contains("no signal chosen"), "{:?}", problems[0]);
+    assert!(problems[0].contains("nothing in it"), "{:?}", problems[0]);
 }
 
 #[test]

@@ -4,6 +4,8 @@
 // each, which is not enough state to be worth a runtime, and a smaller install
 // matters for something that ships next to a daemon.
 
+import { getCurrentWindow } from "@tauri-apps/api/window";
+
 import { displaySection } from "./readout";
 import {
   catalogueStatus,
@@ -39,11 +41,21 @@ import type {
   ModuleChoice,
   Profile,
   ProfileSummary,
+  Readout,
   SignalView,
   Update,
 } from "./types";
 
 const app = document.getElementById("app") as HTMLElement;
+
+/**
+ * Whether anything on screen would be lost by closing the window.
+ *
+ * Held here rather than reached for inside whichever page happens to be up,
+ * so the close guard has one question to ask and every page has one thing to
+ * answer. A page with nothing to lose says so by leaving it alone.
+ */
+let unsavedWork: () => boolean = () => false;
 
 /** Loaded once: the hardware inventory does not change while the window is open. */
 let devices: Device[] = [];
@@ -129,6 +141,8 @@ function matchesFilter(row: ProfileSummary, filter: string): boolean {
 }
 
 async function showLibrary(): Promise<void> {
+  // Nothing here is edited in place, so there is nothing to lose by closing.
+  unsavedWork = () => false;
   // Nothing on the profile list can use the stream, so the socket goes with it.
   stopLearning();
 
@@ -889,6 +903,9 @@ interface Session {
   /** This lamp as it shipped, keyed device and lamp. Empty for a profile the
    * user created, which has no shipped version to revert to. */
   shipped: Map<string, Binding>;
+  /** Every display field as it shipped, for the same reason. Also what says a
+   * field the user deleted can be offered back. */
+  shippedReadouts: Readout[];
   /**
    * The profile as it stood when the rows were built, serialised.
    *
@@ -949,16 +966,19 @@ async function showProfile(file: string): Promise<void> {
     // Only costs the warning while typing; the save is still refused.
   }
 
-  // The shipped copy, so one lamp can be reverted without resetting the file.
-  // A profile the user made has none, which is not an error.
+  // The shipped copy, so one lamp or one field can be put back without
+  // resetting the file. A profile the user made has none, which is not an
+  // error.
   const shipped = new Map<string, Binding>();
+  let shippedReadouts: Readout[] = [];
   try {
     const original = await defaultProfile(file);
     for (const b of original?.bindings ?? []) {
       shipped.set(lampKey(b.device, b.led), b);
     }
+    shippedReadouts = original?.readouts ?? [];
   } catch {
-    // A missing or unreadable default only costs the revert button.
+    // A missing or unreadable default only costs the revert buttons.
   }
 
   clear();
@@ -1049,6 +1069,7 @@ async function showProfile(file: string): Promise<void> {
     profile,
     signals,
     shipped,
+    shippedReadouts,
     baseline: "",
     dirty: false,
     refreshDirty: () => {
@@ -1090,6 +1111,7 @@ async function showProfile(file: string): Promise<void> {
     },
   };
   save.setAttribute("disabled", "");
+  unsavedWork = () => session.dirty;
 
   const back = el("button", {}, "← Profiles");
   back.addEventListener("click", () => {
@@ -1366,9 +1388,10 @@ function deviceSection(
   if (!session.profile.readouts) session.profile.readouts = [];
   const glass = displaySection(
     device,
-    session.profile.readouts,
+    session.profile,
     session.signals,
     session.refreshDirty,
+    session.shippedReadouts,
   );
 
   section.append(summary, table);
@@ -1623,7 +1646,39 @@ async function showUpdate(): Promise<void> {
   document.body.classList.add("with-update");
 }
 
+/**
+ * Closing the window is the one way out that never asked.
+ *
+ * The back button has always asked, so the way to lose an evening's work was
+ * to close the window instead, which is how most people leave an app. Tauri
+ * holds the window open for as long as this listener is registered and closes
+ * it once the handler returns without objecting, so the question is asked
+ * before anything goes.
+ */
+function guardClose(): void {
+  const win = getCurrentWindow();
+  // A second click on the close box while the question is up would stack a
+  // second copy of it behind the first.
+  let asking = false;
+  void win.onCloseRequested(async (event) => {
+    if (!unsavedWork()) return;
+    if (asking) {
+      event.preventDefault();
+      return;
+    }
+    asking = true;
+    try {
+      if (!(await confirmAction("Close without saving? Your changes will be lost.", "Close"))) {
+        event.preventDefault();
+      }
+    } finally {
+      asking = false;
+    }
+  });
+}
+
 async function start(): Promise<void> {
+  guardClose();
   void showUpdate();
   try {
     [devices, modules] = await Promise.all([listDevices(), listModules()]);

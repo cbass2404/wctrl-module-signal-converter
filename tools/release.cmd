@@ -4,16 +4,22 @@ setlocal enabledelayedexpansion
 rem  tools\release.cmd - tag and push a release. Maintainer tool.
 rem
 rem  Order of checks:
+rem    0. the shipped profiles: everything else here can be checked by the
+rem       machine, and this cannot. Changes to data\defaults are not written
+rem       up as they land, so this is the one thing reconstructed from memory.
 rem    1. on main, and main matches origin - releases build only from main,
 rem       and main takes changes through pull requests, so nothing is pushed
 rem       but the tag. Uncommitted changes warn and ask.
 rem    2. tag from VERSION.md must not already exist, locally or on origin
 rem    3. the checks the pipeline would fail on: every version in the repo
-rem       agrees with VERSION.md, in HEAD as well as in the working tree, and
-rem       data\nightly-only.json is current
+rem       agrees with VERSION.md, in HEAD as well as in the working tree,
+rem       data\nightly-only.json is current, and data\defaults-previous still
+rem       holds the defaults the last release shipped
 rem    4. CHANGELOG.md has a section for this version, or you say go anyway
 rem    5. asks for a release message; submitting an empty one cancels
 rem    6. pushes the tag
+rem    7. refreshes data\defaults-previous for the NEXT release, and leaves it
+rem       unstaged for you to branch and open a pull request from
 rem
 rem  Pushing the tag is what triggers .github/workflows/release.yml, which
 rem  checks the tag again, runs the tests, builds and drafts the release. The
@@ -34,6 +40,57 @@ if errorlevel 1 (
     echo ERROR: not a git repository.
     goto :fail
 )
+
+rem ==========================================================================
+rem  0. the shipped profiles, named in CHANGELOG.md
+rem ==========================================================================
+rem
+rem Asked first, and asked of a person, because it is the one thing here the
+rem machine cannot check. An update never rewrites a lamp row somebody has
+rem changed and only corrects a display field still exactly as it shipped, so
+rem a fix to a default reaches anybody who has touched that row only if the
+rem notes name it and they choose to take it. Changes to data\defaults are
+rem deliberately not written up as they land, since they move a great deal
+rem through experimentation, which is exactly why this is easy to forget.
+rem
+rem The files that moved are listed, so the answer is not from memory. A
+rem previous tag is needed to compare against; without one, the question is
+rem asked on its own rather than skipped.
+
+set "LASTTAG="
+for /f "usebackq tokens=* delims= " %%t in (`git describe --tags --abbrev^=0 --match "v*" 2^>nul`) do set "LASTTAG=%%t"
+
+if defined LASTTAG (
+    echo   Shipped profiles changed since %LASTTAG%:
+    echo(
+    set "MOVED="
+    for /f "usebackq tokens=* delims= " %%f in (`git diff --name-only %LASTTAG% HEAD -- data/defaults 2^>nul`) do (
+        set "MOVED=1"
+        echo       %%f
+    )
+    if not defined MOVED echo       none.
+) else (
+    echo   No previous v* tag to compare against, so the changed profiles
+    echo   cannot be listed here.
+)
+echo(
+echo   An update leaves a row you have changed alone, so a fix to a shipped
+echo   row reaches those people only if CHANGELOG.md names it.
+echo(
+echo   -----------------------------------------------
+set "NOTED="
+set /p "NOTED=Does CHANGELOG.md name every shipped row that moved? (y/N): "
+if /i "!NOTED!"=="y"   goto :profiles_ok
+if /i "!NOTED!"=="yes" goto :profiles_ok
+echo(
+echo Cancelled - nothing was tagged or pushed.
+echo(
+echo   Write the changed rows into the '## ' section for this version in
+echo   CHANGELOG.md, then run this again.
+goto :end
+
+:profiles_ok
+echo(
 
 for /f "usebackq tokens=* delims= " %%b in (`git rev-parse --abbrev-ref HEAD`) do set "BRANCH=%%b"
 for /f "usebackq tokens=* delims= " %%c in (`git rev-parse --short HEAD`) do set "COMMIT=%%c"
@@ -272,6 +329,23 @@ if errorlevel 1 (
 echo   ok, current.
 echo(
 
+rem data\defaults-previous is what an update compares a user's display fields
+rem against: a field still matching it was ours and can be corrected, anything
+rem else is theirs and is left alone. It has to hold the PREVIOUS release here,
+rem not this one, so it is checked before the tag and refreshed after the push.
+rem Drift is silent at runtime - no field matches, so no correction reaches
+rem anybody - which is why it is caught here instead.
+echo   checking data\defaults-previous against the last release ...
+python tools\snapshot.py --check
+if errorlevel 1 (
+    echo(
+    echo ERROR: the snapshot is out of step with the last release.
+    echo   Fix it, merge it to main through a pull request, then pull and
+    echo   re-run.
+    goto :fail
+)
+echo(
+
 rem ==========================================================================
 rem  4. release notes
 rem ==========================================================================
@@ -354,6 +428,31 @@ echo     %ORIGIN%/actions
 echo(
 echo   When it goes green, a draft is waiting here to be read and published:
 echo     %ORIGIN%/releases
+echo(
+
+rem ==========================================================================
+rem  7. snapshot these defaults for the next release
+rem ==========================================================================
+
+rem Last, and only once the tag is pushed: the release just cut ships the
+rem PREVIOUS snapshot, and this sets up the one the NEXT release will compare
+rem against. Left unstaged deliberately. The pipeline has only just started, so
+rem nothing here is proven yet; if it goes red, throw this away and nothing ever
+rem claimed %VERSION% shipped.
+echo   snapshotting these defaults for the next release ...
+python tools\snapshot.py
+if errorlevel 1 (
+    echo(
+    echo   WARNING: could not refresh data\defaults-previous.
+    echo   The release is fine. Run  python tools\snapshot.py  before the next
+    echo   one, or updates will stop correcting display fields.
+    goto :end
+)
+echo(
+echo   Left unstaged. Once the pipeline is green:
+echo       git switch -c snapshot-%VERSION%
+echo       git commit -a -m "Snapshot %VERSION% defaults"
+echo   then open a pull request, so the next release compares against these.
 echo(
 goto :end
 

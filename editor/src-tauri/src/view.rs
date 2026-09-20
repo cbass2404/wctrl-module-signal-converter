@@ -70,6 +70,62 @@ pub struct DeviceView {
 /// them: it chooses which signal feeds which cells, and the daemon does the
 /// drawing. What it does need is how many cells there are, so a cell run can be
 /// checked before it is saved.
+/// One font's glyphs, at both sizes, for drawing a preview.
+///
+/// Each glyph is its rows exactly as the font file writes them, `.` for a dark
+/// pixel and `X` for a lit one, because that is already the shape a canvas
+/// wants and converting it here would only mean converting it back.
+#[derive(Serialize)]
+pub struct FontGlyphs {
+    pub width: usize,
+    pub height: usize,
+    /// Character to its rows, at full size.
+    pub large: BTreeMap<char, Vec<String>>,
+    /// Character to its rows, small. Fewer entries than `large` in every font
+    /// here.
+    pub small: BTreeMap<char, Vec<String>>,
+}
+
+impl FontGlyphs {
+    /// Read one font of a text grid, named the way a profile names it.
+    pub fn load(text: &dsc_config::TextGrid, file: &str) -> Result<Self, String> {
+        let font = dsc_config::mcdu_font::McduFont::load(&text.path(file))
+            .map_err(|e| format!("reading the font {file}: {e}"))?;
+        let rows = |gs: &[dsc_config::mcdu_font::Glyph]| {
+            gs.iter()
+                .map(|g| (g.character, g.bit_array.clone()))
+                .collect::<BTreeMap<char, Vec<String>>>()
+        };
+        Ok(FontGlyphs {
+            width: font.glyph_width,
+            height: font.glyph_height,
+            large: rows(&font.large_glyphs),
+            small: rows(&font.small_glyphs),
+        })
+    }
+}
+
+/// A font's characters as one sorted string, for the window to check against.
+fn sorted(set: Option<&std::collections::HashSet<char>>) -> String {
+    let mut chars: Vec<char> = set.map(|s| s.iter().copied().collect()).unwrap_or_default();
+    chars.sort_unstable();
+    chars.into_iter().collect()
+}
+
+/// A font's name for the picker, taken from its file rather than read out of
+/// it, so listing the fonts does not mean loading four of them.
+///
+/// `../mcdu/ah64d-font-21x31.json` is the AH64D font. Anything that does not
+/// look like that keeps its file name, which is still better than nothing.
+fn font_name(file: &str) -> String {
+    Path::new(file)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .and_then(|s| s.split("-font-").next())
+        .map(|s| s.to_uppercase())
+        .unwrap_or_else(|| file.to_string())
+}
+
 #[derive(Serialize)]
 pub struct DisplayView {
     pub key: String,
@@ -93,6 +149,32 @@ pub struct DisplayView {
     /// Empty on anything but a text grid, which is the only kind that has a
     /// colour to choose.
     pub colours: Vec<String>,
+    /// Every font this glass can be given, for a text grid. Empty otherwise.
+    ///
+    /// The window needs the alphabets to say what can be typed, which differs
+    /// per font and per size: only one of these has lowercase, and each draws
+    /// fewer characters small than large.
+    pub fonts: Vec<FontChoice>,
+    /// Runtime aircraft name to the font its own CDU matches.
+    ///
+    /// An aircraft in here takes that font and is offered no choice, because
+    /// the glyphs were drawn to match what its module sends. The window checks
+    /// the profile's aircraft against this to decide whether to ask.
+    pub native_fonts: BTreeMap<String, String>,
+}
+
+/// One font a text grid can be given.
+#[derive(Serialize)]
+pub struct FontChoice {
+    /// Path relative to the display, which is what a profile stores.
+    pub file: String,
+    /// The font's own name, which is the aircraft it was drawn for.
+    pub name: String,
+    /// Every character it draws at full size, sorted.
+    pub large: String,
+    /// Every character it draws small, sorted. A subset of `large` in all of
+    /// them, so marking a piece small can take a character away.
+    pub small: String,
 }
 
 #[derive(Serialize)]
@@ -138,6 +220,26 @@ impl DeviceView {
                 } else {
                     Vec::new()
                 },
+                fonts: d
+                    .text
+                    .as_ref()
+                    .map(|t| {
+                        t.fonts()
+                            .into_iter()
+                            .map(|file| FontChoice {
+                                file: file.to_string(),
+                                name: font_name(file),
+                                large: sorted(t.charset(file, false)),
+                                small: sorted(t.charset(file, true)),
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                native_fonts: d
+                    .text
+                    .as_ref()
+                    .map(|t| t.native_fonts.iter().map(|(a, f)| (a.clone(), f.clone())).collect())
+                    .unwrap_or_default(),
             })
             .collect();
         self

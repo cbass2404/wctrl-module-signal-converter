@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use dsc_bios::Write as BiosWrite;
 use dsc_config::{
-    divider_rule, text_cells, Catalogue, Colour, DeviceInventory, DisplayCatalogue, Profile,
+    text_cells, Catalogue, Colour, DeviceInventory, DisplayCatalogue, Profile, Span,
     Transport,
 };
 use dsc_engine::{Batch, Engine, LcdWrite};
@@ -117,10 +117,15 @@ fn the_cdu_lines_land_on_rows_5_to_14_with_their_symbols() {
     }
     // The CDU is ten lines on a screen of fourteen, so the default rules row 4
     // to give the page a top edge. It reads no signal and is there from load.
-    assert_eq!(
-        row(w, 4),
-        divider_rule(24).concat(),
-        "a rule across row 4, above the first CDU line"
+    //
+    // That it is ruled, not what the rule says: a label is profile content and
+    // will differ per module, so pinning one here would turn an ordinary edit
+    // to a default into a failing build.
+    let ruled = row(w, 4);
+    assert_eq!(ruled.chars().count(), 24, "the rule fills the row: {ruled:?}");
+    assert!(
+        ruled.starts_with('-') && ruled.ends_with('-'),
+        "a rule across row 4, corner to corner: {ruled:?}"
     );
     assert_eq!(
         row(w, 5),
@@ -201,7 +206,7 @@ fn a_divider_on_a_segment_display_is_refused() {
     // beats accepting the field and leaving a row of blank cells on the glass.
     let mut p = Profile::load(&r("data/defaults/fa-18.json")).unwrap();
     p.readouts.truncate(1);
-    p.readouts[0].source = String::new();
+    p.readouts[0].content.clear();
     p.readouts[0].cells = "2-8".parse().unwrap();
     p.readouts[0].divider = true;
     assert!(
@@ -217,7 +222,10 @@ fn a_divider_that_also_names_a_signal_is_refused() {
     // finish. Drawing the rule over it would quietly throw the signal away.
     let mut p = profile();
     let d = p.readouts.iter().position(|r| r.divider).expect("the shipped rule");
-    p.readouts[d].source = "CDU_LINE0".into();
+    p.readouts[d].content = vec![Span {
+        source: "CDU_LINE0".into(),
+        ..Span::default()
+    }];
     assert!(
         refusals(&p).iter().any(|e| e.contains("reads nothing")),
         "{:?}",
@@ -226,12 +234,77 @@ fn a_divider_that_also_names_a_signal_is_refused() {
 }
 
 #[test]
-fn a_divider_with_no_room_for_a_dash_is_refused() {
+fn a_rule_of_one_cell_is_a_dash_and_is_fine() {
+    // There is no run too narrow for a rule. It fills its cells corner to
+    // corner, so one cell is one dash, and a run is never shorter than that.
     let mut p = profile();
     let d = p.readouts.iter().position(|r| r.divider).expect("the shipped rule");
-    p.readouts[d].cells = "72-73".parse().unwrap();
+    p.readouts[d].cells = "72".parse().unwrap();
+    // Whatever the default happens to be labelled is beside the point here,
+    // and a label would need room this run does not have.
+    p.readouts[d].label = String::new();
+    assert!(refusals(&p).is_empty(), "{:?}", refusals(&p));
+}
+
+#[test]
+fn a_rule_draws_its_label_in_the_middle_in_its_own_colour() {
+    // The whole point of a label is that it is not the line, so the two
+    // colours reaching the panel separately is the thing worth flying.
+    let mut p = profile();
+    let d = p.readouts.iter().position(|r| r.divider).expect("the shipped rule");
+    let run = p.readouts[d].cells;
+    p.readouts[d].colour = Some(Colour::Green);
+    p.readouts[d].label = "FUEL".into();
+    p.readouts[d].label_colour = Some(Colour::Amber);
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C_2", &[]);
+    let w = screen(&batch);
+
+    let cells = text_cells(&w.bytes);
+    let drawn: String = cells[run.first..=run.last].iter().map(|c| c.ch).collect();
+    assert_eq!(drawn.chars().count(), run.len(), "the rule fills its run exactly");
+    assert!(drawn.contains(" FUEL "), "a blank each side of the label: {drawn:?}");
+    assert!(drawn.starts_with("--"), "the line starts at the edge: {drawn:?}");
+    assert!(drawn.ends_with("--"), "and ends at it: {drawn:?}");
+
+    // Every cell of the label amber, every cell of the line green, and the
+    // blanks that separate the two belong to the line.
+    for (i, cell) in cells[run.first..=run.last].iter().enumerate() {
+        let want = match cell.ch {
+            'F' | 'U' | 'E' | 'L' => Colour::Amber,
+            _ => Colour::Green,
+        };
+        assert_eq!(cell.fg, want.ordinal(), "cell {i} of the rule, drawn {:?}", cell.ch);
+    }
+}
+
+#[test]
+fn a_label_with_no_room_on_the_rule_is_refused() {
+    // `divider_rule` leaves a label it cannot fit off the line rather than
+    // crowding the margins, so without a refusal the rule would quietly draw
+    // plain and nothing would say where the label went.
+    let mut p = profile();
+    let d = p.readouts.iter().position(|r| r.divider).expect("the shipped rule");
+    p.readouts[d].cells = "72-79".parse().unwrap();
+    p.readouts[d].label = "WAYPOINT".into();
+    p.readouts[d].label_colour = None;
     assert!(
-        refusals(&p).iter().any(|e| e.contains("a dash with a blank each side")),
+        refusals(&p).iter().any(|e| e.contains("does not fit")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_label_the_font_cannot_draw_is_refused() {
+    // The label goes through the same glyph table as everything else, and the
+    // A-10C's has no lowercase, so this would be four blank cells in the
+    // middle of the line with nothing to say why.
+    let mut p = profile();
+    let d = p.readouts.iter().position(|r| r.divider).expect("the shipped rule");
+    p.readouts[d].label = "fuel".into();
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("font")),
         "{:?}",
         refusals(&p)
     );
@@ -239,8 +312,11 @@ fn a_divider_with_no_room_for_a_dash_is_refused() {
 
 #[test]
 fn a_colour_on_a_segment_display_is_refused() {
+    // A colour written beside the cells belongs to the piece that draws them,
+    // which is where it lands coming off disk, so that is where it is set
+    // here too.
     let mut p = Profile::load(&r("data/defaults/fa-18.json")).unwrap();
-    p.readouts[0].colour = Some(Colour::Amber);
+    p.readouts[0].content[0].colour = Some(Colour::Amber);
     assert!(
         refusals(&p).iter().any(|e| e.contains("only a text grid")),
         "{:?}",
@@ -324,7 +400,7 @@ fn the_screen_follows_the_seat() {
 #[test]
 fn a_colour_line_is_checked_like_any_other_signal() {
     let mut p = chinook();
-    let colours = p.readouts[0].colours.as_mut().unwrap();
+    let colours = p.readouts[0].content[0].colours.as_mut().unwrap();
     colours.source = "PLT_CDU_LINE1_COLOUR".into();
     colours.codes.insert("gr".into(), Colour::Green);
     let e = engine(p.clone());
@@ -487,16 +563,26 @@ fn the_apache_scratchpad_sits_on_the_bottom_row_for_the_seat() {
         assert_eq!(row(&w, n).trim(), "", "row {n} is left empty");
     }
     // The Apache exports only the keyboard unit, so the rest of the glass is
-    // dark and the default rules the row above it, inset to the same 22 cells.
-    assert_eq!(
-        row(&w, 13),
-        format!(" {} ", divider_rule(22).concat()),
-        "a rule above the keyboard unit"
-    );
+    // dark and the default rules the row above it, inset to the same 22 cells
+    // the keyboard unit uses, so the two line up.
+    //
+    // Where the rule is and how far it runs, not what it says. A label is
+    // profile content and differs per module, so pinning one here would turn
+    // an ordinary edit to a default into a failing build.
+    let ruled = |w: &LcdWrite| {
+        let line = row(w, 13);
+        assert!(line.starts_with(' ') && line.ends_with(' '), "inset by one: {line:?}");
+        assert_eq!(line.trim().chars().count(), 22, "across 22 cells: {line:?}");
+        assert!(
+            line.trim().starts_with('-') && line.trim().ends_with('-'),
+            "a rule above the keyboard unit: {line:?}"
+        );
+    };
+    ruled(&w);
     assert_eq!(row(&w, 14), format!(" {:<23}", "PILOT\u{2588}"));
 
     let w = apache_at(1);
     // The rule carries no seat, so it draws the same for either crew station.
-    assert_eq!(row(&w, 13), format!(" {} ", divider_rule(22).concat()));
+    ruled(&w);
     assert_eq!(row(&w, 14), format!(" {:<23}", "\u{25c0}CPG\u{25a0}\u{25b6}"));
 }

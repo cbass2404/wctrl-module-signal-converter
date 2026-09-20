@@ -22,6 +22,242 @@ wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
 
+**Built and flown 2026-09-20: the editor's display fields, put right.** Six
+things, found by using the window rather than by reading it, and one of them
+was a feature that had never worked.
+
+- **"+ a reading" handed you a text box.** A piece said which of the two it was
+  by whether `source` held anything, so a piece nobody had pointed at a signal
+  yet was text by definition, and choosing "a reading" in the menu put it back
+  to text on the next redraw. The key being present is what says which it is;
+  whether it has been filled in is the profile check's question, and it already
+  asks it. Nothing writes an empty `source` onto text, so the two cannot be
+  confused: the backend drops the key when it is empty, and every piece the
+  window builds goes through `newSpan`.
+- **"+ another in <row>" is gone rather than fixed.** It predates chains. It
+  guessed at free cells inside a region and handed out ones the row already
+  held, so it only ever produced a field that said "already taken". Two
+  readings on one line is what a chain is for, and a chain can count. The one
+  thing lost with it is adding a second field to a row for a different seat,
+  which the cells box still reaches and which nothing shipped uses.
+- **Closing the window never asked.** The back button always did, so the way
+  to lose an evening was to close the window, which is how most people leave an
+  app. Tauri holds the window while a JS listener is registered and closes it
+  once the handler returns without objecting, so this is a listener and one
+  added permission rather than anything in Rust.
+- **A field could not be put back.** Lamps have had a reset from the start.
+  Fields had none, and deleting one was the worse half: there was then nothing
+  on the screen to say a field had ever been there, and the way back was
+  resetting the whole profile. The shipped copy was already loaded for the lamp
+  resets, so this is the same data read a second way. Telling a changed field
+  from an untouched one needs the same normalising the update reconcile needs
+  and for the same reason, since a field touched in the window is a chain until
+  the backend writes it flat again; `fieldShape` is that, and it mirrors each
+  key's `skip_serializing_if` rather than dropping everything falsy, because
+  seat 0 is a real answer.
+- **A rule can carry a label**, which is the feature. The colour being its own
+  is the whole of it: a label drawn in the line's colour reads as part of the
+  line. Unset it follows the rule, so a label added to a green rule does not
+  arrive white, and the editor offers "same as the rule" as a choice rather
+  than leaving that as the only behaviour. A label with no room is refused
+  rather than crowded in, since the blanks each side and a dash each side are
+  what make it a labelled rule instead of a broken one, and `divider_rule`
+  leaves an unfittable label off, which would otherwise be silent.
+
+- **Typing in a text piece lost focus after every character**, and this one
+  was worth chasing rather than patching. Every edit called the chain's
+  `redraw`, which empties the chain and builds it again, so the box being typed
+  into was thrown away and replaced by an identical one holding the right text.
+  A keystroke changes what the field draws and how wide it comes out; it does
+  not change how many pieces there are or what kind each is, which is all the
+  chain's shape depends on. So `refresh` updates those two things and `redraw`
+  is kept for what really does restructure: adding, removing, moving, changing
+  a piece's kind, picking a different signal, and toggling small, which changes
+  the alphabet the typed text is checked against.
+
+  Leaving the pieces alive between keystrokes exposed what the rebuilding was
+  covering up. `spanEditor` derived its own `spans` from `contentOf`, and on a
+  field still in the flat shape that returns a fresh array of fresh objects
+  every call, so the piece it was handed was not the piece in the chain. Every
+  handler had to write a whole replacement into `spans[index]` rather than
+  change what it had, and two handlers on one piece each built their
+  replacement from the same stale copy, so the first one's work was lost. It
+  was only ever right because the redraw rebuilt the closures immediately after.
+  It is handed the array now and edits what is in it, which is what made the
+  rest of this possible.
+
+The label is the first thing a divider draws that is not fixed, so it goes
+through the font check like any other characters. It rides in the flat shape
+beside the rule's colour and is dropped from anything that is not a divider,
+for the reason the colour is: kept, it would be a setting the window never
+shows and nothing ever draws.
+
+**Flown the same day, on the panel with DCS feeding it**: a chain built on the
+A-10C's free rows from the A-10C II fuel strings, pieced together with typed
+text, labels put on rules, and every one of the fixes above walked through. It
+works.
+
+**Flying it settled one thing that reading it had not.** The rule was inset by
+a blank cell at each end, which was reasoned about here and never looked at.
+On the glass beside real CDU lines, which start in the first cell of their run,
+that inset made the rule the one thing on the screen not lining up with what
+sat above and below it. It fills its run now, corner to corner. The two blanks
+around a label stay, because those do a job: they are what keep the label from
+reading as part of the line.
+
+That took the last reason for a minimum width with it. There is no run too
+narrow for a rule any more, since one cell is one dash and a `CellRange` is
+never shorter than that, so `MIN_DIVIDER_CELLS` and the refusal that used it
+are gone rather than left as a check that can no longer fire. A label's own
+minimum, its width plus four, is the only one left.
+
+**Two tests were pinning profile content rather than behaviour**, and one of
+them failed the moment a rule was labelled while flying. A label differs per
+module and changes whenever somebody decides a page is better named, so the
+shipped-default tests check that a row is ruled and how far the rule runs, not
+what it says. Anything about a label's own drawing sets one up itself.
+
+**Built 2026-09-20, not yet on a panel: an update corrects a field nobody
+changed.** Never rewriting anything kept user work safe and quietly froze every
+shipped field: a correction reached nobody who already had that profile,
+including somebody who had never opened it. Nothing recorded what a field said
+when it shipped, so a field sitting exactly as delivered and one somebody had
+spent an evening on were the same thing to look at.
+
+`data/defaults-previous` is that record, the defaults as the last release
+shipped them, and a field is ours to correct only while it still matches it
+exactly. The five cases and the reasoning are in "Correcting a display field an
+update changed" in [CONFIG.md](CONFIG.md). What is worth keeping here is why
+each decision went the way it did, because three of them were the second
+answer:
+
+- **One snapshot, not a history of them.** Keeping every version removes the
+  ratchet where somebody who skips a release is frozen for good, and buys it by
+  overwriting anybody who deliberately went back to an older shipped layout.
+  A frozen field still works; an overwritten one is lost work. Cory's call, and
+  the right one.
+- **Once per version, not once per start.** This is the decision the design did
+  not survive without. `merge_new` runs at both the daemon and the editor
+  starting, so with one snapshot and no gate, somebody who preferred the old
+  field and put it back would match the snapshot again and have it taken away
+  at the next launch, and every launch after that. They could never keep it.
+  A marker file naming the version that last reconciled the folder is the whole
+  fix. It also makes deleting a field stick immediately rather than at the next
+  release.
+- **The cells are part of what identifies a field.** So a field that moved rows
+  reads as one retired and one arriving, and is drawn once at its new row. The
+  alternative was the duplicate that the additive merge would have produced,
+  which is what prompted looking at this at all.
+- **Removal is real, and it is new.** This is the first code in the project
+  that takes content out of a file the user owns, running unattended at
+  startup. Everything around it exists to keep that honest: it only ever
+  removes a field byte for byte identical to one we shipped, only on a version
+  change, and never in a checkout. The failure direction is safe in every case
+  - a false non-match declines to act, and a false match can only happen when
+  the content is already identical to ours - and
+  `crates/dsc-config/tests/profile_reconcile.rs` pins all fifteen branches,
+  hardest on the ones that delete.
+- **The snapshot follows `--defaults`.** `Profiles::new` derives it as the
+  sibling folder named `-previous`, rather than each layout naming it, because
+  the daemon lets `--defaults` point anywhere and a snapshot read from the
+  install while the defaults came from somewhere else would compare two
+  unrelated things.
+
+**The release step is the part that can rot**, since a human has to refresh the
+snapshot at the right moment. `tools/snapshot.py --check` runs in `release.cmd`
+before the tag, confirming the snapshot still holds the previous release, and
+the refresh runs after the push and is left unstaged: until the pipeline is
+green there is nothing worth committing. Drift is silent at runtime, since no
+field matches and nothing is corrected, which is why it is caught there.
+
+One thing found while building rather than planned: `data/defaults-previous`
+was not in `tauri.conf.json`, so an installed build would have shipped with no
+snapshot and corrected nothing, silently.
+
+**alpha.003 does have work to do**, which was not true when this was written.
+The defaults had not moved since alpha.002, so the first upgrade was going to
+be a no-op and the tests were the only proof of anything. Labelling the
+Apache's rule was Cory's answer to that: a deliberate change to a shipped
+default, made so the first upgrade has a real correction to carry rather than
+shipping the mechanism untried. It is one field on three MCDU names, still
+exactly as alpha.002 shipped it, so anybody who has not touched row 13 of the
+AH-64D gets `KEYBOARD UNIT` on it and anybody who has keeps what they have.
+That upgrade is the thing to watch. Which also means the free MCDU rows, A-10C 1 to 3,
+AH-64D twelve, F-14BU six, are now shippable: putting labels there reaches
+people who already have those profiles instead of only new installs.
+
+**Built and flown 2026-09-20: field content is a chain.** A field
+holds pieces drawn end to end, each one either characters the user typed, a
+signal, or a gap that draws nothing and takes whatever the rest of the row
+leaves. `RALT` small and red, the radar altimeter, then `M`, on one row. The
+MCDU, the DED and the UFC all take it, and so does every aircraft: the A-10C's
+CDU is ten lines on a screen of fourteen, so rows 1 to 3 are the user's, the
+AH-64D leaves twelve rows free and the F-14BU six. The CH-47F is the only one
+with nothing spare.
+
+Five decisions are worth keeping, because each was the second answer rather
+than the first:
+
+- **The type is `Span`, not `Part`.** `Part` is already the device sub-unit all
+  through this codebase and the collision made every mention ambiguous. The
+  JSON key is `content`, for the same reason. `Reading` collided with the learn
+  watcher's own `Reading` and is named in full at its one use in the engine.
+- **A field of one piece is written flat**, with its `source` and styling beside
+  the cells, and only a chain of two or more becomes a `content` array.
+  `Readout` converts through a `ReadoutRepr` in both directions, so no code
+  path can build a field that serializes the other way. This is not tidiness:
+  an update never rewrites a row the user has changed, so a field that came
+  back from a save as an array where a `source` used to be would turn every row
+  into a row the user owns and freeze it against every later fix.
+  `crates/dsc-config/tests/profile_round_trip.rs` holds it shut, comparing
+  parsed JSON rather than text because `replace` and `aliases` are hash maps
+  and have always come back in arbitrary order. That predates this work and is
+  noise in a diff rather than a change; a `BTreeMap` would settle it if the
+  churn of one pass over the defaults is ever worth it.
+- **Overflow is truncation, not refusal.** Checked rather than assumed, and the
+  assumption was wrong: `lay_out` pads or crops to exactly the run width and
+  the write goes out looking healthy, so a reading loses its end with nothing
+  on the panel saying so. The editor therefore works the width out ahead of
+  time, exactly where it can (`max_length` for text, the `reads` range for a
+  gauge) and says how many characters would be lost. A gauge with no range is
+  the one unbounded case and is called out as such. It stays a caution, on the
+  existing advisory channel rather than a new one: whether the aircraft ever
+  sends a reading that wide is the user's to judge.
+- **A gap is measured, not typed.** It carries no text and no source and is
+  laid out after everything else, so `FUEL`, gap, reading puts one at each end
+  of the row and they stay put when the reading changes width. Two or more
+  split what is left evenly, the remainder to the earlier ones. It asks for no
+  room of its own, so it never causes an overflow warning, and `align` stops
+  meaning anything beside one because the content already fills the run.
+- **The aircraft's font always wins.** `font_with` takes `native_fonts` first
+  and the profile's `font` only where there is none. A module that draws a CDU
+  has glyphs drawn to match what it sends, so an override would draw the wrong
+  symbol rather than the same one differently.
+
+**The four fonts are not interchangeable**, which the editor has to show rather
+than describe. Dumped from the files: A-10C 66 glyphs large and 64 small,
+AH-64D 71 and 63, CH-47F 64 and 63, F-14BU 98 and 65. Only the F-14BU font has
+lowercase, `!`, `#`, `?` or `@`, which makes it the one to pick for free text.
+Small is a strict subset in every one of them, so marking a piece small can
+take away a character that was fine large. And the slots lie: in the A-10C font
+`%` draws a question mark, already recorded in `CONFIG.md` and the reason the
+editor draws the line from the font's own `BitArray` bitmaps rather than
+showing the typed string. Checking the characters alone would have agreed with
+the user and disagreed with the glass.
+
+**The editor lists every area of every screen**, in the order it sits on the
+glass, the way it lists every lamp of a device. Adding a field used to push it
+onto the end of the profile's list however far up the panel it was drawn, so
+the only way to get a screen back into order was to delete every field and
+build it again. A field now belongs to the region holding its first cell, and
+fields inside a region sort by first cell, which covers a field narrower than
+its row, one spanning two, and two sharing one without a special case. An area
+in use can take a second field beside the first, which lands on the widest free
+run inside it.
+
+Not flown. 310 tests pass, 33 of them new, but nothing here has been on a
+panel: see the flying note in [TODO.md](TODO.md) for what to watch.
+
 **Built and flown 2026-09-20: the session log.** The daemon writes what it
 is doing to `Saved Games\DCS\Logs\dcs-signal.log`, beside DCS's own log. It
 exists because the hook starts the daemon hidden, so nothing it printed reached
@@ -100,7 +336,10 @@ a daemon built before it could read the lock.
 
 Nothing outstanding on it.
 
-**Built 2026-09-19, seen on the glass: MCDU dividers.** A field with `divider`
+**Built 2026-09-19, seen on the glass, reshaped 2026-09-20: MCDU dividers.**
+The rule was inset by a blank at each end until it was flown beside real CDU
+lines; it fills its run now, and can carry a label. See the 2026-09-20 entry
+above. A field with `divider`
 draws a fixed rule instead of reading a signal, and the A-10C and AH-64D
 defaults now carry one. Drawn in a live A-10C mission the same day, which
 changed it twice: spaced dashes read as a dotted line and became an unbroken
@@ -1268,16 +1507,16 @@ Tauri renders through WebView2, which ships with Windows.
    any default whose file name was missing, so renaming a shipped profile left
    existing installs with two profiles claiming one aircraft. A default whose
    aircraft are all claimed is now skipped.
-5. **Text output fields**, the editor's next ticket and the one the display
-   work keeps pointing at. The MCDU divider shipped ahead of it on 2026-09-19,
-   because a fixed rule needs no input; everything the user types is this
-   ticket. One way to author screen content across the UFC, the
-   ICP DED and the MCDU, with each input constrained by its cell's parameters:
-   width, allowed characters, rows. Font selection belongs here too, and only
-   for aircraft without a native CDU device, since an aircraft that has one
-   takes its font from the aircraft (`native_fonts`) and offers no choice. The
-   display catalogue is where the per-cell limits should be read from rather
-   than derived again.
+5. ~~**Text output fields.**~~ **Built 2026-09-20, not yet flown.** A field is
+   a chain of pieces, each characters the user typed, a signal, or a gap, and
+   each with its own colour and size. Font selection came with it, for aircraft
+   without a native CDU only. The editor lists every area of every screen in
+   the order it sits on the glass, which also fixed fields landing out of order
+   as they were added. See the entry at the top of this file for the decisions
+   and what they cost, and "Content: what fills a field" in `CONFIG.md` for the
+   model.
+
+   Left to do: fly it.
 
 ## Method note
 

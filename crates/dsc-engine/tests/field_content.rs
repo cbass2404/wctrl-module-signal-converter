@@ -1,0 +1,466 @@
+//! A field's content is a chain of pieces, and which font draws it.
+//!
+//! Two things are pinned here. A field can hold characters the user typed
+//! beside the readings, each piece with its own colour and size, which is what
+//! makes `RALT 250M` one field rather than three. And an aircraft with a CDU of
+//! its own takes that aircraft's font whatever the profile says, while one
+//! without takes the font the profile picked, which is the only reason its
+//! screen can be used at all.
+//!
+//! These go through the whole daemon path, the same as `text_paint.rs`: a
+//! profile, a live stream, and the bytes that would reach the panel.
+
+use std::path::Path;
+use std::time::{Duration, Instant};
+
+use dsc_bios::Write as BiosWrite;
+use dsc_config::{
+    text_cells, Catalogue, Colour, DeviceInventory, DisplayCatalogue, Profile, Readout, Span,
+};
+use dsc_engine::{Batch, Engine, LcdWrite};
+
+const MCDU: &str = "MCDU_Captain";
+const A10C_FONT: &str = "../mcdu/a10c-font-21x31.json";
+const F14BU_FONT: &str = "../mcdu/f14bu-font-21x31.json";
+
+fn r(p: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(p)
+}
+
+fn bytes_at(address: u16, b: &[u8]) -> Vec<BiosWrite> {
+    (0..b.len().div_ceil(2))
+        .map(|i| BiosWrite {
+            address: address + (i as u16) * 2,
+            value: u16::from(b[i * 2]) | (u16::from(*b.get(i * 2 + 1).unwrap_or(&0)) << 8),
+        })
+        .collect()
+}
+
+fn profile() -> Profile {
+    Profile::load(&r("data/defaults/a-10c.json")).expect("A-10C default")
+}
+
+fn engine(p: Profile) -> Engine {
+    let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
+    let cat = Catalogue::load_dir(&r("data/catalogue")).expect("catalogue");
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
+    let mut e = Engine::new(devices, cat, vec![p]).with_displays(displays);
+    e.set_connected(vec![MCDU.into()]);
+    e
+}
+
+fn line(e: &Engine, n: usize) -> u16 {
+    e.catalogue()
+        .module("A-10C")
+        .and_then(|m| m.signal(&format!("CDU_LINE{n}")))
+        .and_then(|s| s.primary())
+        .expect("a CDU line")
+        .address
+}
+
+fn fly(e: &mut Engine, aircraft: &str, lines: &[(usize, &[u8])]) -> Batch {
+    let mut name = aircraft.as_bytes().to_vec();
+    name.resize(24, 0);
+    let mut writes = bytes_at(0, &name);
+    for (n, text) in lines {
+        let mut padded = text.to_vec();
+        padded.resize(24, b' ');
+        writes.extend(bytes_at(line(e, *n), &padded));
+    }
+    let t0 = Instant::now();
+    let batch = e.ingest(&writes, t0);
+    if batch.lcd.is_empty() {
+        return e.tick(t0 + Duration::from_secs(5));
+    }
+    batch
+}
+
+fn screen(batch: &Batch) -> &LcdWrite {
+    batch
+        .lcd
+        .iter()
+        .find(|w| w.display == "MCDU")
+        .expect("the MCDU was painted")
+}
+
+fn row(w: &LcdWrite, n: usize) -> String {
+    text_cells(&w.bytes)[(n - 1) * 24..n * 24]
+        .iter()
+        .map(|c| c.ch)
+        .collect()
+}
+
+/// Everything the daemon would refuse this profile for, in its own words.
+fn refusals(p: &Profile) -> Vec<String> {
+    let e = engine(p.clone());
+    let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
+    let module = e.catalogue().module(&p.module).expect("the module");
+    p.problems(module, &devices, &displays)
+        .iter()
+        .map(|e| e.to_string())
+        .collect()
+}
+
+/// A field on one of the A-10C's three free rows, which is the case this whole
+/// feature exists for: the CDU is ten lines on a screen of fourteen.
+fn on_row_one(content: Vec<Span>) -> Readout {
+    Readout {
+        device: MCDU.into(),
+        display: "MCDU".into(),
+        cells: "0-23".parse().unwrap(),
+        content,
+        ..Readout::default()
+    }
+}
+
+fn text(s: &str) -> Span {
+    Span { text: s.into(), ..Span::default() }
+}
+
+fn reading(source: &str) -> Span {
+    Span { source: source.into(), ..Span::default() }
+}
+
+// --- drawing a chain ---------------------------------------------------------
+
+#[test]
+fn typed_characters_and_a_reading_are_drawn_on_one_row() {
+    // The A-10C uses rows 4 to 14, so rows 1 to 3 are the user's. This is what
+    // they are for.
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![text("PAGE "), reading("CDU_LINE1"), text(" END")]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[(1, b"ALPHA")]);
+    let w = screen(&batch);
+    // `PAGE `, then the whole 24 character CDU line, which is `ALPHA` and
+    // nineteen spaces. That is already past the end of the row, so ` END`
+    // never lands: exactly the loss the width caution is there to warn about,
+    // and exactly as quiet on the panel.
+    assert_eq!(row(w, 1).trim_end(), "PAGE ALPHA");
+}
+
+#[test]
+fn each_piece_keeps_its_own_colour_and_size() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        Span { text: "RALT".into(), colour: Some(Colour::Red), small: true, ..Span::default() },
+        Span { text: "250".into(), colour: Some(Colour::Green), ..Span::default() },
+    ]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    let cells = text_cells(&screen(&batch).bytes);
+    assert_eq!(cells[0].ch, 'R');
+    assert_eq!(cells[0].fg, Colour::Red.ordinal());
+    assert!(cells[0].small, "the label is small");
+    assert_eq!(cells[4].ch, '2');
+    assert_eq!(cells[4].fg, Colour::Green.ordinal());
+    assert!(!cells[4].small, "the reading beside it is not");
+}
+
+#[test]
+fn a_typed_piece_is_on_the_glass_before_its_reading_arrives() {
+    // A label should not wait on the signal beside it. The row is drawn as
+    // soon as the aircraft loads, with the reading's cells still blank.
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![text("WIND "), reading("CDU_LINE1")]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    assert_eq!(row(screen(&batch), 1).trim_end(), "WIND");
+}
+
+// --- which font ---------------------------------------------------------------
+
+#[test]
+fn an_aircraft_with_its_own_cdu_keeps_its_font_whatever_the_profile_says() {
+    // The A-10C font was drawn to match what the module sends. Overriding it
+    // would not draw the same page in another hand, it would draw the wrong
+    // symbols.
+    let mut p = profile();
+    p.font = Some(F14BU_FONT.into());
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[(2, b"STEERPOINT")]);
+    assert_eq!(screen(&batch).font.as_deref(), Some(A10C_FONT));
+}
+
+#[test]
+fn an_aircraft_without_a_cdu_cannot_use_the_screen_until_a_font_is_picked() {
+    let mut p = profile();
+    p.aircraft = vec!["Mi-24P".into()];
+    p.readouts.push(on_row_one(vec![text("HELLO")]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("has no font for")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn picking_a_font_opens_the_screen_to_an_aircraft_without_a_cdu() {
+    let mut p = profile();
+    p.aircraft = vec!["Mi-24P".into()];
+    p.readouts.push(on_row_one(vec![text("HELLO")]));
+    p.font = Some(F14BU_FONT.into());
+    assert!(
+        !refusals(&p).iter().any(|e| e.contains("has no font for")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn the_chosen_font_is_the_one_uploaded() {
+    let mut p = profile();
+    p.aircraft = vec!["Mi-24P".into()];
+    p.font = Some(F14BU_FONT.into());
+    p.readouts.push(on_row_one(vec![text("HELLO")]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "Mi-24P", &[]);
+    assert_eq!(screen(&batch).font.as_deref(), Some(F14BU_FONT));
+}
+
+// --- what a font can draw ------------------------------------------------------
+
+#[test]
+fn a_character_the_font_does_not_draw_is_refused() {
+    // Only the F-14BU font has lowercase. Typing it against the A-10C's would
+    // leave blank cells on the panel with nothing saying why, so it is refused
+    // here instead.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![text("Fuel")]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("is not a character the font")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn the_same_characters_are_fine_in_a_font_that_draws_them() {
+    let mut p = profile();
+    p.aircraft = vec!["Mi-24P".into()];
+    p.font = Some(F14BU_FONT.into());
+    p.readouts.push(on_row_one(vec![text("Fuel")]));
+    assert!(
+        !refusals(&p).iter().any(|e| e.contains("is not a character the font")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_piece_marked_small_is_checked_against_the_small_alphabet() {
+    // Every font here draws fewer characters small than large, so marking a
+    // piece small can take away a character that was fine at full size. The
+    // A-10C font draws `^` large and not small.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![text("^")]));
+    assert!(refusals(&p).is_empty(), "{:?}", refusals(&p));
+
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![Span { text: "^".into(), small: true, ..Span::default() }]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("is not a character the font")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+// --- a piece that says two things ------------------------------------------------
+
+#[test]
+fn a_piece_that_both_reads_and_writes_is_refused() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![Span {
+        text: "RALT".into(),
+        source: "CDU_LINE1".into(),
+        ..Span::default()
+    }]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("it can have one")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_piece_with_nothing_in_it_is_unfinished_rather_than_ignored() {
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![text("RALT"), Span::default()]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("a piece with nothing in it")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+// --- running out of room ---------------------------------------------------------
+
+#[test]
+fn content_too_wide_for_its_cells_is_a_caution_and_not_a_refusal() {
+    // Nothing on the panel says the tail was cut, so it is said here. It stays
+    // a caution: whether the aircraft ever sends a reading that wide is the
+    // user's to judge.
+    let mut p = profile();
+    let mut field = on_row_one(vec![text("A VERY LONG LABEL INDEED"), reading("CDU_LINE1")]);
+    field.cells = "0-23".parse().unwrap();
+    p.readouts.push(field);
+    let e = engine(p.clone());
+    let module = e.catalogue().module(&p.module).expect("the module");
+    let cautions = p.width_cautions(module);
+    assert!(
+        cautions.iter().any(|c| c.contains("would be dropped")),
+        "{cautions:?}"
+    );
+    assert!(refusals(&p).is_empty(), "{:?}", refusals(&p));
+}
+
+#[test]
+fn content_that_fits_says_nothing() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![text("SHORT")]));
+    let e = engine(p.clone());
+    let module = e.catalogue().module(&p.module).expect("the module");
+    assert!(p.width_cautions(module).is_empty());
+}
+
+#[test]
+fn a_gauge_with_no_range_is_called_out_as_unbounded() {
+    // The one case nothing bounds: without a range the value could be any
+    // width the needle allows, so the warning says that rather than a number.
+    let mut p = profile();
+    let mut field = on_row_one(vec![reading("FLAP_POS")]);
+    field.cells = "0-5".parse().unwrap();
+    p.readouts.push(field);
+    let e = engine(p.clone());
+    let module = e.catalogue().module(&p.module).expect("the module");
+    let cautions = p.width_cautions(module);
+    assert!(
+        cautions.iter().any(|c| c.contains("no range")),
+        "{cautions:?}"
+    );
+}
+
+// --- gaps: pushing content to both ends -------------------------------------
+
+fn gap() -> Span {
+    Span { gap: true, ..Span::default() }
+}
+
+#[test]
+fn a_gap_pushes_what_follows_to_the_far_end() {
+    // The thing a CDU page does constantly: a label at the left and its value
+    // hard against the right, with the blank between them worked out rather
+    // than counted by hand.
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![text("FUEL"), gap(), text("2450")]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    let drawn = row(screen(&batch), 1);
+    assert_eq!(drawn, "FUEL                2450");
+    assert_eq!(drawn.chars().count(), 24, "the row is filled exactly");
+}
+
+#[test]
+fn two_gaps_space_three_pieces_across_the_line() {
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![text("A"), gap(), text("B"), gap(), text("C")]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    // 21 cells spare across two gaps: 11 then 10, the remainder going to the
+    // earlier one.
+    assert_eq!(row(screen(&batch), 1), "A           B          C");
+}
+
+#[test]
+fn a_gap_gives_its_room_back_as_a_reading_grows() {
+    // The whole point of measuring it rather than typing spaces: the ends stay
+    // put when the value in the middle changes width.
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![text("WP"), gap(), reading("CDU_LINE1")]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[(1, b"X")]);
+    let drawn = row(screen(&batch), 1);
+    assert!(drawn.starts_with("WP"), "{drawn:?}");
+    assert_eq!(drawn.chars().count(), 24);
+    // The CDU line is 24 characters of its own, so it fills what is left and
+    // the gap closes to nothing. A shorter source would open it back up.
+    assert!(drawn.contains('X'), "{drawn:?}");
+}
+
+#[test]
+fn a_gap_with_nothing_spare_draws_nothing() {
+    // A full line is a line that has filled up, not a reason to push anything
+    // off the end.
+    let mut p = profile();
+    let long = "ABCDEFGHIJKL";
+    p.readouts
+        .push(on_row_one(vec![text(long), gap(), text(long)]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    assert_eq!(row(screen(&batch), 1), format!("{long}{long}"));
+}
+
+#[test]
+fn a_gap_asks_for_no_room_of_its_own() {
+    // It can never be the reason content will not fit, so it must not show up
+    // in the width warning.
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![text("LEFT"), gap(), text("RIGHT")]));
+    let e = engine(p.clone());
+    let module = e.catalogue().module(&p.module).expect("the module");
+    assert!(p.width_cautions(module).is_empty(), "{:?}", p.width_cautions(module));
+}
+
+#[test]
+fn a_gap_that_also_has_something_to_draw_is_refused() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![Span {
+        gap: true,
+        text: "X".into(),
+        ..Span::default()
+    }]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("draws nothing of its own")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_field_of_nothing_but_gaps_is_refused() {
+    // Gaps space out what is around them. With nothing around them they are an
+    // elaborate way of writing blanks.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![gap(), gap()]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("nothing but gaps")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_gap_keeps_each_side_in_its_own_colour() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        Span { text: "L".into(), colour: Some(Colour::Green), ..Span::default() },
+        gap(),
+        Span { text: "R".into(), colour: Some(Colour::Amber), ..Span::default() },
+    ]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    let cells = text_cells(&screen(&batch).bytes);
+    assert_eq!(cells[0].ch, 'L');
+    assert_eq!(cells[0].fg, Colour::Green.ordinal());
+    assert_eq!(cells[23].ch, 'R');
+    assert_eq!(cells[23].fg, Colour::Amber.ordinal());
+}

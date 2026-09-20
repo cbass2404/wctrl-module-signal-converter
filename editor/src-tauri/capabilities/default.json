@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The editor talks only to its own commands. It opens no URLs, runs no shell, and reads no files the backend did not hand it. The one page it can have opened, a newer release, is chosen and checked by the backend.",
+  "description": "The editor talks only to its own commands. It opens no URLs, runs no shell, and reads no files the backend did not hand it. The one page it can have opened, a newer release, is chosen and checked by the backend. Closing its own window is the one thing beyond that: the window is held open while unsaved work is asked about, so the close has to be finished by hand.",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": ["core:default", "core:window:allow-destroy"]
 }

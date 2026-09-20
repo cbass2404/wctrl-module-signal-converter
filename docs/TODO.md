@@ -13,14 +13,24 @@ do not.
 
 ## Next
 
-- [ ] **Text output fields.** One way to author screen content across the UFC,
-      the ICP DED and the MCDU, each input constrained by its cell's
-      parameters (width, allowed characters, rows) read from the display
-      catalogue rather than derived again.
-      [STATUS.md:1142](STATUS.md#L1142)
-  - [ ] Font selection, for aircraft without a native CDU only: one that has
-        a CDU takes its font from the aircraft (`native_fonts`) and offers no
-        choice. [STATUS.md:423](STATUS.md#L423)
+- [x] ~~**Text output fields.**~~ Built and flown 2026-09-20, on the panel
+      with DCS feeding it: a chain on the A-10C's free rows from the A-10C II
+      fuel strings, pieced together with typed text, and labels put on rules.
+      A field is a chain of pieces, each characters the user typed or a signal,
+      each with its own colour and size. Font selection came with it, and the
+      editor now lists every area of every screen in the order it sits on the
+      glass. See [CHANGELOG.md](../CHANGELOG.md) and "Content: what fills a
+      field" in [CONFIG.md](CONFIG.md).
+
+- [ ] **Watch the update reconcile on the alpha.003 upgrade.** It runs once
+      when the version changes, so it cannot be exercised by flying; it needs a
+      real upgrade. This release gives it one: the AH-64D rule on row 13 was
+      labelled, and it is still exactly as alpha.002 shipped it, so three
+      fields across the three MCDU names are due a correction. Worth watching:
+      that an untouched row takes `KEYBOARD UNIT`, that a row changed by hand
+      first does not, that a row deleted by hand stays deleted, and that
+      `.updated` lands in the profiles folder naming the version. The tests in
+      `crates/dsc-config/tests/profile_reconcile.rs` stand in until then.
 
 ## Release
 

@@ -8,11 +8,13 @@ import type {
   ConverterState,
   Device,
   Findings,
+  FontGlyphs,
   ImportPreview,
   LearnReport,
   ModuleChoice,
   Profile,
   ProfileSummary,
+  RuleCell,
   SignalView,
   Update,
 } from "./types";
@@ -24,12 +26,25 @@ export const listModules = () => invoke<ModuleChoice[]>("modules");
 export const listProfiles = () => invoke<ProfileSummary[]>("profiles");
 export const listSignals = (module: string) => invoke<SignalView[]>("signals", { module });
 /**
- * What a divider of this many cells will draw.
+ * What a divider of this many cells will draw, one cell at a time.
  *
  * Asked of the backend rather than worked out here, so the preview cannot
- * drift from the rule the panel is actually sent.
+ * drift from the rule the panel is actually sent. Per cell rather than as one
+ * string, because a label is drawn in its own colour and the preview has to
+ * know which cells are it.
  */
-export const dividerRule = (cells: number) => invoke<string>("divider_rule", { cells });
+export const dividerRule = (cells: number, label: string) =>
+  invoke<RuleCell[]>("divider_rule", { cells, label });
+
+/**
+ * One font's glyphs, for drawing a line the way the panel will draw it.
+ *
+ * Asked for per font rather than sent with the displays, because four fonts of
+ * bitmaps is a great deal of data to hand over for a screen nobody may open.
+ * Cached by the caller, since a font never changes while the window is up.
+ */
+export const fontGlyphs = (display: string, font: string) =>
+  invoke<FontGlyphs>("font_glyphs", { display, font });
 
 // The converter daemon. Nothing here is needed to edit a profile: a running
 // daemon picks up a saved one on its own. See editor/src/converter.ts.

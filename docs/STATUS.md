@@ -276,6 +276,17 @@ runs only on `main` in step with origin, pushes nothing but the tag, and
 checks `version.py --check` and `nightly-only.json` first so the pipeline
 does not fail on them after the tag exists. It runs no tests; CI does.
 
+That version check reads `HEAD`, not the working tree (`version.py --check
+--ref HEAD`), and takes the tag from `--print --ref HEAD` as well, so what
+the tag names is what its commit holds. A stamp that was run but never
+committed used to pass here and fail in the build, which meant deleting the
+tag locally and on origin. `--check` covers every version in the repo,
+Cargo.lock included, since `cargo --locked` fails on a lock that disagrees
+with its manifest; the workspace crates come from `Cargo.toml`, so a new one
+is covered without editing `version.py`. Last, `release.cmd` warns when
+`CHANGELOG.md` has no section for this version: the pipeline allows that and
+ships only provenance, which is almost never what was meant.
+
 Still to do: attach the zip to the `dcs-bios-2026.09.18-nightly` release;
 protect `main` (require CI) and `v*` tags on GitHub; the release-notes list
 of changed default rows; then test the installer from the first draft.

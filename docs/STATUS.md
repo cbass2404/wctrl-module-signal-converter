@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 270 passing
+cargo test --workspace            # expect 277 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -21,6 +21,84 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
+
+**Built and flown 2026-09-20: the session log.** The daemon writes what it
+is doing to `Saved Games\DCS\Logs\dcs-signal.log`, beside DCS's own log. It
+exists because the hook starts the daemon hidden, so nothing it printed reached
+anybody: a user reporting a panel going dark mid-flight had nothing to send.
+One file per start, the last kept as `.bak`, ten megabytes before it rolls.
+
+The traffic is no longer gated on `--verbose`; that flag now only decides
+whether the console gets it too, which is why the hook does not pass it and
+should not. Everything named gets at most one line a second, the rest counted
+as `(x14)`, or a single gauge would fill the file in under an hour. A status
+line goes out every minute whether or not anything happened, because an idle
+daemon and a wedged one are otherwise indistinguishable in a log.
+
+Read the first three lines before anything else. They carry the version, the
+full command line and which layout the files came from, and the first thing
+they caught was the log's absence being a stale binary rather than a fault in
+it. See [Development mode](#development-mode-and-three-faults-it-uncovered).
+
+**Flown 2026-09-20, Mi-24P, one nine minute session.** 274 lines, 29 KB, no
+`ERROR` and no `WARN`. It caught every phase without being asked twice:
+
+```text
+12:32:16  Running. Ctrl-C to stop and clear the panels.
+12:33:16  status   0 frame(s), 0 word(s) in, 0 lamp write(s), 0 paint(s)
+12:36:50  stream   first frame after 274444 ms
+12:36:50  aircraft Mi-24P  ->  profile Mi-24P
+12:37:16  status   518 frame(s), 26350 word(s) in, 41 lamp write(s), 26 paint(s), longest pass 175 ms
+12:39:16  status   1111 frame(s), 80577 word(s) in, 0 lamp write(s), 473 paint(s), longest pass 3 ms
+12:39:31  stream quiet for 20s. Panels cleared.
+12:40:47  stream   frames again after the quiet spell
+12:41:07  DCS is no longer running. Exiting.
+12:41:07  stopped  cleanly
+```
+
+Four idle minutes before the mission each left their status line, which is the
+point of writing one on a minute where nothing happened: the gap between
+starting and flying is visibly waiting rather than wedged. The profile was
+picked 1 ms after the first frame arrived.
+
+**The coalescing earned its place.** The Mi-24P radar altimeter, `PLT_RV5_ALT`,
+moves on nearly every export frame; 45 lines in the file carry a suppressed
+count and the largest is `(x20)`:
+
+```text
+12:38:02.820  TRACE   346624 ms  signal  PLT_RV5_ALT  = 502 -> 6  (x14)
+```
+
+At 80,000 words a minute the flying part of that session wrote about 5.6 KB a
+minute, so the ten megabyte cap is roughly thirty hours of continuous flight.
+Unthrottled, that one gauge alone would have reached it in well under an hour.
+
+**`longest pass 175 ms` at mission start** is the number to watch. Loading a
+profile and painting 26 screens happens in one pass of the main loop, and
+nothing else, including the stop check, happens during it. Every later minute
+sat at 1 to 3 ms. Worth a look if panels ever feel behind at mission start, not
+worth doing anything about yet.
+
+Also proven against a synthetic export stream (rollover keeping its header),
+and against the real panels started hidden through `run-hidden.vbs`, where it
+logged every device it opened and stopped 0.15 s after being asked.
+
+The editor's Restart was watched end to end on 2026-09-20 and the log holds the
+whole handover, which is what this file is for:
+
+```text
+12:32:02.037  INFO   run      ... run --exit-when-idle 3600   <- the old daemon
+12:32:15.720  INFO   Asked to stop. Clearing the panels.
+12:32:15.728  INFO   stopped  cleanly                         <- 8 ms
+12:32:15.854  INFO   run      ... run --exit-when-idle 20     <- the new one
+```
+
+The last line is in a new file, and the first three are in `.bak`, so a restart
+reads as two sessions rather than one, exactly as a new flight does. The stop
+took 8 ms against a five second timeout; the timeouts reported before this were
+a daemon built before it could read the lock.
+
+Nothing outstanding on it.
 
 **Built 2026-09-19, seen on the glass: MCDU dividers.** A field with `divider`
 draws a fixed rule instead of reading a signal, and the A-10C and AH-64D
@@ -32,9 +110,12 @@ MCDU below.
 
 **Built 2026-09-19, proven 2026-09-20: Manage Converter.** The editor can stop
 and start the daemon, from a dialog on the profiles page. Pressed in the window
-and run against a live daemon, which cleared the panels on the way out. Only
-the netstat parser has tests, because the rest of it is process control and
-sockets. See below.
+and run against a live daemon, which cleared the panels on the way out. Restart
+was watched end to end with the session log on both sides of it; the handover
+is quoted above. Only the netstat parser has tests, because the rest of it is
+process control and sockets. If Restart ever reports that the converter did not
+stop when asked, read [Development mode](#development-mode-and-three-faults-it-uncovered)
+before believing it is the daemon. See below.
 
 **Verified 2026-09-19: an unplugged panel is harmless.** With the MFDs unplugged
 while profiles bound them, the daemon and the editor both ran and everything
@@ -669,7 +750,7 @@ update never rewrites a row the user has changed: a fix reaches them only if
 they reset that lamp, and they cannot choose to unless the notes name it. The
 alpha.002 entry does that for the two MCDU dividers.
 
-## Development mode, and two faults it uncovered
+## Development mode, and three faults it uncovered
 
 **`.env` beside `data`, 2026-09-19.** `env=dev` makes `Paths::resolve` return
 `Layout::Dev`: everything in the checkout's `data`, with the tracked defaults
@@ -691,6 +772,52 @@ catalogue into `Saved Games\DCS Signal Converter`. Found 2026-09-19 by asking
 where a divider added in the editor had gone. Dev is now tested before
 installed; installed is still tested before a plain checkout, so an installed
 copy started from inside a checkout still uses its own files.
+
+**The same copy hid the checkout again, 2026-09-20.** Testing dev before
+installed was not enough, because the climb that *finds* the checkout stopped
+at the first `data` folder it met, and started from `target/debug` that is the
+copied one. No `.env` sits beside it, so `env=dev` was never read and the run
+fell through to installed a second time: it drove the profiles and catalogue in
+`Saved Games` and wrote its log there too. Found by asking why `data/logs`
+stayed empty. The dev checkout now has its own climb, `climb_dev`, which
+carries on past a `data` folder found beside the executable; both halves are
+tested, including that an install is still not mistaken for a checkout. The
+daemon says which layout it chose on its third line, so this is now visible
+rather than inferred:
+
+```text
+INFO   run      files found as Dev
+INFO   paths    profiles  C:\...\wctrl-module-signal-converter\data\defaults
+```
+
+**Building the daemon is a step of its own.** `npm run tauri dev` builds the
+editor package and reloads the UI from Vite, but never the daemon;
+`beforeBuildCommand` builds it only in release, for packaging. The editor's
+Start and Restart run whatever `target/debug/dcs-signal.exe` happens to be, so
+`cargo build -p dsc-cli` is on you, and it fails while a daemon is running
+because the process holds its own executable open:
+
+```text
+error: failed to remove file `target\debug\dcs-signal.exe`
+Caused by: Access is denied. (os error 5)
+```
+
+Stop the daemon first, or build into `target-alt`. A build skipped this way
+leaves an old daemon that looks current and reads as a product fault: on
+2026-09-20 the editor's Restart timed out for hours against a daemon built
+forty-five minutes before the commit that taught it to read the lock, so it
+bound the port and ignored every stop sent to it, while Kill worked because it
+does not ask. Twice that day the exe also came back as that same 2026-09-19
+build after a build that should have left it alone, hard-linked to a
+`deps/dcs_signal.exe` of that date; why cargo re-linked a stale artifact was
+never established. `cargo clean -p dsc-cli` and a rebuild cleared it, and
+`cargo build --workspace` and `cargo build -p dsc-editor` both left the fresh
+binary alone afterwards. One check before blaming the daemon:
+
+```sh
+ls -l target/debug/dcs-signal.exe        # should be today
+target/debug/dcs-signal.exe run --help   # should list --log-dir
+```
 
 **`merge_new` dropped display fields, silently.** It decided whether to write by
 counting added *bindings* only, so a default that gained a field and no lamp

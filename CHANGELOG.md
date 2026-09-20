@@ -14,4 +14,14 @@ this says what moved.
 
 ### New Features
 
+- **The daemon keeps a log of each session**, in `Saved Games\DCS\Logs\dcs-signal.log`
+  beside DCS's own `dcs.log`. Started by the DCS hook it has no console, so
+  until now a flight left no account of itself at all; if something goes wrong,
+  this is the file to send. It holds where every file was read from, every
+  WinCtrl device found, which profiles loaded and which were skipped, the
+  signals the profile reads as they move, every lamp and screen written, a
+  status line each minute, and the error behind an exit. Each start keeps the
+  last session as `dcs-signal.log.bak` and deletes the one before it, so land
+  and read it rather than flying on. See [docs/CLI.md](docs/CLI.md).
+
 ### Fixed

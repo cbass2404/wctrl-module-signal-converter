@@ -4,7 +4,7 @@
 //! real DCS-BIOS stream before any of it is wrapped in Tauri.
 
 use std::collections::HashMap;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, UdpSocket};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -15,12 +15,52 @@ use clap::{Parser, Subcommand};
 use dsc_bios::{BiosState, Listener, Write as BiosWrite};
 use dsc_config::catalogue_build::{self, Freshness};
 use dsc_config::daemon::{self, STOP_TIMEOUT};
+use dsc_config::log::{self as dlog, Level};
 use dsc_config::nightly_only::{Change, NightlyOnly};
-use dsc_config::paths::Paths;
+use dsc_config::paths::{Layout, Paths};
 use dsc_config::{Flag, Place, Unsound};
 use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout, Transport};
 use dsc_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
+
+/// Say it on the console, as this has always done, and put it in the session
+/// log with a timestamp in front.
+///
+/// The daemon is started hidden by the DCS hook, so the console it prints to
+/// does not exist and the log is the only account anyone can read afterwards.
+/// `kept` is for the facts that hold for the whole session: they are written
+/// again at the top of a rolled log, so a file that begins mid-flight still
+/// says which build, which profiles and which panels. `note` is for detail
+/// worth keeping but not worth interrupting a console for.
+macro_rules! say {
+    ($($arg:tt)*) => {{
+        let line = format!($($arg)*);
+        println!("{line}");
+        dlog::record(Level::Info, &line);
+    }};
+}
+
+macro_rules! kept {
+    ($($arg:tt)*) => {{
+        let line = format!($($arg)*);
+        println!("{line}");
+        dlog::header(&line);
+    }};
+}
+
+macro_rules! warn {
+    ($($arg:tt)*) => {{
+        let line = format!($($arg)*);
+        println!("{line}");
+        dlog::record(Level::Warn, &line);
+    }};
+}
+
+macro_rules! note {
+    ($($arg:tt)*) => {
+        dlog::record(Level::Info, &format!($($arg)*))
+    };
+}
 
 #[derive(Parser)]
 #[command(name = "dcs-signal", about = "DCS Signal Converter", version = dsc_config::build_label())]
@@ -210,6 +250,16 @@ enum Command {
         /// lit either way.
         #[arg(long, value_name = "SECONDS")]
         exit_when_idle: Option<u64>,
+        /// Where to write the session log. An installed copy writes it beside
+        /// dcs.log in Saved Games\DCS\Logs, where a user already knows to look
+        /// when something goes wrong; a checkout writes beside its own data, so
+        /// a development run cannot roll away the log from the flight being
+        /// debugged.
+        #[arg(long, value_name = "DIR")]
+        log_dir: Option<PathBuf>,
+        /// Do not write a session log at all.
+        #[arg(long)]
+        no_log: bool,
     },
     /// Catalogue summary, or one module's signals.
     Catalogue {
@@ -497,19 +547,76 @@ fn main() -> Result<()> {
             verbose,
             seconds,
             exit_when_idle,
-        } => run(
-            &devices.unwrap_or(paths.devices),
-            &catalogue.unwrap_or(paths.catalogue),
-            &profiles.unwrap_or(paths.profiles.active),
-            &defaults.unwrap_or(paths.profiles.defaults),
-            &displays.unwrap_or(paths.displays),
-            &nightly_only.unwrap_or(paths.nightly_only),
-            bios,
-            dry_run,
-            verbose,
-            seconds,
-            exit_when_idle,
-        )?,
+            log_dir,
+            no_log,
+        } => {
+            // The lock first, before anything is read or opened, and the log
+            // straight after it. Which process ends up driving the panels is
+            // what decides whose account matters, and nothing settles that
+            // except holding the lock: asking whether one is running and
+            // starting anyway left a daemon that took over from a departing
+            // one with no log at all, which is the very case worth reading.
+            //
+            // A second daemon must not rotate the log the first is writing
+            // either. The rename happens under the live handle, so the flight
+            // would carry on into a file called .bak that the next start
+            // deletes. Holding the lock means that cannot happen.
+            let lock = if dry_run {
+                None
+            } else {
+                match daemon::take_instance_lock() {
+                    Ok(socket) => Some(socket),
+                    Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+                        // Said on the console alone: the log belongs to the
+                        // daemon that has the panels, and this one has not.
+                        println!(
+                            "Another DCS Signal Converter daemon is already running and driving the panels.\n\
+                             Leaving it alone. Stop it first if you meant to replace it."
+                        );
+                        return Ok(());
+                    }
+                    Err(e) => return Err(e).context("claiming the single-instance lock"),
+                }
+            };
+            // A dry run holds no lock, because it writes nothing and is allowed
+            // alongside a real daemon. It keeps a log where that cannot take
+            // one away from a daemon that is flying: a folder named for it, or
+            // nobody else holding the default one.
+            let named = log_dir.is_some();
+            let dir = log_dir.unwrap_or_else(|| default_log_dir(&paths));
+            if no_log {
+            } else if lock.is_some() || named || !daemon::is_running() {
+                start_log(&dir, &paths);
+            } else {
+                println!(
+                    "a converter is running and keeping the log in {}; this run leaves it alone",
+                    dir.display()
+                );
+            }
+            let result = run(
+                &devices.unwrap_or(paths.devices),
+                &catalogue.unwrap_or(paths.catalogue),
+                &profiles.unwrap_or(paths.profiles.active),
+                &defaults.unwrap_or(paths.profiles.defaults),
+                &displays.unwrap_or(paths.displays),
+                &nightly_only.unwrap_or(paths.nightly_only),
+                bios,
+                dry_run,
+                verbose,
+                seconds,
+                exit_when_idle,
+                lock,
+            );
+            // Logged before it is returned, because returning it prints it to a
+            // console that, started by the hook, nobody is watching. This is the
+            // line a user's report needs most: the panels stopped, and why.
+            if let Err(e) = &result {
+                dlog::record(Level::Error, &format!("stopped  by an error: {e:#}"));
+            } else {
+                dlog::record(Level::Info, "stopped  cleanly");
+            }
+            result?
+        }
 
         Command::Catalogue {
             dir,
@@ -535,6 +642,58 @@ fn main() -> Result<()> {
         )?,
     }
     Ok(())
+}
+
+/// Where the session log goes when nothing says otherwise.
+///
+/// An installed copy writes beside `dcs.log`, because that is the folder users
+/// already zip up when they report something, and having the two side by side
+/// is what lets a panel going dark be lined up against what DCS was doing.
+/// Anything else is a checkout or a test, and writes beside its own data: a
+/// five second `--dry-run` must not roll away the log from the flight that is
+/// actually being debugged.
+fn default_log_dir(paths: &Paths) -> PathBuf {
+    match paths.layout {
+        Layout::Installed => dsc_config::paths::dcs_saved_games().join("Logs"),
+        _ => paths
+            .devices
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join("logs"),
+    }
+}
+
+/// Open the session log and write what is true before the run starts.
+///
+/// A log that cannot be opened is said once on the console and then forgotten:
+/// the daemon's job is to drive the panels, and it does that with or without
+/// somewhere to write about it.
+fn start_log(dir: &Path, paths: &Paths) {
+    // DCS's Logs folder is where this belongs, but it is found through the
+    // registry and a wrong answer there must not cost the log entirely. The
+    // fallback is the folder this product already writes profiles to, which it
+    // is known to be able to write.
+    let fallback = dsc_config::paths::writable_dir().join("Logs");
+    let opened = dlog::start(dir).or_else(|first| {
+        println!("{} could not be opened for a log ({first})", dir.display());
+        dlog::start(&fallback)
+    });
+    match opened {
+        Ok(path) => println!("logging to {}", path.display()),
+        Err(e) => {
+            println!("no session log: {} could not be opened either ({e})", fallback.display());
+            return;
+        }
+    }
+    // Panics in a hidden process are otherwise invisible: the daemon simply
+    // vanishes and the panels stay lit with nothing to say why.
+    dlog::catch_panics();
+    dlog::header(&format!("run      DCS Signal Converter {}", dsc_config::build_label()));
+    dlog::header(&format!(
+        "run      {}",
+        std::env::args().collect::<Vec<_>>().join(" ")
+    ));
+    dlog::header(&format!("run      files found as {:?}", paths.layout));
 }
 
 /// Discover which LED indices drive a physical lamp.
@@ -1211,6 +1370,16 @@ fn catalogue(
 /// handful that drive a lamp.
 #[derive(Default)]
 struct Trace {
+    /// Whether the console gets the traffic as well. The log always does: it
+    /// is the only account of a flight anyone can read afterwards, and what
+    /// the panels were told is most of what a report needs.
+    verbose: bool,
+    /// One line a second per signal, lamp or screen. A gauge moves on every
+    /// export frame and a screen repaints nearly as often, so without this a
+    /// single flight would bury everything else and roll the log away.
+    throttle: dlog::Throttle,
+    /// What the run has done since the last status line.
+    tally: Tally,
     lamps: HashMap<(String, u32, u8), String>,
     /// Address to the signals read from it, because several signals share one
     /// 16-bit word and a string spans several words.
@@ -1252,7 +1421,57 @@ impl Followed {
     }
 }
 
+/// What the run has done lately, written to the log once a minute.
+///
+/// Reported whether or not anything happened, because silence in a log is
+/// ambiguous: a daemon sitting in the menu between missions and a daemon that
+/// has wedged look exactly alike, and telling them apart is the whole question
+/// when someone says the panels stopped.
+#[derive(Default)]
+struct Tally {
+    frames: u64,
+    words: u64,
+    leds: u64,
+    paints: u64,
+    longest: u128,
+}
+
+impl Tally {
+    /// How long one pass of the main loop took, less the wait for a datagram.
+    fn pass(&mut self, took: Duration) {
+        self.longest = self.longest.max(took.as_millis());
+    }
+
+    /// The status line, and start counting again.
+    fn report(&mut self) -> String {
+        let line = format!(
+            "status   {} frame(s), {} word(s) in, {} lamp write(s), {} paint(s), longest pass {} ms",
+            self.frames, self.words, self.leds, self.paints, self.longest
+        );
+        *self = Tally::default();
+        line
+    }
+}
+
 impl Trace {
+    /// Put a traffic line in the log, at most one a second for this key.
+    fn log(&mut self, key: &str, now: Instant, line: String) {
+        if let Some(line) = self.throttle.offer(key, now, line) {
+            dlog::record(Level::Trace, &line);
+        }
+    }
+
+    /// Write out the lines held back by the throttle whose second has passed.
+    ///
+    /// Every pass of the main loop, because a value that changes twice and then
+    /// stops would otherwise sit in the throttle unwritten, leaving the log
+    /// showing the position before last for as long as the flight continues.
+    fn flush(&mut self, now: Instant) {
+        for line in self.throttle.due(now) {
+            dlog::record(Level::Trace, &line);
+        }
+    }
+
     fn lamp_names(inventory: &DeviceInventory) -> HashMap<(String, u32, u8), String> {
         let mut out = HashMap::new();
         for spec in &inventory.devices {
@@ -1272,6 +1491,9 @@ impl Trace {
         self.sources.clear();
         self.last.clear();
         self.converts.clear();
+        // A different aircraft reads different signals, so what the throttle
+        // was holding back is about a cockpit that is no longer loaded.
+        self.throttle.clear();
         let Some(module) = cat.module(&profile.module) else {
             return;
         };
@@ -1348,6 +1570,7 @@ impl Trace {
     /// A string is read back out of `state` rather than off the datagram,
     /// because it is only whole once every word of it has been applied.
     fn signals(&mut self, writes: &[BiosWrite], state: &BiosState, elapsed: u128) {
+        let now = Instant::now();
         for w in writes {
             let Some(signals) = self.sources.get(&w.address) else {
                 continue;
@@ -1376,7 +1599,15 @@ impl Trace {
                 if self.last.get(name) == Some(&shown) {
                     continue;
                 }
-                println!("{elapsed:>8} ms  signal  {name:<28} = {shown}");
+                let line = format!("{elapsed:>8} ms  signal  {name:<28} = {shown}");
+                if self.verbose {
+                    println!("{line}");
+                }
+                // Through the fields rather than `self.log`, because `sources`
+                // is borrowed for the loop this sits in.
+                if let Some(line) = self.throttle.offer(&format!("sig:{name}"), now, line) {
+                    dlog::record(Level::Trace, &line);
+                }
                 self.last.insert(name.to_string(), shown);
             }
         }
@@ -1386,6 +1617,9 @@ impl Trace {
 /// How often to re-ask whether DCS is still there, once the stream has gone
 /// quiet. Only reached while quiet, so it costs nothing during a flight.
 const DCS_RECHECK: Duration = Duration::from_secs(5);
+
+/// How often the log gets a line saying what has happened since the last one.
+const STATUS_EVERY: Duration = Duration::from_secs(60);
 
 /// Whether DCS is running at all.
 ///
@@ -1432,7 +1666,8 @@ fn process_listed(stdout: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{process_listed, Followed, Trace};
+    use super::{dlog, process_listed, Followed, Trace};
+    use std::time::Instant;
     use dsc_bios::{BiosState, Write as BiosWrite};
     use dsc_config::{Catalogue, Module, Profile};
 
@@ -1619,6 +1854,51 @@ mod tests {
         let before = trace.last.clone();
         trace.signals(&writes, &state, 1);
         assert_eq!(trace.last, before, "an unchanged field is not logged again");
+    }
+
+    /// The whole point of the session log: the daemon is started hidden, so
+    /// nothing reaches a console, and what it read and what it wrote has to be
+    /// in the file regardless.
+    ///
+    /// One test for the traffic, because the log is process-wide and two tests
+    /// writing at once would each be reading the other's lines.
+    #[test]
+    fn the_log_gets_the_traffic_with_no_console_watching() {
+        let (cat, profile) = fixture();
+        let dir = std::env::temp_dir().join(format!("dsc-cli-log-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dlog::start_capped(&dir, 1 << 20).expect("opening a log");
+
+        let mut trace = Trace::default();
+        assert!(!trace.verbose, "nothing here reaches a console");
+        trace.follow(&profile, &cat);
+
+        let mut state = BiosState::new();
+        let writes = vec![BiosWrite { address: 100, value: 0b100 }];
+        for w in &writes {
+            state.apply(*w);
+        }
+        trace.signals(&writes, &state, 17);
+
+        // A burst of the same signal is held back and counted rather than
+        // written a line at a time.
+        for value in [0u16, 0b100, 0, 0b100] {
+            let writes = vec![BiosWrite { address: 100, value }];
+            for w in &writes {
+                state.apply(*w);
+            }
+            trace.signals(&writes, &state, 18);
+        }
+        trace.flush(Instant::now() + dlog::THROTTLE);
+        dlog::stop();
+
+        let log = std::fs::read_to_string(&path).expect("the log");
+        assert!(
+            log.contains("TRACE        17 ms  signal  MASTER_CAUTION_LT"),
+            "the signal as it arrived: {log}"
+        );
+        assert!(log.contains("(x4)"), "the rest of the burst, counted: {log}");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1871,6 +2151,15 @@ fn flag_lines(
     out
 }
 
+/// Put a line from the profile loader on the console and in the log, as loud
+/// as its first word says it is.
+fn emit(line: &str) {
+    match line.split_whitespace().next() {
+        Some("skipped" | "warning" | "caution") => warn!("{line}"),
+        _ => say!("{line}"),
+    }
+}
+
 /// A cheap summary of a profile directory: name, size and modification time.
 ///
 /// Polled rather than watched with a filesystem notification API, because the
@@ -1921,8 +2210,25 @@ fn run(
     verbose: bool,
     seconds: Option<u64>,
     exit_when_idle: Option<u64>,
+    // The single-instance lock, held for the lifetime of the run, or None for
+    // a dry run. Taken by the caller before anything here is loaded, so that a
+    // second daemon neither opens the panels nor touches the log.
+    lock: Option<UdpSocket>,
 ) -> Result<()> {
     println!("DCS Signal Converter {}", dsc_config::build_label());
+    // Where everything came from. Half of what a report needs is which files
+    // were actually read, and an install, a checkout and a copy pointed
+    // somewhere by DSC_DATA all look alike from the outside.
+    for (what, path) in [
+        ("devices  ", devices_path.as_path()),
+        ("catalogue", catalogue_dir.as_path()),
+        ("profiles ", profiles_dir.as_path()),
+        ("defaults ", defaults_dir.as_path()),
+        ("displays ", displays_dir.as_path()),
+        ("nightly  ", nightly_path),
+    ] {
+        dlog::header(&format!("paths    {what} {}", path.display()));
+    }
     let inventory = DeviceInventory::load(devices_path)
         .with_context(|| format!("loading {}", devices_path.display()))?;
     let cat = load_catalogue(catalogue_dir, bios)?;
@@ -1930,9 +2236,13 @@ fn run(
     let displays = DisplayCatalogue::load_dir(displays_dir)
         .with_context(|| format!("loading {}", displays_dir.display()))?;
     let nightly = NightlyOnly::load(nightly_path).unwrap_or_else(|e| {
-        println!("could not read {}: {e}", nightly_path.display());
+        warn!("could not read {}: {e}", nightly_path.display());
         NightlyOnly::default()
     });
+    dlog::header(&format!(
+        "catalogue built from DCS-BIOS {}",
+        cat.bios_version().unwrap_or("an unknown version")
+    ));
 
     // Shipped profiles are copied in rather than read from a second folder, so
     // there is only ever one place profiles live and one place the user edits.
@@ -1947,7 +2257,7 @@ fn run(
             )
         })?;
     if !seeded.is_empty() {
-        println!(
+        say!(
             "seeded   {} profile(s) from {}",
             seeded.len(),
             defaults_dir.display()
@@ -1962,15 +2272,20 @@ fn run(
         .merge_new(&inventory)
         .with_context(|| format!("updating profiles in {}", profiles_dir.display()))?
     {
-        println!("updated  {note}");
+        say!("updated  {note}");
     }
 
     let loaded = load_profiles(profiles_dir, &cat, &inventory, &displays, &nightly);
     for line in &loaded.messages {
-        println!("{line}");
+        // Kept, not merely said: which profiles ran, and which were thrown out
+        // and why, is the first thing to check when a lamp does nothing.
+        match line.split_whitespace().next() {
+            Some("profile") => kept!("{line}"),
+            _ => emit(line),
+        }
     }
     if loaded.profiles.is_empty() {
-        println!(
+        warn!(
             "No usable profiles in {}. Every LED will be swept to zero on module load.",
             profiles_dir.display()
         );
@@ -1980,10 +2295,23 @@ fn run(
     // Only drive hardware that is actually plugged in. A shared profile may
     // name panels this user does not own, which is not an error.
     let api = hidapi::HidApi::new().context("opening HID API")?;
-    let present: Vec<u16> = wctrl_hid::enumerate(&api)
-        .iter()
-        .map(|d| d.product_id)
-        .collect();
+    let found = wctrl_hid::enumerate(&api);
+    // Everything of the vendor's that is plugged in, known to this build or
+    // not. A panel missing from the inventory and a panel nobody plugged in
+    // look identical from the profile's side, and only this separates them.
+    for d in &found {
+        dlog::header(&format!(
+            "usb      pid 0x{:04x}  {}{}",
+            d.product_id,
+            d.product,
+            if d.serial.is_empty() {
+                String::new()
+            } else {
+                format!("  serial {}", d.serial)
+            }
+        ));
+    }
+    let present: Vec<u16> = found.iter().map(|d| d.product_id).collect();
     let mut connected = Vec::new();
     let mut handles: HashMap<String, Device> = HashMap::new();
     for spec in &inventory.devices {
@@ -1991,7 +2319,7 @@ fn run(
             continue;
         }
         let glass: Vec<&str> = spec.displays().map(|(_, k)| k).collect();
-        println!(
+        kept!(
             "device   {:<22} pid 0x{:04x}{}",
             spec.display_name,
             spec.usb_pid,
@@ -2023,11 +2351,12 @@ fn run(
         }
     }
     if connected.is_empty() {
-        println!("No known devices connected. Nothing to drive.");
+        warn!("No known devices connected. Nothing to drive.");
         return Ok(());
     }
 
     let mut trace = Trace {
+        verbose,
         lamps: Trace::lamp_names(&inventory),
         ..Trace::default()
     };
@@ -2035,25 +2364,6 @@ fn run(
     let mut panels = Panels { handles, displays: displays.clone(), fonts: HashMap::new() };
     let mut engine = Engine::new(inventory, cat, profiles).with_displays(displays.clone());
     engine.set_connected(connected);
-
-    // Held for the lifetime of the run. A dry run writes nothing, so it is
-    // allowed alongside a real daemon: the lock exists to stop two processes
-    // driving one panel, not to stop two processes existing.
-    let lock = if dry_run {
-        None
-    } else {
-        match daemon::take_instance_lock() {
-            Ok(socket) => Some(socket),
-            Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
-                println!(
-                    "Another DCS Signal Converter daemon is already running and driving the panels.\n\
-                     Leaving it alone. Stop it first if you meant to replace it."
-                );
-                return Ok(());
-            }
-            Err(e) => return Err(e).context("claiming the single-instance lock"),
-        }
-    };
 
     let mut listener = Listener::bind(Ipv4Addr::UNSPECIFIED)
         .context("joining the DCS-BIOS multicast group on 239.255.50.10:5010")?;
@@ -2068,7 +2378,7 @@ fn run(
             .context("installing the Ctrl-C handler")?;
     }
 
-    println!(
+    say!(
         "Running{}{}. Ctrl-C to stop and clear the panels.",
         if dry_run { " (dry run - no HID writes)" } else { "" },
         if verbose { " (verbose)" } else { "" }
@@ -2098,6 +2408,7 @@ fn run(
     let mut fingerprint = profiles_fingerprint(profiles_dir);
     let mut settling: Option<Vec<(String, u64, u64)>> = None;
     let mut next_check = Instant::now() + PROFILE_POLL;
+    let mut next_status = Instant::now() + STATUS_EVERY;
 
     while running.load(Ordering::SeqCst) {
         if let Some(limit) = seconds {
@@ -2111,7 +2422,7 @@ fn run(
         // as Ctrl-C: every lamp this process lit is cleared and every screen it
         // drove is blanked, which a killed process would not do.
         if lock.as_ref().is_some_and(daemon::stop_requested) {
-            println!("Asked to stop. Clearing the panels.");
+            say!("Asked to stop. Clearing the panels.");
             break;
         }
 
@@ -2119,6 +2430,16 @@ fn run(
         match listener.recv(&mut writes) {
             Ok(_) => {
                 if !writes.is_empty() {
+                    // Said once each way round, because "is DCS-BIOS talking to
+                    // us at all" is the first question every report comes down
+                    // to, and the answer is otherwise nowhere in the file.
+                    if last_traffic.is_none() {
+                        say!("stream   first frame after {} ms", started.elapsed().as_millis());
+                    } else if cleared_for_idle {
+                        say!("stream   frames again after the quiet spell");
+                    }
+                    trace.tally.frames += 1;
+                    trace.tally.words += writes.len() as u64;
                     last_traffic = Some(Instant::now());
                     cleared_for_idle = false;
                 }
@@ -2145,13 +2466,13 @@ fn run(
                 if !cleared_for_idle {
                     cleared_for_idle = true;
                     let batch = engine.mission_ended();
-                    apply(&batch, &mut panels, dry_run, verbose.then_some((&trace, elapsed)))?;
+                    apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
                     last_aircraft = None;
-                    println!("stream quiet for {}s. Panels cleared.", limit.as_secs());
+                    say!("stream quiet for {}s. Panels cleared.", limit.as_secs());
                 }
 
                 if !dcs_is_running() {
-                    println!("DCS is no longer running. Exiting.");
+                    say!("DCS is no longer running. Exiting.");
                     break;
                 }
             }
@@ -2170,23 +2491,29 @@ fn run(
 
                     let reloaded =
                         load_profiles(profiles_dir, engine.catalogue(), engine.devices(), &displays, &nightly);
-                    println!(
+                    say!(
                         "reloaded {} profile(s) from {}",
                         reloaded.profiles.len(),
                         profiles_dir.display()
                     );
                     for line in &reloaded.messages {
                         if line.starts_with("skipped") || reloaded.skipped > 0 {
-                            println!("{line}");
+                            emit(line);
+                        } else {
+                            // Not worth interrupting a console for on every
+                            // save, but the log wants the whole picture.
+                            note!("{line}");
                         }
                     }
                     let batch = engine.set_profiles(reloaded.profiles);
-                    apply(&batch, &mut panels, dry_run, verbose.then_some((&trace, elapsed)))?;
+                    apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
                     if let Some(name) = engine.aircraft() {
                         if let Some(p) = engine.active_profile() {
                             let p = p.clone();
                             trace.follow(&p, engine.catalogue());
-                            println!("aircraft {name}  ->  profile {}", p.name);
+                            let line = format!("aircraft {name}  ->  profile {}", p.name);
+                            println!("{line}");
+                            dlog::context(&line);
                         }
                     }
                 } else {
@@ -2204,19 +2531,29 @@ fn run(
         };
 
         // After ingest, so a signal line and the lamp it moved read in the
-        // order they happened.
-        if verbose {
-            trace.signals(&writes, engine.state(), elapsed);
-        }
+        // order they happened. Not gated on --verbose any more: what arrived
+        // is half of what a report needs, and the console was never where it
+        // was going to be read.
+        trace.signals(&writes, engine.state(), elapsed);
 
         let current = engine.aircraft().map(str::to_string);
         if current != last_aircraft {
             if let Some(name) = &current {
                 match engine.active_profile() {
                     Some(p) => {
-                        println!("aircraft {name}  ->  profile {}", p.name);
+                        let line = format!("aircraft {name}  ->  profile {}", p.name);
+                        println!("{line}");
+                        dlog::context(&line);
+                        // Followed whether or not a console is watching: which
+                        // signals this profile reads is most of what the log is
+                        // for, and the console only ever saw it with --verbose.
+                        trace.follow(p, engine.catalogue());
+                        note!(
+                            "profile  following {} signal address(es) for {}",
+                            trace.sources.len(),
+                            p.name
+                        );
                         if verbose {
-                            trace.follow(p, engine.catalogue());
                             println!(
                                 "  following {} signal address(es) for this profile",
                                 trace.sources.len()
@@ -2224,13 +2561,15 @@ fn run(
                         }
                     }
                     None => {
-                        println!("aircraft {name}  ->  no profile; panels will clear");
+                        let line = format!("aircraft {name}  ->  no profile; panels will clear");
+                        println!("{line}");
+                        dlog::context(&line);
                         // Write a stub so the aircraft shows up in the editor
                         // with every lamp listed and nothing assigned. Takes
                         // effect next run; the panel stays cleared this time.
                         if let Err(e) = write_stub(profiles_dir, name, engine.catalogue(), engine.devices())
                         {
-                            println!("  could not write a starter profile: {e:#}");
+                            warn!("  could not write a starter profile: {e:#}");
                         }
                     }
                 }
@@ -2240,12 +2579,7 @@ fn run(
             rebuilt = false;
         }
 
-        apply(
-            &batch,
-            &mut panels,
-            dry_run,
-            verbose.then_some((&trace, elapsed)),
-        )?;
+        apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
 
         if !version_checked && engine.aircraft().is_some() {
             match running_version(&engine) {
@@ -2253,7 +2587,7 @@ fn run(
                 Running::Matches => version_checked = true,
                 Running::Unreported => {
                     version_checked = true;
-                    println!("DCS-BIOS does not report its version, so it cannot be checked against the catalogue.");
+                    warn!("DCS-BIOS does not report its version, so it cannot be checked against the catalogue.");
                 }
                 Running::Differs(running) => {
                     let built = engine.catalogue().bios_version().unwrap_or("unknown").to_string();
@@ -2265,13 +2599,14 @@ fn run(
                     // the new catalogue's address.
                     if !rebuilt && installed.as_deref() != Some(built.as_str()) {
                         rebuilt = true;
+                        say!("catalogue rebuilt: DCS is running DCS-BIOS {running:?}");
                         let cat = load_catalogue(catalogue_dir, bios)?;
                         let reloaded = load_profiles(profiles_dir, &cat, engine.devices(), &displays, &nightly);
                         for line in &reloaded.messages {
-                            println!("{line}");
+                            emit(line);
                         }
                         let batch = engine.set_catalogue(cat, reloaded.profiles);
-                        apply(&batch, &mut panels, dry_run, verbose.then_some((&trace, elapsed)))?;
+                        apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
                         if let Some(p) = engine.active_profile() {
                             let p = p.clone();
                             trace.follow(&p, engine.catalogue());
@@ -2281,7 +2616,7 @@ fn run(
                         // update made while the mission was loaded, or one the
                         // catalogue cannot even read the version of. No
                         // catalogue matches the code DCS is running.
-                        println!(
+                        warn!(
                             "DCS is running DCS-BIOS {running:?}, but the catalogue is built from {built} and {} is installed. Signals would be read from the wrong addresses, so DCS Signal Converter is stopping. The next mission loads the installed DCS-BIOS and starts it again with a catalogue that matches it.",
                             installed.as_deref().unwrap_or("no version")
                         );
@@ -2290,18 +2625,28 @@ fn run(
                 }
             }
         }
+
+        // The log's own housekeeping, last, because everything above may have
+        // added to it. The status line goes out even on a pass that did
+        // nothing: a quiet minute and a wedged daemon read alike otherwise.
+        trace.flush(now);
+        trace.tally.pass(now.elapsed());
+        if now >= next_status {
+            next_status = now + STATUS_EVERY;
+            note!("{}", trace.tally.report());
+        }
     }
 
     println!();
     let batch = engine.shutdown();
     let cleared = batch.writes.len();
-    apply(
-        &batch,
-        &mut panels,
-        dry_run,
-        verbose.then(|| (&trace, started.elapsed().as_millis())),
-    )?;
-    println!("Stopped. Cleared {cleared} LED(s).");
+    let elapsed = started.elapsed().as_millis();
+    apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
+    // Past the throttle's window, so the last second of a flight is written
+    // rather than held back by a daemon that is about to exit.
+    trace.flush(Instant::now() + dlog::THROTTLE);
+    note!("{}", trace.tally.report());
+    say!("Stopped. Cleared {cleared} LED(s).");
     Ok(())
 }
 
@@ -2372,32 +2717,34 @@ fn apply(
     batch: &Batch,
     panels: &mut Panels,
     dry_run: bool,
-    trace: Option<(&Trace, u128)>,
+    trace: &mut Trace,
+    elapsed: u128,
 ) -> Result<()> {
     if batch.is_empty() {
         return Ok(());
     }
+    let now = Instant::now();
+    let verb = match batch.cause {
+        Cause::ModuleLoad => "sweep",
+        Cause::SignalChange => "write",
+        Cause::Shutdown => "clear",
+        Cause::ProfileReload => "reload",
+    };
     for w in &batch.writes {
-        match trace {
-            Some((t, elapsed)) => println!(
-                "{elapsed:>8} ms  {:<7} {:<28} = {}",
-                match batch.cause {
-                    Cause::ModuleLoad => "sweep",
-                    Cause::SignalChange => "write",
-                    Cause::Shutdown => "clear",
-                    Cause::ProfileReload => "reload",
-                },
-                t.lamp(&w.id),
-                w.value
-            ),
+        let lamp = trace.lamp(&w.id);
+        let line = format!("{elapsed:>8} ms  {verb:<7} {lamp:<28} = {}", w.value);
+        if trace.verbose {
+            println!("{line}");
+        } else if dry_run {
             // Without --verbose a dry run still says what it would have sent,
             // which is the whole point of a dry run.
-            None if dry_run => println!(
+            println!(
                 "  {:?}  {} part 0x{:04x} index {:<2} = {}",
                 batch.cause, w.id.device, w.id.part_id, w.id.index, w.value
-            ),
-            None => {}
+            );
         }
+        trace.log(&format!("led:{lamp}"), now, line);
+        trace.tally.leds += 1;
         if dry_run {
             continue;
         }
@@ -2428,25 +2775,36 @@ fn apply(
                 .collect::<Vec<_>>()
                 .join(" ")
         };
-        match trace {
-            Some((_, elapsed)) => println!(
-                "{elapsed:>8} ms  {:<7} {:<28} = {}",
-                match batch.cause {
-                    Cause::Shutdown => "blank",
-                    _ => "paint",
-                },
-                format!("{} group {}", w.device, w.group),
-                hex()
-            ),
-            None if dry_run => println!(
+        let verb = match batch.cause {
+            Cause::Shutdown => "blank",
+            _ => "paint",
+        };
+        let what = format!("{} group {}", w.device, w.group);
+        // Every row of a blanked text screen is empty and empty rows are left
+        // out, so say so rather than trailing off after the equals sign.
+        let shown = match hex() {
+            text if text.is_empty() => "(blank)".to_string(),
+            text => text,
+        };
+        if trace.verbose {
+            println!("{elapsed:>8} ms  {verb:<7} {what:<28} = {shown}");
+        } else if dry_run {
+            println!(
                 "  {:?}  {} display group {:<2} = {}",
-                batch.cause,
-                w.device,
-                w.group,
-                hex()
-            ),
-            None => {}
+                batch.cause, w.device, w.group, shown
+            );
         }
+        // A text screen is logged as what it says, since that is the thing
+        // worth reading afterwards. A bitmap is logged as its head and its
+        // length: a screen's worth of hex, even once a second, would be most
+        // of the file and tells nobody anything they could check.
+        let logged = if w.transport == Transport::Text { shown } else { brief(&w.bytes) };
+        trace.log(
+            &format!("lcd:{}/{}", w.device, w.group),
+            now,
+            format!("{elapsed:>8} ms  {verb:<7} {what:<28} = {logged}"),
+        );
+        trace.tally.paints += 1;
         if dry_run {
             continue;
         }
@@ -2497,6 +2855,22 @@ fn apply(
     Ok(())
 }
 
+/// The head of a bitmap and how long it was, for the log.
+fn brief(bytes: &[u8]) -> String {
+    const SHOWN: usize = 16;
+    let head = bytes
+        .iter()
+        .take(SHOWN)
+        .map(|b| format!("{b:02x}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    if bytes.len() > SHOWN {
+        format!("{head} ... ({} bytes)", bytes.len())
+    } else {
+        format!("{head} ({} bytes)", bytes.len())
+    }
+}
+
 /// Write a starter profile for an aircraft nothing is configured for.
 ///
 /// Never overwrites: if the file exists the user has already started on it, and
@@ -2510,7 +2884,7 @@ fn write_stub(
     let Some(module) = cat.for_aircraft(aircraft) else {
         // No DCS-BIOS support means there is nothing to bind to, so a stub would
         // be a file that can never work. Say so instead of writing one.
-        println!("  {aircraft} has no DCS-BIOS catalogue entry, so nothing can be bound to it.");
+        warn!("  {aircraft} has no DCS-BIOS catalogue entry, so nothing can be bound to it.");
         return Ok(());
     };
 
@@ -2519,7 +2893,7 @@ fn write_stub(
     let name = profile_name_for(aircraft);
     let stem = file_stem(name);
     if stem.is_empty() {
-        println!("  {aircraft:?} gives no usable file name, so no starter profile was written.");
+        warn!("  {aircraft:?} gives no usable file name, so no starter profile was written.");
         return Ok(());
     }
     let path = profiles_dir.join(format!("{stem}.json"));
@@ -2530,7 +2904,7 @@ fn write_stub(
     // skipped still does, and a stub beside it would claim the aircraft twice
     // once that one is fixed. Only the active folder is read, so no defaults.
     if let Some(owner) = Profiles::new(PathBuf::new(), profiles_dir).claimed_aircraft().get(aircraft) {
-        println!("  {owner} claims {aircraft} but was skipped; fix it rather than starting another.");
+        warn!("  {owner} claims {aircraft} but was skipped; fix it rather than starting another.");
         return Ok(());
     }
 
@@ -2538,6 +2912,6 @@ fn write_stub(
     let profile = Profile::stub(name, aircraft, &module.module, devices);
     let lamps = profile.bindings.len();
     profile.save(&path)?;
-    println!("  wrote {} with {lamps} unassigned lamp(s)", path.display());
+    say!("  wrote {} with {lamps} unassigned lamp(s)", path.display());
     Ok(())
 }

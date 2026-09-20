@@ -76,7 +76,8 @@ impl Paths {
     ///    profiles. Tested before installed on purpose, because a Tauri build
     ///    copies `data` beside the executable and would otherwise make every
     ///    development run look installed, writing to the profiles the
-    ///    developer actually flies.
+    ///    developer actually flies. Looked for with its own climb, for the
+    ///    same reason: see [`climb_dev`].
     /// 3. `data/devices.json` beside the executable: installed.
     /// 4. A `data/devices.json` in the current directory or any ancestor, then
     ///    the executable's: a checkout. `tauri dev` runs from
@@ -92,10 +93,8 @@ impl Paths {
         let cwd = std::env::current_dir().ok();
         let checkout = cwd.iter().chain(exe_dir.iter()).find_map(|start| climb(start));
 
-        if let Some(root) = &checkout {
-            if dev_requested(root) {
-                return Self::dev(root.clone());
-            }
+        if let Some(root) = cwd.iter().chain(exe_dir.iter()).find_map(|start| climb_dev(start)) {
+            return Self::dev(root);
         }
         if let Some(dir) = &exe_dir {
             let shipped = dir.join("data");
@@ -164,6 +163,26 @@ fn climb(start: &Path) -> Option<PathBuf> {
         .ancestors()
         .map(|dir| dir.join("data"))
         .find(|candidate| candidate.join("devices.json").is_file())
+}
+
+/// The nearest checkout above `start` that asks for development mode.
+///
+/// Climbed on its own, and past any `data` folder met on the way, because a
+/// Tauri build copies `data` beside the executable. Started from
+/// `target/debug`, which is where the hook's shim and the editor's Start both
+/// put the daemon, [`climb`] stops at that copy; no `.env` sits beside it, so
+/// development mode was never recognised and the run resolved as installed,
+/// reading and writing the profiles the developer actually flies. Continuing
+/// up finds the checkout that `data` was copied from.
+fn climb_dev(start: &Path) -> Option<PathBuf> {
+    start.ancestors().find_map(|dir| {
+        let data = dir.join("data");
+        if data.join("devices.json").is_file() && dev_requested(&data) {
+            Some(data)
+        } else {
+            None
+        }
+    })
 }
 
 /// Whether the checkout holding `data` asks for development mode.
@@ -347,6 +366,47 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("..").join("..");
         let found = climb(&root.join("editor").join("src-tauri")).expect("the repository's data");
         assert!(found.join("devices.json").is_file());
+    }
+
+    /// A build folder carries a copy of `data` beside the executable, and the
+    /// daemon is started from there with that as its working directory. The
+    /// dev checkout has to be found above it, or a development run drives the
+    /// profiles being flown.
+    #[test]
+    fn a_data_folder_beside_the_exe_does_not_hide_the_dev_checkout() {
+        let root = std::env::temp_dir().join(format!("dsc-paths-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let beside = root.join("target").join("debug");
+        std::fs::create_dir_all(root.join("data")).expect("the checkout's data");
+        std::fs::create_dir_all(beside.join("data")).expect("the copy beside the exe");
+        std::fs::write(root.join("data").join("devices.json"), "{}").expect("devices");
+        std::fs::write(beside.join("data").join("devices.json"), "{}").expect("the copy");
+        std::fs::write(root.join(DEV_FILE), "env=dev
+").expect("the .env");
+
+        assert_eq!(
+            climb(&beside).as_deref(),
+            Some(beside.join("data").as_path()),
+            "the plain climb stops at the copy, which is what hid the checkout"
+        );
+        assert_eq!(
+            climb_dev(&beside).as_deref(),
+            Some(root.join("data").as_path()),
+            "the dev climb carries on to the checkout that asked for it"
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// Nothing above an installed copy says `env=dev`, so it stays installed.
+    #[test]
+    fn an_install_is_not_mistaken_for_a_dev_checkout() {
+        let root = std::env::temp_dir().join(format!("dsc-paths-installed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(root.join("data")).expect("the installed data");
+        std::fs::write(root.join("data").join("devices.json"), "{}").expect("devices");
+
+        assert_eq!(climb_dev(&root), None);
+        let _ = std::fs::remove_dir_all(&root);
     }
 
     #[cfg(windows)]

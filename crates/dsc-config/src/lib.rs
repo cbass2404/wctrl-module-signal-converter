@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 pub mod catalogue_build;
 pub mod daemon;
 pub mod display;
+pub mod log;
 pub mod mcdu_font;
 pub mod nightly_only;
 pub mod paths;

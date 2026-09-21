@@ -345,6 +345,45 @@ fn a_gauge_with_no_range_is_called_out_as_unbounded() {
     );
 }
 
+#[test]
+fn a_run_of_one_cell_is_never_measured_by_character() {
+    // The Hornet UFC is the case this exists for. Four of its fields are one
+    // cell reading a two character signal, and the panel draws each as a
+    // single glyph: the comm windows carry `width: 2` in the display map, and
+    // a scratchpad mark arrives from DCS-BIOS as `" G"` and is looked up
+    // whole. Counted by character they all read as a field about to lose its
+    // last character, and the editor showed four warnings on a screen that
+    // draws exactly what it was built to draw.
+    let p = Profile::load(&r("data/defaults/fa-18.json")).expect("the Hornet default");
+    let cat = Catalogue::load_dir(&r("data/catalogue")).expect("catalogue");
+    let module = cat.module(&p.module).expect("the module");
+    // The whole screen rather than the four fields, because a shipped default
+    // that warns on sight teaches people to scroll past the warnings.
+    assert!(
+        p.width_cautions(module).is_empty(),
+        "the Hornet draws what it was built to draw: {:?}",
+        p.width_cautions(module)
+    );
+}
+
+#[test]
+fn a_run_of_two_cells_still_counts_characters() {
+    // The boundary the one cell rule sits on, and the half of it that is easy
+    // to take too far. One cell holds whatever it is handed; two hold one
+    // character each, and a third character is gone with nothing said.
+    let mut p = profile();
+    let mut field = on_row_one(vec![text("ABC")]);
+    field.cells = "0-1".parse().unwrap();
+    p.readouts.push(field);
+    let e = engine(p.clone());
+    let module = e.catalogue().module(&p.module).expect("the module");
+    assert!(
+        p.width_cautions(module).iter().any(|c| c.contains("would be dropped")),
+        "{:?}",
+        p.width_cautions(module)
+    );
+}
+
 // --- gaps: pushing content to both ends -------------------------------------
 
 fn gap() -> Span {

@@ -305,3 +305,30 @@ fn a_piece_carrying_none_of_it_is_still_written_flat() {
         }
     }
 }
+
+#[test]
+fn a_saved_profile_is_written_with_windows_line_endings() {
+    // These are Windows files that people open and hand edit, and every one
+    // of them was committed with CRLF. `to_string_pretty` writes LF, so a
+    // save from the editor turned the whole file over and buried the one row
+    // that had actually changed. Checked on the bytes, because that is the
+    // thing that was wrong.
+    let profile = Profile::load(&r("data/defaults/a-10c.json")).expect("the A-10C default");
+    let dir = std::env::temp_dir().join(format!("dsc-endings-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("a place to write");
+    let path = dir.join("a-10c.json");
+    profile.save(&path).expect("it saves");
+    let bytes = std::fs::read(&path).expect("it reads back");
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let lone = bytes
+        .iter()
+        .enumerate()
+        .filter(|(i, &c)| c == b'\n' && *i > 0 && bytes[i - 1] != b'\r')
+        .count();
+    assert_eq!(lone, 0, "every line ends with the pair");
+    assert!(bytes.windows(2).any(|w| w == b"\r\n"), "and there are lines");
+    // No trailing newline, the way the shipped defaults are written, so the
+    // last row of a file is not a change every time it is saved.
+    assert_ne!(bytes.last(), Some(&b'\n'));
+}

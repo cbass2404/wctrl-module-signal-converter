@@ -35,9 +35,24 @@ alone, so naming what moved matters there too.
 
 ### Shipped profiles
 
+- **Hornet:** the UFC scratchpad number is held to its 7 cells and aligned
+  right within them. It draws exactly as it did. DCS-BIOS sends 8 characters
+  for 7 cells, so one of them was always going, and saying which in the profile
+  is what stops the editor warning that one might.
+
 ### Fixed
 
 - The editor refused a label on a rule that the panel would have drawn. It was
   still asking for a blank margin at each end of the line, which went when the
   rule was changed to run corner to corner, so it wanted two cells more than
   the rule actually needs.
+- A field one cell wide no longer warns that it is about to lose a character.
+  A single cell takes its whole value as one glyph, which is how the Hornet UFC
+  draws a two-digit comm channel and a scratchpad mark, so nothing was ever
+  being dropped. The check was counting characters and put four warnings on the
+  Hornet for a screen drawing exactly what it was built to draw.
+- Profiles are saved with Windows line endings again. Every profile was written
+  with CRLF and the editor was saving them back with LF, which turned a change
+  to one row into a change to every line of the file and left it as one long
+  line in anything that still wants the pair. The catalogue is written the same
+  way now.

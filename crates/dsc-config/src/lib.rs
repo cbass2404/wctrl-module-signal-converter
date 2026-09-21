@@ -764,6 +764,17 @@ impl Readout {
         if self.divider {
             return Width { widest: cells, cells, unbounded: false };
         }
+        // A run of one cell takes its whole value as a single glyph, however
+        // many characters that is. That is not a shortcut: a two character
+        // field really does occupy one cell on this hardware, the comm windows
+        // carry `width: 2` and a Hornet scratchpad mark arrives as `" G"`.
+        // `compose` hands the value over whole and `fit` joins rather than
+        // crops, so nothing can be cut off the end of one cell and there is
+        // nothing here to measure. Counted by character instead, every one of
+        // these read as a field about to lose its last character.
+        if cells == 1 {
+            return Width { widest: 1, cells, unbounded: false };
+        }
         let mut widest = 0;
         let mut unbounded = false;
         for span in &self.content {
@@ -1084,9 +1095,17 @@ impl Profile {
     /// visible while it is still half finished. A reader would see truncated
     /// JSON, and the profile would appear to vanish for as long as it took to
     /// finish writing.
+    ///
+    /// CRLF, because these are Windows files that people open and read. A
+    /// profile is meant to be looked at and hand edited, and `to_string_pretty`
+    /// writes LF, which leaves the file as one long line in anything that still
+    /// wants the pair. The shipped defaults are CRLF and end without a trailing
+    /// newline, so a save gives back the same bytes the profile arrived as
+    /// rather than a whole file of changed endings around one edited row.
     pub fn save(&self, path: &Path) -> Result<()> {
         let text = serde_json::to_string_pretty(self)
-            .map_err(|e| Error::Json(e, path.display().to_string()))?;
+            .map_err(|e| Error::Json(e, path.display().to_string()))?
+            .replace('\n', "\r\n");
         let temp = path.with_extension("json.saving");
         // Rename replaces an existing file on Windows as well as on Unix.
         let written = std::fs::write(&temp, text).and_then(|()| std::fs::rename(&temp, path));

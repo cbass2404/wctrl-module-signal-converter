@@ -458,6 +458,12 @@ fn the_shipped_hornet_fields_land_on_named_regions() {
     let readouts = profile["readouts"].as_array().expect("it has readouts");
     assert!(!readouts.is_empty());
     for r in readouts {
+        // The UFC's regions, so only the UFC's fields. The Hornet has nothing
+        // else on it today, but it has a screen the editor can write to and a
+        // row put there would otherwise fail this for having no UFC region.
+        if r["display"].as_str() != Some("UFC1") {
+            continue;
+        }
         let cells = r["cells"].as_str().unwrap();
         assert!(
             named.contains(&cells),

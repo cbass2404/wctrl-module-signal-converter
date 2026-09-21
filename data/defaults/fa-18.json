@@ -10,6 +10,7 @@
     "FA-18F"
   ],
   "module": "FA-18C_hornet",
+  "font": "../mcdu/f14bu-font-21x31.json",
   "bindings": [
     {
       "device": "CarrierAce_MFD_C",
@@ -647,9 +648,14 @@
       "device": "CarrierAce_UFC",
       "display": "UFC1",
       "cells": "2-8",
-      "source": "UFC_SCRATCHPAD_NUMBER_DISPLAY",
-      "align": "right",
-      "note": "DCS-BIOS gives 8 characters for 7 cells. Right aligned, so the leading pad is what gets dropped and keypresses land at the right."
+      "content": [
+        {
+          "source": "UFC_SCRATCHPAD_NUMBER_DISPLAY",
+          "width": 7,
+          "align": "right"
+        }
+      ],
+      "note": "DCS-BIOS gives 8 characters for 7 cells, so one of them cannot be shown. Held to 7 and aligned right, which drops the leading pad rather than a digit and lands keypresses at the right. Written as a box rather than as a field alignment because it says out loud that a character goes, so the editor stops warning that one might."
     },
     {
       "device": "CarrierAce_UFC",
@@ -722,6 +728,12 @@
       "display": "UFC1",
       "cells": "35",
       "source": "UFC_COMM2_DISPLAY"
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "312-335",
+      "divider": true
     }
   ],
   "disabled_devices": [

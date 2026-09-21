@@ -726,6 +726,11 @@ fn inline_label_at(chars: &[char], start: usize) -> Option<(Option<u64>, String,
 
 /// Pretty printed one space deep with every non-ASCII character escaped, so
 /// the files match what the Python builder wrote byte for byte.
+///
+/// CRLF, like everything else written here: this is built and run on Windows
+/// and there is one right answer for a line ending. Safe to do on the bytes,
+/// because a newline inside a string is escaped by then and the only ones left
+/// are the ones between lines.
 fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     let mut bytes = Vec::new();
     let formatter = AsciiPretty(PrettyFormatter::with_indent(b" "));
@@ -733,7 +738,14 @@ fn write_json<T: Serialize>(path: &Path, value: &T) -> Result<()> {
     value
         .serialize(&mut ser)
         .map_err(|e| Error::Json(e, path.display().to_string()))?;
-    fs::write(path, bytes)?;
+    let mut out = Vec::with_capacity(bytes.len());
+    for b in bytes {
+        if b == b'\n' {
+            out.push(b'\r');
+        }
+        out.push(b);
+    }
+    fs::write(path, out)?;
     Ok(())
 }
 
@@ -838,6 +850,6 @@ mod tests {
         write_json(&path, &serde_json::json!({"a": "\u{b0}\u{bb}\u{1f600}", "b": []})).unwrap();
         let text = fs::read_to_string(&path).unwrap();
         let _ = fs::remove_dir_all(&dir);
-        assert_eq!(text, "{\n \"a\": \"\\u00b0\\u00bb\\ud83d\\ude00\",\n \"b\": []\n}");
+        assert_eq!(text, "{\r\n \"a\": \"\\u00b0\\u00bb\\ud83d\\ude00\",\r\n \"b\": []\r\n}");
     }
 }

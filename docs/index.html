@@ -448,6 +448,13 @@
         height: auto;
         display: block;
       }
+      /* A YouTube Short is filmed upright, so it is held to a phone's width. */
+      .frame .short {
+        width: min(100%, 360px);
+        aspect-ratio: 9 / 16;
+        border: 0;
+        display: block;
+      }
       figcaption {
         font-size: 0.94rem;
         color: var(--ink-2);
@@ -972,13 +979,15 @@
         <div class="shots">
           <figure>
             <div class="frame">
-              <img
-                src="img/mcdu-custom-ifei.jpg"
-                alt="A WinWing MCDU showing the Hornet's engine and fuel readings: RPM, temperature, fuel flow, nozzle and oil for each engine, fuel remaining, bingo and the clock"
-                width="1400"
-                height="1048"
+              <iframe
+                class="short"
+                src="https://www.youtube-nocookie.com/embed/WJGK2bjjDxw"
+                title="A WinWing MCDU showing the Hornet's engine and fuel readings live from DCS: RPM, temperature, fuel flow, nozzle and oil for each engine, fuel remaining, bingo and the clock"
+                allow="encrypted-media; picture-in-picture; web-share"
+                referrerpolicy="strict-origin-when-cross-origin"
+                allowfullscreen
                 loading="lazy"
-              />
+              ></iframe>
             </div>
             <figcaption>
               <b>The Hornet's IFEI, rebuilt on an MCDU in the editor.</b> Each

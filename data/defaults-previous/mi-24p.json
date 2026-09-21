@@ -7,6 +7,7 @@
     "Mi-24P"
   ],
   "module": "Mi-24P",
+  "font": "../mcdu/f14bu-font-21x31.json",
   "bindings": [
     {
       "device": "CarrierAce_MFD_C",
@@ -58,136 +59,22 @@
       "device": "CarrierAce_MFD_L",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_MFD_R",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_UFC",
@@ -201,91 +88,15 @@
       "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Captain",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Captain",
@@ -299,7 +110,8 @@
       "device": "MCDU_Captain",
       "led": "Marker_Light",
       "conditions": [],
-      "always": true,
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
@@ -352,46 +164,8 @@
       "device": "MCDU_CoPilot",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_CoPilot",
@@ -405,7 +179,8 @@
       "device": "MCDU_CoPilot",
       "led": "Marker_Light",
       "conditions": [],
-      "always": true,
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
@@ -458,46 +233,8 @@
       "device": "MCDU_Observer",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Observer",
@@ -511,7 +248,8 @@
       "device": "MCDU_Observer",
       "led": "Marker_Light",
       "conditions": [],
-      "always": true,
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
@@ -564,103 +302,29 @@
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_L",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_R",
       "conditions": [],
-      "same_as": "Backlight_L"
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Logo",
       "conditions": [],
-      "same_as": "Backlight_L"
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -676,46 +340,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -726,7 +352,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "SL",
       "conditions": [],
-      "always": true,
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -734,7 +361,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "FLAG",
       "conditions": [],
-      "always": true,
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -812,46 +440,8 @@
       "device": "ViperAce_ICP",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "ViperAce_ICP",
@@ -885,5 +475,11 @@
         750.0
       ]
     }
-  ]
+  ],
+  "follows": {
+    "CarrierAce_MFD_L": "CarrierAce_MFD_C",
+    "CarrierAce_MFD_R": "CarrierAce_MFD_C",
+    "MCDU_CoPilot": "MCDU_Captain",
+    "MCDU_Observer": "MCDU_Captain"
+  }
 }

@@ -732,8 +732,144 @@
     {
       "device": "MCDU_Captain",
       "display": "MCDU",
-      "cells": "312-335",
-      "divider": true
+      "cells": "24-47",
+      "content": [
+        {
+          "text": " L ENGINE R ",
+          "colour": "white"
+        },
+        {
+          "gap": true,
+          "width": 7
+        },
+        {
+          "text": "FUEL"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "48-71",
+      "content": [
+        {
+          "gap": true,
+          "width": 11
+        },
+        {
+          "text": "[MODE]"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "72-95",
+      "content": [
+        {
+          "source": "IFEI_RPM_L",
+          "width": 4,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
+          "text": " RPM",
+          "width": 4,
+          "small": true
+        },
+        {
+          "source": "IFEI_RPM_R",
+          "width": 3,
+          "colour": "amber"
+        },
+        {
+          "gap": true,
+          "width": 6
+        },
+        {
+          "source": "IFEI_T",
+          "colour": "amber"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "288-311",
+      "content": [
+        {
+          "gap": true,
+          "width": 11
+        },
+        {
+          "text": "[ ET ]",
+          "width": 6
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "264-287",
+      "content": [
+        {
+          "source": "IFEI_OIL_PRESS_L",
+          "width": 4,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
+          "text": "OIL",
+          "width": 4,
+          "align": "right",
+          "small": true
+        },
+        {
+          "source": "IFEI_OIL_PRESS_R",
+          "colour": "amber"
+        },
+        {
+          "gap": true,
+          "width": 5
+        },
+        {
+          "source": "IFEI_TIMER_H",
+          "width": 2,
+          "colour": "amber"
+        },
+        {
+          "text": ":",
+          "width": 1
+        },
+        {
+          "source": "IFEI_TIMER_M",
+          "width": 2,
+          "colour": "amber"
+        },
+        {
+          "text": ":"
+        },
+        {
+          "source": "IFEI_TIMER_S",
+          "width": 2,
+          "colour": "amber"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "240-263",
+      "content": [
+        {
+          "gap": true,
+          "width": 11
+        },
+        {
+          "text": "[ZONE]",
+          "width": 6
+        }
+      ]
     }
   ],
   "disabled_devices": [

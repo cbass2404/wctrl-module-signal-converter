@@ -56,3 +56,8 @@ alone, so naming what moved matters there too.
   to one row into a change to every line of the file and left it as one long
   line in anything that still wants the pair. The catalogue is written the same
   way now.
+- A rule started in an empty area of a screen can now have text, readings and
+  gaps added beside it, and can be changed to another kind of piece. It was
+  being made as a whole-row rule, which holds nothing else, so the only way
+  round it was to add the text first and move a rule above it. An empty area
+  can also start with a gap now.

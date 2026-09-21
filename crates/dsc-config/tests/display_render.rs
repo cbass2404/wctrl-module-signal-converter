@@ -800,3 +800,172 @@ fn each_piece_of_a_chain_keeps_its_own_colour_and_size() {
     assert_eq!(glyphs[1].colour, Some(dsc_config::Colour::Green));
     assert!(!glyphs[1].small);
 }
+
+// ------------------------------------------------------- boxes
+
+/// A field of one boxed reading, to watch what the box does on its own.
+fn boxed(cells: &str, width: usize, align: Align) -> Readout {
+    let mut r = readout(cells, "RALT");
+    let s = span(&mut r);
+    s.width = width;
+    s.align = align;
+    r
+}
+
+#[test]
+fn a_centred_box_keeps_the_value_in_the_middle_as_it_shrinks() {
+    // The whole point, in the shape it was asked for: a reading counting down
+    // through four widths, drawn in the same eight cells every time.
+    let r = boxed("10-17", 8, Align::Centre);
+    assert_eq!(drawn(&r, "1000").concat(), "  1000  ");
+    assert_eq!(drawn(&r, "900").concat(), "   900  ");
+    assert_eq!(drawn(&r, "90").concat(), "   90   ");
+    assert_eq!(drawn(&r, "9").concat(), "    9   ");
+}
+
+#[test]
+fn a_right_aligned_box_pins_the_digits_and_grows_the_blanks_in_front() {
+    // What a number actually wants. Centring moves both edges in half a cell
+    // at a time, which is right for a label and reads as drift on a reading.
+    let r = boxed("10-17", 8, Align::Right);
+    assert_eq!(drawn(&r, "1000").concat(), "    1000");
+    assert_eq!(drawn(&r, "900").concat(), "     900");
+    assert_eq!(drawn(&r, "90").concat(), "      90");
+    assert_eq!(drawn(&r, "9").concat(), "       9");
+}
+
+#[test]
+fn a_box_keeps_what_follows_it_from_moving() {
+    // The reason a box beats the field's own alignment: this piece is in the
+    // middle of a chain, so without one the unit would walk left every time
+    // the reading lost a character.
+    let mut r = readout("10-19", "RALT");
+    r.content = vec![
+        Span { text: "R".into(), ..Span::default() },
+        Span { source: "RALT".into(), width: 8, align: Align::Centre, ..Span::default() },
+        Span { text: "M".into(), ..Span::default() },
+    ];
+    for value in ["1000", "900", "90", "9"] {
+        let cells = drawn(&r, value);
+        assert_eq!(cells[0], "R", "{value}");
+        assert_eq!(cells[9], "M", "{value}: the unit has not moved");
+    }
+}
+
+#[test]
+fn a_box_crops_from_the_end_its_alignment_anchors_away_from() {
+    // The same bargain the field makes with its run. A right aligned box is
+    // what a scratchpad wants: it drops its leading pad, not its last digit.
+    let left = boxed("10-13", 4, Align::Left);
+    assert_eq!(drawn(&left, "123456").concat(), "1234");
+    let right = boxed("10-13", 4, Align::Right);
+    assert_eq!(drawn(&right, "123456").concat(), "3456");
+    // Centred, the odd cell comes off the front, the way its padding is added.
+    let centre = boxed("10-13", 4, Align::Centre);
+    assert_eq!(drawn(&centre, "123456").concat(), "2345");
+    assert_eq!(drawn(&centre, "1234567").concat(), "3456");
+}
+
+#[test]
+fn a_box_holds_its_cells_before_the_reading_has_arrived() {
+    // Room held, not content drawn. The piece beside it is on the glass from
+    // the first frame and does not jump when the signal turns up.
+    let mut r = readout("10-19", "RALT");
+    r.content = vec![
+        Span { source: "RALT".into(), width: 8, align: Align::Right, ..Span::default() },
+        Span { text: "M".into(), ..Span::default() },
+    ];
+    let glyphs = r.compose(|s| (s != "RALT").then(|| Reading::Text(String::new())));
+    let text: String = glyphs.expect("the unit is ready").iter().map(|g| g.text.as_str()).collect();
+    assert_eq!(text, "        M ");
+}
+
+#[test]
+fn a_field_of_nothing_but_held_room_still_leaves_its_cells_alone() {
+    // Blanks from a box are not a reason to write over the glass: a field with
+    // nothing else on it has said nothing yet, box or no box.
+    let r = boxed("10-17", 8, Align::Right);
+    assert!(r.compose(|_| None).is_none());
+}
+
+#[test]
+fn a_centred_field_sits_in_the_middle_of_its_run() {
+    // The same arithmetic one level up, so a field and a box put the odd cell
+    // on the same side and the screen lines up with itself.
+    let mut r = readout("10-17", "RALT");
+    r.align = Align::Centre;
+    assert_eq!(drawn(&r, "1000").concat(), "  1000  ");
+    assert_eq!(drawn(&r, "900").concat(), "   900  ");
+}
+
+// ------------------------------------------------------- rules in a chain
+
+#[test]
+fn a_rule_fills_the_room_between_two_pieces() {
+    // What used to be three fields with hand counted cells. The rule is a gap,
+    // so it is measured last and takes whatever the two ends leave.
+    let mut r = readout("10-19", "RALT");
+    r.content = vec![
+        Span { text: "NAV".into(), ..Span::default() },
+        Span { gap: true, rule: true, ..Span::default() },
+        Span { source: "RALT".into(), ..Span::default() },
+    ];
+    assert_eq!(drawn(&r, "250").concat(), "NAV----250");
+    // And the rule is what gives way when the reading grows, rather than the
+    // reading being pushed off the end.
+    assert_eq!(drawn(&r, "2500").concat(), "NAV---2500");
+}
+
+#[test]
+fn a_boxed_rule_carries_a_label_the_way_a_divider_does() {
+    // The same function draws both, so a rule in a chain cannot drift from the
+    // one a whole field draws.
+    let mut r = readout("10-18", "RALT");
+    r.content = vec![
+        Span { text: "A".into(), ..Span::default() },
+        Span { gap: true, rule: true, width: 8, label: "FUEL".into(), ..Span::default() },
+    ];
+    assert_eq!(drawn(&r, "").concat(), "A- FUEL -");
+    assert_eq!(divider_text(8, "FUEL"), "- FUEL -");
+}
+
+#[test]
+fn a_rule_in_a_chain_is_drawn_before_anything_has_been_read() {
+    // A rule reads nothing, so it belongs on the glass from the moment the
+    // aircraft loads, exactly like the divider it is a piece of.
+    let mut r = readout("10-19", "RALT");
+    r.content = vec![
+        Span { gap: true, rule: true, width: 4, ..Span::default() },
+        Span { source: "RALT".into(), ..Span::default() },
+    ];
+    let glyphs = r.compose(|_| None).expect("the rule is ready");
+    let text: String = glyphs.iter().map(|g| g.text.as_str()).collect();
+    assert_eq!(text, "----      ");
+}
+
+#[test]
+fn a_rule_and_its_label_keep_their_own_colours() {
+    // A label drawn in the line's colour reads as part of the line, and unset
+    // it follows the rule rather than arriving white.
+    let mut r = readout("10-18", "RALT");
+    r.content = vec![Span {
+        gap: true,
+        rule: true,
+        width: 9,
+        label: "FUEL".into(),
+        colour: Some(Colour::Green),
+        label_colour: Some(Colour::Red),
+        ..Span::default()
+    }];
+    let glyphs = r.compose(|_| None).expect("a rule needs nothing to arrive");
+    let text: String = glyphs.iter().map(|g| g.text.as_str()).collect();
+    assert_eq!(text, "-- FUEL -");
+    for (n, g) in glyphs.iter().enumerate() {
+        let want = if g.text == "F" || g.text == "U" || g.text == "E" || g.text == "L" {
+            Some(Colour::Red)
+        } else {
+            Some(Colour::Green)
+        };
+        assert_eq!(g.colour, want, "cell {n} draws {:?}", g.text);
+    }
+}

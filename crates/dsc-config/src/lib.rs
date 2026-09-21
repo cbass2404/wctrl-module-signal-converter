@@ -105,6 +105,16 @@ pub enum Error {
     DividerReadsSignal(String, String, String),
     #[error("the label {4:?} on the divider on {1} of display {0:?} does not fit: it has {2} cells and needs {3}, a dash and a blank each side of the label")]
     DividerLabelTooWide(String, String, usize, usize, String),
+    #[error("a rule on {1} of display {0:?} is written on a piece that draws its own content; only a gap can be a rule")]
+    RuleNotOnGap(String, String),
+    #[error("the label {2:?} on a rule on {1} of display {0:?} has no fixed width; an elastic rule is as wide as the rest of the line leaves, so a label on one would come and go as the readings beside it change width")]
+    RuleLabelNeedsWidth(String, String, String),
+    #[error("the label {4:?} on a rule on {1} of display {0:?} does not fit: the rule is {2} cells wide and needs {3}, a dash and a blank each side of the label")]
+    RuleLabelTooWide(String, String, usize, usize, String),
+    #[error("a label {2:?} on {1} of display {0:?} is written on a piece that is not a rule; only a rule sets a label into itself")]
+    LabelNotOnRule(String, String, String),
+    #[error("a fixed width of {2} on {1} of display {0:?} is wider than the {3} cells the field has")]
+    SpanWiderThanField(String, String, usize, usize),
 
     #[error("display {0:?} has no cell {1}")]
     NoSuchCell(String, usize),
@@ -1435,6 +1445,9 @@ impl Profile {
                 let end = match r.align {
                     Align::Right => "first",
                     Align::Left => "last",
+                    // Centred content is cropped at both ends, the odd one
+                    // coming off the front, the way its padding is added.
+                    Align::Centre => "outermost",
                 };
                 out.push(format!(
                     "{where_} needs up to {} cells and has {}, so the {end} {n} character{} would be dropped with nothing shown on the panel to say so.",
@@ -1584,6 +1597,65 @@ impl Profile {
             }
 
             for span in &r.content {
+                // A box wider than the run it sits in cannot be drawn: the
+                // field crops what will not fit, so the piece would take the
+                // whole run and whatever shares it would be the part that
+                // goes. Refused rather than cautioned, unlike an overflow,
+                // because this one is certain before a single frame arrives.
+                if span.width > r.cells.len() {
+                    out.push(Error::SpanWiderThanField(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                        span.width,
+                        r.cells.len(),
+                    ));
+                }
+                // A rule fills room it was given rather than drawing anything
+                // of its own, which is what a gap is. On a piece that has its
+                // own content there is nowhere to put it.
+                if span.rule {
+                    if !span.gap {
+                        out.push(Error::RuleNotOnGap(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                        ));
+                    }
+                    if !display.is_text_grid() {
+                        out.push(Error::DividerNotDrawn(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                        ));
+                    }
+                }
+                if !span.label.is_empty() {
+                    if !span.rule {
+                        out.push(Error::LabelNotOnRule(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                            span.label.clone(),
+                        ));
+                    } else if span.width == 0 {
+                        // An elastic rule is as wide as the chain leaves it,
+                        // which changes with every reading beside it, so there
+                        // is no width to check a label against. `divider_rule`
+                        // drops a label it cannot fit, which on a rule that
+                        // keeps changing width means a label appearing and
+                        // vanishing on the glass with nothing to say why.
+                        out.push(Error::RuleLabelNeedsWidth(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                            span.label.clone(),
+                        ));
+                    } else if span.width < min_divider_cells(&span.label) {
+                        out.push(Error::RuleLabelTooWide(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                            span.width,
+                            min_divider_cells(&span.label),
+                            span.label.clone(),
+                        ));
+                    }
+                }
                 // A gap draws nothing and measures itself from what is left,
                 // so anything written on one is something that will never be
                 // seen. Refused rather than ignored, for the same reason a
@@ -1667,8 +1739,10 @@ impl Profile {
 
             // Gaps space out what is around them. With nothing around them
             // they are an elaborate way of writing blanks, which is what an
-            // empty run already does.
-            if !r.content.is_empty() && r.content.iter().all(|s| s.gap) {
+            // empty run already does. A rule is not blanks: a field that is
+            // nothing but one is a divider written the long way, and drawing
+            // it is the right answer rather than a fault.
+            if !r.content.is_empty() && r.content.iter().all(|s| s.gap && !s.rule) {
                 out.push(Error::NothingButGaps(
                     r.display.clone(),
                     r.cells.to_string(),
@@ -1704,7 +1778,9 @@ impl Profile {
             let styled = r
                 .content
                 .iter()
-                .any(|s| s.colour.is_some() || s.colours.is_some() || s.small);
+                .any(|s| {
+                    s.colour.is_some() || s.colours.is_some() || s.small || s.label_colour.is_some()
+                });
             let ruled = r.divider && (r.colour.is_some() || r.label_colour.is_some());
             if styled || ruled {
                 out.push(Error::StyleNotDrawn(r.display.clone(), r.cells.to_string()));
@@ -1740,18 +1816,30 @@ impl Profile {
                 continue;
             }
             for span in &r.content {
-                // A gap is drawn as blank cells like any other character, so a
-                // font without a space would leave a hole rather than a gap.
-                if span.gap {
-                    if !chars.large.contains(&' ') {
-                        out.push(Error::NotInFont(' ', file.to_string(), r.cells.to_string()));
-                    }
-                    continue;
-                }
                 // Each size has its own alphabet, and small is the smaller one
                 // in every font here, so a span marked small can lose a
                 // character that was fine at full size.
                 let set = if span.small { &chars.small } else { &chars.large };
+                // A gap is drawn as blank cells like any other character, so a
+                // font without a space would leave a hole rather than a gap. A
+                // rule draws dashes instead, and its label is drawn from the
+                // same alphabet as the rule, with a blank each side of it.
+                if span.gap {
+                    let (fill, spaced) = if span.rule {
+                        ('-', if span.label.is_empty() { None } else { Some(' ') })
+                    } else {
+                        (' ', None)
+                    };
+                    let written = std::iter::once(fill)
+                        .chain(spaced)
+                        .chain(span.label.chars());
+                    for c in written {
+                        if !set.contains(&c) {
+                            out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
+                        }
+                    }
+                    continue;
+                }
                 let written = span
                     .text
                     .chars()

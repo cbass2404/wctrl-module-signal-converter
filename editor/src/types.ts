@@ -116,6 +116,32 @@ export interface Span {
   colours?: { source: string; codes: Record<string, string> };
   /** Stand-in characters this module sends, rewritten one for one. */
   replace?: Record<string, string>;
+  /**
+   * Draw this piece in exactly this many cells, whatever it reads.
+   *
+   * Without one a chain only holds still at its ends: a reading that goes from
+   * four characters to three pulls everything after it one cell left, so a
+   * layout built around one width comes apart at another. A box is measured
+   * before the gaps are, so what surrounds it never moves.
+   *
+   * It also bounds a gauge with no range, which nothing else does, and turns
+   * "this may run past its cells" into an exact answer.
+   */
+  width?: number;
+  /** Where the value sits inside `width`. Means nothing without one. */
+  align?: "left" | "right" | "centre";
+  /**
+   * Fill this gap with a rule rather than with blanks.
+   *
+   * A rule between two pieces of a chain, where `divider` is a rule instead of
+   * a whole field. Elastic, it takes whatever the two ends leave, which is
+   * what the three separate fields it replaces could never do.
+   */
+  rule?: boolean;
+  /** Characters set into the middle of this piece's rule. Needs a `width`. */
+  label?: string;
+  /** The label's colour, its own rather than the rule's. */
+  label_colour?: string;
 }
 
 /**
@@ -195,7 +221,7 @@ export interface Readout {
    */
   reads?: [number, number];
   decimals?: number;
-  align?: "left" | "right";
+  align?: "left" | "right" | "centre";
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
   /**

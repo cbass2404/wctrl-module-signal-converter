@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use dsc_config::{Colour, Profile, Span};
+use dsc_config::{Align, Colour, Profile, Span};
 
 fn r(rel: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel)
@@ -251,4 +251,57 @@ fn a_chain_survives_a_save_and_a_load() {
     assert!(field.content[0].small);
     assert_eq!(field.content[1].source, "CDU_LINE0");
     assert_eq!(field.content[2].text, "M");
+}
+
+#[test]
+fn a_piece_with_a_box_is_written_as_a_chain_even_on_its_own() {
+    // The flat shape's `align` is the field's, so a piece aligned inside its
+    // own box has no flat spelling: written there, a box aligned right in a
+    // field aligned left would come back as both aligned right. A chain of one
+    // is the honest shape for it.
+    for shaped in [
+        Span { source: "CDU_LINE0".into(), width: 8, ..Span::default() },
+        Span { source: "CDU_LINE0".into(), align: Align::Centre, ..Span::default() },
+        Span { gap: true, rule: true, ..Span::default() },
+    ] {
+        let path = r("data/defaults/a-10c.json");
+        let mut profile = Profile::load(&path).expect("the A-10C default loads");
+        let field = profile
+            .readouts
+            .iter_mut()
+            .find(|r| !r.divider)
+            .expect("a field to shape");
+        field.content = vec![shaped.clone()];
+        let written = serde_json::to_string_pretty(&profile).expect("it serializes");
+        assert!(
+            written.contains("\"content\""),
+            "a piece carrying {shaped:?} cannot be written beside the cells"
+        );
+        let back: Profile = serde_json::from_str(&written).expect("it reads back");
+        let field = back
+            .readouts
+            .iter()
+            .find(|r| r.content.len() == 1 && r.content[0].needs_chain())
+            .expect("the piece came back shaped");
+        assert_eq!(field.content[0].width, shaped.width);
+        assert_eq!(field.content[0].align, shaped.align);
+        assert_eq!(field.content[0].rule, shaped.rule);
+    }
+}
+
+#[test]
+fn a_piece_carrying_none_of_it_is_still_written_flat() {
+    // The other half of the same promise: adding these keys must not move a
+    // single field that does not use them, or every shipped row would read as
+    // one the user had changed.
+    let path = r("data/defaults/a-10c.json");
+    let profile = Profile::load(&path).expect("the A-10C default loads");
+    for field in &profile.readouts {
+        for span in &field.content {
+            assert!(
+                !span.needs_chain(),
+                "nothing shipped is boxed, so nothing shipped changes shape"
+            );
+        }
+    }
 }

@@ -897,6 +897,32 @@ pub enum Align {
     /// What a scratchpad wants: digits enter at the rightmost cell and shift
     /// left, and DCS-BIOS can hand over more characters than there are cells.
     Right,
+    /// Equal blanks each side, the odd one going left, the way `divider_rule`
+    /// sets a label into a line of dashes.
+    ///
+    /// Worth saying what this does to a value that changes width, because it
+    /// is the reason it is offered per piece rather than only per field: every
+    /// character lost moves both edges in, so a number counting down drifts
+    /// half a cell at a time. That is what centring is, and it is right for a
+    /// label and wrong for a reading. `Right` inside a box is what keeps
+    /// digits pinned while the blanks grow on the left.
+    Centre,
+}
+
+impl Align {
+    /// How many blanks go before the content when it is padded to `width`.
+    ///
+    /// One place rather than three, because a box, a field and a rule's label
+    /// all have to put the odd cell on the same side or the screen stops
+    /// lining up with itself.
+    fn pad_before(&self, len: usize, width: usize) -> usize {
+        let spare = width.saturating_sub(len);
+        match self {
+            Align::Left => 0,
+            Align::Right => spare,
+            Align::Centre => spare - spare / 2,
+        }
+    }
 }
 
 /// One cell of a rule: the glyph, and whether it is part of the label.
@@ -968,7 +994,7 @@ pub fn divider_text(width: usize, label: &str) -> String {
     divider_rule(width, label).into_iter().map(|c| c.text).collect()
 }
 
-//// One piece of a field's content: characters the user typed, or a signal.
+/// One piece of a field's content: characters the user typed, or a signal.
 ///
 /// A field is a chain of these, drawn end to end, because a reading on its own
 /// is rarely a readout. `250` says nothing that `RALT 250M` does not say
@@ -1012,6 +1038,57 @@ pub struct Span {
     /// beside one: the content already fills the run exactly.
     #[serde(default, skip_serializing_if = "is_false")]
     pub gap: bool,
+    /// Fill the gap with a rule rather than with blanks.
+    ///
+    /// A rule between two pieces of a chain, where `divider` is a rule instead
+    /// of a whole field. `NAV ----- 250` on one row, with the dashes taking
+    /// whatever the two ends leave, which is the arrangement that was three
+    /// fields with hand counted cells before this: the rule could not move, so
+    /// a reading one character wider than planned overran into its cells and
+    /// was cropped.
+    ///
+    /// Only on a gap. Elsewhere the piece has its own content to draw and a
+    /// rule would have nowhere to go.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub rule: bool,
+    /// Characters set into the middle of this piece's rule, naming what it
+    /// divides. Empty on anything that is not a rule.
+    ///
+    /// Needs `width`, and `problems` refuses it without one. An elastic rule
+    /// is as wide as the rest of the chain leaves, so a label that fits at one
+    /// reading may not fit at the next, and `divider_rule` leaves a label it
+    /// cannot fit off the line. That is safe but silent: the label would drop
+    /// away and come back as the number beside it grew and shrank.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
+    /// The label's colour, its own rather than the rule's, because a label
+    /// drawn in the line's colour reads as part of the line. Falls back to the
+    /// piece's `colour`, which is what a label added to a rule that already
+    /// had one should look like until it is told otherwise.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub label_colour: Option<Colour>,
+    /// Draw this piece in exactly this many cells, whatever it reads. 0 for a
+    /// piece that takes the room its value needs, which is every piece written
+    /// before this existed.
+    ///
+    /// Without it a chain only holds still at its ends. A value that goes from
+    /// four characters to three pulls everything after it one cell left, so a
+    /// layout built around a reading at one width comes apart at another. A
+    /// box is measured before the gaps are, so what surrounds it never moves.
+    ///
+    /// It also bounds a piece nothing else bounds: a gauge with no `reads`
+    /// range can draw any width at all, and in a box it draws `width`. That
+    /// turns the editor's "this may run past its cells" into an exact answer.
+    ///
+    /// Content too wide for its box is cropped the way a field is, from the
+    /// end `align` anchors away from.
+    #[serde(default, skip_serializing_if = "is_zero_usize")]
+    pub width: usize,
+    /// Where the value sits inside `width`. Means nothing without one: with no
+    /// box the piece is exactly as wide as its value and there is nothing to
+    /// sit inside.
+    #[serde(default, skip_serializing_if = "is_left")]
+    pub align: Align,
     /// What the gauge reads in the cockpit, for a numeric source: the real
     /// values at the bottom and top of its travel.
     ///
@@ -1094,6 +1171,15 @@ impl Span {
         self.text.is_empty() && self.source.is_empty() && !self.gap
     }
 
+    /// Whether this part carries something the flat shape has nowhere to put.
+    ///
+    /// The flat shape's `align`, `label` and `label_colour` are the field's,
+    /// so a part with its own has to be written as a chain of one rather than
+    /// quietly handing its setting to the field.
+    pub fn needs_chain(&self) -> bool {
+        self.width > 0 || self.align != Align::Left || self.rule || !self.label.is_empty()
+    }
+
     /// Turn a raw signal value into the characters this part should show.
     ///
     /// `max` is the source's own declared maximum, so a needle at 0..65535 and
@@ -1136,9 +1222,15 @@ impl Span {
     /// warning vaguely that some might be.
     pub fn widest(&self, max_length: Option<usize>, numeric: bool) -> Option<usize> {
         // A gap takes what is left over, so it never asks for room of its own
-        // and can never be the reason content will not fit.
+        // and can never be the reason content will not fit. A boxed one does
+        // ask: it is a fixed run of blanks, or of dashes.
         if self.gap {
-            return Some(0);
+            return Some(self.width);
+        }
+        // A box is the whole answer, and the only one that holds for a gauge
+        // with no range: whatever it reads, it draws this many cells.
+        if self.width > 0 {
+            return Some(self.width);
         }
         if !self.is_signal() {
             return Some(self.text.chars().count());
@@ -1158,6 +1250,66 @@ impl Span {
     /// measure the ends of its range.
     fn format_number_at(&self, reading: f64) -> String {
         format!("{:.*}", self.decimals as usize, reading)
+    }
+
+    /// What a gap puts in the cells it was given: blanks, or a rule.
+    ///
+    /// The rule is drawn by `divider_rule`, the same function a whole field's
+    /// divider goes through, so the two cannot drift apart and the editor's
+    /// preview keeps working by asking for it rather than working it out.
+    ///
+    /// An elastic rule is handed whatever the chain left, which may be less
+    /// than its label needs. `divider_rule` leaves the label off and draws a
+    /// plain line in that case, which is why a label needs a box: in one, the
+    /// width is known and `problems` can refuse a label that will not fit
+    /// instead of letting it come and go with the reading beside it.
+    fn fill(&self, width: usize) -> Vec<Glyph> {
+        if !self.rule {
+            return vec![Glyph::blank(); width];
+        }
+        divider_rule(width, &self.label)
+            .into_iter()
+            .map(|cell| Glyph {
+                colour: if cell.label {
+                    self.label_colour.or(self.colour)
+                } else {
+                    self.colour
+                },
+                text: cell.text,
+                small: self.small,
+                inverse: self.inverse,
+            })
+            .collect()
+    }
+
+    /// Hold this piece to exactly `width` cells, where it has one.
+    ///
+    /// The whole point of a box is that the pieces after it do not move, so
+    /// this runs before the gaps are measured and a box counts as fixed room
+    /// like any typed characters.
+    ///
+    /// Padded with blanks on the side `align` says, and cropped from the end
+    /// `align` anchors away from, which is the same bargain the field makes
+    /// with its run: a right aligned box drops its leading pad rather than its
+    /// last digit.
+    fn box_fit(&self, mut glyphs: Vec<Glyph>) -> Vec<Glyph> {
+        if self.width == 0 || glyphs.len() == self.width {
+            return glyphs;
+        }
+        if glyphs.len() > self.width {
+            // The same sum read the other way round: the blanks a narrower
+            // value would have been given at the front are the glyphs a wider
+            // one loses there.
+            let front = self.align.pad_before(self.width, glyphs.len());
+            glyphs.drain(..front);
+            glyphs.truncate(self.width);
+            return glyphs;
+        }
+        let before = self.align.pad_before(glyphs.len(), self.width);
+        let mut out = vec![Glyph::blank(); before];
+        out.extend(glyphs);
+        out.resize(self.width, Glyph::blank());
+        out
     }
 }
 
@@ -1341,6 +1493,10 @@ impl From<ReadoutRepr> for Readout {
                 inverse: r.inverse,
                 colours: r.colours,
                 replace: r.replace,
+                // The flat shape has no spelling for the rest: its `align` and
+                // `label` belong to the field, so a part written flat never
+                // carried one of its own.
+                ..Span::default()
             }]
         };
         Readout {
@@ -1371,7 +1527,16 @@ impl From<Readout> for ReadoutRepr {
         // A rule draws itself and has no content. What it carries is only kept
         // so that a signal written on one can still be refused rather than
         // quietly dropped, and it goes back beside the cells the way it came.
-        let (one, chain) = if r.divider || r.content.len() == 1 {
+        //
+        // A piece that is boxed, aligned inside its box or drawing a rule goes
+        // as a chain of one instead. The flat shape has an `align` and a
+        // `label` already and they belong to the field, so writing a piece's
+        // own into them would be two different settings sharing a key: a box
+        // aligned right inside a field aligned left has no flat spelling. The
+        // flat shape is therefore exactly what it always was, and every
+        // profile written before this still round trips byte for byte.
+        let flat_one = r.content.len() == 1 && !r.content[0].needs_chain();
+        let (one, chain) = if r.divider || flat_one {
             (r.content.first().cloned(), Vec::new())
         } else {
             (None, r.content)
@@ -1449,6 +1614,10 @@ fn is_zero_u8(n: &u8) -> bool {
     *n == 0
 }
 
+fn is_zero_usize(n: &usize) -> bool {
+    *n == 0
+}
+
 fn is_left(a: &Align) -> bool {
     *a == Align::Left
 }
@@ -1519,10 +1688,19 @@ impl Readout {
         let mut groups: Vec<Vec<Glyph>> = Vec::new();
         let mut gaps: Vec<usize> = Vec::new();
         let mut waiting = false;
+        let mut drew = false;
         for span in &self.content {
             if span.gap {
-                gaps.push(groups.len());
-                groups.push(Vec::new());
+                // A boxed gap knows how wide it is before anything else is
+                // laid out, so it is filled here and never asks for a share of
+                // the leftover. An elastic one waits for the measuring below.
+                if span.width > 0 {
+                    drew |= span.rule;
+                    groups.push(span.fill(span.width));
+                } else {
+                    gaps.push(groups.len());
+                    groups.push(Vec::new());
+                }
                 continue;
             }
             let mut glyphs: Vec<Glyph> = Vec::new();
@@ -1531,8 +1709,11 @@ impl Readout {
                     Some(Reading::Text(t)) => t,
                     Some(Reading::Number { value, max }) => span.format_number(value, max),
                     None => {
+                        // Room held rather than content: a boxed piece keeps
+                        // its cells from the first frame, so what sits beside
+                        // it does not jump when the reading finally arrives.
                         waiting = true;
-                        groups.push(glyphs);
+                        groups.push(span.box_fit(glyphs));
                         continue;
                     }
                 }
@@ -1580,6 +1761,7 @@ impl Readout {
                     small: span.small,
                     inverse: span.inverse || inverse.first().copied().unwrap_or(false),
                 });
+                drew = true;
                 groups.push(glyphs);
                 continue;
             }
@@ -1592,7 +1774,8 @@ impl Readout {
                     inverse: span.inverse || inverse.get(i).copied().unwrap_or(false),
                 });
             }
-            groups.push(glyphs);
+            drew |= !glyphs.is_empty();
+            groups.push(span.box_fit(glyphs));
         }
 
         // What the gaps get: whatever the rest of the line did not use, split
@@ -1606,15 +1789,26 @@ impl Readout {
             let extra = spare % gaps.len();
             for (n, &at) in gaps.iter().enumerate() {
                 let take = each + usize::from(n < extra);
-                groups[at] = vec![Glyph::blank(); take];
+                // One group per piece, pushed in order, so a gap's group index
+                // is its index in the chain: the piece that says whether this
+                // is blanks or a rule, and what the rule is labelled.
+                let span = &self.content[at];
+                drew |= span.rule && take > 0;
+                groups[at] = span.fill(take);
             }
         }
 
         let glyphs: Vec<Glyph> = groups.into_iter().flatten().collect();
-        // Nothing to show and still waiting is a field whose signals have not
-        // arrived, which leaves its cells alone. Nothing to show with nothing
-        // to wait for is an empty field, which draws blanks like any other.
-        if glyphs.is_empty() && waiting {
+        // Nothing drawn and still waiting is a field whose signals have not
+        // arrived, which leaves its cells alone. Nothing to wait for is an
+        // empty field, which draws blanks like any other.
+        //
+        // Drawn rather than simply present, because a gap and a box both fill
+        // cells with blanks before anything has arrived, and writing those
+        // over the glass would be the field announcing itself as an empty row
+        // and then filling in. A rule counts: it reads nothing and is ready
+        // from the moment the aircraft loads.
+        if !drew && waiting {
             return None;
         }
         Some(self.fit(glyphs))
@@ -1639,20 +1833,17 @@ impl Readout {
             }
             return glyphs;
         }
-        if self.align == Align::Right {
-            let excess = glyphs.len().saturating_sub(width);
-            glyphs.drain(..excess);
-            let pad = width - glyphs.len();
-            let mut out = vec![Glyph::blank(); pad];
-            out.extend(glyphs);
-            out
-        } else {
+        if glyphs.len() > width {
+            let front = self.align.pad_before(width, glyphs.len());
+            glyphs.drain(..front);
             glyphs.truncate(width);
-            while glyphs.len() < width {
-                glyphs.push(Glyph::blank());
-            }
-            glyphs
+            return glyphs;
         }
+        let before = self.align.pad_before(glyphs.len(), width);
+        let mut out = vec![Glyph::blank(); before];
+        out.extend(glyphs);
+        out.resize(width, Glyph::blank());
+        out
     }
 }
 

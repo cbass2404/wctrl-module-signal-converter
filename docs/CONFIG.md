@@ -911,6 +911,92 @@ steps.
 is work somebody started and left, and drawing the rest of the chain around a
 hole would hide it.
 
+#### A fixed width, so a piece stays where it is put
+
+A chain only holds still at its ends. A reading that goes from four characters
+to three pulls everything after it one cell left, so a layout built around one
+width comes apart at another, and there is no way to decide ahead of time
+whether something will eventually run off the edge of the screen. `width` is a
+piece held to that many cells whatever it reads, and `align` on the piece says
+where the value sits inside it:
+
+```jsonc
+{
+  "cells": "0-23",
+  "content": [
+    { "text": "W " },
+    { "source": "WIND_SPEED", "reads": [0, 200], "width": 8, "align": "right" },
+    { "text": "KT" },
+  ],
+}
+```
+
+The unit is in the same two cells at every reading. A box is measured before
+the gaps are, so it counts as fixed room like typed characters do, and content
+too long for it is cropped from the end `align` anchors away from, the way a
+field is cropped by its run.
+
+**The alignment is the user's because the two useful answers pull opposite
+ways.** `centre` puts equal blanks each side, the odd one going left, which is
+what a label wants and what a number does not: every character a reading sheds
+moves both its edges inward half a cell at a time, so a counter drifts. `right`
+keeps the digits pinned and grows the blanks in front of them, which is what
+`1000` counting down to `9` should look like. `left` is the default and means
+the piece starts where it starts.
+
+A box also bounds the one thing nothing else bounds. A gauge with no `reads`
+range can draw any width at all, and in a box it draws `width`, which turns the
+editor's "this may run past its cells" into an exact answer.
+
+`align` on a piece means nothing without a `width`, and the editor drops it
+when the width goes. A width wider than the field's own run is refused rather
+than cautioned: unlike an overflow, that one is certain before a single frame
+arrives.
+
+**A piece with a width, an alignment or a rule is always written as a chain**,
+even on its own. The flat shape has an `align` and a `label` already and they
+belong to the field, so a box aligned right inside a field aligned left has no
+flat spelling. Every profile written before this still round trips byte for
+byte, which is what `profile_round_trip.rs` checks.
+
+#### A rule between two pieces
+
+A gap can draw a line of dashes instead of blanks, which is the rule a
+[divider](#dividers) draws as one piece of a row rather than the whole of it:
+
+```jsonc
+{
+  "cells": "0-23",
+  "content": [
+    { "text": "NAV" },
+    { "gap": true, "rule": true },
+    { "source": "CDU_LINE1" },
+  ],
+}
+```
+
+It goes through the same `divider_rule` the whole-field version does, so the
+two cannot drift, and the editor asks for it rather than drawing its own. Being
+a gap, it is measured last and takes whatever the two ends leave, and a reading
+that grows eats into the dashes rather than pushing anything off the end. That
+is what this replaces: three fields with hand counted cell runs, where the rule
+could not move, so a reading one character wider than planned overran into its
+cells and was cropped.
+
+A rule reads nothing, so it is on the glass from the moment the aircraft loads,
+and it is the one kind of gap that keeps a `colour`: it is the user's own
+addition rather than something the cockpit decided. A rule on a piece that
+draws its own content is refused, since there would be nowhere to put it, and
+so is one on glass that is not a text grid.
+
+**A labelled rule needs a `width`.** The label, its blank each side and its own
+`label_colour` work exactly as they do on a divider, but an elastic rule is as
+wide as the rest of the line leaves it, and that changes with every reading
+beside it. `divider_rule` leaves a label it cannot fit off the line, which on a
+rule that keeps changing width means a label appearing and vanishing on the
+glass with nothing to say why. With a width the rule cannot change size, the
+check is exact, and a label too wide for it is refused the way a divider's is.
+
 ### Text grids
 
 The MCDU's screen is a grid of 24 by 14 characters that the panel draws from

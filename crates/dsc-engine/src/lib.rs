@@ -578,11 +578,7 @@ impl Engine {
                             .value(output.address, mask, output.shift)
                             .map(|value| dsc_config::Reading::Number {
                                 value,
-                                max: output
-                                    .max_value
-                                    .unwrap_or(u32::from(u16::MAX))
-                                    .min(u32::from(u16::MAX))
-                                    as u16,
+                                max: output.number_max(),
                             })
                     }) else {
                         continue;

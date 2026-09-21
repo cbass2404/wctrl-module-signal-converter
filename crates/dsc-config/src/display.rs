@@ -1215,30 +1215,33 @@ impl Span {
 
     /// The widest this part can ever draw, in cells, where that is knowable.
     ///
-    /// None for a numeric source with no range, which is the one case nothing
-    /// bounds: without `reads` the value could be any width the needle allows.
-    /// Everything else is known ahead of a single frame arriving, which is what
-    /// lets the editor say how many characters will be dropped rather than
-    /// warning vaguely that some might be.
-    pub fn widest(&self, max_length: Option<usize>, numeric: bool) -> Option<usize> {
+    /// `number_max` is the source's own maximum for a numeric source and None
+    /// for a string. None back only for a string with no `max_length`, which
+    /// is the one case nothing bounds. A number is always known: converted, it
+    /// runs between the ends of `reads`, and shown as sent it runs from 0 to
+    /// its maximum, the same default `format_number` takes. Everything is
+    /// known ahead of a single frame arriving, which is what lets the editor
+    /// say how many characters will be dropped rather than warning vaguely
+    /// that some might be.
+    pub fn widest(&self, max_length: Option<usize>, number_max: Option<u16>) -> Option<usize> {
         // A gap takes what is left over, so it never asks for room of its own
         // and can never be the reason content will not fit. A boxed one does
         // ask: it is a fixed run of blanks, or of dashes.
         if self.gap {
             return Some(self.width);
         }
-        // A box is the whole answer, and the only one that holds for a gauge
-        // with no range: whatever it reads, it draws this many cells.
+        // A box is the whole answer: whatever it reads, it draws this many
+        // cells.
         if self.width > 0 {
             return Some(self.width);
         }
         if !self.is_signal() {
             return Some(self.text.chars().count());
         }
-        if !numeric {
+        let Some(max) = number_max else {
             return max_length;
-        }
-        let [low, high] = self.reads?;
+        };
+        let [low, high] = self.reads.unwrap_or([0.0, f64::from(max)]);
         let ends = [
             self.format_number_at(low),
             self.format_number_at(high),

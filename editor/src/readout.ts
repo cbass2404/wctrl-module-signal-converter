@@ -144,13 +144,115 @@ function extent(cells: string): string {
 
 function isText(signals: SignalView[], id: string): boolean {
   // A signal the catalogue reports as characters needs no conversion. Anything
-  // else is a number, and a number needs to be told what the dial reads.
+  // else is a number, which can be shown as sent or converted.
   return signals.find((x) => x.id === id)?.text ?? false;
 }
 
 /** How many characters a text signal will hand over, or 0. */
 function textLength(signals: SignalView[], id: string): number {
   return signals.find((x) => x.id === id)?.length ?? 0;
+}
+
+/** The largest number a signal reports. The backend fills in 65535 where DCS-BIOS gives none. */
+function maxOf(signals: SignalView[], id: string): number {
+  return signals.find((x) => x.id === id)?.max_value ?? 65535;
+}
+
+/** How a reading draws a number: as DCS-BIOS sends it, or converted. */
+type ReadingKind = "sent" | "converted";
+
+const READING_LABELS: Record<ReadingKind, string> = {
+  sent: "as sent",
+  converted: "converted to",
+};
+
+/**
+ * A sensible way to show a number the user has just chosen, so that picking
+ * the signal is usually the only step, the way a lamp's test is filled in.
+ *
+ * A full word is a needle's position rather than a quantity, and 0 to 65535
+ * means nothing on a screen, so it arrives converted, to a range the user then
+ * sets from the dial. Anything narrower is a count or a selector whose value
+ * already is the number, and is shown as sent.
+ */
+function defaultReads(signal: SignalView | undefined): [number, number] | undefined {
+  if (!signal || signal.text || signal.max_value < 65535) return undefined;
+  return [0, 100];
+}
+
+/**
+ * How a number is drawn, laid out the way a lamp's test is: what to do with
+ * it, then the numbers that go with that.
+ *
+ * As sent draws the value DCS-BIOS reports. Converted spreads the signal's
+ * whole range, 0 to its maximum, across what the dial is marked with, which
+ * is the linear conversion the daemon does. Whether `reads` is present is
+ * what says which, so a field written by hand reads back as whichever it is.
+ */
+function conversionRow(
+  span: Span,
+  max: number,
+  edited: () => void,
+  rebuild: () => void,
+): HTMLElement {
+  const select = el("select", { class: "test" });
+  for (const kind of Object.keys(READING_LABELS) as ReadingKind[]) {
+    select.append(el("option", { value: kind }, READING_LABELS[kind]));
+  }
+  select.value = span.reads ? "converted" : "sent";
+  select.addEventListener("change", () => {
+    // Converting starts from the signal's own range, which draws exactly what
+    // as sent did, so the choice changes nothing until a number is changed.
+    // Decimals mean nothing on a whole number sent as it is.
+    if (select.value === "converted") span.reads = [0, max];
+    else {
+      delete span.reads;
+      delete span.decimals;
+    }
+    rebuild();
+  });
+
+  const values = el("span", { class: "values-row" });
+  if (span.reads) {
+    const number = (value: number, attrs: Record<string, string> = {}): HTMLInputElement =>
+      el("input", { type: "number", class: "value", value: String(value), ...attrs });
+    const low = number(span.reads[0]);
+    const high = number(span.reads[1]);
+    const dp = number(span.decimals ?? 0, { min: "0", max: "3" });
+    const sync = (): void => {
+      span.reads = [Number(low.value) || 0, Number(high.value) || 0];
+      const places = Number(dp.value) || 0;
+      if (places > 0) span.decimals = places;
+      else delete span.decimals;
+      edited();
+    };
+    for (const box of [low, high, dp]) box.addEventListener("input", sync);
+    values.append(
+      low,
+      el("span", { class: "sep" }, "to"),
+      high,
+      el("span", { class: "sep" }, "with"),
+      dp,
+      el("span", { class: "sep" }, "decimals"),
+    );
+  }
+
+  return el(
+    "div",
+    {},
+    el("div", { class: "test-row" }, select, values),
+    el(
+      "span",
+      { class: "meta block" },
+      span.reads
+        ? `DCS-BIOS sends 0 to ${max}, and this is what the dial is marked ` +
+            "with at each end. It reports a needle as a position, not a value, " +
+            "so this is yours to give. A face that starts below zero or runs " +
+            "backwards is fine."
+        : `The number DCS-BIOS sends, 0 to ${max}, drawn as it is. Right for ` +
+            "a count or a selector. A needle wants converting.",
+    ),
+  );
 }
 
 /**
@@ -786,9 +888,11 @@ function spanWidth(span: Span, signals: SignalView[]): number {
   if (isLiteral(span)) return (span.text ?? "").length;
   if (!span.source) return 0;
   if (isText(signals, span.source)) return textLength(signals, span.source);
-  if (!span.reads) return 0;
+  // As sent is a conversion onto the signal's own range, so both measure the
+  // same way, as the daemon does.
+  const ends = span.reads ?? [0, maxOf(signals, span.source)];
   const dp = span.decimals ?? 0;
-  return Math.max(...span.reads.map((end) => end.toFixed(dp).length));
+  return Math.max(...ends.map((end) => end.toFixed(dp).length));
 }
 
 /**
@@ -849,18 +953,21 @@ function signalWidth(span: Span, signals: SignalView[]): number {
   return spanWidth({ ...span, width: 0 }, signals);
 }
 
-/** Whether any piece is a gauge with no range, so nothing bounds the width. */
+/**
+ * Whether any piece is text DCS-BIOS gives no length for, so nothing bounds
+ * the width. A number always has one: its range, or its own maximum.
+ */
 function unbounded(spans: Span[], signals: SignalView[]): boolean {
   return spans.some(
     (s) =>
-      // A box bounds what nothing else does: in one, a gauge with no range
+      // A box bounds what nothing else does: in one, a reading of any width
       // draws its width and no more.
       !s.width &&
       !s.gap &&
       !isLiteral(s) &&
       s.source !== "" &&
-      !isText(signals, s.source ?? "") &&
-      !s.reads,
+      isText(signals, s.source ?? "") &&
+      textLength(signals, s.source ?? "") === 0,
   );
 }
 
@@ -1015,8 +1122,8 @@ function glyphPreview(
           } else {
             // In a box, only as many cells as the reading itself can fill:
             // the rest are blanks being held, and drawing them as more of the
-            // reading would hide the thing the box is for. A gauge with no
-            // range could be any of them, so it takes the lot.
+            // reading would hide the thing the box is for. A reading of no
+            // known width could be any of them, so it takes the lot.
             const value = span.width
               ? Math.min(span.width, signalWidth(span, signals) || span.width)
               : spanWidth(span, signals);
@@ -1232,6 +1339,15 @@ function spanEditor(
         const was = span.source ?? "";
         span.source = id;
         followTwin(span, signals, was);
+        // Only fill in a conversion for a piece that had no number before, so
+        // swapping the signal under a tuned range does not discard it, the
+        // same bargain a lamp's test makes.
+        if (!was || isText(signals, was)) {
+          const reads = defaultReads(signals.find((s) => s.id === id));
+          if (reads) span.reads = reads;
+          else delete span.reads;
+          delete span.decimals;
+        }
         // A different signal brings a different set of controls with it: a
         // range where the old one was a number, none where it reports
         // characters, a highlighting twin or not. So this one rebuilds.
@@ -1249,47 +1365,14 @@ function spanEditor(
         delete span.reads;
         delete span.decimals;
       } else {
-        const low = el("input", {
-          type: "number",
-          class: "num small",
-          value: String(span.reads?.[0] ?? 0),
-        });
-        const high = el("input", {
-          type: "number",
-          class: "num small",
-          value: String(span.reads?.[1] ?? 100),
-        });
-        const dp = el("input", {
-          type: "number",
-          class: "num small",
-          min: "0",
-          max: "3",
-          value: String(span.decimals ?? 0),
-        });
-        const sync = (): void => {
-          span.reads = [Number(low.value), Number(high.value)];
-          span.decimals = Number(dp.value) || 0;
-          edited();
-        };
-        for (const box of [low, high, dp]) box.addEventListener("input", sync);
-        if (!span.reads) sync();
+        // Choosing between as sent and converted changes which boxes there
+        // are, so that rebuilds. Typing in them does not.
         body.append(
-          el(
-            "label",
-            { class: "meta" },
-            "reads ",
-            low,
-            " to ",
-            high,
-            el(
-              "span",
-              { class: "meta block" },
-              "What the dial is marked with in the cockpit. DCS-BIOS reports a " +
-                "needle as a position, not a value, so this is yours to give. " +
-                "A face that starts below zero or runs backwards is fine.",
-            ),
-          ),
-          el("label", { class: "meta" }, "decimals ", dp),
+          conversionRow(span, maxOf(signals, span.source), edited, () => {
+            setContent(readout, spans);
+            redraw();
+            onChange();
+          }),
         );
       }
       // A substitution is about what this signal sends, so it belongs to the
@@ -1643,7 +1726,7 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
           "nothing on the panel would say so.";
       } else if (loose) {
         fit.textContent =
-          `A gauge with no range has no known width, so this may run past its ${cells} cells.`;
+          `Text DCS-BIOS gives no length for has no known width, so this may run past its ${cells} cells.`;
       } else if (elastic > 0) {
         const spare = cells - widest;
         const rules = spans.filter((s) => s.gap && s.rule && !s.width).length;

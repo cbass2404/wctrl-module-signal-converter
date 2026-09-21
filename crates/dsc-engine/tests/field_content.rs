@@ -329,18 +329,18 @@ fn content_that_fits_says_nothing() {
 }
 
 #[test]
-fn a_gauge_with_no_range_is_called_out_as_unbounded() {
-    // The one case nothing bounds: without a range the value could be any
-    // width the needle allows, so the warning says that rather than a number.
+fn a_gauge_shown_as_sent_is_measured_by_its_maximum() {
+    // With no range the needle is drawn as the number DCS-BIOS sends, 0 to
+    // 65535, so five cells is known and four is known to be one short.
     let mut p = profile();
     let mut field = on_row_one(vec![reading("FLAP_POS")]);
-    field.cells = "0-5".parse().unwrap();
+    field.cells = "0-3".parse().unwrap();
     p.readouts.push(field);
     let e = engine(p.clone());
     let module = e.catalogue().module(&p.module).expect("the module");
     let cautions = p.width_cautions(module);
     assert!(
-        cautions.iter().any(|c| c.contains("no range")),
+        cautions.iter().any(|c| c.contains("needs up to 5 cells and has 4")),
         "{cautions:?}"
     );
 }

@@ -1539,10 +1539,7 @@ impl Trace {
                     .flat_map(|r| r.content.iter())
                     .find(|s| s.source == source && s.reads.is_some())
                 {
-                    let max = o
-                        .max_value
-                        .unwrap_or(u32::from(u16::MAX))
-                        .min(u32::from(u16::MAX)) as u16;
+                    let max = o.number_max();
                     self.converts
                         .insert(source.to_string(), (span.clone(), max));
                 }

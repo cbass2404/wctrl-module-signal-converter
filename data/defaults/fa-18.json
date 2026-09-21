@@ -739,11 +739,14 @@
           "colour": "white"
         },
         {
-          "gap": true,
-          "width": 7
+          "gap": true
         },
         {
           "text": "FUEL"
+        },
+        {
+          "gap": true,
+          "width": 6
         }
       ]
     },
@@ -753,11 +756,11 @@
       "cells": "48-71",
       "content": [
         {
-          "gap": true,
-          "width": 11
+          "gap": true
         },
         {
-          "text": "[MODE]"
+          "text": "MODE",
+          "colour": "green"
         }
       ]
     },
@@ -769,26 +772,29 @@
         {
           "source": "IFEI_RPM_L",
           "width": 4,
-          "align": "right",
           "colour": "amber"
         },
         {
-          "text": " RPM",
-          "width": 4,
+          "text": "RPM",
+          "width": 3,
           "small": true
         },
         {
           "source": "IFEI_RPM_R",
-          "width": 3,
+          "width": 4,
+          "align": "right",
           "colour": "amber"
         },
         {
-          "gap": true,
-          "width": 6
+          "gap": true
         },
         {
           "source": "IFEI_T",
           "colour": "amber"
+        },
+        {
+          "gap": true,
+          "width": 4
         }
       ]
     },
@@ -798,12 +804,11 @@
       "cells": "288-311",
       "content": [
         {
-          "gap": true,
-          "width": 11
+          "gap": true
         },
         {
-          "text": "[ ET ]",
-          "width": 6
+          "text": "ET",
+          "colour": "green"
         }
       ]
     },
@@ -815,22 +820,22 @@
         {
           "source": "IFEI_OIL_PRESS_L",
           "width": 4,
-          "align": "right",
           "colour": "amber"
         },
         {
           "text": "OIL",
-          "width": 4,
-          "align": "right",
+          "width": 3,
           "small": true
         },
         {
           "source": "IFEI_OIL_PRESS_R",
+          "width": 4,
+          "align": "right",
           "colour": "amber"
         },
         {
           "gap": true,
-          "width": 5
+          "width": 1
         },
         {
           "source": "IFEI_TIMER_H",
@@ -853,6 +858,10 @@
           "source": "IFEI_TIMER_S",
           "width": 2,
           "colour": "amber"
+        },
+        {
+          "gap": true,
+          "width": 4
         }
       ]
     },
@@ -863,10 +872,62 @@
       "content": [
         {
           "gap": true,
-          "width": 11
+          "width": 10
         },
         {
-          "text": "[ZONE]",
+          "gap": true
+        },
+        {
+          "source": "IFEI_CLOCK_H"
+        },
+        {
+          "text": ":"
+        },
+        {
+          "source": "IFEI_CLOCK_M"
+        },
+        {
+          "text": ":"
+        },
+        {
+          "source": "IFEI_CLOCK_S",
+          "width": 2
+        },
+        {
+          "text": "ZONE",
+          "width": 4,
+          "align": "right",
+          "colour": "green"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "216-239",
+      "content": [
+        {
+          "text": " ",
+          "width": 4
+        },
+        {
+          "text": "NOZ",
+          "width": 3,
+          "align": "right",
+          "small": true
+        },
+        {
+          "text": " ",
+          "width": 4
+        },
+        {
+          "gap": true
+        },
+        {
+          "text": "TIME"
+        },
+        {
+          "gap": true,
           "width": 6
         }
       ]

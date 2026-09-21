@@ -184,6 +184,18 @@ fn default_type() -> String {
     "integer".to_string()
 }
 
+impl Output {
+    /// The largest number this output can report, as a display field reads it.
+    ///
+    /// DCS-BIOS leaves `max_value` off some outputs, and the value is a single
+    /// 16 bit word whatever it says, so both fall back to the word's own top.
+    pub fn number_max(&self) -> u16 {
+        self.max_value
+            .unwrap_or(u32::from(u16::MAX))
+            .min(u32::from(u16::MAX)) as u16
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ValueLabel {
     pub value: u32,
@@ -730,8 +742,8 @@ pub struct Width {
     pub widest: usize,
     /// How many cells it has.
     pub cells: usize,
-    /// A piece reads a number with no range, so nothing bounds how wide it
-    /// gets and `widest` is a floor rather than a maximum.
+    /// A piece reads a string DCS-BIOS gives no length for, so nothing
+    /// bounds how wide it gets and `widest` is a floor rather than a maximum.
     pub unbounded: bool,
 }
 
@@ -756,9 +768,9 @@ impl Readout {
     /// What this field needs against what it has.
     ///
     /// A string signal is bounded by the `max_length` DCS-BIOS declares for
-    /// it, and a gauge by the range the user gave it, so both are known. A
-    /// gauge with no range is the one thing nothing bounds, and it is reported
-    /// rather than guessed at.
+    /// it, and a number by the range the user converted it to, or by its own
+    /// maximum when it is shown as sent. A string with no declared length is
+    /// the one thing nothing bounds, and it is reported rather than guessed at.
     pub fn width(&self, module: &Module) -> Width {
         let cells = self.cells.len();
         if self.divider {
@@ -787,9 +799,9 @@ impl Readout {
                 // and is already flagged as its own problem.
                 continue;
             };
-            let numeric = output.r#type != "string";
+            let number_max = (output.r#type != "string").then(|| output.number_max());
             let max_length = output.max_length.map(usize::from);
-            match span.widest(max_length, numeric) {
+            match span.widest(max_length, number_max) {
                 Some(n) => widest += n,
                 None => unbounded = true,
             }
@@ -1448,9 +1460,9 @@ impl Profile {
     /// because a field that silently loses its last two digits reads as a
     /// working field showing the wrong number.
     ///
-    /// Only what is known. A gauge with no range is unbounded and gets the
-    /// shorter warning, since the widest it can draw depends on what the
-    /// needle does rather than on anything written down.
+    /// Only what is known. A string with no declared length is unbounded and
+    /// gets the shorter warning, since the widest it can draw depends on what
+    /// the module sends rather than on anything written down.
     pub fn width_cautions(&self, module: &Module) -> Vec<String> {
         let mut out = Vec::new();
         for r in &self.readouts {
@@ -1476,7 +1488,7 @@ impl Profile {
                 ));
             } else if width.unbounded {
                 out.push(format!(
-                    "{where_} reads a gauge with no range, so how wide it draws is not known ahead of time and it may run past its {} cells.",
+                    "{where_} reads text DCS-BIOS gives no length for, so how wide it draws is not known ahead of time and it may run past its {} cells.",
                     width.cells
                 ));
             }

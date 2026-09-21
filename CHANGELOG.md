@@ -33,6 +33,16 @@ alone, so naming what moved matters there too.
 
 ### Changed
 
+- **A number on a display is chosen the way a lamp's test is.** Pick the
+  signal, then say how to show it: as sent, or converted to what the dial is
+  marked with, with the decimals beside it. A needle (0 to 65535) arrives
+  converted and anything narrower arrives as sent, so picking the signal is
+  usually the only step. Before, every number was forced through a 0 to 100
+  conversion, which turned a selector's 0 to 3 into 0, 33, 67 and 100.
+- **A number shown as sent is measured from its maximum**, so a field says
+  exactly how many characters it would lose instead of warning that it might
+  run past its cells.
+
 ### Shipped profiles
 
 - **Hornet:** the UFC scratchpad number is held to its 7 cells and aligned

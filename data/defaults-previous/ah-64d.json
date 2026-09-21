@@ -57,136 +57,22 @@
       "device": "CarrierAce_MFD_L",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_MFD_R",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_UFC",
@@ -200,91 +86,15 @@
       "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Captain",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Captain",
@@ -298,7 +108,8 @@
       "device": "MCDU_Captain",
       "led": "Marker_Light",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
@@ -351,46 +162,8 @@
       "device": "MCDU_CoPilot",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_CoPilot",
@@ -404,7 +177,8 @@
       "device": "MCDU_CoPilot",
       "led": "Marker_Light",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
@@ -457,46 +231,8 @@
       "device": "MCDU_Observer",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Observer",
@@ -510,7 +246,8 @@
       "device": "MCDU_Observer",
       "led": "Marker_Light",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
@@ -563,103 +300,29 @@
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_L",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_R",
       "conditions": [],
-      "same_as": "Backlight_L"
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Logo",
       "conditions": [],
-      "same_as": "Backlight_L"
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -689,46 +352,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -739,7 +364,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "SL",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Follows the console dimmer at night, and goes full bright when the console is off. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark console, which means daylight, blanked every lamp on the panel. Same daylight floor as FLAG."
     },
@@ -747,26 +373,168 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "FLAG",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the interior lighting at night, and goes full bright when it is off, because off means daylight and a dim flag lamp is unreadable then."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Master_Caution",
-      "conditions": [
+      "conditions": [],
+      "any_of": [
         {
-          "source": "PLT_MASTER_CAUTION_L",
-          "on_when": {
-            "equals": 1
-          }
+          "conditions": [
+            {
+              "source": "PLT_MASTER_CAUTION_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "PLT_MASTER_WARNING_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_MASTER_CAUTION_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_MASTER_WARNING_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
         }
       ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "JETT",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_L_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_L_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_R_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_R_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_L_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_L_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_R_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_R_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -776,22 +544,158 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "LI",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_L_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_L_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "LO",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_L_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_L_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "RO",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_R_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_R_OUTBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "RI",
-      "conditions": []
+      "conditions": [],
+      "any_of": [
+        {
+          "conditions": [
+            {
+              "source": "PLT_JETT_R_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 0
+              }
+            }
+          ]
+        },
+        {
+          "conditions": [
+            {
+              "source": "CPG_JETT_R_INBOARD_L",
+              "on_when": {
+                "equals": 1
+              }
+            },
+            {
+              "source": "SEAT_POSITION",
+              "on_when": {
+                "equals": 1
+              }
+            }
+          ]
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -832,46 +736,8 @@
       "device": "ViperAce_ICP",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "ViperAce_ICP",
@@ -917,11 +783,11 @@
       "seat": 1,
       "colour": "green",
       "replace": {
-        "<": "◀",
+        "=": "■",
         "~": "█",
         ">": "▶",
         "#": "█",
-        "=": "■"
+        "<": "◀"
       }
     },
     {
@@ -942,67 +808,73 @@
       "seat": 0,
       "colour": "green",
       "replace": {
+        "<": "◀",
+        "#": "█",
+        ">": "▶",
+        "=": "■",
+        "~": "█"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
+        "=": "■",
+        "#": "█",
+        "<": "◀",
+        ">": "▶",
+        "~": "█"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "289-310",
+      "divider": true,
+      "colour": "amber",
+      "label": "KEYBOARD UNIT",
+      "label_colour": "white",
+      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "PLT_KU_DISPLAY",
+      "seat": 0,
+      "colour": "green",
+      "replace": {
+        ">": "▶",
         "#": "█",
         "<": "◀",
         "~": "█",
+        "=": "■"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
+        "#": "█",
+        "~": "█",
+        "<": "◀",
         "=": "■",
         ">": "▶"
       }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        "<": "◀",
-        ">": "▶",
-        "~": "█",
-        "#": "█",
-        "=": "■"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "289-310",
-      "divider": true,
-      "colour": "amber",
-      "label": "KEYBOARD UNIT",
-      "label_colour": "white",
-      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "PLT_KU_DISPLAY",
-      "seat": 0,
-      "colour": "green",
-      "replace": {
-        "<": "◀",
-        "~": "█",
-        "=": "■",
-        ">": "▶",
-        "#": "█"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        "=": "■",
-        "~": "█",
-        "#": "█",
-        ">": "▶",
-        "<": "◀"
-      }
     }
-  ]
+  ],
+  "follows": {
+    "CarrierAce_MFD_L": "CarrierAce_MFD_C",
+    "CarrierAce_MFD_R": "CarrierAce_MFD_C",
+    "MCDU_CoPilot": "MCDU_Captain",
+    "MCDU_Observer": "MCDU_Captain"
+  }
 }

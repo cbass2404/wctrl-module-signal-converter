@@ -27,8 +27,8 @@ The Hornet has no CDU of its own, so the MCDU is free glass, and the IFEI is
 the densest thing in that cockpit worth copying: two engine columns of five
 readings each around a column of labels, fuel remaining and bingo, and the
 clock. Built entirely in the editor, with DCS feeding it, and photographed in
-[editor/demos/mcdu-custom-ifei.jpg](../editor/demos/mcdu-custom-ifei.jpg) (a
-smaller copy is on the site page). What it proved:
+[editor/demos/mcdu-custom-ifei.jpg](../editor/demos/mcdu-custom-ifei.jpg) (the
+site page shows a video of it running instead). What it proved:
 
 - **Numbers shown as sent and numbers converted, side by side.** RPM,
   temperature, fuel flow and oil arrive as the digits the IFEI draws. The

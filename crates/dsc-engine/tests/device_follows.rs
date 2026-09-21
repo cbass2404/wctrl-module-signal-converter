@@ -76,9 +76,12 @@ fn a_follower_is_sent_what_it_follows() {
 
 #[test]
 fn without_following_the_two_differ() {
-    // The control: the shipped Hornet puts its fields on the Captain only, so
-    // the test above is not passing because the two were already the same.
-    let batches = fly(hornet());
+    // The control: with the follow taken out, the Hornet puts its fields on
+    // the Captain only, so the test above is not passing because the two were
+    // already the same. The shipped file follows, so it is cleared here.
+    let mut p = hornet();
+    p.follows.clear();
+    let batches = fly(p);
     assert_ne!(sent(&batches, CAPTAIN).1, sent(&batches, COPILOT).1);
 }
 

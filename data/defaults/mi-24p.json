@@ -65,7 +65,9 @@
     {
       "device": "CarrierAce_MFD_R",
       "led": "INST_PNL_Backlight",
-      "conditions": []
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_UFC",

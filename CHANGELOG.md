@@ -14,6 +14,13 @@ unless this says what moved.
 
 ## 1.0.0-alpha.005
 
+### Changed
+
+- **Setup asks you to close DCS World, DCS Signal Converter and its editor
+  before it starts**, naming whichever of them are running, instead of
+  finding the daemon only once you had clicked through to the install step.
+  Uninstalling asks the same.
+
 ### Fixed
 
 - **Updating now carries lamp rows and profile settings forward, not just

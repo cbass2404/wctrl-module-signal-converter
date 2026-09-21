@@ -176,7 +176,7 @@ to drive a lamp, and the editor offers each only where it can mean something:
 | **+ Add condition**        | Another test that must _also_ hold.                         |
 | **+ Add alternative (or)** | Another way to light the lamp, such as from the other seat. |
 | **Always on**              | Lit whenever the aircraft is loaded, or a fixed brightness. |
-| **Match another lamp**     | Follow another dimmer on the same panel.                    |
+| **Match another lamp**     | Follow another dimmer, on this panel or another one.        |
 
 **Do not know what a switch is called?** Press **Learn** beside the signal box,
 flip the switch in the cockpit, and what you just moved is at the top of the list.

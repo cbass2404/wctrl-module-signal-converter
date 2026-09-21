@@ -62,6 +62,8 @@ export interface Binding {
    * no level to follow. Mutually exclusive with the other three forms.
    */
   same_as?: string | null;
+  /** The device holding the `same_as` lamp, when it is not this one. */
+  same_as_device?: string | null;
   on: number | null;
   off: number;
   note?: string;
@@ -116,6 +118,32 @@ export interface Span {
   colours?: { source: string; codes: Record<string, string> };
   /** Stand-in characters this module sends, rewritten one for one. */
   replace?: Record<string, string>;
+  /**
+   * Draw this piece in exactly this many cells, whatever it reads.
+   *
+   * Without one a chain only holds still at its ends: a reading that goes from
+   * four characters to three pulls everything after it one cell left, so a
+   * layout built around one width comes apart at another. A box is measured
+   * before the gaps are, so what surrounds it never moves.
+   *
+   * It also bounds a gauge with no range, which nothing else does, and turns
+   * "this may run past its cells" into an exact answer.
+   */
+  width?: number;
+  /** Where the value sits inside `width`. Means nothing without one. */
+  align?: "left" | "right" | "centre";
+  /**
+   * Fill this gap with a rule rather than with blanks.
+   *
+   * A rule between two pieces of a chain, where `divider` is a rule instead of
+   * a whole field. Elastic, it takes whatever the two ends leave, which is
+   * what the three separate fields it replaces could never do.
+   */
+  rule?: boolean;
+  /** Characters set into the middle of this piece's rule. Needs a `width`. */
+  label?: string;
+  /** The label's colour, its own rather than the rule's. */
+  label_colour?: string;
 }
 
 /**
@@ -195,7 +223,7 @@ export interface Readout {
    */
   reads?: [number, number];
   decimals?: number;
-  align?: "left" | "right";
+  align?: "left" | "right" | "centre";
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
   /**
@@ -279,6 +307,12 @@ export interface Profile {
    * hides the other.
    */
   disabled_devices?: string[];
+  /**
+   * Devices that take another device's setup, keyed by the one that follows.
+   * Only between variants, and one step deep. The follower's own rows are
+   * kept and ignored while it follows.
+   */
+  follows?: Record<string, string>;
 }
 
 export interface Led {
@@ -379,6 +413,12 @@ export interface Device {
   product_name: string;
   leds: Led[];
   displays: DisplayInfo[];
+  /**
+   * Other devices that are this one under another name: the MCDU's three
+   * seats, the MFD's three positions. A profile can point this one at any of
+   * them rather than setting it up again.
+   */
+  variants: string[];
 }
 
 /** A profile picked for import, before anything is written. */

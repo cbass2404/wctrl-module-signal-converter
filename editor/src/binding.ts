@@ -200,15 +200,25 @@ function valueControls(
   return wrap;
 }
 
+/** A lamp a mirror can point at, on this device or another. */
+export interface MirrorTarget {
+  device: string;
+  deviceName: string;
+  led: Led;
+}
+
 export interface BindingEditorOptions {
   binding: Binding;
   led: Led;
   signals: SignalView[];
   /**
-   * The other lamps on this device, for the mirror target list. Filtered to
-   * dimmers by the caller, since only they can mirror or be mirrored.
+   * The lamps this one could match, this device's first. Filtered to dimmers
+   * by the caller, since only they can mirror or be mirrored. Asked for on
+   * each draw, because matching one lamp takes it out of every other list.
    */
-  siblings: Led[];
+  targets: () => MirrorTarget[];
+  /** A device's name as the window shows it, for a mirror on another panel. */
+  deviceName: (key: string) => string;
   /**
    * This lamp as the shipped profile has it, when there is one. Drives the
    * per-lamp revert, so one lamp can be put back without discarding every other
@@ -240,6 +250,7 @@ function meaningfulPart(b: Binding): string {
     pick: b.pick ?? "brightest",
     always: b.always ?? false,
     same_as: b.same_as ?? null,
+    same_as_device: b.same_as_device ?? null,
     on: b.on ?? null,
     off: b.off,
     note: b.note ?? "",
@@ -297,13 +308,20 @@ function groupsOf(binding: Binding): Branch[] {
  * what a change will do before it is made rather than leave the user to find
  * out after.
  */
-function describeBinding(b: Binding, byId: Map<string, SignalView>): string {
+function describeBinding(
+  b: Binding,
+  byId: Map<string, SignalView>,
+  deviceName: (key: string) => string,
+): string {
   const lines: string[] = [];
   const groups = groupsOf(b).filter((g) => g.conditions.length > 0);
   const condition = (c: Condition): string =>
     c.source ? `${c.source} ${describeTest(c.on_when, byId.get(c.source))}` : "an unfinished condition";
   if (b.always) lines.push("Always on, reading no signal");
-  else if (b.same_as) lines.push(`Matches ${b.same_as}`);
+  else if (b.same_as) {
+    const elsewhere = b.same_as_device && b.same_as_device !== b.device;
+    lines.push(`Matches ${b.same_as}${elsewhere ? ` on ${deviceName(b.same_as_device!)}` : ""}`);
+  }
   else if (groups.length === 0) lines.push("Unassigned, so driven off");
   else if (groups.length === 1) lines.push(groups[0]!.conditions.map(condition).join("\nand "));
   else {
@@ -535,11 +553,14 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
    * signal: it takes whatever the other lamp resolved to.
    */
   function mirrorRow(target: string): HTMLElement {
-    const known = opts.siblings.some((l) => l.name === target);
+    const on = binding.same_as_device ?? binding.device;
+    const targets = opts.targets();
+    const known = targets.some((t) => t.device === on && t.led.name === target);
+    const where = on === binding.device ? "" : ` on ${opts.deviceName(on)}`;
     const text = el("div", { class: "grow" });
     if (known) {
       text.append(
-        el("span", { class: "desc" }, `Matches ${target}`),
+        el("span", { class: "desc" }, `Matches ${target}${where}`),
         el(
           "span",
           { class: "sub" },
@@ -552,19 +573,32 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       );
     } else {
       text.append(
-        el("span", { class: "bad" }, `${target} is not a lamp that dims on this device`),
+        el(
+          "span",
+          { class: "bad" },
+          `${target} is not a lamp that dims on ${where ? opts.deviceName(on) : "this device"}`,
+        ),
       );
     }
 
     const row = el("div", { class: "condition-view always" }, text);
-    if (opts.siblings.length > 1) {
+    if (targets.length > 1) {
+      // Grouped by panel, since the same lamp name turns up on several. The
+      // value is the position in the list: a lamp name can hold a slash.
       const pick = el("select", { class: "test" });
-      for (const l of opts.siblings) {
-        pick.append(el("option", { value: l.name }, l.label || l.name));
+      let group: HTMLElement | null = null;
+      for (const [i, t] of targets.entries()) {
+        if (!group || group.getAttribute("label") !== t.deviceName) {
+          group = el("optgroup", { label: t.deviceName });
+          pick.append(group);
+        }
+        group.append(el("option", { value: String(i) }, t.led.label || t.led.name));
       }
-      pick.value = target;
+      pick.value = String(targets.findIndex((t) => t.device === on && t.led.name === target));
       pick.addEventListener("change", () => {
-        binding.same_as = pick.value;
+        const chosen = targets[Number(pick.value)];
+        if (!chosen) return;
+        pointAt(chosen);
         committed();
       });
       row.append(pick);
@@ -572,10 +606,18 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     row.append(
       iconButton("cancel", "\u2715", "Stop matching another lamp", () => {
         binding.same_as = null;
+        delete binding.same_as_device;
         committed();
       }),
     );
     return row;
+  }
+
+  /** The device is written only when it is another one, as the file has it. */
+  function pointAt(t: MirrorTarget): void {
+    binding.same_as = t.led.name;
+    if (t.device === binding.device) delete binding.same_as_device;
+    else binding.same_as_device = t.device;
   }
 
   function addCondition(group: Branch): void {
@@ -665,12 +707,15 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       const choices = el("div", { class: "choices" }, assign, on);
 
       // Only between lamps that dim, and only where there is another one to
-      // point at. On a panel with a single dimmer the option would be dead.
-      if (led.dimmable && opts.siblings.length > 0) {
+      // point at, on this panel or any other.
+      if (opts.targets().length > 0) {
         const match = el("button", { class: "add", type: "button" }, "Match another lamp");
-        match.title = "Follow another dimmer on this device, so both move together.";
+        match.title = "Follow another dimmer, on this panel or another, so both move together.";
         match.addEventListener("click", () => {
-          binding.same_as = opts.siblings[0]?.name ?? null;
+          // Asked again: another lamp may have started following this one
+          // since the button was drawn, and matching now would be a loop.
+          const first = opts.targets()[0];
+          if (first) pointAt(first);
           committed();
         });
         choices.append(match);
@@ -762,8 +807,8 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
   async function confirmRevert(shipped: Binding): Promise<void> {
     const question =
       `Reset ${led.name} to how it shipped?\n\n` +
-      `Now:\n${describeBinding(binding, byId)}\n\n` +
-      `Shipped:\n${describeBinding(shipped, byId)}\n\n` +
+      `Now:\n${describeBinding(binding, byId, opts.deviceName)}\n\n` +
+      `Shipped:\n${describeBinding(shipped, byId, opts.deviceName)}\n\n` +
       "No other lamp is touched.";
     if (!(await confirmAction(question, "Reset"))) return;
     binding.conditions = structuredClone(shipped.conditions);
@@ -772,6 +817,8 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
     else delete binding.pick;
     binding.always = shipped.always ?? false;
     binding.same_as = shipped.same_as ?? null;
+    if (shipped.same_as_device) binding.same_as_device = shipped.same_as_device;
+    else delete binding.same_as_device;
     binding.on = shipped.on;
     binding.off = shipped.off;
     binding.note = shipped.note;

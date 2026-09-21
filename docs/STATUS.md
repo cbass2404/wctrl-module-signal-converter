@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-20. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-21. Enough context to resume cold.
 
 ## Resume here
 
@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 277 passing
+cargo test --workspace            # expect 375 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -21,6 +21,89 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
+
+**Validated on the panel 2026-09-21: the Hornet's IFEI rebuilt on the MCDU.**
+The Hornet has no CDU of its own, so the MCDU is free glass, and the IFEI is
+the densest thing in that cockpit worth copying: two engine columns of five
+readings each around a column of labels, fuel remaining and bingo, and the
+clock. Built entirely in the editor, with DCS feeding it, and photographed in
+[editor/demos/mcdu-custom-ifei.jpg](../editor/demos/mcdu-custom-ifei.jpg) (a
+smaller copy is on the site page). What it proved:
+
+- **Numbers shown as sent and numbers converted, side by side.** RPM,
+  temperature, fuel flow and oil arrive as the digits the IFEI draws. The
+  nozzle positions are needles, 0 to 65535, and read 76 because they were
+  converted to 0 to 100, which is how the cockpit gauge is marked. This is the
+  change that made numbers on a screen work the way a lamp's test does: pick
+  the signal, then say how to show it. Before it, every number was forced
+  through 0 to 100, which would have scaled every digit reading on this page.
+- **Fixed-width pieces hold columns.** Each engine value is boxed and aligned
+  right, so the left and right columns stay put as readings change width, and
+  the labels between them stay centred on their row.
+- **A chain can mix readings and typed text on one line.** The clock is three
+  readings with two typed colons, and the right-hand column labels (MD, QT, UP,
+  DN, ZN, ET) are typed text boxed to three cells so they line up.
+- **Small and large text, and colour per piece**, on one row: white labels in
+  the small font, amber readings, green column labels.
+
+The profile edits are the working-tree changes to `data/defaults/fa-18.json`,
+which put these fields on `MCDU_Captain` only. Whether they ship as the
+Hornet's default MCDU page is a separate decision, and waits for release like
+any changed default.
+
+**Built 2026-09-21, not yet on a panel: one panel under several names shares a
+setup.** Rebuilding the IFEI showed the cost of the MCDU being three devices: it
+was built on the Captain, and a Co-Pilot or Observer unit would need it all
+again, as the three MFDs need every backlight row three times. `follows` on the
+profile points one device at another of the same hardware, and the follower is
+driven with a copy of that device's rows. See "One panel under several names"
+in [CONFIG.md](CONFIG.md). The decisions:
+
+- **Resolved once, when the engine takes a profile** (`Profile::with_followers`),
+  so painting, sweeping and resolving never learn a second kind of device.
+- **"Same hardware" is worked out, not listed.** `DeviceSpec::same_hardware`
+  compares lamps by index, name and max and the displays per part, ignoring
+  part ids and PIDs, which differ between the MFDs. A variant added to
+  `devices.json` qualifies with nothing else said, and the editor gets the list
+  from the backend (`DeviceView::variants`) rather than keeping its own idea.
+- **One step deep**, so there is one place to edit. The editor does not offer a
+  follower as a target and locks the chooser on a device something follows.
+- **The follower's own rows are kept and ignored**, as a disabled device's are,
+  and `inert()` says so.
+- **Per profile, not global.** A profile that wants its panels set up apart
+  keeps them apart; one global setting would take that away.
+
+Not yet done: flying it on two MCDUs. Every shipped default uses it, by
+decision 2026-09-21: the MFD L and R use the MFD C and the MCDU Co-Pilot and
+Observer use the Captain. The AH-64D and CH-47F lose nothing by it, because the
+seat on each field picks the source and all three MCDU names carried the same
+fields.
+
+**Built and proven on the panels 2026-09-21: a lamp can match one on
+another panel.** Every default puts its backlights on one knob, and until now that
+meant writing the same condition into every panel's backlight row, so moving
+the knob was a change made once per panel. `same_as_device` beside `same_as`
+names the device the target lamp is on; left out, it is the lamp's own device,
+so every existing profile reads the same. See "Matching another lamp" in
+[CONFIG.md](CONFIG.md). The decisions:
+
+- **A field beside `same_as`, not a new shape for it.** A string that became
+  an object, or a `device/lamp` path, would have changed every row that already
+  mirrors something, and lamp names can hold a slash (`A/A`).
+- **The chain rule is unchanged, only wider.** The target must read signals of
+  its own, now looked for on whichever device it names, so a loop across two
+  panels is refused at both ends with no cycle detection added.
+- **A device that follows another is read through it** (`mirror_target`), since
+  its own rows are not in use. That also catches a lamp pointed at itself
+  through a follower, as a chain.
+- **The editor lists every panel's dimmers**, its own first, and none from a
+  panel that follows another. The list is asked for on each draw rather than
+  once, and matching is not offered on a lamp something else already follows,
+  so the window cannot build the loop the check would refuse.
+
+Cory is moving the shipped defaults onto it in the editor, testing the flow
+along the way, so those rows change with it. The one-knob test follows `same_as`
+across devices now, so it keeps holding them.
 
 **Built and flown 2026-09-20: the editor's display fields, put right.** Six
 things, found by using the window rather than by reading it, and one of them
@@ -870,7 +953,8 @@ forms are offered, each only where it can mean something:
 * **any_of**, through "+ Add alternative (or)", with a choice between the
   brightest alternative and the one whose signal moved last (`pick`)
 * **always**, on a lamp nothing is assigned to
-* **same_as**, only on a dimmer with another dimmer to point at
+* **same_as**, only on a dimmer with another dimmer to point at, on this
+  panel or another (added 2026-09-21)
 
 `Reset this lamp` appears only where a lamp differs from the shipped profile.
 Save is explicit, and the unsaved marker compares against a snapshot rather than
@@ -1330,7 +1414,8 @@ anything, so a shipped file is already what a user's copy becomes.
 so the whole pit dims together until a user splits it. `devices.json` marks
 panel backlights with `backlight: true` (not the PTO2's gates, nor its
 unidentified `Landing_gear_lights`), and the same test file fails when a
-default's backlights resolve to different bindings, following `same_as`. The
+default's backlights resolve to different bindings, following `same_as`
+across panels. The
 Hornet and Super Hornet moved their UFC, MFDs and ICP from `INST_PNL_DIMMER`
 to `CONSOLES_DIMMER` for it. **The Mi-24P is exempt, by name and with its
 reason, until the Hind's backlight knob is found with learn mode**; remove

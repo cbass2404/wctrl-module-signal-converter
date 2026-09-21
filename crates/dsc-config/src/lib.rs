@@ -4,7 +4,7 @@
 //! device inventory is `data/devices.json`. Profiles are authored by the user,
 //! keyed by LED rather than by signal  see docs/CONFIG.md.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -71,7 +71,7 @@ pub enum Error {
     EmptyBranch(String),
     #[error("LED {0:?} picks between alternatives but has none; pick applies only to any_of")]
     PickWithoutAlternatives(String),
-    #[error("LED {0:?} mirrors {1:?}, which is not a lamp on device {2:?}")]
+    #[error("LED {0:?} mirrors {1:?}, which has no row on device {2:?}")]
     UnknownMirror(String, String, String),
     #[error("LED {0:?} mirrors {1:?}, which mirrors something itself; a mirror must point at a lamp that reads signals")]
     MirrorChain(String, String),
@@ -105,6 +105,16 @@ pub enum Error {
     DividerReadsSignal(String, String, String),
     #[error("the label {4:?} on the divider on {1} of display {0:?} does not fit: it has {2} cells and needs {3}, a dash and a blank each side of the label")]
     DividerLabelTooWide(String, String, usize, usize, String),
+    #[error("a rule on {1} of display {0:?} is written on a piece that draws its own content; only a gap can be a rule")]
+    RuleNotOnGap(String, String),
+    #[error("the label {2:?} on a rule on {1} of display {0:?} has no fixed width; an elastic rule is as wide as the rest of the line leaves, so a label on one would come and go as the readings beside it change width")]
+    RuleLabelNeedsWidth(String, String, String),
+    #[error("the label {4:?} on a rule on {1} of display {0:?} does not fit: the rule is {2} cells wide and needs {3}, a dash and a blank each side of the label")]
+    RuleLabelTooWide(String, String, usize, usize, String),
+    #[error("a label {2:?} on {1} of display {0:?} is written on a piece that is not a rule; only a rule sets a label into itself")]
+    LabelNotOnRule(String, String, String),
+    #[error("a fixed width of {2} on {1} of display {0:?} is wider than the {3} cells the field has")]
+    SpanWiderThanField(String, String, usize, usize),
 
     #[error("display {0:?} has no cell {1}")]
     NoSuchCell(String, usize),
@@ -124,6 +134,14 @@ pub enum Error {
     RangeOnText(String),
     #[error("profile disables device {0:?}, which is not a device we know")]
     DisablesUnknownDevice(String),
+    #[error("{0:?} is set to follow {1:?}, and {2:?} is not a device we know")]
+    FollowsUnknownDevice(String, String, String),
+    #[error("{0:?} is set to follow itself")]
+    FollowsItself(String),
+    #[error("{0:?} follows {1:?}, which follows another device in turn; point it at that one instead")]
+    FollowChain(String, String),
+    #[error("{0:?} cannot follow {1:?}: they are different hardware, so the lamps and screens would not line up")]
+    FollowsDifferentHardware(String, String),
     #[error("a field is set to seat {0}, but module {1:?} does not report {2}, so nothing would ever be painted there")]
     SeatNotReported(u32, String, &'static str),
     #[error("seat {0} is not one this module has; {1} reports 0 to {2}")]
@@ -172,6 +190,18 @@ pub struct Output {
 
 fn default_type() -> String {
     "integer".to_string()
+}
+
+impl Output {
+    /// The largest number this output can report, as a display field reads it.
+    ///
+    /// DCS-BIOS leaves `max_value` off some outputs, and the value is a single
+    /// 16 bit word whatever it says, so both fall back to the word's own top.
+    pub fn number_max(&self) -> u16 {
+        self.max_value
+            .unwrap_or(u32::from(u16::MAX))
+            .min(u32::from(u16::MAX)) as u16
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -448,6 +478,29 @@ impl DeviceSpec {
             .iter()
             .filter_map(|p| p.display.as_deref().map(|d| (p, d)))
     }
+
+    /// Whether `other` is this device under another name: the same lamps at
+    /// the same indices and the same screens, whatever its part ids and USB id
+    /// say.
+    ///
+    /// WinWing sells one panel as several products, one per seat or position,
+    /// each with its own PID so that more than one can sit on a desk. The
+    /// MCDU is Captain, Co-Pilot and Observer, and the MFD is L, C and R. A
+    /// profile can point one at another rather than setting both up, and this
+    /// is what decides it may. Worked out from the hardware rather than listed,
+    /// so a variant added to the inventory is one without anything else said.
+    pub fn same_hardware(&self, other: &DeviceSpec) -> bool {
+        let shape = |d: &DeviceSpec| {
+            d.parts
+                .iter()
+                .map(|p| {
+                    let leds: Vec<_> = p.leds.iter().map(|l| (l.index, l.name.clone(), l.max)).collect();
+                    (p.display.clone(), leds)
+                })
+                .collect::<Vec<_>>()
+        };
+        shape(self) == shape(other)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -570,7 +623,8 @@ pub struct Binding {
     /// How the alternatives in `any_of` combine. See [`Pick`].
     #[serde(default, skip_serializing_if = "Pick::is_brightest")]
     pub pick: Pick,
-    /// Mirror another lamp on the same device, by name.
+    /// Mirror another lamp, by name, on this device unless
+    /// [`same_as_device`](Self::same_as_device) names another.
     ///
     /// A link rather than a copy: change what the other lamp reads and this one
     /// follows. The PTO2 is the case it exists for, because its three
@@ -589,6 +643,15 @@ pub struct Binding {
     /// Mutually exclusive with `conditions`, `any_of` and `always`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub same_as: Option<String>,
+    /// The device holding the lamp `same_as` names, when it is not this one.
+    ///
+    /// So one panel's backlight can follow another's: an MFD bezel set to
+    /// match the throttle's is one knob to change instead of two. Left out, the
+    /// lamp is on this device, which is every profile written before this
+    /// existed. A device that follows another is read through the one it
+    /// follows, since its own rows are not in use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub same_as_device: Option<String>,
     /// Omitted means "fully on for this lamp", resolved from the LED itself.
     ///
     /// Skipped when absent, and `off` when zero, so a profile the editor saves
@@ -720,8 +783,8 @@ pub struct Width {
     pub widest: usize,
     /// How many cells it has.
     pub cells: usize,
-    /// A piece reads a number with no range, so nothing bounds how wide it
-    /// gets and `widest` is a floor rather than a maximum.
+    /// A piece reads a string DCS-BIOS gives no length for, so nothing
+    /// bounds how wide it gets and `widest` is a floor rather than a maximum.
     pub unbounded: bool,
 }
 
@@ -746,13 +809,24 @@ impl Readout {
     /// What this field needs against what it has.
     ///
     /// A string signal is bounded by the `max_length` DCS-BIOS declares for
-    /// it, and a gauge by the range the user gave it, so both are known. A
-    /// gauge with no range is the one thing nothing bounds, and it is reported
-    /// rather than guessed at.
+    /// it, and a number by the range the user converted it to, or by its own
+    /// maximum when it is shown as sent. A string with no declared length is
+    /// the one thing nothing bounds, and it is reported rather than guessed at.
     pub fn width(&self, module: &Module) -> Width {
         let cells = self.cells.len();
         if self.divider {
             return Width { widest: cells, cells, unbounded: false };
+        }
+        // A run of one cell takes its whole value as a single glyph, however
+        // many characters that is. That is not a shortcut: a two character
+        // field really does occupy one cell on this hardware, the comm windows
+        // carry `width: 2` and a Hornet scratchpad mark arrives as `" G"`.
+        // `compose` hands the value over whole and `fit` joins rather than
+        // crops, so nothing can be cut off the end of one cell and there is
+        // nothing here to measure. Counted by character instead, every one of
+        // these read as a field about to lose its last character.
+        if cells == 1 {
+            return Width { widest: 1, cells, unbounded: false };
         }
         let mut widest = 0;
         let mut unbounded = false;
@@ -766,9 +840,9 @@ impl Readout {
                 // and is already flagged as its own problem.
                 continue;
             };
-            let numeric = output.r#type != "string";
+            let number_max = (output.r#type != "string").then(|| output.number_max());
             let max_length = output.max_length.map(usize::from);
-            match span.widest(max_length, numeric) {
+            match span.widest(max_length, number_max) {
                 Some(n) => widest += n,
                 None => unbounded = true,
             }
@@ -855,6 +929,7 @@ impl Binding {
             any_of: Vec::new(),
             pick: Pick::default(),
             same_as: None,
+            same_as_device: None,
             on: None,
             off: if held { led.max_value() } else { 0 },
             note: note.to_string(),
@@ -1012,6 +1087,20 @@ pub struct Profile {
     /// zero by a sweep.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_devices: Vec<String>,
+    /// Devices that take another device's setup instead of holding their own,
+    /// keyed by the one that follows.
+    ///
+    /// For variants of one panel, which WinWing sells under a name per seat:
+    /// an MCDU set up as Captain can drive the Co-Pilot and Observer units
+    /// too, rather than every lamp and field being written three times and
+    /// kept in step by hand. Only between the same hardware, see
+    /// [`DeviceSpec::same_hardware`], and one step deep: a device that follows
+    /// cannot be followed, so there is always exactly one place to edit.
+    ///
+    /// The follower's own rows are kept and ignored while it follows, the way
+    /// a disabled device's are, so stopping gives back what was there.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub follows: BTreeMap<String, String>,
 }
 
 fn default_schema() -> u32 {
@@ -1030,6 +1119,40 @@ impl Profile {
     /// leaving its backlight where the user set it beats zeroing it.
     pub fn drives(&self, device: &str) -> bool {
         !self.disabled_devices.iter().any(|d| d == device)
+    }
+
+    /// This profile as it runs: every device that follows another given a
+    /// copy of that device's lamps and fields in place of its own.
+    ///
+    /// Done once, when the engine takes the profile, so nothing downstream has
+    /// a second kind of device to know about. Each follower is still driven,
+    /// disabled or not, under its own name, so disabling the one it follows
+    /// leaves it running.
+    pub fn with_followers(&self) -> Profile {
+        let mut p = self.clone();
+        if self.follows.is_empty() {
+            return p;
+        }
+        p.bindings.retain(|b| !self.follows.contains_key(&b.device));
+        p.readouts.retain(|r| !self.follows.contains_key(&r.device));
+        for (follower, source) in &self.follows {
+            // A chain is refused by `problems`. Should one be loaded anyway,
+            // copying from a follower would copy the rows just set aside.
+            if self.follows.contains_key(source) {
+                continue;
+            }
+            p.bindings.extend(self.bindings.iter().filter(|b| &b.device == source).map(|b| {
+                let mut b = b.clone();
+                b.device = follower.clone();
+                b
+            }));
+            p.readouts.extend(self.readouts.iter().filter(|r| &r.device == source).map(|r| {
+                let mut r = r.clone();
+                r.device = follower.clone();
+                r
+            }));
+        }
+        p
     }
 
     /// A profile with one unassigned row per LED on every device given.
@@ -1064,6 +1187,7 @@ impl Profile {
             // so an empty field needs no record here to be offered.
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
+            follows: BTreeMap::new(),
         }
     }
 
@@ -1074,9 +1198,17 @@ impl Profile {
     /// visible while it is still half finished. A reader would see truncated
     /// JSON, and the profile would appear to vanish for as long as it took to
     /// finish writing.
+    ///
+    /// CRLF, because these are Windows files that people open and read. A
+    /// profile is meant to be looked at and hand edited, and `to_string_pretty`
+    /// writes LF, which leaves the file as one long line in anything that still
+    /// wants the pair. The shipped defaults are CRLF and end without a trailing
+    /// newline, so a save gives back the same bytes the profile arrived as
+    /// rather than a whole file of changed endings around one edited row.
     pub fn save(&self, path: &Path) -> Result<()> {
         let text = serde_json::to_string_pretty(self)
-            .map_err(|e| Error::Json(e, path.display().to_string()))?;
+            .map_err(|e| Error::Json(e, path.display().to_string()))?
+            .replace('\n', "\r\n");
         let temp = path.with_extension("json.saving");
         // Rename replaces an existing file on Windows as well as on Unix.
         let written = std::fs::write(&temp, text).and_then(|()| std::fs::rename(&temp, path));
@@ -1089,12 +1221,22 @@ impl Profile {
         Ok(())
     }
 
+    /// The device and lamp a mirroring lamp points at, if it mirrors one.
+    ///
+    /// A device that follows another is read as the one it follows, whose rows
+    /// are the ones in use; after [`with_followers`](Self::with_followers) the
+    /// two hold the same rows, so either reading gives the same value.
+    fn mirror_target<'a>(&'a self, b: &'a Binding) -> Option<(&'a str, &'a str)> {
+        let led = b.same_as.as_deref()?;
+        let device = b.same_as_device.as_deref().unwrap_or(&b.device);
+        let device = self.follows.get(device).map_or(device, String::as_str);
+        Some((device, led))
+    }
+
     /// The binding a mirroring lamp points at, if any.
     fn mirrored<'a>(&'a self, b: &'a Binding) -> Option<&'a Binding> {
-        let target = b.same_as.as_deref()?;
-        self.bindings
-            .iter()
-            .find(|o| o.device == b.device && o.led == target)
+        let (device, led) = self.mirror_target(b)?;
+        self.bindings.iter().find(|o| o.device == device && o.led == led)
     }
 
     /// Every signal a binding depends on, following a mirror to its target.
@@ -1203,35 +1345,31 @@ impl Profile {
             {
                 out.push(Error::MirrorWithConditions(b.led.clone()));
             }
-            if let Some(target) = &b.same_as {
-                match self
-                    .bindings
-                    .iter()
-                    .find(|o| o.device == b.device && &o.led == target)
-                {
+            if let Some((target_device, target)) = self.mirror_target(b) {
+                match self.mirrored(b) {
                     None => out.push(Error::UnknownMirror(
                         b.led.clone(),
-                        target.clone(),
-                        b.device.clone(),
+                        target.to_string(),
+                        target_device.to_string(),
                     )),
                     Some(other) => {
                         if other.same_as.is_some() {
-                            out.push(Error::MirrorChain(b.led.clone(), target.clone()));
+                            out.push(Error::MirrorChain(b.led.clone(), target.to_string()));
                         }
                         // Only lamps that dim, on both ends. An indicator takes
                         // 0 or 1, so it has no level to follow and none to
                         // offer: mirroring one either way would be a setting
                         // that cannot mean what it says.
-                        if let Some(device) = devices.device(&b.device) {
-                            let dims = |name: &str| {
-                                device
-                                    .led(name)
-                                    .map(|(_, led)| led.is_dimmable())
-                                    .unwrap_or(false)
-                            };
-                            if !dims(&b.led) || !dims(target) {
-                                out.push(Error::MirrorNotDimmable(b.led.clone(), target.clone()));
-                            }
+                        let dims = |device: &str, name: &str| {
+                            devices
+                                .device(device)
+                                .and_then(|d| d.led(name))
+                                .is_some_and(|(_, led)| led.is_dimmable())
+                        };
+                        if devices.device(&b.device).is_some()
+                            && (!dims(&b.device, &b.led) || !dims(target_device, target))
+                        {
+                            out.push(Error::MirrorNotDimmable(b.led.clone(), target.to_string()));
                         }
                     }
                 }
@@ -1377,6 +1515,15 @@ impl Profile {
                 ));
             }
         }
+        for (device, source) in &self.follows {
+            let lamps = self.bindings.iter().filter(|b| &b.device == device && !b.is_placeholder()).count();
+            let fields = self.readouts.iter().filter(|r| &r.device == device).count();
+            if lamps + fields > 0 {
+                out.push(format!(
+                    "{device} follows {source} in this profile, so {lamps} lamp binding(s) and {fields} display field(s) of its own are kept but not used"
+                ));
+            }
+        }
         out
     }
 
@@ -1419,9 +1566,9 @@ impl Profile {
     /// because a field that silently loses its last two digits reads as a
     /// working field showing the wrong number.
     ///
-    /// Only what is known. A gauge with no range is unbounded and gets the
-    /// shorter warning, since the widest it can draw depends on what the
-    /// needle does rather than on anything written down.
+    /// Only what is known. A string with no declared length is unbounded and
+    /// gets the shorter warning, since the widest it can draw depends on what
+    /// the module sends rather than on anything written down.
     pub fn width_cautions(&self, module: &Module) -> Vec<String> {
         let mut out = Vec::new();
         for r in &self.readouts {
@@ -1435,6 +1582,9 @@ impl Profile {
                 let end = match r.align {
                     Align::Right => "first",
                     Align::Left => "last",
+                    // Centred content is cropped at both ends, the odd one
+                    // coming off the front, the way its padding is added.
+                    Align::Centre => "outermost",
                 };
                 out.push(format!(
                     "{where_} needs up to {} cells and has {}, so the {end} {n} character{} would be dropped with nothing shown on the panel to say so.",
@@ -1444,7 +1594,7 @@ impl Profile {
                 ));
             } else if width.unbounded {
                 out.push(format!(
-                    "{where_} reads a gauge with no range, so how wide it draws is not known ahead of time and it may run past its {} cells.",
+                    "{where_} reads text DCS-BIOS gives no length for, so how wide it draws is not known ahead of time and it may run past its {} cells.",
                     width.cells
                 ));
             }
@@ -1467,6 +1617,27 @@ impl Profile {
         for name in &self.disabled_devices {
             if devices.device(name).is_none() {
                 out.push(Error::DisablesUnknownDevice(name.clone()));
+            }
+        }
+        for (follower, source) in &self.follows {
+            if follower == source {
+                out.push(Error::FollowsItself(follower.clone()));
+                continue;
+            }
+            let (Some(a), Some(b)) = (devices.device(follower), devices.device(source)) else {
+                let unknown = if devices.device(follower).is_none() { follower } else { source };
+                out.push(Error::FollowsUnknownDevice(
+                    follower.clone(),
+                    source.clone(),
+                    unknown.clone(),
+                ));
+                continue;
+            };
+            if self.follows.contains_key(source) {
+                out.push(Error::FollowChain(follower.clone(), source.clone()));
+            }
+            if !a.same_hardware(b) {
+                out.push(Error::FollowsDifferentHardware(follower.clone(), source.clone()));
             }
         }
         for (i, r) in self.readouts.iter().enumerate() {
@@ -1584,6 +1755,65 @@ impl Profile {
             }
 
             for span in &r.content {
+                // A box wider than the run it sits in cannot be drawn: the
+                // field crops what will not fit, so the piece would take the
+                // whole run and whatever shares it would be the part that
+                // goes. Refused rather than cautioned, unlike an overflow,
+                // because this one is certain before a single frame arrives.
+                if span.width > r.cells.len() {
+                    out.push(Error::SpanWiderThanField(
+                        r.display.clone(),
+                        r.cells.to_string(),
+                        span.width,
+                        r.cells.len(),
+                    ));
+                }
+                // A rule fills room it was given rather than drawing anything
+                // of its own, which is what a gap is. On a piece that has its
+                // own content there is nowhere to put it.
+                if span.rule {
+                    if !span.gap {
+                        out.push(Error::RuleNotOnGap(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                        ));
+                    }
+                    if !display.is_text_grid() {
+                        out.push(Error::DividerNotDrawn(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                        ));
+                    }
+                }
+                if !span.label.is_empty() {
+                    if !span.rule {
+                        out.push(Error::LabelNotOnRule(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                            span.label.clone(),
+                        ));
+                    } else if span.width == 0 {
+                        // An elastic rule is as wide as the chain leaves it,
+                        // which changes with every reading beside it, so there
+                        // is no width to check a label against. `divider_rule`
+                        // drops a label it cannot fit, which on a rule that
+                        // keeps changing width means a label appearing and
+                        // vanishing on the glass with nothing to say why.
+                        out.push(Error::RuleLabelNeedsWidth(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                            span.label.clone(),
+                        ));
+                    } else if span.width < min_divider_cells(&span.label) {
+                        out.push(Error::RuleLabelTooWide(
+                            r.display.clone(),
+                            r.cells.to_string(),
+                            span.width,
+                            min_divider_cells(&span.label),
+                            span.label.clone(),
+                        ));
+                    }
+                }
                 // A gap draws nothing and measures itself from what is left,
                 // so anything written on one is something that will never be
                 // seen. Refused rather than ignored, for the same reason a
@@ -1667,8 +1897,10 @@ impl Profile {
 
             // Gaps space out what is around them. With nothing around them
             // they are an elaborate way of writing blanks, which is what an
-            // empty run already does.
-            if !r.content.is_empty() && r.content.iter().all(|s| s.gap) {
+            // empty run already does. A rule is not blanks: a field that is
+            // nothing but one is a divider written the long way, and drawing
+            // it is the right answer rather than a fault.
+            if !r.content.is_empty() && r.content.iter().all(|s| s.gap && !s.rule) {
                 out.push(Error::NothingButGaps(
                     r.display.clone(),
                     r.cells.to_string(),
@@ -1704,7 +1936,9 @@ impl Profile {
             let styled = r
                 .content
                 .iter()
-                .any(|s| s.colour.is_some() || s.colours.is_some() || s.small);
+                .any(|s| {
+                    s.colour.is_some() || s.colours.is_some() || s.small || s.label_colour.is_some()
+                });
             let ruled = r.divider && (r.colour.is_some() || r.label_colour.is_some());
             if styled || ruled {
                 out.push(Error::StyleNotDrawn(r.display.clone(), r.cells.to_string()));
@@ -1740,18 +1974,30 @@ impl Profile {
                 continue;
             }
             for span in &r.content {
-                // A gap is drawn as blank cells like any other character, so a
-                // font without a space would leave a hole rather than a gap.
-                if span.gap {
-                    if !chars.large.contains(&' ') {
-                        out.push(Error::NotInFont(' ', file.to_string(), r.cells.to_string()));
-                    }
-                    continue;
-                }
                 // Each size has its own alphabet, and small is the smaller one
                 // in every font here, so a span marked small can lose a
                 // character that was fine at full size.
                 let set = if span.small { &chars.small } else { &chars.large };
+                // A gap is drawn as blank cells like any other character, so a
+                // font without a space would leave a hole rather than a gap. A
+                // rule draws dashes instead, and its label is drawn from the
+                // same alphabet as the rule, with a blank each side of it.
+                if span.gap {
+                    let (fill, spaced) = if span.rule {
+                        ('-', if span.label.is_empty() { None } else { Some(' ') })
+                    } else {
+                        (' ', None)
+                    };
+                    let written = std::iter::once(fill)
+                        .chain(spaced)
+                        .chain(span.label.chars());
+                    for c in written {
+                        if !set.contains(&c) {
+                            out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
+                        }
+                    }
+                    continue;
+                }
                 let written = span
                     .text
                     .chars()
@@ -2447,6 +2693,7 @@ mod tests {
             any_of: Vec::new(),
             pick: Pick::default(),
             same_as: None,
+            same_as_device: None,
             on,
             off: 0,
             note: String::new(),
@@ -2504,6 +2751,7 @@ mod tests {
             always: false,
             pick: Pick::default(),
             same_as: None,
+            same_as_device: None,
             any_of: vec![
                 Branch {
                     conditions: vec![
@@ -2618,6 +2866,7 @@ mod tests {
             always: false,
             pick,
             same_as: None,
+            same_as_device: None,
             any_of: vec![
                 Branch {
                     conditions: vec![cond("PLT_KNOB", OnWhen::Scale([0, 8]))],
@@ -2719,6 +2968,7 @@ mod tests {
                     any_of: Vec::new(),
                     pick: Pick::default(),
                     same_as: None,
+                    same_as_device: None,
                     on: None,
                     off: 0,
                     note: String::new(),
@@ -2731,6 +2981,7 @@ mod tests {
                     any_of: Vec::new(),
                     pick: Pick::default(),
                     same_as: same_as.map(str::to_string),
+                    same_as_device: None,
                     on: None,
                     off: 255,
                     note: String::new(),
@@ -2738,6 +2989,7 @@ mod tests {
             ],
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
+            follows: BTreeMap::new(),
         }
     }
 
@@ -2775,6 +3027,39 @@ mod tests {
         // And without the mirror it reports nothing, because it reads nothing.
         let plain = mirror_profile(None);
         assert!(profile.sources_of(&plain.bindings[1]).is_empty());
+    }
+
+    /// A mirror can name a lamp on another device, and follows it the same way.
+    #[test]
+    fn a_mirror_follows_a_lamp_on_another_device() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let mut profile = mirror_profile(Some("Backlight"));
+        profile.bindings[1].device = "E".into();
+        profile.bindings[1].same_as_device = Some("D".into());
+        let flag = &profile.bindings[1];
+
+        assert_eq!(profile.resolve_binding(flag, &led, |_| Some(32768)), Some(127));
+        assert_eq!(profile.sources_of(flag), vec!["DIM"]);
+        // Without the device it looks on its own, which holds no `Backlight`.
+        let mut local = profile.clone();
+        local.bindings[1].same_as_device = None;
+        assert!(local.sources_of(&local.bindings[1]).is_empty());
+    }
+
+    /// Pointing at a device that follows another reads the one it follows,
+    /// whose rows are the ones in use.
+    #[test]
+    fn a_mirror_on_a_follower_reads_what_it_follows() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let mut profile = mirror_profile(Some("Backlight"));
+        profile.bindings[1].device = "E".into();
+        profile.bindings[1].same_as_device = Some("F".into());
+        profile.follows.insert("F".into(), "D".into());
+        let flag = &profile.bindings[1];
+        assert_eq!(profile.resolve_binding(flag, &led, |_| Some(65535)), Some(255));
+        let running = profile.with_followers();
+        let flag = running.bindings.iter().find(|b| b.device == "E").unwrap();
+        assert_eq!(running.sources_of(flag), vec!["DIM"]);
     }
 
     /// The editor rewrites whole profiles, and these files are shipped and

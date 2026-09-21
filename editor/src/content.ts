@@ -72,14 +72,15 @@ export function setContent(readout: Readout, spans: Span[]): void {
 
 /** A new empty piece of the kind asked for. */
 export function newSpan(kind: SpanKind): Span {
+  if (kind === "rule") return { gap: true, rule: true };
   if (kind === "gap") return { gap: true };
   return kind === "text" ? { text: "" } : { source: "" };
 }
 
-export type SpanKind = "text" | "signal" | "gap";
+export type SpanKind = "text" | "signal" | "gap" | "rule";
 
 /**
- * Which of the three a piece is.
+ * Which of the four a piece is.
  *
  * The key being present is what says so, not what is in it. A piece the user
  * has just added reads no signal yet, and asking whether `source` held
@@ -90,8 +91,13 @@ export type SpanKind = "text" | "signal" | "gap";
  * Nothing writes an empty `source` onto a piece of text: the backend drops the
  * key when it is empty, `contentOf` only sets it from a field that has one,
  * and every piece the window builds is built through `newSpan`.
+ *
+ * A rule is a gap that draws dashes instead of blanks, so it is one kind of
+ * piece in the menu and one key on top of a gap in the file. Asked in that
+ * order, because everything true of a gap is true of it.
  */
 export function kindOf(span: Span): SpanKind {
+  if (span.rule) return "rule";
   if (span.gap) return "gap";
   return "source" in span ? "signal" : "text";
 }

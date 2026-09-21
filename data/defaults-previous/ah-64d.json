@@ -889,6 +889,8 @@
       "cells": "289-310",
       "divider": true,
       "colour": "amber",
+      "label": "KEYBOARD UNIT",
+      "label_colour": "white",
       "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
     },
     {
@@ -915,87 +917,91 @@
       "seat": 1,
       "colour": "green",
       "replace": {
-        ">": "▶",
-        "=": "■",
-        "~": "█",
         "<": "◀",
-        "#": "█"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "289-310",
-      "divider": true,
-      "colour": "amber",
-      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "PLT_KU_DISPLAY",
-      "seat": 0,
-      "colour": "green",
-      "replace": {
-        "=": "■",
-        "<": "◀",
-        ">": "▶",
         "~": "█",
-        "#": "█"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        "=": "■",
+        ">": "▶",
         "#": "█",
-        ">": "▶",
-        "~": "█",
-        "<": "◀"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "289-310",
-      "divider": true,
-      "colour": "amber",
-      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "PLT_KU_DISPLAY",
-      "seat": 0,
-      "colour": "green",
-      "replace": {
-        "=": "■",
-        "<": "◀",
-        "~": "█",
-        ">": "▶",
-        "#": "█"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        ">": "▶",
-        "~": "█",
-        "#": "█",
-        "<": "◀",
         "=": "■"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "289-310",
+      "divider": true,
+      "colour": "amber",
+      "label": "KEYBOARD UNIT",
+      "label_colour": "white",
+      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "PLT_KU_DISPLAY",
+      "seat": 0,
+      "colour": "green",
+      "replace": {
+        "#": "█",
+        "<": "◀",
+        "~": "█",
+        "=": "■",
+        ">": "▶"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
+        "<": "◀",
+        ">": "▶",
+        "~": "█",
+        "#": "█",
+        "=": "■"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "289-310",
+      "divider": true,
+      "colour": "amber",
+      "label": "KEYBOARD UNIT",
+      "label_colour": "white",
+      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "PLT_KU_DISPLAY",
+      "seat": 0,
+      "colour": "green",
+      "replace": {
+        "<": "◀",
+        "~": "█",
+        "=": "■",
+        ">": "▶",
+        "#": "█"
+      }
+    },
+    {
+      "device": "MCDU_Observer",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
+        "=": "■",
+        "~": "█",
+        "#": "█",
+        ">": "▶",
+        "<": "◀"
       }
     }
   ]

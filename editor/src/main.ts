@@ -917,6 +917,12 @@ interface Session {
   dirty: boolean;
   refreshDirty: () => void;
   /**
+   * Every device section's follow chooser, redrawn together. Pointing one
+   * unit at another changes what the rest may offer, since a unit that
+   * follows cannot be followed.
+   */
+  followSync: (() => void)[];
+  /**
    * Re-run the daemon's own checks over the profile as it stands.
    *
    * Called from `refreshDirty`, so every edit is checked without each call
@@ -1072,6 +1078,7 @@ async function showProfile(file: string): Promise<void> {
     shippedReadouts,
     baseline: "",
     dirty: false,
+    followSync: [],
     refreshDirty: () => {
       session.dirty = JSON.stringify(session.profile) !== session.baseline;
       refreshSave();
@@ -1172,7 +1179,7 @@ async function showProfile(file: string): Promise<void> {
     byLamp.set(lampKey(b.device, b.led), b);
   }
 
-  const sections = devices.map((device) => deviceSection(device, byLamp, session));
+  const sections = devices.map((device) => deviceSection(device, devices, byLamp, session));
   app.append(...sections);
 
   // Taken after the rows are built, because building them adds a binding for
@@ -1290,16 +1297,26 @@ function bindingFor(device: Device, led: Led, byLamp: Map<string, Binding>, sess
 
 function deviceSection(
   device: Device,
+  all: Device[],
   byLamp: Map<string, Binding>,
   session: Session,
 ): HTMLDetailsElement {
   const count = el("span", { class: "meta" }, "");
+  const nameOf = (key: string): string => all.find((d) => d.key === key)?.display_name ?? key;
+  // The unit this one takes its lamps and screen from, if it takes them from
+  // anywhere. Its own rows stay in the profile and come back if it stops.
+  const following = (): string | undefined => session.profile.follows?.[device.key];
   // What saving now would drive, so any form counts ("same as", "always",
   // "any of"), but a condition still waiting for its signal does not: the
   // profile check rejects it. Those are named instead of silently left out,
   // or an unfinished lamp reads as one the user missed. Refreshed when an edit
   // is settled rather than on every keystroke; see `onCommit`.
   const refreshCount = (): void => {
+    const source = following();
+    if (source) {
+      count.textContent = `set up as ${nameOf(source)}`;
+      return;
+    }
     let assigned = 0;
     let unfinished = 0;
     for (const l of device.leds) {
@@ -1314,7 +1331,7 @@ function deviceSection(
 
   const rows = el("tbody");
   for (const led of device.leds) {
-    rows.append(lampRow(device, led, byLamp, session, refreshCount));
+    rows.append(lampRow(device, all, led, byLamp, session, refreshCount));
   }
   refreshCount();
 
@@ -1347,9 +1364,14 @@ function deviceSection(
   // A panel left alone does not open. Its lamps and fields are kept, so ticking
   // it again brings back exactly what was set up, but there is nothing to edit
   // on a panel that will not be driven.
+  //
+  // A unit that follows another does not open either: what it will do is
+  // edited on the one it follows, and its own rows are not in use.
+  const shut = (): boolean => !drive.checked || following() !== undefined;
   const applyDriveState = (): void => {
     section.classList.toggle("off", !drive.checked);
-    if (!drive.checked) section.open = false;
+    section.classList.toggle("follows", following() !== undefined);
+    if (shut()) section.open = false;
   };
   // Stopped before it opens rather than closed after, which flashed the panel
   // open for a frame. The click is cancelled at the summary, which also covers
@@ -1360,14 +1382,18 @@ function deviceSection(
     {},
     el("span", { class: "name" }, device.display_name),
     count,
-    el("label", { class: "drive meta" }, drive, " drive this panel"),
   );
+  if (device.variants.length > 0) summary.append(followChooser(device, session, nameOf, () => {
+    applyDriveState();
+    refreshCount();
+  }));
+  summary.append(el("label", { class: "drive meta" }, drive, " drive this panel"));
   summary.addEventListener("click", (e) => {
-    if (!drive.checked && !(e.target as Element).closest("label")) e.preventDefault();
+    if (shut() && !(e.target as Element).closest("label")) e.preventDefault();
   });
   // Anything that opens it some other way is closed again.
   section.addEventListener("toggle", () => {
-    if (section.open && !drive.checked) section.open = false;
+    if (section.open && shut()) section.open = false;
   });
   drive.addEventListener("click", (e) => e.stopPropagation());
   drive.addEventListener("change", () => {
@@ -1397,6 +1423,60 @@ function deviceSection(
   section.append(summary, table);
   if (glass) section.append(glass);
   return section;
+}
+
+/**
+ * Which unit a device takes its setup from, for a device sold under more than
+ * one name.
+ *
+ * The MCDU is Captain, Co-Pilot and Observer, and the MFD is L, C and R, each
+ * with its own USB id and the same hardware. Pointing one at another means
+ * setting it up once. One step deep, so there is always exactly one place to
+ * edit: a unit that follows is not offered as a target, and a unit something
+ * follows cannot follow in turn.
+ *
+ * `changed` is this section's own redraw. Every other section's chooser is
+ * redrawn too, through `session.followSync`, since what they may offer moved.
+ */
+function followChooser(
+  device: Device,
+  session: Session,
+  nameOf: (key: string) => string,
+  changed: () => void,
+): HTMLElement {
+  const select = el("select", { class: "test" }) as HTMLSelectElement;
+  const sync = (): void => {
+    const follows = session.profile.follows ?? {};
+    const mine = follows[device.key];
+    const followedBy = Object.keys(follows).filter((k) => follows[k] === device.key);
+    select.textContent = "";
+    select.append(el("option", { value: "" }, "its own setup"));
+    for (const key of device.variants) {
+      // Kept when it is the current choice, so a file that chains two says
+      // so through the problem list rather than by quietly reading as unset.
+      if (follows[key] !== undefined && key !== mine) continue;
+      select.append(el("option", { value: key }, `the ${nameOf(key)}'s`));
+    }
+    select.value = mine ?? "";
+    select.disabled = followedBy.length > 0 && mine === undefined;
+    select.title = select.disabled
+      ? `${followedBy.map(nameOf).join(" and ")} ${followedBy.length === 1 ? "takes its" : "take their"} setup from this one, so it keeps its own.`
+      : "Take another unit's lamps and screen instead of setting this one up again. Its own are kept for if it stops.";
+    changed();
+  };
+  select.addEventListener("click", (e) => e.stopPropagation());
+  select.addEventListener("change", () => {
+    const follows = session.profile.follows ?? {};
+    if (select.value) follows[device.key] = select.value;
+    else delete follows[device.key];
+    if (Object.keys(follows).length > 0) session.profile.follows = follows;
+    else delete session.profile.follows;
+    for (const redraw of session.followSync) redraw();
+    session.refreshDirty();
+  });
+  session.followSync.push(sync);
+  sync();
+  return el("label", { class: "drive meta" }, "uses ", select);
 }
 
 /**
@@ -1468,6 +1548,7 @@ function onValueMatters(binding: Binding): boolean {
 
 function lampRow(
   device: Device,
+  all: Device[],
   led: Led,
   byLamp: Map<string, Binding>,
   session: Session,
@@ -1577,21 +1658,42 @@ function lampRow(
       led,
       signals: session.signals,
       // Only dimmers, and never the lamp itself: an on/off lamp has no level to
-      // follow, which is what the mirror copies.
+      // follow, which is what the mirror copies. This panel's first, then every
+      // other panel's, so one backlight can follow another's.
       //
       // A lamp that mirrors something itself is not offered either. Pointing at
       // one would build a chain, and a chain has no value to resolve: the
       // daemon rejects the profile rather than following it. The one already
       // chosen stays in the list whatever it is, so a chain that arrived in the
       // file can still be seen and changed rather than silently reassigned.
-      siblings: led.dimmable
-        ? device.leds.filter(
-            (l) =>
-              l.dimmable &&
-              l.name !== led.name &&
-              (l.name === binding.same_as || !byLamp.get(lampKey(device.key, l.name))?.same_as),
-          )
-        : [],
+      //
+      // A panel that takes its setup from another is left out: its own rows
+      // are not in use, and its lamps are the ones it follows.
+      targets: () => {
+        if (!led.dimmable) return [];
+        const on = binding.same_as_device ?? device.key;
+        // A lamp something else already follows cannot follow in turn, or the
+        // two would point round in a loop. Only while it is not matching yet,
+        // so one that arrived that way in the file can still be changed.
+        const followed = session.profile.bindings.some(
+          (b) => b !== binding && b.same_as === led.name && (b.same_as_device ?? b.device) === device.key,
+        );
+        if (followed && !binding.same_as) return [];
+        const panels = [device, ...all.filter((d) => d.key !== device.key)];
+        return panels
+          .filter((d) => d.key === device.key || session.profile.follows?.[d.key] === undefined)
+          .flatMap((d) =>
+            d.leds
+              .filter(
+                (l) =>
+                  l.dimmable &&
+                  !(d.key === device.key && l.name === led.name) &&
+                  ((d.key === on && l.name === binding.same_as) || !byLamp.get(lampKey(d.key, l.name))?.same_as),
+              )
+              .map((l) => ({ device: d.key, deviceName: d.display_name, led: l })),
+          );
+      },
+      deviceName: (key) => all.find((d) => d.key === key)?.display_name ?? key,
       shipped: session.shipped.get(lampKey(device.key, led.name)),
       onCommit: refreshCount,
       onChange: () => {

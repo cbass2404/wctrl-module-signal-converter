@@ -187,3 +187,78 @@ fn a_mirror_chain_is_found_without_the_target_hiding_it() {
     assert_eq!(problems.len(), 2, "both ends are a chain: {problems:?}");
     assert!(problems.iter().all(|m| m.contains("mirrors")), "{problems:?}");
 }
+
+#[test]
+fn a_backlight_can_match_one_on_another_device() {
+    // One knob for the pit: the MFD bezel follows the PTO2's backlight rather
+    // than carrying a copy of its condition.
+    let p = profile(
+        r#""bindings": [
+            {"device": "TAKEOFF_PLANEL_2", "led": "Backlight", "off": 0,
+             "conditions": [{"source": "GEAR", "on_when": {"equals": 1}}]},
+            {"device": "CarrierAce_MFD_L", "led": "INST_PNL_Backlight", "off": 0,
+             "same_as": "Backlight", "same_as_device": "TAKEOFF_PLANEL_2"}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+}
+
+#[test]
+fn a_mirror_on_another_device_is_checked_there() {
+    // The lamp is looked for on the device named, not on the mirroring one:
+    // the MFD has no `Backlight`, and the Orion's `A/A` is an indicator.
+    let missing = profile(
+        r#""bindings": [
+            {"device": "TAKEOFF_PLANEL_2", "led": "Backlight", "off": 0,
+             "same_as": "Backlight", "same_as_device": "CarrierAce_MFD_L"}
+        ]"#,
+    );
+    let problems = found(&missing);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("CarrierAce_MFD_L"), "{:?}", problems[0]);
+
+    let indicator = profile(
+        r#""bindings": [
+            {"device": "Orion_Throttle_Base_II", "led": "A/A", "off": 0,
+             "conditions": [{"source": "GEAR", "on_when": {"equals": 1}}]},
+            {"device": "TAKEOFF_PLANEL_2", "led": "Backlight", "off": 0,
+             "same_as": "A/A", "same_as_device": "Orion_Throttle_Base_II"}
+        ]"#,
+    );
+    let problems = found(&indicator);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("only lamps that dim"), "{:?}", problems[0]);
+}
+
+#[test]
+fn a_loop_across_two_panels_is_still_a_chain() {
+    // Across devices the rule is the same: the target must read signals of its
+    // own, so two panels pointed at each other are refused at both ends.
+    let p = profile(
+        r#""bindings": [
+            {"device": "TAKEOFF_PLANEL_2", "led": "Backlight", "off": 0,
+             "same_as": "INST_PNL_Backlight", "same_as_device": "CarrierAce_MFD_L"},
+            {"device": "CarrierAce_MFD_L", "led": "INST_PNL_Backlight", "off": 0,
+             "same_as": "Backlight", "same_as_device": "TAKEOFF_PLANEL_2"}
+        ]"#,
+    );
+    let problems = found(&p);
+    assert_eq!(problems.len(), 2, "both ends are a chain: {problems:?}");
+    assert!(problems.iter().all(|m| m.contains("mirrors something itself")), "{problems:?}");
+}
+
+#[test]
+fn a_lamp_cannot_reach_itself_through_a_panel_that_follows() {
+    // The MFD_R takes the MFD_L's setup, so its backlight is the MFD_L's, and
+    // pointing the MFD_L at it is pointing the lamp at itself.
+    let p = profile(
+        r#""follows": {"CarrierAce_MFD_R": "CarrierAce_MFD_L"},
+        "bindings": [
+            {"device": "CarrierAce_MFD_L", "led": "INST_PNL_Backlight", "off": 0,
+             "same_as": "INST_PNL_Backlight", "same_as_device": "CarrierAce_MFD_R"}
+        ]"#,
+    );
+    let problems = found(&p);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("mirrors something itself"), "{:?}", problems[0]);
+}

@@ -980,6 +980,20 @@ details.device.off > summary {
   margin: 0;
 }
 
+/* The follow chooser and the drive box share the right-hand end. */
+.drive + .drive {
+  margin-left: 12px;
+}
+
+/* A unit that takes another's setup. Its own rows are kept, but not used. */
+details.device.follows table {
+  opacity: 0.45;
+}
+
+details.device.follows > summary {
+  cursor: default;
+}
+
 .displays {
   padding: 0 14px 14px;
 }
@@ -1097,7 +1111,10 @@ input.alias {
 /* The label set into a rule: the text and its colour side by side, with
    whatever is wrong with it underneath. The row wraps rather than squeezing
    the box, since a label is read as much as it is typed. */
-.rule-label {
+/* The box controls take the same shape as a rule's label: a couple of
+   labelled controls on one line, with anything wrong about them on the next. */
+.rule-label,
+.span-box {
   flex-basis: 100%;
   display: flex;
   flex-wrap: wrap;
@@ -1106,13 +1123,16 @@ input.alias {
   margin-top: 4px;
 }
 
-.rule-label .meta {
+.rule-label .meta,
+.span-box .meta {
   display: flex;
   align-items: center;
   gap: 6px;
 }
 
-.rule-label .bad {
+.rule-label .bad,
+.span-box .bad,
+.span-box .block {
   flex-basis: 100%;
 }
 

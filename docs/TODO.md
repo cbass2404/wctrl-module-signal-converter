@@ -22,6 +22,27 @@ do not.
       glass. See [CHANGELOG.md](../CHANGELOG.md) and "Content: what fills a
       field" in [CONFIG.md](CONFIG.md).
 
+- [ ] **Fly `follows` on two MCDUs.** Built 2026-09-21 and tested, not yet on
+      a panel. Point the Co-Pilot unit at the Captain in the Hornet and check
+      that both show the IFEI page and dim together. See "one panel under
+      several names" in STATUS.md.
+
+- [x] ~~**Point the defaults' backlights at one lamp across panels.**~~ Done
+      2026-09-21: every backlight in every default matches the MFD C's
+      `INST_PNL_Backlight`, moved in the editor. The changed rows are named in
+      CHANGELOG.md.
+
+- [x] ~~**Fly a cross-panel `same_as`.**~~ Proven on the panels 2026-09-21: a
+      dimmer pointed at a dimmer on another device follows it.
+
+- [x] ~~**Decide whether shipped defaults use `follows`.**~~ Decided
+      2026-09-21: they do. In every default the MFD L and R use the MFD C and
+      the MCDU Co-Pilot and Observer use the Captain; their own rows are kept.
+
+- [ ] **Decide whether the IFEI page ships as the Hornet's MCDU default.**
+      Validated on the panel 2026-09-21; the profile edits are uncommitted
+      in `data/defaults/fa-18.json`.
+
 - [ ] **Watch the update reconcile on the alpha.003 upgrade.** It runs once
       when the version changes, so it cannot be exercised by flying; it needs a
       real upgrade. This release gives it one: the AH-64D rule on row 13 was

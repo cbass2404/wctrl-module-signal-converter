@@ -144,13 +144,115 @@ function extent(cells: string): string {
 
 function isText(signals: SignalView[], id: string): boolean {
   // A signal the catalogue reports as characters needs no conversion. Anything
-  // else is a number, and a number needs to be told what the dial reads.
+  // else is a number, which can be shown as sent or converted.
   return signals.find((x) => x.id === id)?.text ?? false;
 }
 
 /** How many characters a text signal will hand over, or 0. */
 function textLength(signals: SignalView[], id: string): number {
   return signals.find((x) => x.id === id)?.length ?? 0;
+}
+
+/** The largest number a signal reports. The backend fills in 65535 where DCS-BIOS gives none. */
+function maxOf(signals: SignalView[], id: string): number {
+  return signals.find((x) => x.id === id)?.max_value ?? 65535;
+}
+
+/** How a reading draws a number: as DCS-BIOS sends it, or converted. */
+type ReadingKind = "sent" | "converted";
+
+const READING_LABELS: Record<ReadingKind, string> = {
+  sent: "as sent",
+  converted: "converted to",
+};
+
+/**
+ * A sensible way to show a number the user has just chosen, so that picking
+ * the signal is usually the only step, the way a lamp's test is filled in.
+ *
+ * A full word is a needle's position rather than a quantity, and 0 to 65535
+ * means nothing on a screen, so it arrives converted, to a range the user then
+ * sets from the dial. Anything narrower is a count or a selector whose value
+ * already is the number, and is shown as sent.
+ */
+function defaultReads(signal: SignalView | undefined): [number, number] | undefined {
+  if (!signal || signal.text || signal.max_value < 65535) return undefined;
+  return [0, 100];
+}
+
+/**
+ * How a number is drawn, laid out the way a lamp's test is: what to do with
+ * it, then the numbers that go with that.
+ *
+ * As sent draws the value DCS-BIOS reports. Converted spreads the signal's
+ * whole range, 0 to its maximum, across what the dial is marked with, which
+ * is the linear conversion the daemon does. Whether `reads` is present is
+ * what says which, so a field written by hand reads back as whichever it is.
+ */
+function conversionRow(
+  span: Span,
+  max: number,
+  edited: () => void,
+  rebuild: () => void,
+): HTMLElement {
+  const select = el("select", { class: "test" });
+  for (const kind of Object.keys(READING_LABELS) as ReadingKind[]) {
+    select.append(el("option", { value: kind }, READING_LABELS[kind]));
+  }
+  select.value = span.reads ? "converted" : "sent";
+  select.addEventListener("change", () => {
+    // Converting starts from the signal's own range, which draws exactly what
+    // as sent did, so the choice changes nothing until a number is changed.
+    // Decimals mean nothing on a whole number sent as it is.
+    if (select.value === "converted") span.reads = [0, max];
+    else {
+      delete span.reads;
+      delete span.decimals;
+    }
+    rebuild();
+  });
+
+  const values = el("span", { class: "values-row" });
+  if (span.reads) {
+    const number = (value: number, attrs: Record<string, string> = {}): HTMLInputElement =>
+      el("input", { type: "number", class: "value", value: String(value), ...attrs });
+    const low = number(span.reads[0]);
+    const high = number(span.reads[1]);
+    const dp = number(span.decimals ?? 0, { min: "0", max: "3" });
+    const sync = (): void => {
+      span.reads = [Number(low.value) || 0, Number(high.value) || 0];
+      const places = Number(dp.value) || 0;
+      if (places > 0) span.decimals = places;
+      else delete span.decimals;
+      edited();
+    };
+    for (const box of [low, high, dp]) box.addEventListener("input", sync);
+    values.append(
+      low,
+      el("span", { class: "sep" }, "to"),
+      high,
+      el("span", { class: "sep" }, "with"),
+      dp,
+      el("span", { class: "sep" }, "decimals"),
+    );
+  }
+
+  return el(
+    "div",
+    {},
+    el("div", { class: "test-row" }, select, values),
+    el(
+      "span",
+      { class: "meta block" },
+      span.reads
+        ? `DCS-BIOS sends 0 to ${max}, and this is what the dial is marked ` +
+            "with at each end. It reports a needle as a position, not a value, " +
+            "so this is yours to give. A face that starts below zero or runs " +
+            "backwards is fine."
+        : `The number DCS-BIOS sends, 0 to ${max}, drawn as it is. Right for ` +
+            "a count or a selector. A needle wants converting.",
+    ),
+  );
 }
 
 /**
@@ -483,10 +585,16 @@ function dividerCell(opts: RowOptions): { node: HTMLElement; refresh: () => void
       refresh();
       onChange();
     }),
-    labelEditor(readout, display, profile, () => {
-      refresh();
-      onChange();
-    }),
+    labelEditor(
+      readout,
+      () => cellCount(readout.cells),
+      display,
+      profile,
+      () => {
+        refresh();
+        onChange();
+      },
+    ).node,
     el(
       "span",
       { class: "meta block" },
@@ -515,15 +623,16 @@ function dividerCell(opts: RowOptions): { node: HTMLElement; refresh: () => void
  * rule" is offered as a choice rather than left as the only behaviour.
  */
 function labelEditor(
-  readout: Readout,
+  on: { label?: string; label_colour?: string },
+  room: () => number | null,
   display: DisplayInfo,
   profile: Profile,
   onChange: () => void,
-): HTMLElement {
+): { node: HTMLElement; check: () => void } {
   const box = el("input", {
     type: "text",
     class: "span-text",
-    value: readout.label ?? "",
+    value: on.label ?? "",
     placeholder: "none",
   });
 
@@ -532,16 +641,16 @@ function labelEditor(
   // already green does not arrive white until somebody notices.
   menu.append(el("option", { value: "" }, "same as the rule"));
   for (const name of display.colours) menu.append(el("option", { value: name }, name));
-  menu.value = readout.label_colour ?? "";
+  menu.value = on.label_colour ?? "";
   menu.addEventListener("change", () => {
-    if (menu.value) readout.label_colour = menu.value;
-    else delete readout.label_colour;
+    if (menu.value) on.label_colour = menu.value;
+    else delete on.label_colour;
     onChange();
   });
 
   const trouble = el("div", { class: "meta" });
   const check = (): void => {
-    const label = readout.label ?? "";
+    const label = on.label ?? "";
     menu.disabled = label === "";
     if (label === "") {
       box.classList.remove("bad");
@@ -549,12 +658,25 @@ function labelEditor(
       trouble.textContent = "";
       return;
     }
-    // A margin, a dash and a blank each side of it. The backend refuses a
-    // label with less than that rather than crowding the line, so saying so
-    // here saves the user finding out from the problem list.
-    const range = parseCells(readout.cells);
-    const cells = range ? range[1] - range[0] + 1 : 0;
-    const needs = [...label].length + 6;
+    const cells = room();
+    if (cells === null) {
+      // A rule with no fixed width is as wide as the rest of the line leaves
+      // it, which changes with every reading beside it. A label on one would
+      // fit at one reading and be dropped at the next, coming and going on the
+      // glass with nothing to say why, so the backend refuses it.
+      box.classList.add("bad");
+      trouble.classList.add("bad");
+      trouble.textContent =
+        "A label needs a rule that cannot change width, so give this one a " +
+        "fixed width below. Without one it is as wide as the rest of the row " +
+        "leaves it, and the label would come and go as the readings beside it " +
+        "change.";
+      return;
+    }
+    // A dash and a blank each side of it. The backend refuses a label with
+    // less than that rather than crowding the line, so saying so here saves
+    // the user finding out from the problem list.
+    const needs = [...label].length + 4;
     if (cells < needs) {
       box.classList.add("bad");
       trouble.classList.add("bad");
@@ -577,20 +699,23 @@ function labelEditor(
   box.addEventListener("input", () => {
     // The colour is kept when the text goes, so clearing it to retype does not
     // quietly throw the choice away.
-    if (box.value) readout.label = box.value;
-    else delete readout.label;
+    if (box.value) on.label = box.value;
+    else delete on.label;
     check();
     onChange();
   });
   check();
 
-  return el(
-    "div",
-    { class: "rule-label" },
-    el("label", { class: "meta" }, "labelled ", box),
-    el("label", { class: "meta" }, "in ", menu),
-    trouble,
-  );
+  return {
+    node: el(
+      "div",
+      { class: "rule-label" },
+      el("label", { class: "meta" }, "labelled ", box),
+      el("label", { class: "meta" }, "in ", menu),
+      trouble,
+    ),
+    check,
+  };
 }
 
 /**
@@ -656,6 +781,7 @@ function meaningful(key: string, value: unknown): boolean {
   if (value === undefined || value === null || value === false || value === "") return false;
   if (key === "decimals" && value === 0) return false;
   if (key === "align" && value === "left") return false;
+  if (key === "width" && value === 0) return false;
   if (Array.isArray(value)) return value.length > 0;
   if (typeof value === "object") return Object.keys(value as object).length > 0;
   return true;
@@ -753,26 +879,95 @@ function resetButton(opts: RowOptions): HTMLElement | null {
  * once, in one place.
  */
 function spanWidth(span: Span, signals: SignalView[]): number {
+  // A box is the whole answer, and the only one that holds for a gauge with no
+  // range: whatever it reads, it draws this many cells.
+  if (span.width) return span.width;
   // A gap takes what is left over, so it never asks for room of its own and
   // can never be the reason content will not fit.
   if (span.gap) return 0;
   if (isLiteral(span)) return (span.text ?? "").length;
   if (!span.source) return 0;
   if (isText(signals, span.source)) return textLength(signals, span.source);
-  if (!span.reads) return 0;
+  // As sent is a conversion onto the signal's own range, so both measure the
+  // same way, as the daemon does.
+  const ends = span.reads ?? [0, maxOf(signals, span.source)];
   const dp = span.decimals ?? 0;
-  return Math.max(...span.reads.map((end) => end.toFixed(dp).length));
+  return Math.max(...ends.map((end) => end.toFixed(dp).length));
 }
 
-/** Whether any piece is a gauge with no range, so nothing bounds the width. */
+/**
+ * How many blanks go before content of `len` held to `width`.
+ *
+ * One place rather than four, because a box, a field, the preview and the rule
+ * all have to put the odd cell on the same side or the window stops agreeing
+ * with the panel. Read the other way round, with the shorter length first, it
+ * gives the glyphs a wider value loses off its front.
+ */
+function padBefore(align: string | undefined, len: number, width: number): number {
+  const spare = Math.max(0, width - len);
+  if (align === "right") return spare;
+  if (align === "centre") return spare - Math.floor(spare / 2);
+  return 0;
+}
+
+/** How many cells a run covers, and 0 for a run that does not parse. */
+function cellCount(cells: string): number {
+  const range = parseCells(cells);
+  return range ? range[1] - range[0] + 1 : 0;
+}
+
+/** One cell of the preview: which piece drew it, what it draws, and in what. */
+type PreviewCell = { span: Span; ch: string | null; colour?: string };
+
+/**
+ * Hold a piece's cells to its box, the way the daemon does.
+ *
+ * Padded on the side `align` says and cropped from the end it anchors away
+ * from, which is the same bargain the field makes with its run.
+ */
+function boxFit(span: Span, cells: PreviewCell[]): PreviewCell[] {
+  const width = span.width ?? 0;
+  if (width === 0 || cells.length === width) return cells;
+  if (cells.length > width) {
+    const front = padBefore(span.align, width, cells.length);
+    return cells.slice(front, front + width);
+  }
+  const before = padBefore(span.align, cells.length, width);
+  const blank = (): PreviewCell => ({ span, ch: " " });
+  return [
+    ...Array.from({ length: before }, blank),
+    ...cells,
+    ...Array.from({ length: width - cells.length - before }, blank),
+  ];
+}
+
+/**
+ * The cells a reading itself can fill, ignoring any box around it.
+ *
+ * `spanWidth` answers with the box where there is one, which is what the fit
+ * line wants. The preview wants the other number: how much of the box the
+ * reading can actually cover, so the blanks held around it are drawn as
+ * blanks rather than as more of the reading.
+ */
+function signalWidth(span: Span, signals: SignalView[]): number {
+  return spanWidth({ ...span, width: 0 }, signals);
+}
+
+/**
+ * Whether any piece is text DCS-BIOS gives no length for, so nothing bounds
+ * the width. A number always has one: its range, or its own maximum.
+ */
 function unbounded(spans: Span[], signals: SignalView[]): boolean {
   return spans.some(
     (s) =>
+      // A box bounds what nothing else does: in one, a reading of any width
+      // draws its width and no more.
+      !s.width &&
       !s.gap &&
       !isLiteral(s) &&
       s.source !== "" &&
-      !isText(signals, s.source ?? "") &&
-      !s.reads,
+      isText(signals, s.source ?? "") &&
+      textLength(signals, s.source ?? "") === 0,
   );
 }
 
@@ -878,11 +1073,16 @@ function glyphPreview(
 ): { node: HTMLElement; refresh: () => void } {
   const canvas = el("canvas", { class: "glyph-preview" });
   const note = el("div", { class: "meta" });
+  // Which repaint is the current one. Two things are waited on now, the font
+  // and the rules, and a late answer about a layout the user has already moved
+  // on from must not be painted over the one they are looking at.
+  let generation = 0;
 
   const refresh = (): void => {
     const range = parseCells(readout.cells);
     const width = range ? range[1] - range[0] + 1 : 0;
     const file = fontInUse(display, profile);
+    generation += 1;
     if (!display.text_grid || !file || width === 0) {
       canvas.hidden = true;
       note.textContent =
@@ -891,29 +1091,47 @@ function glyphPreview(
     }
     canvas.hidden = false;
     note.textContent = "";
-    void glyphsFor(display.key, file).then(
-      (font) => {
+    const mine = generation;
+    void (async () => {
+      const font = await glyphsFor(display.key, file);
+      {
         // Which piece each cell comes from, so a cell can be drawn in that
         // piece's colour and size, or left as a block where a reading goes.
         // Built per piece rather than flat, because a gap cannot be measured
         // until everything that is not a gap has been laid out, the same way
         // the daemon does it.
         const spans = contentOf(readout);
-        const groups: { span: Span; ch: string | null }[][] = [];
+        const groups: PreviewCell[][] = [];
         const gaps: number[] = [];
         for (const span of spans) {
           if (span.gap) {
-            gaps.push(groups.length);
-            groups.push([]);
+            // A boxed gap knows its width before anything else is laid out, so
+            // it is filled below with the rest of the rules. An elastic one
+            // waits for the measuring.
+            if (!span.width) {
+              gaps.push(groups.length);
+              groups.push([]);
+              continue;
+            }
+            groups.push(Array.from({ length: span.width }, () => ({ span, ch: " " })));
             continue;
           }
-          const group: { span: Span; ch: string | null }[] = [];
+          const group: PreviewCell[] = [];
           if (isLiteral(span)) {
             for (const ch of span.text ?? "") group.push({ span, ch });
           } else {
-            for (let i = 0; i < spanWidth(span, signals); i += 1) group.push({ span, ch: null });
+            // In a box, only as many cells as the reading itself can fill:
+            // the rest are blanks being held, and drawing them as more of the
+            // reading would hide the thing the box is for. A reading of no
+            // known width could be any of them, so it takes the lot.
+            const value = span.width
+              ? Math.min(span.width, signalWidth(span, signals) || span.width)
+              : spanWidth(span, signals);
+            for (let i = 0; i < value; i += 1) group.push({ span, ch: null });
           }
-          groups.push(group);
+          // Held to its box before the gaps are measured, which is the whole
+          // point of one: the pieces after it do not move.
+          groups.push(boxFit(span, group));
         }
         if (gaps.length > 0) {
           const fixed = groups.reduce((n, g) => n + g.length, 0);
@@ -925,14 +1143,27 @@ function glyphPreview(
             groups[at] = Array.from({ length: take }, () => ({ span: spans[at] as Span, ch: " " }));
           });
         }
+        // The rules last, once every one of them knows how wide it is. Asked
+        // for rather than worked out here, because a rule drawn twice is a
+        // rule that can drift from the one the panel gets.
+        await Promise.all(
+          spans.map(async (span, at) => {
+            if (!span.gap || !span.rule) return;
+            const cells = await dividerRule(groups[at]?.length ?? 0, span.label ?? "");
+            groups[at] = cells.map((cell) => ({
+              span,
+              ch: cell.text,
+              colour: cell.label ? span.label_colour ?? span.colour : span.colour,
+            }));
+          }),
+        );
+        if (mine !== generation) return;
         const cells = groups.flat();
         // Cropped and padded the way the field will be, so the preview shows
         // the loss rather than a line that fits in the window and not on the
         // panel.
-        const shown =
-          readout.align === "right"
-            ? cells.slice(Math.max(0, cells.length - width))
-            : cells.slice(0, width);
+        const front = padBefore(readout.align, width, cells.length);
+        const shown = cells.length > width ? cells.slice(front, front + width) : cells;
 
         const scale = 0.6;
         const cw = Math.round(font.width * scale);
@@ -946,10 +1177,12 @@ function glyphPreview(
         ctx.fillStyle = "#05070a";
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-        const offset = readout.align === "right" ? width - shown.length : 0;
+        const offset = padBefore(readout.align, shown.length, width);
         shown.forEach((cell, i) => {
           const x = (offset + i) * cw;
-          const colour = SWATCH[cell.span.colour ?? "white"] ?? "#f2f4f7";
+          // A rule's label carries its own, which is the whole reason it reads
+          // as a label rather than as part of the line.
+          const colour = SWATCH[cell.colour ?? cell.span.colour ?? "white"] ?? "#f2f4f7";
           if (cell.ch === null) {
             // Where a reading will go. Drawn as a bar rather than as digits,
             // because nothing here knows what the aircraft will send.
@@ -982,12 +1215,12 @@ function glyphPreview(
             });
           });
         });
-      },
-      () => {
-        canvas.hidden = true;
-        note.textContent = "The font could not be read.";
-      },
-    );
+      }
+    })().catch(() => {
+      if (mine !== generation) return;
+      canvas.hidden = true;
+      note.textContent = "The font could not be read.";
+    });
   };
 
   return { node: el("div", { class: "preview-wrap" }, canvas, note), refresh };
@@ -1026,6 +1259,12 @@ function spanEditor(
   kind.append(el("option", { value: "signal" }, "a reading"));
   kind.append(el("option", { value: "text" }, "text"));
   kind.append(el("option", { value: "gap" }, "a gap"));
+  // Only a text grid draws a rule, the same as a whole field's divider. Kept
+  // in the list for a piece that already is one, so glass that cannot draw it
+  // says so through the problem list rather than by quietly reading as a gap.
+  if (display.text_grid || kindOf(span) === "rule") {
+    kind.append(el("option", { value: "rule" }, "a rule"));
+  }
   kind.value = kindOf(span);
   kind.addEventListener("change", () => {
     // Everything on a piece describes the one value it draws, so switching
@@ -1033,8 +1272,8 @@ function spanEditor(
     // exception: they are about how it looks, and the user picked them. A gap
     // keeps none of it, because it draws nothing to style.
     const next = kind.value as SpanKind;
-    if (next === "gap") {
-      spans[index] = newSpan("gap");
+    if (next === "gap" || next === "rule") {
+      spans[index] = newSpan(next);
     } else {
       const kept: Span = { colour: span.colour, small: span.small, inverse: span.inverse };
       spans[index] = next === "text" ? { ...kept, text: "" } : { ...kept, source: "" };
@@ -1046,7 +1285,9 @@ function spanEditor(
 
   const body = el("div", { class: "span-body" });
 
-  if (span.gap) {
+  if (span.rule) {
+    body.append(spanRule(span, opts, edited));
+  } else if (span.gap) {
     body.append(
       el(
         "span",
@@ -1054,7 +1295,8 @@ function spanEditor(
         "Blank, and as wide as whatever the rest of the row leaves. Put one " +
           "between two pieces to push them to opposite ends, or use two to " +
           "space three pieces evenly. It draws nothing itself, so it has " +
-          "nothing to colour.",
+          "nothing to colour. Give it a fixed width below and it stops " +
+          "measuring itself and becomes a spacer of exactly that many cells.",
       ),
     );
   } else if (isLiteral(span)) {
@@ -1097,6 +1339,15 @@ function spanEditor(
         const was = span.source ?? "";
         span.source = id;
         followTwin(span, signals, was);
+        // Only fill in a conversion for a piece that had no number before, so
+        // swapping the signal under a tuned range does not discard it, the
+        // same bargain a lamp's test makes.
+        if (!was || isText(signals, was)) {
+          const reads = defaultReads(signals.find((s) => s.id === id));
+          if (reads) span.reads = reads;
+          else delete span.reads;
+          delete span.decimals;
+        }
         // A different signal brings a different set of controls with it: a
         // range where the old one was a number, none where it reports
         // characters, a highlighting twin or not. So this one rebuilds.
@@ -1114,47 +1365,14 @@ function spanEditor(
         delete span.reads;
         delete span.decimals;
       } else {
-        const low = el("input", {
-          type: "number",
-          class: "num small",
-          value: String(span.reads?.[0] ?? 0),
-        });
-        const high = el("input", {
-          type: "number",
-          class: "num small",
-          value: String(span.reads?.[1] ?? 100),
-        });
-        const dp = el("input", {
-          type: "number",
-          class: "num small",
-          min: "0",
-          max: "3",
-          value: String(span.decimals ?? 0),
-        });
-        const sync = (): void => {
-          span.reads = [Number(low.value), Number(high.value)];
-          span.decimals = Number(dp.value) || 0;
-          edited();
-        };
-        for (const box of [low, high, dp]) box.addEventListener("input", sync);
-        if (!span.reads) sync();
+        // Choosing between as sent and converted changes which boxes there
+        // are, so that rebuilds. Typing in them does not.
         body.append(
-          el(
-            "label",
-            { class: "meta" },
-            "reads ",
-            low,
-            " to ",
-            high,
-            el(
-              "span",
-              { class: "meta block" },
-              "What the dial is marked with in the cockpit. DCS-BIOS reports a " +
-                "needle as a position, not a value, so this is yours to give. " +
-                "A face that starts below zero or runs backwards is fine.",
-            ),
-          ),
-          el("label", { class: "meta" }, "decimals ", dp),
+          conversionRow(span, maxOf(signals, span.source), edited, () => {
+            setContent(readout, spans);
+            redraw();
+            onChange();
+          }),
         );
       }
       // A substitution is about what this signal sends, so it belongs to the
@@ -1166,7 +1384,10 @@ function spanEditor(
   // --- how it looks --------------------------------------------------------
   const style = el("div", { class: "span-style" });
 
-  if (display.text_grid && !span.gap) {
+  // A plain gap draws nothing and so has nothing to colour. A rule does: it
+  // is the user's own addition rather than something the cockpit decided, so
+  // its colour is theirs to pick, exactly as a divider's is.
+  if (display.text_grid && (!span.gap || span.rule)) {
     const colour = el("select", { class: "colour" });
     for (const name of display.colours) colour.append(el("option", { value: name }, name));
     colour.value = span.colour ?? "white";
@@ -1229,6 +1450,12 @@ function spanEditor(
     );
   }
 
+  // Last in the style row, because it is about where the piece sits rather
+  // than what it draws, and every kind of piece can have one: a box on a gap
+  // is a spacer of exactly that many blanks, and on a rule it is what lets it
+  // carry a label.
+  style.append(boxControls(span, readout, edited));
+
   const up = el("button", { class: "icon", title: "Move this piece earlier" }, "↑");
   up.disabled = index === 0;
   up.addEventListener("click", () => {
@@ -1264,6 +1491,127 @@ function spanEditor(
     style,
   );
   return wrap;
+}
+
+/**
+ * A rule inside a chain: what it says, and what it will look like.
+ *
+ * The same rule a whole field's divider draws, as one piece of a line instead
+ * of the whole of it, which is what `NAV ----- 250` needs. Elastic by default:
+ * it is a gap, so it is measured last and takes whatever the pieces each side
+ * leave, and a reading that grows eats into the dashes rather than pushing
+ * anything off the end. That is what the three separate fields with hand
+ * counted cells this replaces could never do.
+ *
+ * Its own colour comes from the style row, the same chooser every piece has.
+ * The label's is here, beside the label, because it is the label's.
+ */
+function spanRule(span: Span, opts: RowOptions, edited: () => void): HTMLElement {
+  const { display, profile } = opts;
+  const label = labelEditor(span, () => span.width || null, display, profile, edited);
+  // Re-run when the width changes, which is what decides whether a label can
+  // be here at all and whether it fits.
+  ruleChecks.set(span, label.check);
+  return el(
+    "div",
+    { class: "readout-extras" },
+    el(
+      "span",
+      { class: "meta block" },
+      "A line of dashes, as wide as whatever the rest of the row leaves. It " +
+        "reads nothing, so it is on the glass from the moment the aircraft " +
+        "loads. Give it a fixed width below to hold it to a size, which is " +
+        "also what a label needs.",
+    ),
+    label.node,
+  );
+}
+
+/**
+ * The label check belonging to each rule piece on screen.
+ *
+ * The width control and the label sit in different parts of the same piece and
+ * are built one after the other, so this is how the first reaches the second
+ * without either owning the other. A weak map because the entry is only of
+ * interest while its piece is on screen, and the chain is rebuilt from
+ * scratch on every redraw.
+ */
+const ruleChecks = new WeakMap<Span, () => void>();
+
+/**
+ * Holding one piece to a fixed number of cells.
+ *
+ * Without a box a chain only holds still at its ends. A reading that goes from
+ * four characters to three pulls everything after it one cell left, so a
+ * layout built around one width comes apart at another, and there is no way to
+ * tell ahead of time whether something will eventually run off the edge.
+ *
+ * The alignment inside the box is the user's, because the two useful answers
+ * pull opposite ways: centred is right for a label and reads as drift on a
+ * number, which loses half a cell from each edge every time it sheds a
+ * character, while right keeps the digits pinned and grows the blanks in
+ * front of them.
+ */
+function boxControls(span: Span, readout: Readout, edited: () => void): HTMLElement {
+  const cells = cellCount(readout.cells);
+  const width = el("input", {
+    type: "number",
+    class: "num small",
+    min: "0",
+    max: String(cells),
+    value: String(span.width ?? 0),
+    placeholder: "0",
+  });
+  const align = el("select", { class: "colour" });
+  align.append(el("option", { value: "left" }, "left"));
+  align.append(el("option", { value: "centre" }, "centred"));
+  align.append(el("option", { value: "right" }, "right"));
+  align.value = span.align ?? "left";
+
+  const trouble = el("div", { class: "meta" });
+  const check = (): void => {
+    align.disabled = !span.width;
+    const over = (span.width ?? 0) > cells;
+    width.classList.toggle("bad", over);
+    trouble.classList.toggle("bad", over);
+    trouble.textContent = over
+      ? `This field has ${cells} cells, so a piece ${span.width} wide cannot be drawn in it.`
+      : "";
+    ruleChecks.get(span)?.();
+  };
+
+  width.addEventListener("input", () => {
+    const n = Number(width.value);
+    if (n > 0) span.width = n;
+    else delete span.width;
+    // The alignment says nothing without a box, and leaving it behind would be
+    // a setting the window shows greyed out and the file still carries.
+    if (!span.width) delete span.align;
+    check();
+    edited();
+  });
+  align.addEventListener("change", () => {
+    if (align.value === "left") delete span.align;
+    else span.align = align.value as "right" | "centre";
+    edited();
+  });
+  check();
+
+  return el(
+    "div",
+    { class: "span-box" },
+    el("label", { class: "meta" }, "width ", width),
+    el("label", { class: "meta" }, "aligned ", align),
+    el(
+      "span",
+      { class: "meta block" },
+      "Cells this piece takes whatever it draws, so the pieces after it stay " +
+        "where they are as it changes width. 0 leaves it as wide as its " +
+        "value. Anything too long for the box is cropped from the end the " +
+        "alignment anchors away from.",
+    ),
+    trouble,
+  );
 }
 
 /**
@@ -1339,6 +1687,8 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
       addOne("text", "+ text"),
       addOne("gap", "+ a gap"),
     );
+    // Only a text grid draws a rule, the same as a whole field's divider.
+    if (display.text_grid) add.append(addOne("rule", "+ a rule"));
     wrap.append(add);
 
     // --- how wide it comes out ---------------------------------------------
@@ -1347,6 +1697,10 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
     const range = parseCells(readout.cells);
     const cells = range ? range[1] - range[0] + 1 : 0;
     const hasGap = spans.some((s) => s.gap);
+    // Only a gap with no box of its own still measures itself from what is
+    // left. A boxed one is a fixed run of blanks, or of dashes, and counts
+    // towards the width like anything else.
+    const elastic = spans.filter((s) => s.gap && !s.width).length;
     const fit = el("div", { class: "meta" });
     const drawFit = (): void => {
       const widest = spans.reduce((n, s) => n + spanWidth(s, signals), 0);
@@ -1359,7 +1713,12 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
           "two-character field is drawn on this hardware.";
       } else if (widest > cells) {
         const lost = widest - cells;
-        const end = readout.align === "right" ? "first" : "last";
+        const end =
+          readout.align === "right"
+            ? "first"
+            : readout.align === "centre"
+              ? "outermost"
+              : "last";
         fit.classList.add("bad");
         fit.textContent =
           `This needs up to ${widest} cells and has ${cells}. The ${end} ` +
@@ -1367,12 +1726,14 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
           "nothing on the panel would say so.";
       } else if (loose) {
         fit.textContent =
-          `A gauge with no range has no known width, so this may run past its ${cells} cells.`;
-      } else if (hasGap) {
+          `Text DCS-BIOS gives no length for has no known width, so this may run past its ${cells} cells.`;
+      } else if (elastic > 0) {
         const spare = cells - widest;
+        const rules = spans.filter((s) => s.gap && s.rule && !s.width).length;
+        const what = rules === elastic ? "rule" : rules > 0 ? "gap or rule" : "gap";
         fit.textContent =
           `Up to ${widest} of ${cells} cells, and the ${spare} left over go to ` +
-          `the gap${spans.filter((s) => s.gap).length === 1 ? "" : "s"}. ` +
+          `the ${what}${elastic === 1 ? "" : "s"}. ` +
           "A reading that grows takes the room back from there, so the ends stay put.";
       } else if (widest > 0) {
         fit.textContent = `Up to ${widest} of ${cells} cells.`;
@@ -1383,11 +1744,14 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
     // --- the rest of the field ---------------------------------------------
     const extras = el("div", { class: "readout-extras" });
     if (range && range[1] > range[0] && !hasGap) {
-      const right = el("input", { type: "checkbox" });
-      right.checked = readout.align === "right";
-      right.addEventListener("change", () => {
-        if (right.checked) readout.align = "right";
-        else delete readout.align;
+      const align = el("select", { class: "colour" });
+      align.append(el("option", { value: "left" }, "left"));
+      align.append(el("option", { value: "centre" }, "centred"));
+      align.append(el("option", { value: "right" }, "right"));
+      align.value = readout.align ?? "left";
+      align.addEventListener("change", () => {
+        if (align.value === "left") delete readout.align;
+        else readout.align = align.value as "right" | "centre";
         redraw();
         onChange();
       });
@@ -1395,14 +1759,15 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
         el(
           "label",
           { class: "meta" },
-          right,
-          " right aligned",
+          "aligned ",
+          align,
           el(
             "span",
             { class: "meta block" },
-            "Anchor the content to the last cell. A scratchpad wants this: " +
-              "digits enter at the right, and DCS-BIOS can send more " +
-              "characters than there are cells.",
+            "Which end of the run the whole line anchors to. A scratchpad " +
+              "wants right: digits enter at the last cell, and DCS-BIOS can " +
+              "send more characters than there are cells. To hold one piece " +
+              "in place rather than the line, give that piece a width instead.",
           ),
         ),
       );
@@ -1476,9 +1841,13 @@ function describeField(readout: Readout, display: DisplayInfo): string {
     return readout.label ? `The rule on ${where}, labelled ${readout.label}.` : `The rule on ${where}.`;
   }
   const pieces = contentOf(readout).map((s) => {
-    if (s.gap) return "a gap";
-    if (kindOf(s) === "signal") return s.source ? s.source : "a reading nobody has chosen yet";
-    return s.text ? JSON.stringify(s.text) : "an empty piece of text";
+    const held = s.width ? ` held to ${s.width} cells` : "";
+    if (s.rule) return s.label ? `a rule labelled ${s.label}${held}` : `a rule${held}`;
+    if (s.gap) return `a gap${held}`;
+    if (kindOf(s) === "signal") {
+      return `${s.source ? s.source : "a reading nobody has chosen yet"}${held}`;
+    }
+    return `${s.text ? JSON.stringify(s.text) : "an empty piece of text"}${held}`;
   });
   return pieces.length > 0 ? `${where}: ${pieces.join(", then ")}.` : `${where}.`;
 }
@@ -1512,7 +1881,7 @@ function removeButton(opts: RowOptions): HTMLElement {
 /**
  * The colour every field on this display already draws in, if they agree.
  *
- * A new divider takes it, because a white rule across a green page reads as a
+ * A new rule takes it, because a white rule across a green page reads as a
  * fault rather than a divider. Undefined where they disagree or there are
  * none, which leaves the rule on the display's own default.
  */
@@ -1600,7 +1969,7 @@ export function displaySection(
           el("div", { class: "meta" }, extent(region.cells)),
         ),
       );
-      const add = (kind: "signal" | "text" | "rule", label: string): HTMLElement => {
+      const add = (kind: SpanKind, label: string): HTMLElement => {
         const button = el("button", { class: "add" }, label);
         button.addEventListener("click", () => {
           const fresh: Readout = {
@@ -1609,19 +1978,26 @@ export function displaySection(
             cells: region.cells,
             source: "",
           };
-          if (kind === "rule") {
-            fresh.divider = true;
-            fresh.colour = agreedColour(mine());
-          } else {
-            setContent(fresh, [newSpan(kind)]);
-          }
+          // Every first piece starts a chain, a rule included. A rule made
+          // here used to be a whole-field divider, which holds no pieces, so
+          // nothing could be added beside it and its kind could not be
+          // changed. A divider already in a profile still loads and edits.
+          const first = newSpan(kind);
+          if (kind === "rule") first.colour = agreedColour(mine());
+          setContent(fresh, [first]);
           readouts.push(fresh);
           redraw();
           onChange();
         });
         return button;
       };
-      const buttons = el("div", { class: "chain-add" }, add("signal", "+ a reading"), add("text", "+ text"));
+      const buttons = el(
+        "div",
+        { class: "chain-add" },
+        add("signal", "+ a reading"),
+        add("text", "+ text"),
+        add("gap", "+ a gap"),
+      );
       // Only a text grid draws a rule. A segment display draws from a glyph
       // table with no dash in it, and the daemon refuses one there.
       if (display.text_grid) buttons.append(add("rule", "+ a rule"));

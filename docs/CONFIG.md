@@ -235,8 +235,9 @@ change; the point is that choosing a signal should usually be the only step.
 
 ### Matching another lamp
 
-`same_as` points one lamp at another on the same device, and it follows whatever
-that lamp resolved to:
+`same_as` points one lamp at another, and it follows whatever that lamp
+resolved to. The lamp is on the same device unless `same_as_device` names
+another:
 
 ```jsonc
 {
@@ -247,10 +248,27 @@ that lamp resolved to:
 }
 ```
 
+```jsonc
+{
+  "device": "CarrierAce_MFD_L",
+  "led": "INST_PNL_Backlight",
+  "same_as": "Backlight",
+  "same_as_device": "TAKEOFF_PLANEL_2",
+}
+```
+
 This is a link, not a copy. The PTO2 is the case it exists for: it carries three
 independent brightness governors that are usually meant to sit at one level, and
 writing the same conditions into all three means every later change has to be
-made three times or they drift apart without anyone noticing.
+made three times or they drift apart without anyone noticing. Backlights across
+panels are the same problem one level up: every default puts them all on one
+knob, and a panel pointed at another's backlight keeps it there when the knob
+changes.
+
+`same_as_device` is written only when it names another device, so a profile
+from before it existed reads the same. Naming a device that follows another
+(see "One panel under several names") reads the one it follows, since the
+follower's own rows are not in use; the editor offers only the device followed.
 
 **Only between lamps that dim, on both ends.** An indicator takes 0 or 1, so it
 has no level to follow and none to offer; mirroring one either way would be a
@@ -277,10 +295,14 @@ with every signal at 0, and the daemon logs the same caution on load. A newly
 generated profile starts both gates held at full with the floor already set, so
 switching one to follow a dimmer does not blank the panel by day.
 
-**Chains are not allowed.** The target must read signals of its own, which rules
-out cycles with no cycle detection to get wrong. A mirroring lamp reads nothing
-directly, so the engine indexes it under its target's addresses; otherwise it
-would be written once by the sweep and then never follow anything.
+**Chains are not allowed**, on one device or across several. The target must
+read signals of its own, which rules out cycles with no cycle detection to get
+wrong: two panels pointed at each other are refused at both ends, and so is a
+lamp pointed at itself through a device that follows its own. The editor does
+not offer a lamp that mirrors something as a target, and does not offer
+matching at all on a lamp something else already follows. A mirroring lamp
+reads nothing directly, so the engine indexes it under its target's addresses;
+otherwise it would be written once by the sweep and then never follow anything.
 
 `same_as` is mutually exclusive with `conditions`, `any_of` and `always`.
 
@@ -770,6 +792,42 @@ Its lamps and fields stay in the profile and are simply ignored, so turning the
 panel back on restores exactly what was set up. In the editor the panel's
 section stays closed while it is not driven.
 
+## One panel under several names
+
+WinWing sells some panels as several products with the same hardware and a USB
+id each: the MCDU as Captain, Co-Pilot and Observer, the MFD as L, C and R.
+Each is its own device here, so without help every lamp and field is set up
+once per name. `follows` points one at another instead:
+
+```jsonc
+"follows": {
+  "MCDU_CoPilot": "MCDU_Captain",   // the follower, then the one it copies
+  "MCDU_Observer": "MCDU_Captain"
+}
+```
+
+The follower is driven with a copy of every lamp and field on the device it
+follows, under its own name, when the engine loads the profile. Rules:
+
+- **Only the same hardware.** Two devices qualify when their parts carry the
+  same lamps at the same indices and the same displays. This is worked out from
+  `devices.json` rather than listed, so a new variant needs nothing else.
+- **One step deep.** A device that follows cannot be followed, so there is
+  always one place to edit.
+- **The follower's own rows are kept and not used**, the way a disabled
+  panel's are, so stopping gives back what was there.
+- **Disabling is separate.** A follower is driven unless it is disabled
+  itself, so disabling the device it follows leaves it running.
+
+Two-seat aircraft such as the AH-64D and CH-47F can follow too: the seat on
+each field picks the source, so every MCDU name carries the same fields and a
+follower loses nothing. Every shipped default points the MCDU Co-Pilot and
+Observer at the Captain, and the MFD L and R at the MFD C.
+
+In the editor it is the **uses** dropdown in the panel's header, offered only
+on a panel that has variants. A panel that follows stays closed and says
+whose setup it uses.
+
 ## Display fields
 
 A panel with glass carries `readouts` alongside `bindings`. They have almost
@@ -910,6 +968,92 @@ steps.
 **A piece with nothing in it is refused**, the same as an unfinished lamp. It
 is work somebody started and left, and drawing the rest of the chain around a
 hole would hide it.
+
+#### A fixed width, so a piece stays where it is put
+
+A chain only holds still at its ends. A reading that goes from four characters
+to three pulls everything after it one cell left, so a layout built around one
+width comes apart at another, and there is no way to decide ahead of time
+whether something will eventually run off the edge of the screen. `width` is a
+piece held to that many cells whatever it reads, and `align` on the piece says
+where the value sits inside it:
+
+```jsonc
+{
+  "cells": "0-23",
+  "content": [
+    { "text": "W " },
+    { "source": "WIND_SPEED", "reads": [0, 200], "width": 8, "align": "right" },
+    { "text": "KT" },
+  ],
+}
+```
+
+The unit is in the same two cells at every reading. A box is measured before
+the gaps are, so it counts as fixed room like typed characters do, and content
+too long for it is cropped from the end `align` anchors away from, the way a
+field is cropped by its run.
+
+**The alignment is the user's because the two useful answers pull opposite
+ways.** `centre` puts equal blanks each side, the odd one going left, which is
+what a label wants and what a number does not: every character a reading sheds
+moves both its edges inward half a cell at a time, so a counter drifts. `right`
+keeps the digits pinned and grows the blanks in front of them, which is what
+`1000` counting down to `9` should look like. `left` is the default and means
+the piece starts where it starts.
+
+A box also bounds the one thing nothing else bounds. A gauge with no `reads`
+range can draw any width at all, and in a box it draws `width`, which turns the
+editor's "this may run past its cells" into an exact answer.
+
+`align` on a piece means nothing without a `width`, and the editor drops it
+when the width goes. A width wider than the field's own run is refused rather
+than cautioned: unlike an overflow, that one is certain before a single frame
+arrives.
+
+**A piece with a width, an alignment or a rule is always written as a chain**,
+even on its own. The flat shape has an `align` and a `label` already and they
+belong to the field, so a box aligned right inside a field aligned left has no
+flat spelling. Every profile written before this still round trips byte for
+byte, which is what `profile_round_trip.rs` checks.
+
+#### A rule between two pieces
+
+A gap can draw a line of dashes instead of blanks, which is the rule a
+[divider](#dividers) draws as one piece of a row rather than the whole of it:
+
+```jsonc
+{
+  "cells": "0-23",
+  "content": [
+    { "text": "NAV" },
+    { "gap": true, "rule": true },
+    { "source": "CDU_LINE1" },
+  ],
+}
+```
+
+It goes through the same `divider_rule` the whole-field version does, so the
+two cannot drift, and the editor asks for it rather than drawing its own. Being
+a gap, it is measured last and takes whatever the two ends leave, and a reading
+that grows eats into the dashes rather than pushing anything off the end. That
+is what this replaces: three fields with hand counted cell runs, where the rule
+could not move, so a reading one character wider than planned overran into its
+cells and was cropped.
+
+A rule reads nothing, so it is on the glass from the moment the aircraft loads,
+and it is the one kind of gap that keeps a `colour`: it is the user's own
+addition rather than something the cockpit decided. A rule on a piece that
+draws its own content is refused, since there would be nowhere to put it, and
+so is one on glass that is not a text grid.
+
+**A labelled rule needs a `width`.** The label, its blank each side and its own
+`label_colour` work exactly as they do on a divider, but an elastic rule is as
+wide as the rest of the line leaves it, and that changes with every reading
+beside it. `divider_rule` leaves a label it cannot fit off the line, which on a
+rule that keeps changing width means a label appearing and vanishing on the
+glass with nothing to say why. With a width the rule cannot change size, the
+check is exact, and a label too wide for it is refused the way a divider's is.
 
 ### Text grids
 

@@ -329,19 +329,58 @@ fn content_that_fits_says_nothing() {
 }
 
 #[test]
-fn a_gauge_with_no_range_is_called_out_as_unbounded() {
-    // The one case nothing bounds: without a range the value could be any
-    // width the needle allows, so the warning says that rather than a number.
+fn a_gauge_shown_as_sent_is_measured_by_its_maximum() {
+    // With no range the needle is drawn as the number DCS-BIOS sends, 0 to
+    // 65535, so five cells is known and four is known to be one short.
     let mut p = profile();
     let mut field = on_row_one(vec![reading("FLAP_POS")]);
-    field.cells = "0-5".parse().unwrap();
+    field.cells = "0-3".parse().unwrap();
     p.readouts.push(field);
     let e = engine(p.clone());
     let module = e.catalogue().module(&p.module).expect("the module");
     let cautions = p.width_cautions(module);
     assert!(
-        cautions.iter().any(|c| c.contains("no range")),
+        cautions.iter().any(|c| c.contains("needs up to 5 cells and has 4")),
         "{cautions:?}"
+    );
+}
+
+#[test]
+fn a_run_of_one_cell_is_never_measured_by_character() {
+    // The Hornet UFC is the case this exists for. Four of its fields are one
+    // cell reading a two character signal, and the panel draws each as a
+    // single glyph: the comm windows carry `width: 2` in the display map, and
+    // a scratchpad mark arrives from DCS-BIOS as `" G"` and is looked up
+    // whole. Counted by character they all read as a field about to lose its
+    // last character, and the editor showed four warnings on a screen that
+    // draws exactly what it was built to draw.
+    let p = Profile::load(&r("data/defaults/fa-18.json")).expect("the Hornet default");
+    let cat = Catalogue::load_dir(&r("data/catalogue")).expect("catalogue");
+    let module = cat.module(&p.module).expect("the module");
+    // The whole screen rather than the four fields, because a shipped default
+    // that warns on sight teaches people to scroll past the warnings.
+    assert!(
+        p.width_cautions(module).is_empty(),
+        "the Hornet draws what it was built to draw: {:?}",
+        p.width_cautions(module)
+    );
+}
+
+#[test]
+fn a_run_of_two_cells_still_counts_characters() {
+    // The boundary the one cell rule sits on, and the half of it that is easy
+    // to take too far. One cell holds whatever it is handed; two hold one
+    // character each, and a third character is gone with nothing said.
+    let mut p = profile();
+    let mut field = on_row_one(vec![text("ABC")]);
+    field.cells = "0-1".parse().unwrap();
+    p.readouts.push(field);
+    let e = engine(p.clone());
+    let module = e.catalogue().module(&p.module).expect("the module");
+    assert!(
+        p.width_cautions(module).iter().any(|c| c.contains("would be dropped")),
+        "{:?}",
+        p.width_cautions(module)
     );
 }
 
@@ -463,4 +502,180 @@ fn a_gap_keeps_each_side_in_its_own_colour() {
     assert_eq!(cells[0].fg, Colour::Green.ordinal());
     assert_eq!(cells[23].ch, 'R');
     assert_eq!(cells[23].fg, Colour::Amber.ordinal());
+}
+
+// --- boxes: holding a piece to a width --------------------------------------
+
+#[test]
+fn a_boxed_piece_keeps_what_follows_it_in_the_same_cells() {
+    // Without the box the unit would sit wherever the reading happened to end,
+    // and move every time it changed width. The whole CDU line is 24
+    // characters, so the box is also what stops it filling the row.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        text("W "),
+        Span { source: "CDU_LINE1".into(), width: 8, ..Span::default() },
+        text("KT"),
+    ]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[(1, b"ALPHA")]);
+    let w = screen(&batch);
+    assert_eq!(row(w, 1).trim_end(), "W ALPHA   KT");
+    let cells = text_cells(&w.bytes);
+    assert_eq!(cells[10].ch, 'K', "the unit starts where the box ends");
+}
+
+#[test]
+fn a_right_aligned_box_pins_its_reading_to_the_end_of_the_box() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        text("W "),
+        Span {
+            source: "CDU_LINE1".into(),
+            width: 8,
+            align: dsc_config::Align::Right,
+            ..Span::default()
+        },
+        text("KT"),
+    ]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[(1, b"ALPHA")]);
+    // The reading is the whole 24 character line, so the box crops it from the
+    // front: what a right aligned run keeps is its tail.
+    let drawn = row(screen(&batch), 1);
+    assert_eq!(&drawn[2..10], "        ", "the line's trailing blanks are its end");
+    assert_eq!(&drawn[10..12], "KT");
+}
+
+#[test]
+fn a_box_wider_than_the_field_is_refused() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![Span {
+        source: "CDU_LINE1".into(),
+        width: 40,
+        ..Span::default()
+    }]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("wider than the 24 cells")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+// --- a rule inside a chain ---------------------------------------------------
+
+#[test]
+fn a_rule_fills_the_room_between_two_pieces_on_the_panel() {
+    // What this replaces is three fields with hand counted cells, where the
+    // rule could not move and a reading one character wider than planned
+    // overran into it.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        text("NAV"),
+        Span { gap: true, rule: true, ..Span::default() },
+        text("END"),
+    ]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    assert_eq!(row(screen(&batch), 1), "NAV------------------END");
+}
+
+#[test]
+fn a_boxed_rule_carries_a_label_and_its_own_colour() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        text("A"),
+        Span {
+            gap: true,
+            rule: true,
+            width: 23,
+            label: "FUEL".into(),
+            colour: Some(Colour::Green),
+            label_colour: Some(Colour::Amber),
+            ..Span::default()
+        },
+    ]));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    let w = screen(&batch);
+    assert_eq!(row(w, 1), format!("A{}", dsc_config::divider_text(23, "FUEL")));
+    let cells = text_cells(&w.bytes);
+    let label: Vec<usize> = (0..24).filter(|&i| cells[i].ch == 'F' || cells[i].ch == 'U').collect();
+    assert!(!label.is_empty(), "the label is on the glass");
+    for i in label {
+        assert_eq!(cells[i].fg, Colour::Amber.ordinal(), "cell {i} is the label");
+    }
+    assert_eq!(cells[1].fg, Colour::Green.ordinal(), "the line keeps its own");
+}
+
+#[test]
+fn a_label_on_a_rule_that_can_change_width_is_refused() {
+    // An elastic rule is as wide as the chain leaves it, so a label on one
+    // would fit at one reading and be dropped at the next, coming and going on
+    // the glass with nothing to say why.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        text("NAV"),
+        Span { gap: true, rule: true, label: "FUEL".into(), ..Span::default() },
+        reading("CDU_LINE1"),
+    ]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("has no fixed width")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_label_too_wide_for_its_rule_is_refused() {
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        Span { gap: true, rule: true, width: 6, label: "STEERPOINT".into(), ..Span::default() },
+        text("X"),
+    ]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("does not fit")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_rule_written_on_a_piece_that_draws_its_own_content_is_refused() {
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![Span { text: "NAV".into(), rule: true, ..Span::default() }]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("only a gap can be a rule")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_label_written_on_a_piece_that_is_not_a_rule_is_refused() {
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![Span { text: "NAV".into(), label: "FUEL".into(), ..Span::default() }]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("not a rule")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_field_of_nothing_but_a_rule_is_a_divider_written_the_long_way() {
+    // Gaps with nothing around them are refused as an elaborate way of writing
+    // blanks. A rule is not blanks, so drawing it is the right answer.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![Span {
+        gap: true,
+        rule: true,
+        ..Span::default()
+    }]));
+    assert_eq!(refusals(&p), Vec::<String>::new());
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    assert_eq!(row(screen(&batch), 1), "------------------------");
 }

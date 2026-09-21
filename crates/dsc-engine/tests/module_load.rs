@@ -379,6 +379,7 @@ fn an_unassigned_lamp_is_swept_off_and_never_driven() {
         any_of: Vec::new(),
         pick: dsc_config::Pick::default(),
         same_as: None,
+        same_as_device: None,
         on: None,
         off: 0,
         note: "not decided yet".to_string(),

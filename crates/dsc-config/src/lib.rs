@@ -4,7 +4,7 @@
 //! device inventory is `data/devices.json`. Profiles are authored by the user,
 //! keyed by LED rather than by signal  see docs/CONFIG.md.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -2080,17 +2080,23 @@ pub struct Profiles {
 /// Not `.json`, so every path that walks the folder for profiles skips it.
 const UPDATED: &str = ".updated";
 
-/// What reconciling one profile's fields came to.
+/// What reconciling one profile against a new release came to.
 #[derive(Default)]
 struct FieldWork {
     added: usize,
     updated: usize,
     removed: usize,
+    lamps: usize,
+    settings: usize,
 }
 
 impl FieldWork {
     fn nothing(&self) -> bool {
-        self.added == 0 && self.updated == 0 && self.removed == 0
+        self.added == 0
+            && self.updated == 0
+            && self.removed == 0
+            && self.lamps == 0
+            && self.settings == 0
     }
 }
 
@@ -2196,6 +2202,95 @@ fn reconcile_fields(profile: &mut Profile, shipped: &[Readout], was: &[Readout])
     work
 }
 
+/// Whether two values say the same thing, compared as JSON for the same
+/// reason [`same_field`] is.
+fn same_value<T: Serialize>(a: &T, b: &T) -> bool {
+    match (serde_json::to_value(a), serde_json::to_value(b)) {
+        (Ok(x), Ok(y)) => x == y,
+        _ => false,
+    }
+}
+
+/// Bring lamp rows still as the last release shipped them up to the new one.
+///
+/// The field rule, narrowed to what lamps can do: a lamp is hardware, so its
+/// row is never added or removed here (new hardware is added on every start
+/// regardless). A row identical to what `was` held is ours to replace; one
+/// that differs, or one `was` never had, is the user's and stays.
+fn reconcile_lamps(profile: &mut Profile, shipped: &[Binding], was: &[Binding]) -> usize {
+    let key = |b: &Binding| (b.device.clone(), b.led.clone());
+    let was: HashMap<_, _> = was.iter().map(|b| (key(b), b)).collect();
+    let now: HashMap<_, _> = shipped.iter().map(|b| (key(b), b)).collect();
+    let mut changed = 0;
+    for b in &mut profile.bindings {
+        let k = key(b);
+        let (Some(before), Some(after)) = (was.get(&k), now.get(&k)) else {
+            continue;
+        };
+        if same_value(&*b, *before) && !same_value(*after, *before) {
+            *b = (*after).clone();
+            changed += 1;
+        }
+    }
+    changed
+}
+
+/// Bring the profile's own settings up to the new release, one entry at a
+/// time: the font, each device's `follows`, and whether each device is
+/// disabled.
+///
+/// Each is the user's once it differs from what `was` said, and ours while it
+/// does not. Taken entry by entry rather than as a whole map, so pointing one
+/// MFD at another does not freeze the MCDU's entry the release changed.
+///
+/// These travel with the rows and fields reconciled beside them: a release
+/// that adds MCDU fields to an aircraft with no CDU of its own also names the
+/// font they are drawn in, and fields merged without it leave a profile the
+/// daemon refuses to load at all.
+fn reconcile_settings(profile: &mut Profile, shipped: &Profile, was: &Profile) -> usize {
+    let mut changed = 0;
+
+    if profile.font == was.font && shipped.font != was.font {
+        profile.font = shipped.font.clone();
+        changed += 1;
+    }
+
+    let followers: BTreeSet<&String> = was.follows.keys().chain(shipped.follows.keys()).collect();
+    for device in followers {
+        let (before, after) = (was.follows.get(device), shipped.follows.get(device));
+        if profile.follows.get(device) != before || after == before {
+            continue;
+        }
+        match after {
+            Some(source) => profile.follows.insert(device.clone(), source.clone()),
+            None => profile.follows.remove(device),
+        };
+        changed += 1;
+    }
+
+    let has = |list: &[String], d: &String| list.contains(d);
+    let mut devices: Vec<&String> = Vec::new();
+    for d in was.disabled_devices.iter().chain(&shipped.disabled_devices) {
+        if !devices.contains(&d) {
+            devices.push(d);
+        }
+    }
+    for device in devices {
+        let (before, after) = (has(&was.disabled_devices, device), has(&shipped.disabled_devices, device));
+        if has(&profile.disabled_devices, device) != before || after == before {
+            continue;
+        }
+        if after {
+            profile.disabled_devices.push(device.clone());
+        } else {
+            profile.disabled_devices.retain(|d| d != device);
+        }
+        changed += 1;
+    }
+
+    changed
+}
+
 /// The file name, without `.json`, for a profile named after `name`.
 ///
 /// Lowercase, with each run of anything else collapsed to one dash and none at
@@ -2289,11 +2384,11 @@ impl Profiles {
     }
 
     /// What the last release shipped for this profile, or nothing.
-    fn previously_shipped(&self, name: &str) -> Vec<Readout> {
+    fn previously_shipped(&self, name: &str) -> Option<Profile> {
         if self.previous.as_os_str().is_empty() {
-            return Vec::new();
+            return None;
         }
-        Profile::load(&self.previous.join(name)).map(|p| p.readouts).unwrap_or_default()
+        Profile::load(&self.previous.join(name)).ok()
     }
 
     /// Every aircraft an active profile already claims, with the name of the
@@ -2524,15 +2619,23 @@ impl Profiles {
             let mut work = FieldWork::default();
 
             if let Ok(shipped) = Profile::load(&self.defaults.join(&name)) {
-                for b in shipped.bindings {
+                for b in &shipped.bindings {
                     if have.insert((b.device.clone(), b.led.clone())) {
-                        profile.bindings.push(b);
+                        profile.bindings.push(b.clone());
                         from_default += 1;
                     }
                 }
                 if upgrading {
+                    // With no snapshot there is nothing to tell an untouched
+                    // row from an edited one, so only fields go on, adding
+                    // what does not clash, and lamps and settings stay put.
                     let was = self.previously_shipped(&name);
-                    work = reconcile_fields(&mut profile, &shipped.readouts, &was);
+                    let fields = was.as_ref().map_or(&[][..], |w| &w.readouts[..]);
+                    work = reconcile_fields(&mut profile, &shipped.readouts, fields);
+                    if let Some(was) = &was {
+                        work.lamps = reconcile_lamps(&mut profile, &shipped.bindings, &was.bindings);
+                        work.settings = reconcile_settings(&mut profile, &shipped, was);
+                    }
                 }
             }
 
@@ -2576,6 +2679,18 @@ impl Profiles {
                 what.push(format!(
                     "removed {} display field(s) the default no longer ships",
                     work.removed
+                ));
+            }
+            if work.lamps > 0 {
+                what.push(format!(
+                    "updated {} unchanged lamp row(s) to the new default",
+                    work.lamps
+                ));
+            }
+            if work.settings > 0 {
+                what.push(format!(
+                    "updated {} unchanged profile setting(s) to the new default",
+                    work.settings
                 ));
             }
             match what.is_empty() {

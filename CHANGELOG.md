@@ -6,11 +6,25 @@ here reaches users; development detail belongs in
 [docs/STATUS.md](docs/STATUS.md) instead.
 
 **When a shipped profile changes**, say so here and name the rows. An update
-never rewrites a lamp row you have changed, so a fix to a shipped lamp only
-reaches you if you reset that lamp, and you cannot decide to unless this says
-what moved. Display fields are the exception from alpha.003 on: one still
-exactly as it shipped is corrected for you, and one you have touched is left
-alone, so naming what moved matters there too.
+never rewrites anything you have changed: a lamp row, a display field, or a
+setting such as which panel follows which. Anything still exactly as the last
+release shipped it is brought up to the new one for you. A fix to something
+you have touched only reaches you if you reset it, and you cannot decide to
+unless this says what moved.
+
+## 1.0.0-alpha.005
+
+### Fixed
+
+- **Updating now carries lamp rows and profile settings forward, not just
+  display fields.** Upgrading to alpha.004 left every panel on "its own setup"
+  instead of following the one it shipped following, kept each backlight on its
+  own knob instead of matching the PTO2's, and left the MCDU without the font
+  the new Hornet page is drawn in. The Hornet profile was then refused at
+  start and the cockpit stayed dark until the profile was saved again. Lamp
+  rows, `follows`, the font and disabled panels are now updated wherever they
+  still match what the previous release shipped, and left alone wherever you
+  changed them.
 
 ## 1.0.0-alpha.004
 

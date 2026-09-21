@@ -7,7 +7,6 @@
     "NONE"
   ],
   "module": "FC3",
-  "font": "../mcdu/f14bu-font-21x31.json",
   "bindings": [
     {
       "device": "CarrierAce_MFD_C",
@@ -379,18 +378,5 @@
       "off": 255,
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
-  ],
-  "disabled_devices": [
-    "ViperAce_ICP",
-    "TAKEOFF_PLANEL_2",
-    "Orion_Throttle_Base_II",
-    "Orion_Combat_Rudder_Pedals",
-    "MCDU_Observer",
-    "MCDU_CoPilot",
-    "MCDU_Captain",
-    "CarrierAce_UFC",
-    "CarrierAce_MFD_R",
-    "CarrierAce_MFD_L",
-    "CarrierAce_MFD_C"
   ]
 }

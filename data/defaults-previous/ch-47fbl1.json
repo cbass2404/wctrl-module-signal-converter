@@ -57,136 +57,22 @@
       "device": "CarrierAce_MFD_L",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_MFD_R",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "CarrierAce_UFC",
@@ -200,52 +86,15 @@
       "device": "CarrierAce_UFC",
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
-      "same_as": "INST_PNL_Backlight"
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Captain",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Captain",
@@ -259,7 +108,8 @@
       "device": "MCDU_Captain",
       "led": "Marker_Light",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -312,46 +162,8 @@
       "device": "MCDU_CoPilot",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_CoPilot",
@@ -365,7 +177,8 @@
       "device": "MCDU_CoPilot",
       "led": "Marker_Light",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -418,46 +231,8 @@
       "device": "MCDU_Observer",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Observer",
@@ -471,7 +246,8 @@
       "device": "MCDU_Observer",
       "led": "Marker_Light",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -524,103 +300,29 @@
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_L",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Backlight_R",
       "conditions": [],
-      "same_as": "Backlight_L"
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Combat_Rudder_Pedals",
       "led": "Logo",
       "conditions": [],
-      "same_as": "Backlight_L"
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -636,46 +338,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -686,7 +350,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "SL",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -694,7 +359,8 @@
       "device": "TAKEOFF_PLANEL_2",
       "led": "FLAG",
       "conditions": [],
-      "same_as": "Backlight",
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
       "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
     },
@@ -772,46 +438,8 @@
       "device": "ViperAce_ICP",
       "led": "Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "CPLT_LIGHT_INSTRUMENT_DIM",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        }
-      ]
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "ViperAce_ICP",
@@ -833,20 +461,20 @@
       "colours": {
         "source": "PLT_CDU_LINE1_COLOR",
         "codes": {
-          "p": "magenta",
-          "b": "cyan",
           "g": "green",
-          "w": "white"
+          "p": "magenta",
+          "w": "white",
+          "b": "cyan"
         }
       },
       "replace": {
-        "»": "→",
-        "¡": "☐",
+        "?": "%",
         "{": "↑",
+        "«": "←",
+        "¡": "☐",
         "®": "Δ",
         "}": "↓",
-        "?": "%",
-        "«": "←"
+        "»": "→"
       },
       "note": "CDU line 1, pilot seat. The CH-47F CDU is 14 lines of 24, the MCDU's own grid, so line n sits on row n. Each line has a twin, PLT_CDU_LINEn_COLOR, one letter per character; colours.codes says what the letters mean. A space there leaves the field's own colour, white."
     },
@@ -863,18 +491,18 @@
         "codes": {
           "g": "green",
           "b": "cyan",
-          "w": "white",
-          "p": "magenta"
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "}": "↓",
-        "?": "%",
-        "¡": "☐",
-        "®": "Δ",
         "«": "←",
+        "®": "Δ",
         "{": "↑",
-        "»": "→"
+        "»": "→",
+        "}": "↓",
+        "¡": "☐",
+        "?": "%"
       },
       "note": "Even lines 2 to 12 are the CDU's small labels, so they draw in the small font; line 14, the scratchpad, is large. Split taken from WCtrlDcsBiosBridge's CH-47F listener."
     },
@@ -888,20 +516,20 @@
       "colours": {
         "source": "PLT_CDU_LINE3_COLOR",
         "codes": {
-          "g": "green",
-          "w": "white",
           "b": "cyan",
+          "w": "white",
+          "g": "green",
           "p": "magenta"
         }
       },
       "replace": {
-        "?": "%",
-        "¡": "☐",
         "}": "↓",
+        "¡": "☐",
+        "«": "←",
         "®": "Δ",
         "»": "→",
         "{": "↑",
-        "«": "←"
+        "?": "%"
       },
       "note": "DCS-BIOS sends the CDU's symbols as single bytes above ASCII (CH-47F.lua, cdu_replace_map), and the braces as arrows. replace turns each into the character whose glyph the CH-47F font draws for it: the arrows, the check mark (box slot), the up-down arrow (Delta slot), and ? in the % slot."
     },
@@ -917,19 +545,19 @@
         "source": "PLT_CDU_LINE4_COLOR",
         "codes": {
           "b": "cyan",
-          "p": "magenta",
           "w": "white",
-          "g": "green"
+          "g": "green",
+          "p": "magenta"
         }
       },
       "replace": {
-        "¡": "☐",
-        "}": "↓",
-        "«": "←",
-        "?": "%",
         "®": "Δ",
+        "?": "%",
+        "{": "↑",
+        "¡": "☐",
         "»": "→",
-        "{": "↑"
+        "}": "↓",
+        "«": "←"
       }
     },
     {
@@ -942,19 +570,19 @@
       "colours": {
         "source": "PLT_CDU_LINE5_COLOR",
         "codes": {
-          "g": "green",
           "w": "white",
-          "p": "magenta",
-          "b": "cyan"
+          "g": "green",
+          "b": "cyan",
+          "p": "magenta"
         }
       },
       "replace": {
+        "¡": "☐",
+        "«": "←",
+        "®": "Δ",
+        "»": "→",
         "?": "%",
         "}": "↓",
-        "»": "→",
-        "®": "Δ",
-        "«": "←",
-        "¡": "☐",
         "{": "↑"
       }
     },
@@ -969,19 +597,19 @@
       "colours": {
         "source": "PLT_CDU_LINE6_COLOR",
         "codes": {
-          "p": "magenta",
-          "w": "white",
           "g": "green",
-          "b": "cyan"
+          "p": "magenta",
+          "b": "cyan",
+          "w": "white"
         }
       },
       "replace": {
-        "«": "←",
-        "}": "↓",
-        "?": "%",
-        "¡": "☐",
-        "®": "Δ",
         "{": "↑",
+        "}": "↓",
+        "¡": "☐",
+        "«": "←",
+        "®": "Δ",
+        "?": "%",
         "»": "→"
       }
     },
@@ -995,20 +623,20 @@
       "colours": {
         "source": "PLT_CDU_LINE7_COLOR",
         "codes": {
-          "p": "magenta",
+          "w": "white",
           "g": "green",
-          "b": "cyan",
-          "w": "white"
+          "p": "magenta",
+          "b": "cyan"
         }
       },
       "replace": {
-        "®": "Δ",
         "}": "↓",
         "?": "%",
         "{": "↑",
+        "»": "→",
+        "®": "Δ",
         "«": "←",
-        "¡": "☐",
-        "»": "→"
+        "¡": "☐"
       }
     },
     {
@@ -1023,19 +651,19 @@
         "source": "PLT_CDU_LINE8_COLOR",
         "codes": {
           "b": "cyan",
-          "w": "white",
           "p": "magenta",
+          "w": "white",
           "g": "green"
         }
       },
       "replace": {
-        "}": "↓",
-        "?": "%",
         "¡": "☐",
-        "«": "←",
         "»": "→",
+        "?": "%",
+        "{": "↑",
+        "«": "←",
         "®": "Δ",
-        "{": "↑"
+        "}": "↓"
       }
     },
     {
@@ -1048,20 +676,20 @@
       "colours": {
         "source": "PLT_CDU_LINE9_COLOR",
         "codes": {
+          "g": "green",
           "p": "magenta",
-          "w": "white",
           "b": "cyan",
-          "g": "green"
+          "w": "white"
         }
       },
       "replace": {
-        "}": "↓",
-        "«": "←",
-        "?": "%",
+        "{": "↑",
+        "¡": "☐",
         "»": "→",
         "®": "Δ",
-        "{": "↑",
-        "¡": "☐"
+        "}": "↓",
+        "?": "%",
+        "«": "←"
       }
     },
     {
@@ -1075,20 +703,20 @@
       "colours": {
         "source": "PLT_CDU_LINE10_COLOR",
         "codes": {
-          "w": "white",
           "b": "cyan",
           "g": "green",
-          "p": "magenta"
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "«": "←",
-        "®": "Δ",
-        "?": "%",
         "¡": "☐",
         "{": "↑",
-        "»": "→",
-        "}": "↓"
+        "}": "↓",
+        "®": "Δ",
+        "?": "%",
+        "«": "←",
+        "»": "→"
       }
     },
     {
@@ -1103,17 +731,17 @@
         "codes": {
           "w": "white",
           "b": "cyan",
-          "g": "green",
-          "p": "magenta"
+          "p": "magenta",
+          "g": "green"
         }
       },
       "replace": {
-        "{": "↑",
-        "}": "↓",
         "«": "←",
-        "»": "→",
         "¡": "☐",
         "®": "Δ",
+        "»": "→",
+        "{": "↑",
+        "}": "↓",
         "?": "%"
       }
     },
@@ -1128,20 +756,20 @@
       "colours": {
         "source": "PLT_CDU_LINE12_COLOR",
         "codes": {
+          "b": "cyan",
           "w": "white",
           "g": "green",
-          "p": "magenta",
-          "b": "cyan"
+          "p": "magenta"
         }
       },
       "replace": {
         "»": "→",
-        "«": "←",
-        "®": "Δ",
+        "?": "%",
         "{": "↑",
-        "¡": "☐",
+        "®": "Δ",
         "}": "↓",
-        "?": "%"
+        "«": "←",
+        "¡": "☐"
       }
     },
     {
@@ -1154,20 +782,20 @@
       "colours": {
         "source": "PLT_CDU_LINE13_COLOR",
         "codes": {
-          "p": "magenta",
           "b": "cyan",
           "w": "white",
-          "g": "green"
+          "g": "green",
+          "p": "magenta"
         }
       },
       "replace": {
+        "®": "Δ",
         "{": "↑",
-        "?": "%",
+        "»": "→",
         "¡": "☐",
         "«": "←",
-        "»": "→",
-        "®": "Δ",
-        "}": "↓"
+        "}": "↓",
+        "?": "%"
       }
     },
     {
@@ -1180,19 +808,19 @@
       "colours": {
         "source": "PLT_CDU_LINE14_COLOR",
         "codes": {
-          "w": "white",
-          "g": "green",
           "b": "cyan",
-          "p": "magenta"
+          "p": "magenta",
+          "w": "white",
+          "g": "green"
         }
       },
       "replace": {
         "®": "Δ",
+        "}": "↓",
+        "»": "→",
         "{": "↑",
         "?": "%",
         "¡": "☐",
-        "}": "↓",
-        "»": "→",
         "«": "←"
       }
     },
@@ -1208,18 +836,18 @@
         "codes": {
           "w": "white",
           "p": "magenta",
-          "g": "green",
-          "b": "cyan"
+          "b": "cyan",
+          "g": "green"
         }
       },
       "replace": {
-        "«": "←",
-        "»": "→",
         "{": "↑",
         "}": "↓",
+        "®": "Δ",
         "¡": "☐",
+        "«": "←",
         "?": "%",
-        "®": "Δ"
+        "»": "→"
       },
       "note": "CDU line 1, copilot seat. Same cells as the pilot's line 1: seat picks which station's CDU is on the glass, so the MCDU follows you when you change seats."
     },
@@ -1235,19 +863,19 @@
         "source": "CPLT_CDU_LINE2_COLOR",
         "codes": {
           "p": "magenta",
-          "b": "cyan",
           "w": "white",
+          "b": "cyan",
           "g": "green"
         }
       },
       "replace": {
-        "®": "Δ",
-        "{": "↑",
-        "¡": "☐",
-        "}": "↓",
         "«": "←",
+        "®": "Δ",
+        "»": "→",
+        "{": "↑",
         "?": "%",
-        "»": "→"
+        "¡": "☐",
+        "}": "↓"
       }
     },
     {
@@ -1260,20 +888,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE3_COLOR",
         "codes": {
-          "g": "green",
-          "w": "white",
           "b": "cyan",
-          "p": "magenta"
+          "g": "green",
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "»": "→",
-        "¡": "☐",
-        "{": "↑",
-        "«": "←",
         "}": "↓",
         "®": "Δ",
-        "?": "%"
+        "«": "←",
+        "»": "→",
+        "{": "↑",
+        "?": "%",
+        "¡": "☐"
       }
     },
     {
@@ -1287,20 +915,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE4_COLOR",
         "codes": {
-          "p": "magenta",
           "w": "white",
           "b": "cyan",
-          "g": "green"
+          "g": "green",
+          "p": "magenta"
         }
       },
       "replace": {
         "}": "↓",
-        "?": "%",
-        "®": "Δ",
         "¡": "☐",
         "«": "←",
-        "{": "↑",
-        "»": "→"
+        "?": "%",
+        "®": "Δ",
+        "»": "→",
+        "{": "↑"
       }
     },
     {
@@ -1313,20 +941,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE5_COLOR",
         "codes": {
+          "p": "magenta",
           "b": "cyan",
           "w": "white",
-          "g": "green",
-          "p": "magenta"
+          "g": "green"
         }
       },
       "replace": {
-        "{": "↑",
-        "}": "↓",
         "?": "%",
-        "«": "←",
         "»": "→",
+        "®": "Δ",
+        "«": "←",
+        "}": "↓",
         "¡": "☐",
-        "®": "Δ"
+        "{": "↑"
       }
     },
     {
@@ -1340,20 +968,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE6_COLOR",
         "codes": {
-          "g": "green",
-          "b": "cyan",
+          "p": "magenta",
           "w": "white",
-          "p": "magenta"
+          "b": "cyan",
+          "g": "green"
         }
       },
       "replace": {
+        "»": "→",
         "{": "↑",
-        "}": "↓",
         "?": "%",
         "«": "←",
-        "¡": "☐",
-        "»": "→",
-        "®": "Δ"
+        "®": "Δ",
+        "}": "↓",
+        "¡": "☐"
       }
     },
     {
@@ -1368,16 +996,16 @@
         "codes": {
           "g": "green",
           "b": "cyan",
-          "p": "magenta",
-          "w": "white"
+          "w": "white",
+          "p": "magenta"
         }
       },
       "replace": {
-        "¡": "☐",
+        "?": "%",
         "®": "Δ",
         "{": "↑",
         "}": "↓",
-        "?": "%",
+        "¡": "☐",
         "«": "←",
         "»": "→"
       }
@@ -1393,20 +1021,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE8_COLOR",
         "codes": {
-          "p": "magenta",
-          "b": "cyan",
           "w": "white",
-          "g": "green"
+          "b": "cyan",
+          "g": "green",
+          "p": "magenta"
         }
       },
       "replace": {
-        "}": "↓",
-        "{": "↑",
-        "®": "Δ",
         "¡": "☐",
-        "?": "%",
+        "{": "↑",
         "«": "←",
-        "»": "→"
+        "?": "%",
+        "»": "→",
+        "®": "Δ",
+        "}": "↓"
       }
     },
     {
@@ -1419,20 +1047,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE9_COLOR",
         "codes": {
-          "b": "cyan",
+          "p": "magenta",
           "w": "white",
-          "g": "green",
-          "p": "magenta"
+          "b": "cyan",
+          "g": "green"
         }
       },
       "replace": {
-        "¡": "☐",
-        "}": "↓",
         "»": "→",
+        "?": "%",
         "«": "←",
+        "}": "↓",
         "®": "Δ",
-        "{": "↑",
-        "?": "%"
+        "¡": "☐",
+        "{": "↑"
       }
     },
     {
@@ -1453,13 +1081,13 @@
         }
       },
       "replace": {
-        "»": "→",
-        "«": "←",
-        "¡": "☐",
-        "®": "Δ",
-        "{": "↑",
         "}": "↓",
-        "?": "%"
+        "¡": "☐",
+        "«": "←",
+        "{": "↑",
+        "»": "→",
+        "?": "%",
+        "®": "Δ"
       }
     },
     {
@@ -1472,10 +1100,10 @@
       "colours": {
         "source": "CPLT_CDU_LINE11_COLOR",
         "codes": {
-          "g": "green",
           "p": "magenta",
-          "b": "cyan",
-          "w": "white"
+          "g": "green",
+          "w": "white",
+          "b": "cyan"
         }
       },
       "replace": {
@@ -1483,9 +1111,9 @@
         "}": "↓",
         "¡": "☐",
         "®": "Δ",
-        "{": "↑",
         "?": "%",
-        "»": "→"
+        "»": "→",
+        "{": "↑"
       }
     },
     {
@@ -1500,19 +1128,19 @@
         "source": "CPLT_CDU_LINE12_COLOR",
         "codes": {
           "g": "green",
-          "w": "white",
           "p": "magenta",
-          "b": "cyan"
+          "b": "cyan",
+          "w": "white"
         }
       },
       "replace": {
         "¡": "☐",
-        "?": "%",
-        "«": "←",
         "»": "→",
-        "®": "Δ",
+        "«": "←",
+        "}": "↓",
+        "?": "%",
         "{": "↑",
-        "}": "↓"
+        "®": "Δ"
       }
     },
     {
@@ -1525,20 +1153,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE13_COLOR",
         "codes": {
-          "w": "white",
-          "g": "green",
           "p": "magenta",
-          "b": "cyan"
+          "w": "white",
+          "b": "cyan",
+          "g": "green"
         }
       },
       "replace": {
-        "«": "←",
-        "¡": "☐",
-        "®": "Δ",
-        "}": "↓",
-        "{": "↑",
         "?": "%",
-        "»": "→"
+        "{": "↑",
+        "®": "Δ",
+        "»": "→",
+        "}": "↓",
+        "¡": "☐",
+        "«": "←"
       }
     },
     {
@@ -1551,20 +1179,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE14_COLOR",
         "codes": {
+          "g": "green",
           "b": "cyan",
           "p": "magenta",
-          "g": "green",
           "w": "white"
         }
       },
       "replace": {
         "}": "↓",
-        "?": "%",
         "«": "←",
-        "®": "Δ",
         "{": "↑",
+        "®": "Δ",
+        "»": "→",
         "¡": "☐",
-        "»": "→"
+        "?": "%"
       }
     },
     {
@@ -1577,19 +1205,19 @@
       "colours": {
         "source": "PLT_CDU_LINE1_COLOR",
         "codes": {
-          "p": "magenta",
           "g": "green",
-          "w": "white",
-          "b": "cyan"
+          "p": "magenta",
+          "b": "cyan",
+          "w": "white"
         }
       },
       "replace": {
-        "®": "Δ",
-        "»": "→",
         "¡": "☐",
-        "}": "↓",
         "«": "←",
+        "»": "→",
+        "}": "↓",
         "{": "↑",
+        "®": "Δ",
         "?": "%"
       }
     },
@@ -1604,20 +1232,20 @@
       "colours": {
         "source": "PLT_CDU_LINE2_COLOR",
         "codes": {
-          "w": "white",
-          "g": "green",
+          "b": "cyan",
           "p": "magenta",
-          "b": "cyan"
+          "g": "green",
+          "w": "white"
         }
       },
       "replace": {
         "?": "%",
-        "¡": "☐",
-        "®": "Δ",
-        "«": "←",
-        "»": "→",
         "{": "↑",
-        "}": "↓"
+        "¡": "☐",
+        "«": "←",
+        "}": "↓",
+        "®": "Δ",
+        "»": "→"
       }
     },
     {
@@ -1631,19 +1259,19 @@
         "source": "PLT_CDU_LINE3_COLOR",
         "codes": {
           "p": "magenta",
-          "b": "cyan",
           "w": "white",
-          "g": "green"
+          "g": "green",
+          "b": "cyan"
         }
       },
       "replace": {
         "{": "↑",
-        "}": "↓",
+        "¡": "☐",
         "®": "Δ",
         "?": "%",
-        "¡": "☐",
-        "»": "→",
-        "«": "←"
+        "}": "↓",
+        "«": "←",
+        "»": "→"
       }
     },
     {
@@ -1657,20 +1285,20 @@
       "colours": {
         "source": "PLT_CDU_LINE4_COLOR",
         "codes": {
-          "p": "magenta",
           "b": "cyan",
           "w": "white",
+          "p": "magenta",
           "g": "green"
         }
       },
       "replace": {
+        "{": "↑",
+        "»": "→",
+        "}": "↓",
+        "¡": "☐",
         "?": "%",
         "«": "←",
-        "¡": "☐",
-        "»": "→",
-        "{": "↑",
-        "®": "Δ",
-        "}": "↓"
+        "®": "Δ"
       }
     },
     {
@@ -1683,19 +1311,19 @@
       "colours": {
         "source": "PLT_CDU_LINE5_COLOR",
         "codes": {
-          "g": "green",
           "b": "cyan",
-          "w": "white",
-          "p": "magenta"
+          "g": "green",
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "«": "←",
         "¡": "☐",
-        "®": "Δ",
         "{": "↑",
-        "»": "→",
+        "«": "←",
         "}": "↓",
+        "®": "Δ",
+        "»": "→",
         "?": "%"
       }
     },
@@ -1711,19 +1339,19 @@
         "source": "PLT_CDU_LINE6_COLOR",
         "codes": {
           "w": "white",
+          "g": "green",
           "b": "cyan",
-          "p": "magenta",
-          "g": "green"
+          "p": "magenta"
         }
       },
       "replace": {
         "?": "%",
         "}": "↓",
-        "¡": "☐",
-        "«": "←",
         "®": "Δ",
-        "»": "→",
-        "{": "↑"
+        "«": "←",
+        "{": "↑",
+        "¡": "☐",
+        "»": "→"
       }
     },
     {
@@ -1737,19 +1365,19 @@
         "source": "PLT_CDU_LINE7_COLOR",
         "codes": {
           "w": "white",
-          "p": "magenta",
           "b": "cyan",
-          "g": "green"
+          "g": "green",
+          "p": "magenta"
         }
       },
       "replace": {
-        "?": "%",
         "«": "←",
-        "¡": "☐",
+        "?": "%",
+        "®": "Δ",
         "»": "→",
-        "{": "↑",
         "}": "↓",
-        "®": "Δ"
+        "{": "↑",
+        "¡": "☐"
       }
     },
     {
@@ -1764,19 +1392,19 @@
         "source": "PLT_CDU_LINE8_COLOR",
         "codes": {
           "b": "cyan",
-          "w": "white",
           "g": "green",
-          "p": "magenta"
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "«": "←",
+        "?": "%",
+        "}": "↓",
         "{": "↑",
         "¡": "☐",
-        "?": "%",
+        "»": "→",
         "®": "Δ",
-        "}": "↓",
-        "»": "→"
+        "«": "←"
       }
     },
     {
@@ -1789,20 +1417,20 @@
       "colours": {
         "source": "PLT_CDU_LINE9_COLOR",
         "codes": {
-          "w": "white",
-          "g": "green",
           "b": "cyan",
-          "p": "magenta"
+          "p": "magenta",
+          "g": "green",
+          "w": "white"
         }
       },
       "replace": {
-        "}": "↓",
         "¡": "☐",
-        "{": "↑",
+        "?": "%",
+        "®": "Δ",
         "»": "→",
         "«": "←",
-        "?": "%",
-        "®": "Δ"
+        "{": "↑",
+        "}": "↓"
       }
     },
     {
@@ -1816,20 +1444,20 @@
       "colours": {
         "source": "PLT_CDU_LINE10_COLOR",
         "codes": {
-          "b": "cyan",
+          "w": "white",
           "g": "green",
           "p": "magenta",
-          "w": "white"
+          "b": "cyan"
         }
       },
       "replace": {
-        "»": "→",
-        "«": "←",
         "{": "↑",
-        "}": "↓",
-        "?": "%",
         "¡": "☐",
-        "®": "Δ"
+        "}": "↓",
+        "«": "←",
+        "®": "Δ",
+        "»": "→",
+        "?": "%"
       }
     },
     {
@@ -1843,19 +1471,19 @@
         "source": "PLT_CDU_LINE11_COLOR",
         "codes": {
           "w": "white",
-          "p": "magenta",
+          "b": "cyan",
           "g": "green",
-          "b": "cyan"
+          "p": "magenta"
         }
       },
       "replace": {
+        "®": "Δ",
         "}": "↓",
-        "¡": "☐",
-        "{": "↑",
-        "«": "←",
         "»": "→",
         "?": "%",
-        "®": "Δ"
+        "¡": "☐",
+        "«": "←",
+        "{": "↑"
       }
     },
     {
@@ -1869,20 +1497,20 @@
       "colours": {
         "source": "PLT_CDU_LINE12_COLOR",
         "codes": {
+          "w": "white",
           "p": "magenta",
-          "g": "green",
           "b": "cyan",
-          "w": "white"
+          "g": "green"
         }
       },
       "replace": {
         "¡": "☐",
-        "?": "%",
-        "}": "↓",
-        "{": "↑",
-        "»": "→",
+        "«": "←",
         "®": "Δ",
-        "«": "←"
+        "»": "→",
+        "}": "↓",
+        "?": "%",
+        "{": "↑"
       }
     },
     {
@@ -1895,20 +1523,20 @@
       "colours": {
         "source": "PLT_CDU_LINE13_COLOR",
         "codes": {
-          "b": "cyan",
-          "w": "white",
           "g": "green",
-          "p": "magenta"
+          "w": "white",
+          "p": "magenta",
+          "b": "cyan"
         }
       },
       "replace": {
-        "»": "→",
-        "«": "←",
         "¡": "☐",
+        "«": "←",
         "®": "Δ",
-        "{": "↑",
         "}": "↓",
-        "?": "%"
+        "»": "→",
+        "?": "%",
+        "{": "↑"
       }
     },
     {
@@ -1922,19 +1550,19 @@
         "source": "PLT_CDU_LINE14_COLOR",
         "codes": {
           "w": "white",
-          "g": "green",
           "b": "cyan",
+          "g": "green",
           "p": "magenta"
         }
       },
       "replace": {
+        "}": "↓",
+        "«": "←",
+        "»": "→",
         "?": "%",
         "®": "Δ",
-        "»": "→",
-        "{": "↑",
         "¡": "☐",
-        "«": "←",
-        "}": "↓"
+        "{": "↑"
       }
     },
     {
@@ -1947,19 +1575,19 @@
       "colours": {
         "source": "CPLT_CDU_LINE1_COLOR",
         "codes": {
-          "g": "green",
+          "p": "magenta",
           "b": "cyan",
           "w": "white",
-          "p": "magenta"
+          "g": "green"
         }
       },
       "replace": {
-        "¡": "☐",
-        "«": "←",
         "®": "Δ",
-        "{": "↑",
-        "}": "↓",
+        "«": "←",
         "»": "→",
+        "¡": "☐",
+        "}": "↓",
+        "{": "↑",
         "?": "%"
       }
     },
@@ -1974,20 +1602,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE2_COLOR",
         "codes": {
-          "p": "magenta",
           "g": "green",
           "b": "cyan",
+          "p": "magenta",
           "w": "white"
         }
       },
       "replace": {
-        "?": "%",
-        "®": "Δ",
         "{": "↑",
-        "¡": "☐",
-        "«": "←",
+        "®": "Δ",
         "»": "→",
-        "}": "↓"
+        "}": "↓",
+        "«": "←",
+        "¡": "☐",
+        "?": "%"
       }
     },
     {
@@ -2000,20 +1628,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE3_COLOR",
         "codes": {
-          "p": "magenta",
-          "w": "white",
+          "g": "green",
           "b": "cyan",
-          "g": "green"
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "®": "Δ",
+        "¡": "☐",
         "?": "%",
         "}": "↓",
         "{": "↑",
-        "»": "→",
         "«": "←",
-        "¡": "☐"
+        "®": "Δ",
+        "»": "→"
       }
     },
     {
@@ -2027,20 +1655,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE4_COLOR",
         "codes": {
-          "g": "green",
           "p": "magenta",
-          "w": "white",
-          "b": "cyan"
+          "b": "cyan",
+          "g": "green",
+          "w": "white"
         }
       },
       "replace": {
+        "¡": "☐",
+        "?": "%",
+        "{": "↑",
         "»": "→",
         "}": "↓",
-        "?": "%",
-        "®": "Δ",
-        "¡": "☐",
         "«": "←",
-        "{": "↑"
+        "®": "Δ"
       }
     },
     {
@@ -2053,19 +1681,19 @@
       "colours": {
         "source": "CPLT_CDU_LINE5_COLOR",
         "codes": {
-          "w": "white",
+          "p": "magenta",
           "b": "cyan",
-          "g": "green",
-          "p": "magenta"
+          "w": "white",
+          "g": "green"
         }
       },
       "replace": {
-        "®": "Δ",
-        "{": "↑",
         "}": "↓",
-        "?": "%",
-        "»": "→",
         "«": "←",
+        "®": "Δ",
+        "»": "→",
+        "?": "%",
+        "{": "↑",
         "¡": "☐"
       }
     },
@@ -2080,20 +1708,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE6_COLOR",
         "codes": {
-          "b": "cyan",
-          "w": "white",
+          "g": "green",
           "p": "magenta",
-          "g": "green"
+          "w": "white",
+          "b": "cyan"
         }
       },
       "replace": {
+        "»": "→",
         "?": "%",
+        "}": "↓",
+        "{": "↑",
         "«": "←",
         "¡": "☐",
-        "®": "Δ",
-        "»": "→",
-        "{": "↑",
-        "}": "↓"
+        "®": "Δ"
       }
     },
     {
@@ -2108,18 +1736,18 @@
         "codes": {
           "b": "cyan",
           "g": "green",
-          "w": "white",
-          "p": "magenta"
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
         "?": "%",
-        "«": "←",
-        "®": "Δ",
-        "¡": "☐",
         "}": "↓",
+        "«": "←",
+        "{": "↑",
+        "¡": "☐",
         "»": "→",
-        "{": "↑"
+        "®": "Δ"
       }
     },
     {
@@ -2133,20 +1761,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE8_COLOR",
         "codes": {
-          "g": "green",
-          "w": "white",
+          "b": "cyan",
           "p": "magenta",
-          "b": "cyan"
+          "w": "white",
+          "g": "green"
         }
       },
       "replace": {
-        "®": "Δ",
-        "}": "↓",
         "?": "%",
-        "«": "←",
-        "¡": "☐",
+        "{": "↑",
+        "}": "↓",
         "»": "→",
-        "{": "↑"
+        "¡": "☐",
+        "«": "←",
+        "®": "Δ"
       }
     },
     {
@@ -2166,13 +1794,13 @@
         }
       },
       "replace": {
-        "?": "%",
-        "¡": "☐",
-        "®": "Δ",
-        "}": "↓",
-        "»": "→",
         "«": "←",
-        "{": "↑"
+        "®": "Δ",
+        "»": "→",
+        "¡": "☐",
+        "{": "↑",
+        "?": "%",
+        "}": "↓"
       }
     },
     {
@@ -2186,20 +1814,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE10_COLOR",
         "codes": {
+          "b": "cyan",
           "p": "magenta",
           "w": "white",
-          "g": "green",
-          "b": "cyan"
+          "g": "green"
         }
       },
       "replace": {
-        "?": "%",
-        "»": "→",
+        "}": "↓",
+        "¡": "☐",
         "«": "←",
         "®": "Δ",
-        "{": "↑",
-        "}": "↓",
-        "¡": "☐"
+        "»": "→",
+        "?": "%",
+        "{": "↑"
       }
     },
     {
@@ -2212,20 +1840,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE11_COLOR",
         "codes": {
-          "p": "magenta",
-          "g": "green",
           "b": "cyan",
+          "g": "green",
+          "p": "magenta",
           "w": "white"
         }
       },
       "replace": {
-        "{": "↑",
-        "«": "←",
-        "¡": "☐",
-        "}": "↓",
         "?": "%",
-        "®": "Δ",
-        "»": "→"
+        "}": "↓",
+        "»": "→",
+        "¡": "☐",
+        "«": "←",
+        "{": "↑",
+        "®": "Δ"
       }
     },
     {
@@ -2240,19 +1868,19 @@
         "source": "CPLT_CDU_LINE12_COLOR",
         "codes": {
           "w": "white",
-          "g": "green",
+          "b": "cyan",
           "p": "magenta",
-          "b": "cyan"
+          "g": "green"
         }
       },
       "replace": {
-        "®": "Δ",
-        "?": "%",
-        "¡": "☐",
-        "«": "←",
-        "}": "↓",
         "»": "→",
-        "{": "↑"
+        "{": "↑",
+        "¡": "☐",
+        "}": "↓",
+        "?": "%",
+        "«": "←",
+        "®": "Δ"
       }
     },
     {
@@ -2265,20 +1893,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE13_COLOR",
         "codes": {
-          "b": "cyan",
-          "w": "white",
           "p": "magenta",
-          "g": "green"
+          "w": "white",
+          "g": "green",
+          "b": "cyan"
         }
       },
       "replace": {
         "®": "Δ",
-        "}": "↓",
-        "«": "←",
         "»": "→",
         "{": "↑",
-        "¡": "☐",
-        "?": "%"
+        "«": "←",
+        "?": "%",
+        "}": "↓",
+        "¡": "☐"
       }
     },
     {
@@ -2292,18 +1920,18 @@
         "source": "CPLT_CDU_LINE14_COLOR",
         "codes": {
           "b": "cyan",
+          "g": "green",
           "p": "magenta",
-          "w": "white",
-          "g": "green"
+          "w": "white"
         }
       },
       "replace": {
-        "»": "→",
         "®": "Δ",
-        "{": "↑",
-        "?": "%",
-        "}": "↓",
         "«": "←",
+        "»": "→",
+        "}": "↓",
+        "?": "%",
+        "{": "↑",
         "¡": "☐"
       }
     },
@@ -2324,12 +1952,12 @@
         }
       },
       "replace": {
-        "®": "Δ",
-        "{": "↑",
-        "«": "←",
-        "?": "%",
-        "»": "→",
         "¡": "☐",
+        "«": "←",
+        "®": "Δ",
+        "»": "→",
+        "{": "↑",
+        "?": "%",
         "}": "↓"
       }
     },
@@ -2344,20 +1972,20 @@
       "colours": {
         "source": "PLT_CDU_LINE2_COLOR",
         "codes": {
-          "g": "green",
-          "p": "magenta",
+          "w": "white",
           "b": "cyan",
-          "w": "white"
+          "g": "green",
+          "p": "magenta"
         }
       },
       "replace": {
-        "}": "↓",
-        "?": "%",
-        "{": "↑",
+        "¡": "☐",
         "®": "Δ",
         "»": "→",
+        "{": "↑",
         "«": "←",
-        "¡": "☐"
+        "?": "%",
+        "}": "↓"
       }
     },
     {
@@ -2370,20 +1998,20 @@
       "colours": {
         "source": "PLT_CDU_LINE3_COLOR",
         "codes": {
+          "b": "cyan",
           "g": "green",
-          "w": "white",
           "p": "magenta",
-          "b": "cyan"
+          "w": "white"
         }
       },
       "replace": {
-        "«": "←",
         "}": "↓",
-        "»": "→",
-        "®": "Δ",
-        "{": "↑",
+        "¡": "☐",
+        "«": "←",
         "?": "%",
-        "¡": "☐"
+        "®": "Δ",
+        "»": "→",
+        "{": "↑"
       }
     },
     {
@@ -2398,18 +2026,18 @@
         "source": "PLT_CDU_LINE4_COLOR",
         "codes": {
           "g": "green",
-          "b": "cyan",
           "w": "white",
-          "p": "magenta"
+          "p": "magenta",
+          "b": "cyan"
         }
       },
       "replace": {
-        "®": "Δ",
-        "«": "←",
         "?": "%",
-        "¡": "☐",
+        "«": "←",
         "{": "↑",
+        "¡": "☐",
         "}": "↓",
+        "®": "Δ",
         "»": "→"
       }
     },
@@ -2423,20 +2051,20 @@
       "colours": {
         "source": "PLT_CDU_LINE5_COLOR",
         "codes": {
-          "w": "white",
+          "p": "magenta",
           "g": "green",
           "b": "cyan",
-          "p": "magenta"
+          "w": "white"
         }
       },
       "replace": {
-        "{": "↑",
-        "}": "↓",
-        "¡": "☐",
-        "?": "%",
-        "®": "Δ",
         "«": "←",
-        "»": "→"
+        "}": "↓",
+        "®": "Δ",
+        "»": "→",
+        "?": "%",
+        "{": "↑",
+        "¡": "☐"
       }
     },
     {
@@ -2450,20 +2078,20 @@
       "colours": {
         "source": "PLT_CDU_LINE6_COLOR",
         "codes": {
+          "p": "magenta",
           "b": "cyan",
-          "w": "white",
           "g": "green",
-          "p": "magenta"
+          "w": "white"
         }
       },
       "replace": {
-        "»": "→",
-        "}": "↓",
-        "{": "↑",
         "¡": "☐",
-        "?": "%",
+        "}": "↓",
         "®": "Δ",
-        "«": "←"
+        "»": "→",
+        "«": "←",
+        "?": "%",
+        "{": "↑"
       }
     },
     {
@@ -2477,18 +2105,18 @@
         "source": "PLT_CDU_LINE7_COLOR",
         "codes": {
           "w": "white",
-          "b": "cyan",
           "p": "magenta",
+          "b": "cyan",
           "g": "green"
         }
       },
       "replace": {
-        "?": "%",
         "«": "←",
         "®": "Δ",
         "¡": "☐",
-        "{": "↑",
         "»": "→",
+        "{": "↑",
+        "?": "%",
         "}": "↓"
       }
     },
@@ -2503,20 +2131,20 @@
       "colours": {
         "source": "PLT_CDU_LINE8_COLOR",
         "codes": {
-          "p": "magenta",
           "w": "white",
-          "b": "cyan",
-          "g": "green"
+          "g": "green",
+          "p": "magenta",
+          "b": "cyan"
         }
       },
       "replace": {
-        "»": "→",
+        "{": "↑",
+        "¡": "☐",
         "?": "%",
         "«": "←",
         "®": "Δ",
-        "{": "↑",
-        "}": "↓",
-        "¡": "☐"
+        "»": "→",
+        "}": "↓"
       }
     },
     {
@@ -2530,15 +2158,15 @@
         "source": "PLT_CDU_LINE9_COLOR",
         "codes": {
           "g": "green",
+          "p": "magenta",
           "w": "white",
-          "b": "cyan",
-          "p": "magenta"
+          "b": "cyan"
         }
       },
       "replace": {
         "}": "↓",
-        "»": "→",
         "®": "Δ",
+        "»": "→",
         "¡": "☐",
         "{": "↑",
         "«": "←",
@@ -2557,17 +2185,17 @@
         "source": "PLT_CDU_LINE10_COLOR",
         "codes": {
           "p": "magenta",
-          "g": "green",
+          "b": "cyan",
           "w": "white",
-          "b": "cyan"
+          "g": "green"
         }
       },
       "replace": {
+        "®": "Δ",
         "»": "→",
+        "?": "%",
         "{": "↑",
         "}": "↓",
-        "®": "Δ",
-        "?": "%",
         "¡": "☐",
         "«": "←"
       }
@@ -2582,20 +2210,20 @@
       "colours": {
         "source": "PLT_CDU_LINE11_COLOR",
         "codes": {
-          "p": "magenta",
           "w": "white",
+          "g": "green",
           "b": "cyan",
-          "g": "green"
+          "p": "magenta"
         }
       },
       "replace": {
-        "«": "←",
-        "®": "Δ",
         "}": "↓",
         "{": "↑",
-        "»": "→",
+        "?": "%",
         "¡": "☐",
-        "?": "%"
+        "®": "Δ",
+        "»": "→",
+        "«": "←"
       }
     },
     {
@@ -2609,20 +2237,20 @@
       "colours": {
         "source": "PLT_CDU_LINE12_COLOR",
         "codes": {
-          "w": "white",
           "b": "cyan",
           "g": "green",
+          "w": "white",
           "p": "magenta"
         }
       },
       "replace": {
-        "«": "←",
         "®": "Δ",
-        "¡": "☐",
-        "}": "↓",
-        "?": "%",
+        "«": "←",
         "»": "→",
-        "{": "↑"
+        "?": "%",
+        "{": "↑",
+        "¡": "☐",
+        "}": "↓"
       }
     },
     {
@@ -2635,20 +2263,20 @@
       "colours": {
         "source": "PLT_CDU_LINE13_COLOR",
         "codes": {
+          "b": "cyan",
           "w": "white",
           "g": "green",
-          "b": "cyan",
           "p": "magenta"
         }
       },
       "replace": {
+        "}": "↓",
         "?": "%",
         "¡": "☐",
-        "{": "↑",
-        "»": "→",
         "«": "←",
         "®": "Δ",
-        "}": "↓"
+        "{": "↑",
+        "»": "→"
       }
     },
     {
@@ -2661,20 +2289,20 @@
       "colours": {
         "source": "PLT_CDU_LINE14_COLOR",
         "codes": {
-          "p": "magenta",
-          "w": "white",
           "b": "cyan",
-          "g": "green"
+          "g": "green",
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "¡": "☐",
-        "®": "Δ",
-        "}": "↓",
-        "{": "↑",
-        "?": "%",
+        "«": "←",
         "»": "→",
-        "«": "←"
+        "}": "↓",
+        "?": "%",
+        "®": "Δ",
+        "{": "↑",
+        "¡": "☐"
       }
     },
     {
@@ -2694,13 +2322,13 @@
         }
       },
       "replace": {
-        "«": "←",
-        "{": "↑",
         "}": "↓",
-        "¡": "☐",
+        "«": "←",
         "?": "%",
-        "»": "→",
-        "®": "Δ"
+        "¡": "☐",
+        "®": "Δ",
+        "{": "↑",
+        "»": "→"
       }
     },
     {
@@ -2714,20 +2342,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE2_COLOR",
         "codes": {
-          "w": "white",
-          "b": "cyan",
           "g": "green",
-          "p": "magenta"
+          "p": "magenta",
+          "b": "cyan",
+          "w": "white"
         }
       },
       "replace": {
-        "}": "↓",
-        "{": "↑",
-        "»": "→",
         "«": "←",
-        "¡": "☐",
+        "?": "%",
         "®": "Δ",
-        "?": "%"
+        "{": "↑",
+        "¡": "☐",
+        "}": "↓",
+        "»": "→"
       }
     },
     {
@@ -2747,13 +2375,13 @@
         }
       },
       "replace": {
-        "?": "%",
-        "»": "→",
+        "{": "↑",
         "}": "↓",
+        "?": "%",
         "¡": "☐",
         "«": "←",
         "®": "Δ",
-        "{": "↑"
+        "»": "→"
       }
     },
     {
@@ -2767,20 +2395,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE4_COLOR",
         "codes": {
-          "b": "cyan",
+          "p": "magenta",
           "g": "green",
-          "w": "white",
-          "p": "magenta"
+          "b": "cyan",
+          "w": "white"
         }
       },
       "replace": {
-        "«": "←",
-        "}": "↓",
-        "¡": "☐",
-        "»": "→",
-        "®": "Δ",
         "{": "↑",
-        "?": "%"
+        "»": "→",
+        "}": "↓",
+        "«": "←",
+        "¡": "☐",
+        "?": "%",
+        "®": "Δ"
       }
     },
     {
@@ -2795,18 +2423,18 @@
         "codes": {
           "b": "cyan",
           "g": "green",
-          "p": "magenta",
-          "w": "white"
+          "w": "white",
+          "p": "magenta"
         }
       },
       "replace": {
-        "}": "↓",
-        "?": "%",
-        "¡": "☐",
+        "{": "↑",
         "»": "→",
-        "®": "Δ",
+        "?": "%",
+        "}": "↓",
         "«": "←",
-        "{": "↑"
+        "¡": "☐",
+        "®": "Δ"
       }
     },
     {
@@ -2820,20 +2448,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE6_COLOR",
         "codes": {
-          "w": "white",
           "g": "green",
-          "p": "magenta",
-          "b": "cyan"
+          "w": "white",
+          "b": "cyan",
+          "p": "magenta"
         }
       },
       "replace": {
-        "»": "→",
+        "}": "↓",
+        "®": "Δ",
         "«": "←",
         "{": "↑",
-        "}": "↓",
-        "?": "%",
         "¡": "☐",
-        "®": "Δ"
+        "?": "%",
+        "»": "→"
       }
     },
     {
@@ -2847,18 +2475,18 @@
         "source": "CPLT_CDU_LINE7_COLOR",
         "codes": {
           "g": "green",
-          "w": "white",
           "p": "magenta",
-          "b": "cyan"
+          "b": "cyan",
+          "w": "white"
         }
       },
       "replace": {
-        "»": "→",
         "¡": "☐",
+        "»": "→",
+        "®": "Δ",
+        "«": "←",
         "{": "↑",
         "?": "%",
-        "«": "←",
-        "®": "Δ",
         "}": "↓"
       }
     },
@@ -2873,20 +2501,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE8_COLOR",
         "codes": {
-          "p": "magenta",
-          "b": "cyan",
           "w": "white",
+          "b": "cyan",
+          "p": "magenta",
           "g": "green"
         }
       },
       "replace": {
-        "®": "Δ",
+        "»": "→",
+        "?": "%",
         "}": "↓",
         "¡": "☐",
         "{": "↑",
-        "?": "%",
-        "»": "→",
-        "«": "←"
+        "«": "←",
+        "®": "Δ"
       }
     },
     {
@@ -2899,20 +2527,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE9_COLOR",
         "codes": {
-          "g": "green",
-          "w": "white",
           "p": "magenta",
-          "b": "cyan"
+          "b": "cyan",
+          "w": "white",
+          "g": "green"
         }
       },
       "replace": {
         "}": "↓",
-        "?": "%",
-        "«": "←",
-        "¡": "☐",
         "®": "Δ",
+        "?": "%",
         "»": "→",
-        "{": "↑"
+        "«": "←",
+        "{": "↑",
+        "¡": "☐"
       }
     },
     {
@@ -2926,20 +2554,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE10_COLOR",
         "codes": {
-          "g": "green",
-          "b": "cyan",
           "p": "magenta",
-          "w": "white"
+          "b": "cyan",
+          "w": "white",
+          "g": "green"
         }
       },
       "replace": {
-        "«": "←",
-        "¡": "☐",
-        "®": "Δ",
-        "{": "↑",
-        "»": "→",
         "}": "↓",
-        "?": "%"
+        "»": "→",
+        "?": "%",
+        "®": "Δ",
+        "¡": "☐",
+        "«": "←",
+        "{": "↑"
       }
     },
     {
@@ -2952,20 +2580,20 @@
       "colours": {
         "source": "CPLT_CDU_LINE11_COLOR",
         "codes": {
-          "b": "cyan",
           "g": "green",
+          "b": "cyan",
           "p": "magenta",
           "w": "white"
         }
       },
       "replace": {
-        "?": "%",
+        "}": "↓",
         "«": "←",
-        "{": "↑",
         "®": "Δ",
         "»": "→",
-        "¡": "☐",
-        "}": "↓"
+        "{": "↑",
+        "?": "%",
+        "¡": "☐"
       }
     },
     {
@@ -2980,19 +2608,19 @@
         "source": "CPLT_CDU_LINE12_COLOR",
         "codes": {
           "w": "white",
-          "g": "green",
           "b": "cyan",
+          "g": "green",
           "p": "magenta"
         }
       },
       "replace": {
-        "}": "↓",
-        "»": "→",
         "®": "Δ",
+        "»": "→",
+        "{": "↑",
         "?": "%",
         "¡": "☐",
         "«": "←",
-        "{": "↑"
+        "}": "↓"
       }
     },
     {
@@ -3006,19 +2634,19 @@
         "source": "CPLT_CDU_LINE13_COLOR",
         "codes": {
           "g": "green",
-          "p": "magenta",
           "b": "cyan",
+          "p": "magenta",
           "w": "white"
         }
       },
       "replace": {
-        "?": "%",
-        "¡": "☐",
-        "®": "Δ",
         "{": "↑",
-        "»": "→",
         "«": "←",
-        "}": "↓"
+        "?": "%",
+        "®": "Δ",
+        "}": "↓",
+        "»": "→",
+        "¡": "☐"
       }
     },
     {
@@ -3033,22 +2661,25 @@
         "codes": {
           "g": "green",
           "b": "cyan",
-          "w": "white",
-          "p": "magenta"
+          "p": "magenta",
+          "w": "white"
         }
       },
       "replace": {
-        "{": "↑",
-        "}": "↓",
         "?": "%",
+        "{": "↑",
+        "«": "←",
+        "»": "→",
         "¡": "☐",
         "®": "Δ",
-        "»": "→",
-        "«": "←"
+        "}": "↓"
       }
     }
   ],
-  "disabled_devices": [
-    "ViperAce_ICP"
-  ]
+  "follows": {
+    "CarrierAce_MFD_L": "CarrierAce_MFD_C",
+    "CarrierAce_MFD_R": "CarrierAce_MFD_C",
+    "MCDU_CoPilot": "MCDU_Captain",
+    "MCDU_Observer": "MCDU_Captain"
+  }
 }

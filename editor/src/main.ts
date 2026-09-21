@@ -1331,7 +1331,7 @@ function deviceSection(
 
   const rows = el("tbody");
   for (const led of device.leds) {
-    rows.append(lampRow(device, led, byLamp, session, refreshCount));
+    rows.append(lampRow(device, all, led, byLamp, session, refreshCount));
   }
   refreshCount();
 
@@ -1548,6 +1548,7 @@ function onValueMatters(binding: Binding): boolean {
 
 function lampRow(
   device: Device,
+  all: Device[],
   led: Led,
   byLamp: Map<string, Binding>,
   session: Session,
@@ -1657,21 +1658,42 @@ function lampRow(
       led,
       signals: session.signals,
       // Only dimmers, and never the lamp itself: an on/off lamp has no level to
-      // follow, which is what the mirror copies.
+      // follow, which is what the mirror copies. This panel's first, then every
+      // other panel's, so one backlight can follow another's.
       //
       // A lamp that mirrors something itself is not offered either. Pointing at
       // one would build a chain, and a chain has no value to resolve: the
       // daemon rejects the profile rather than following it. The one already
       // chosen stays in the list whatever it is, so a chain that arrived in the
       // file can still be seen and changed rather than silently reassigned.
-      siblings: led.dimmable
-        ? device.leds.filter(
-            (l) =>
-              l.dimmable &&
-              l.name !== led.name &&
-              (l.name === binding.same_as || !byLamp.get(lampKey(device.key, l.name))?.same_as),
-          )
-        : [],
+      //
+      // A panel that takes its setup from another is left out: its own rows
+      // are not in use, and its lamps are the ones it follows.
+      targets: () => {
+        if (!led.dimmable) return [];
+        const on = binding.same_as_device ?? device.key;
+        // A lamp something else already follows cannot follow in turn, or the
+        // two would point round in a loop. Only while it is not matching yet,
+        // so one that arrived that way in the file can still be changed.
+        const followed = session.profile.bindings.some(
+          (b) => b !== binding && b.same_as === led.name && (b.same_as_device ?? b.device) === device.key,
+        );
+        if (followed && !binding.same_as) return [];
+        const panels = [device, ...all.filter((d) => d.key !== device.key)];
+        return panels
+          .filter((d) => d.key === device.key || session.profile.follows?.[d.key] === undefined)
+          .flatMap((d) =>
+            d.leds
+              .filter(
+                (l) =>
+                  l.dimmable &&
+                  !(d.key === device.key && l.name === led.name) &&
+                  ((d.key === on && l.name === binding.same_as) || !byLamp.get(lampKey(d.key, l.name))?.same_as),
+              )
+              .map((l) => ({ device: d.key, deviceName: d.display_name, led: l })),
+          );
+      },
+      deviceName: (key) => all.find((d) => d.key === key)?.display_name ?? key,
       shipped: session.shipped.get(lampKey(device.key, led.name)),
       onCommit: refreshCount,
       onChange: () => {

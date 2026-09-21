@@ -112,7 +112,8 @@ const ONE_KNOB_EXEMPT: &[(&str, &str)] = &[(
 
 /// A shipped default drives every panel backlight from the same cockpit
 /// source, so the whole pit dims together until the user decides otherwise.
-/// A `same_as` is followed to the lamp it names before comparing.
+/// A `same_as` is followed to the lamp it names, on whichever device, before
+/// comparing.
 #[test]
 fn every_default_drives_all_backlights_from_one_source() {
     let inventory = inventory();
@@ -138,7 +139,8 @@ fn every_default_drives_all_backlights_from_one_source() {
             let mut b: &Binding = find(device, led).expect("every lamp has a row");
             let mut hops = 0;
             while let Some(target) = &b.same_as {
-                b = find(device, target).expect("same_as names a lamp with a row");
+                let on = b.same_as_device.as_deref().unwrap_or(&b.device);
+                b = find(on, target).expect("same_as names a lamp with a row");
                 hops += 1;
                 assert!(hops < 8, "{name}: same_as loop at {device} {led}");
             }

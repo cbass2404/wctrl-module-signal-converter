@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-20. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-21. Enough context to resume cold.
 
 ## Resume here
 
@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 369 passing
+cargo test --workspace            # expect 375 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -70,13 +70,40 @@ in [CONFIG.md](CONFIG.md). The decisions:
   follower as a target and locks the chooser on a device something follows.
 - **The follower's own rows are kept and ignored**, as a disabled device's are,
   and `inert()` says so.
-- **Per profile, not global.** The AH-64D and CH-47F put a different seat on
-  each MCDU, which one global setting would break.
+- **Per profile, not global.** A profile that wants its panels set up apart
+  keeps them apart; one global setting would take that away.
 
-Not yet done: flying it on two MCDUs, and changing any shipped default to use
-it. The three MCDU and three MFD lamp blocks in every default could collapse to
-one each, but that rewrites rows users may have changed, so it waits for a
-deliberate decision.
+Not yet done: flying it on two MCDUs. Every shipped default uses it, by
+decision 2026-09-21: the MFD L and R use the MFD C and the MCDU Co-Pilot and
+Observer use the Captain. The AH-64D and CH-47F lose nothing by it, because the
+seat on each field picks the source and all three MCDU names carried the same
+fields.
+
+**Built and proven on the panels 2026-09-21: a lamp can match one on
+another panel.** Every default puts its backlights on one knob, and until now that
+meant writing the same condition into every panel's backlight row, so moving
+the knob was a change made once per panel. `same_as_device` beside `same_as`
+names the device the target lamp is on; left out, it is the lamp's own device,
+so every existing profile reads the same. See "Matching another lamp" in
+[CONFIG.md](CONFIG.md). The decisions:
+
+- **A field beside `same_as`, not a new shape for it.** A string that became
+  an object, or a `device/lamp` path, would have changed every row that already
+  mirrors something, and lamp names can hold a slash (`A/A`).
+- **The chain rule is unchanged, only wider.** The target must read signals of
+  its own, now looked for on whichever device it names, so a loop across two
+  panels is refused at both ends with no cycle detection added.
+- **A device that follows another is read through it** (`mirror_target`), since
+  its own rows are not in use. That also catches a lamp pointed at itself
+  through a follower, as a chain.
+- **The editor lists every panel's dimmers**, its own first, and none from a
+  panel that follows another. The list is asked for on each draw rather than
+  once, and matching is not offered on a lamp something else already follows,
+  so the window cannot build the loop the check would refuse.
+
+Cory is moving the shipped defaults onto it in the editor, testing the flow
+along the way, so those rows change with it. The one-knob test follows `same_as`
+across devices now, so it keeps holding them.
 
 **Built and flown 2026-09-20: the editor's display fields, put right.** Six
 things, found by using the window rather than by reading it, and one of them
@@ -926,7 +953,8 @@ forms are offered, each only where it can mean something:
 * **any_of**, through "+ Add alternative (or)", with a choice between the
   brightest alternative and the one whose signal moved last (`pick`)
 * **always**, on a lamp nothing is assigned to
-* **same_as**, only on a dimmer with another dimmer to point at
+* **same_as**, only on a dimmer with another dimmer to point at, on this
+  panel or another (added 2026-09-21)
 
 `Reset this lamp` appears only where a lamp differs from the shipped profile.
 Save is explicit, and the unsaved marker compares against a snapshot rather than
@@ -1386,7 +1414,8 @@ anything, so a shipped file is already what a user's copy becomes.
 so the whole pit dims together until a user splits it. `devices.json` marks
 panel backlights with `backlight: true` (not the PTO2's gates, nor its
 unidentified `Landing_gear_lights`), and the same test file fails when a
-default's backlights resolve to different bindings, following `same_as`. The
+default's backlights resolve to different bindings, following `same_as`
+across panels. The
 Hornet and Super Hornet moved their UFC, MFDs and ICP from `INST_PNL_DIMMER`
 to `CONSOLES_DIMMER` for it. **The Mi-24P is exempt, by name and with its
 reason, until the Hind's backlight knob is found with learn mode**; remove

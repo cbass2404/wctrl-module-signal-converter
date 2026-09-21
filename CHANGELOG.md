@@ -35,6 +35,10 @@ alone, so naming what moved matters there too.
   need every lamp and field set up again. Choose **uses** in a panel's header
   and point it at another unit of the same kind: it gets exactly what that one
   has, and its own setup is kept in case you switch back.
+- **A lamp can match a lamp on another panel.** "Match another lamp" now lists
+  the dimmers on every panel, not only its own, so an MFD's backlight can
+  follow the throttle's and the whole pit dims from one place. Two lamps still
+  cannot follow each other, on one panel or across two.
 
 ### Changed
 
@@ -54,6 +58,35 @@ alone, so naming what moved matters there too.
   right within them. It draws exactly as it did. DCS-BIOS sends 8 characters
   for 7 cells, so one of them was always going, and saying which in the profile
   is what stops the editor warning that one might.
+- **Every aircraft: one knob dims the whole pit.** Every backlight on every
+  panel now matches the centre MFD's backlight (the MFD C's
+  `INST_PNL_Backlight`) instead of reading the cockpit knob for itself. That is
+  the same knob as before, so the lamps look the same until you change the MFD
+  C's row, and then they all follow it. Rows: `Backlight`,
+  `INST_PNL_Backlight`, `HUD_INST_PNL_Backlight`, `Marker_Light`, `SL`, `FLAG`,
+  `Backlight_L`, `Backlight_R` and `Logo` on every panel except the MFD C.
+- **Every aircraft: the MFD L and R use the MFD C's setup, and the MCDU
+  Co-Pilot and Observer use the Captain's.** Their own rows stay in the profile
+  and come back if you point **uses** back at the panel itself.
+- **F-14, F-14BU and Mi-24P:** the MCDU `Marker_Light` and the PTO2 `SL` and
+  `FLAG` were held at full. They now dim with the console lights, and go full
+  bright when the console lights are off.
+- **F-14 and F-14BU:** the PTO2 is wired. `LEFT`, `NOSE` and `RIGHT` show the
+  gear, `HALF` and `FULL` the flaps, `FLAPS` and `HOOK` their warning lights,
+  `Landing_gear_lights` the gear handle light, and `Master_Caution` lights for
+  the pilot's or the RIO's master caution.
+- **F-16:** the PTO2 `LEFT`, `NOSE` and `RIGHT` show the gear.
+- **AH-64D:** the PTO2 `LI`, `LO`, `RI` and `RO` show the jettison stations
+  selected in your seat, `JETT` lights when any station is selected in either
+  seat, and `Master_Caution` follows your seat and lights for a master warning
+  as well as a master caution.
+- **A-10C:** the throttle's `A/A` lights with the master arm at ARM, and `A/G`
+  with the GUN/PAC switch at ARM, where the gun is live. The UFC's `HUD_INST_PNL_Backlight` goes full
+  bright when the console lights are off.
+- **CH-47F and F-14:** the ICP is no longer switched off, so its backlight
+  follows the pit.
+- **No aircraft:** every panel is switched off, so nothing lights while you
+  spectate.
 
 ### Fixed
 

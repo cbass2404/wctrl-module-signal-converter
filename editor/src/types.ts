@@ -62,6 +62,8 @@ export interface Binding {
    * no level to follow. Mutually exclusive with the other three forms.
    */
   same_as?: string | null;
+  /** The device holding the `same_as` lamp, when it is not this one. */
+  same_as_device?: string | null;
   on: number | null;
   off: number;
   note?: string;

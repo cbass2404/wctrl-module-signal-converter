@@ -235,8 +235,9 @@ change; the point is that choosing a signal should usually be the only step.
 
 ### Matching another lamp
 
-`same_as` points one lamp at another on the same device, and it follows whatever
-that lamp resolved to:
+`same_as` points one lamp at another, and it follows whatever that lamp
+resolved to. The lamp is on the same device unless `same_as_device` names
+another:
 
 ```jsonc
 {
@@ -247,10 +248,27 @@ that lamp resolved to:
 }
 ```
 
+```jsonc
+{
+  "device": "CarrierAce_MFD_L",
+  "led": "INST_PNL_Backlight",
+  "same_as": "Backlight",
+  "same_as_device": "TAKEOFF_PLANEL_2",
+}
+```
+
 This is a link, not a copy. The PTO2 is the case it exists for: it carries three
 independent brightness governors that are usually meant to sit at one level, and
 writing the same conditions into all three means every later change has to be
-made three times or they drift apart without anyone noticing.
+made three times or they drift apart without anyone noticing. Backlights across
+panels are the same problem one level up: every default puts them all on one
+knob, and a panel pointed at another's backlight keeps it there when the knob
+changes.
+
+`same_as_device` is written only when it names another device, so a profile
+from before it existed reads the same. Naming a device that follows another
+(see "One panel under several names") reads the one it follows, since the
+follower's own rows are not in use; the editor offers only the device followed.
 
 **Only between lamps that dim, on both ends.** An indicator takes 0 or 1, so it
 has no level to follow and none to offer; mirroring one either way would be a
@@ -277,10 +295,14 @@ with every signal at 0, and the daemon logs the same caution on load. A newly
 generated profile starts both gates held at full with the floor already set, so
 switching one to follow a dimmer does not blank the panel by day.
 
-**Chains are not allowed.** The target must read signals of its own, which rules
-out cycles with no cycle detection to get wrong. A mirroring lamp reads nothing
-directly, so the engine indexes it under its target's addresses; otherwise it
-would be written once by the sweep and then never follow anything.
+**Chains are not allowed**, on one device or across several. The target must
+read signals of its own, which rules out cycles with no cycle detection to get
+wrong: two panels pointed at each other are refused at both ends, and so is a
+lamp pointed at itself through a device that follows its own. The editor does
+not offer a lamp that mirrors something as a target, and does not offer
+matching at all on a lamp something else already follows. A mirroring lamp
+reads nothing directly, so the engine indexes it under its target's addresses;
+otherwise it would be written once by the sweep and then never follow anything.
 
 `same_as` is mutually exclusive with `conditions`, `any_of` and `always`.
 
@@ -797,8 +819,10 @@ follows, under its own name, when the engine loads the profile. Rules:
 - **Disabling is separate.** A follower is driven unless it is disabled
   itself, so disabling the device it follows leaves it running.
 
-Two-seat aircraft whose MCDUs show different seats, the AH-64D and CH-47F, do
-not want this: there the seat on each field is what picks the source.
+Two-seat aircraft such as the AH-64D and CH-47F can follow too: the seat on
+each field picks the source, so every MCDU name carries the same fields and a
+follower loses nothing. Every shipped default points the MCDU Co-Pilot and
+Observer at the Captain, and the MFD L and R at the MFD C.
 
 In the editor it is the **uses** dropdown in the panel's header, offered only
 on a panel that has variants. A panel that follows stays closed and says

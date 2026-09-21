@@ -71,7 +71,7 @@ pub enum Error {
     EmptyBranch(String),
     #[error("LED {0:?} picks between alternatives but has none; pick applies only to any_of")]
     PickWithoutAlternatives(String),
-    #[error("LED {0:?} mirrors {1:?}, which is not a lamp on device {2:?}")]
+    #[error("LED {0:?} mirrors {1:?}, which has no row on device {2:?}")]
     UnknownMirror(String, String, String),
     #[error("LED {0:?} mirrors {1:?}, which mirrors something itself; a mirror must point at a lamp that reads signals")]
     MirrorChain(String, String),
@@ -623,7 +623,8 @@ pub struct Binding {
     /// How the alternatives in `any_of` combine. See [`Pick`].
     #[serde(default, skip_serializing_if = "Pick::is_brightest")]
     pub pick: Pick,
-    /// Mirror another lamp on the same device, by name.
+    /// Mirror another lamp, by name, on this device unless
+    /// [`same_as_device`](Self::same_as_device) names another.
     ///
     /// A link rather than a copy: change what the other lamp reads and this one
     /// follows. The PTO2 is the case it exists for, because its three
@@ -642,6 +643,15 @@ pub struct Binding {
     /// Mutually exclusive with `conditions`, `any_of` and `always`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub same_as: Option<String>,
+    /// The device holding the lamp `same_as` names, when it is not this one.
+    ///
+    /// So one panel's backlight can follow another's: an MFD bezel set to
+    /// match the throttle's is one knob to change instead of two. Left out, the
+    /// lamp is on this device, which is every profile written before this
+    /// existed. A device that follows another is read through the one it
+    /// follows, since its own rows are not in use.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub same_as_device: Option<String>,
     /// Omitted means "fully on for this lamp", resolved from the LED itself.
     ///
     /// Skipped when absent, and `off` when zero, so a profile the editor saves
@@ -919,6 +929,7 @@ impl Binding {
             any_of: Vec::new(),
             pick: Pick::default(),
             same_as: None,
+            same_as_device: None,
             on: None,
             off: if held { led.max_value() } else { 0 },
             note: note.to_string(),
@@ -1210,12 +1221,22 @@ impl Profile {
         Ok(())
     }
 
+    /// The device and lamp a mirroring lamp points at, if it mirrors one.
+    ///
+    /// A device that follows another is read as the one it follows, whose rows
+    /// are the ones in use; after [`with_followers`](Self::with_followers) the
+    /// two hold the same rows, so either reading gives the same value.
+    fn mirror_target<'a>(&'a self, b: &'a Binding) -> Option<(&'a str, &'a str)> {
+        let led = b.same_as.as_deref()?;
+        let device = b.same_as_device.as_deref().unwrap_or(&b.device);
+        let device = self.follows.get(device).map_or(device, String::as_str);
+        Some((device, led))
+    }
+
     /// The binding a mirroring lamp points at, if any.
     fn mirrored<'a>(&'a self, b: &'a Binding) -> Option<&'a Binding> {
-        let target = b.same_as.as_deref()?;
-        self.bindings
-            .iter()
-            .find(|o| o.device == b.device && o.led == target)
+        let (device, led) = self.mirror_target(b)?;
+        self.bindings.iter().find(|o| o.device == device && o.led == led)
     }
 
     /// Every signal a binding depends on, following a mirror to its target.
@@ -1324,35 +1345,31 @@ impl Profile {
             {
                 out.push(Error::MirrorWithConditions(b.led.clone()));
             }
-            if let Some(target) = &b.same_as {
-                match self
-                    .bindings
-                    .iter()
-                    .find(|o| o.device == b.device && &o.led == target)
-                {
+            if let Some((target_device, target)) = self.mirror_target(b) {
+                match self.mirrored(b) {
                     None => out.push(Error::UnknownMirror(
                         b.led.clone(),
-                        target.clone(),
-                        b.device.clone(),
+                        target.to_string(),
+                        target_device.to_string(),
                     )),
                     Some(other) => {
                         if other.same_as.is_some() {
-                            out.push(Error::MirrorChain(b.led.clone(), target.clone()));
+                            out.push(Error::MirrorChain(b.led.clone(), target.to_string()));
                         }
                         // Only lamps that dim, on both ends. An indicator takes
                         // 0 or 1, so it has no level to follow and none to
                         // offer: mirroring one either way would be a setting
                         // that cannot mean what it says.
-                        if let Some(device) = devices.device(&b.device) {
-                            let dims = |name: &str| {
-                                device
-                                    .led(name)
-                                    .map(|(_, led)| led.is_dimmable())
-                                    .unwrap_or(false)
-                            };
-                            if !dims(&b.led) || !dims(target) {
-                                out.push(Error::MirrorNotDimmable(b.led.clone(), target.clone()));
-                            }
+                        let dims = |device: &str, name: &str| {
+                            devices
+                                .device(device)
+                                .and_then(|d| d.led(name))
+                                .is_some_and(|(_, led)| led.is_dimmable())
+                        };
+                        if devices.device(&b.device).is_some()
+                            && (!dims(&b.device, &b.led) || !dims(target_device, target))
+                        {
+                            out.push(Error::MirrorNotDimmable(b.led.clone(), target.to_string()));
                         }
                     }
                 }
@@ -2676,6 +2693,7 @@ mod tests {
             any_of: Vec::new(),
             pick: Pick::default(),
             same_as: None,
+            same_as_device: None,
             on,
             off: 0,
             note: String::new(),
@@ -2733,6 +2751,7 @@ mod tests {
             always: false,
             pick: Pick::default(),
             same_as: None,
+            same_as_device: None,
             any_of: vec![
                 Branch {
                     conditions: vec![
@@ -2847,6 +2866,7 @@ mod tests {
             always: false,
             pick,
             same_as: None,
+            same_as_device: None,
             any_of: vec![
                 Branch {
                     conditions: vec![cond("PLT_KNOB", OnWhen::Scale([0, 8]))],
@@ -2948,6 +2968,7 @@ mod tests {
                     any_of: Vec::new(),
                     pick: Pick::default(),
                     same_as: None,
+                    same_as_device: None,
                     on: None,
                     off: 0,
                     note: String::new(),
@@ -2960,6 +2981,7 @@ mod tests {
                     any_of: Vec::new(),
                     pick: Pick::default(),
                     same_as: same_as.map(str::to_string),
+                    same_as_device: None,
                     on: None,
                     off: 255,
                     note: String::new(),
@@ -3005,6 +3027,39 @@ mod tests {
         // And without the mirror it reports nothing, because it reads nothing.
         let plain = mirror_profile(None);
         assert!(profile.sources_of(&plain.bindings[1]).is_empty());
+    }
+
+    /// A mirror can name a lamp on another device, and follows it the same way.
+    #[test]
+    fn a_mirror_follows_a_lamp_on_another_device() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let mut profile = mirror_profile(Some("Backlight"));
+        profile.bindings[1].device = "E".into();
+        profile.bindings[1].same_as_device = Some("D".into());
+        let flag = &profile.bindings[1];
+
+        assert_eq!(profile.resolve_binding(flag, &led, |_| Some(32768)), Some(127));
+        assert_eq!(profile.sources_of(flag), vec!["DIM"]);
+        // Without the device it looks on its own, which holds no `Backlight`.
+        let mut local = profile.clone();
+        local.bindings[1].same_as_device = None;
+        assert!(local.sources_of(&local.bindings[1]).is_empty());
+    }
+
+    /// Pointing at a device that follows another reads the one it follows,
+    /// whose rows are the ones in use.
+    #[test]
+    fn a_mirror_on_a_follower_reads_what_it_follows() {
+        let led = lamp(LedKind::Dimmer, 255);
+        let mut profile = mirror_profile(Some("Backlight"));
+        profile.bindings[1].device = "E".into();
+        profile.bindings[1].same_as_device = Some("F".into());
+        profile.follows.insert("F".into(), "D".into());
+        let flag = &profile.bindings[1];
+        assert_eq!(profile.resolve_binding(flag, &led, |_| Some(65535)), Some(255));
+        let running = profile.with_followers();
+        let flag = running.bindings.iter().find(|b| b.device == "E").unwrap();
+        assert_eq!(running.sources_of(flag), vec!["DIM"]);
     }
 
     /// The editor rewrites whole profiles, and these files are shipped and

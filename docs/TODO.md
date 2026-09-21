@@ -27,10 +27,17 @@ do not.
       that both show the IFEI page and dim together. See "one panel under
       several names" in STATUS.md.
 
-- [ ] **Decide whether shipped defaults use `follows`.** The three MCDU and
-      three MFD lamp blocks in every default could each become one block and
-      two followers. That rewrites rows users may have changed, so it is a
-      decision rather than a cleanup.
+- [x] ~~**Point the defaults' backlights at one lamp across panels.**~~ Done
+      2026-09-21: every backlight in every default matches the MFD C's
+      `INST_PNL_Backlight`, moved in the editor. The changed rows are named in
+      CHANGELOG.md.
+
+- [x] ~~**Fly a cross-panel `same_as`.**~~ Proven on the panels 2026-09-21: a
+      dimmer pointed at a dimmer on another device follows it.
+
+- [x] ~~**Decide whether shipped defaults use `follows`.**~~ Decided
+      2026-09-21: they do. In every default the MFD L and R use the MFD C and
+      the MCDU Co-Pilot and Observer use the Captain; their own rows are kept.
 
 - [ ] **Decide whether the IFEI page ships as the Hornet's MCDU default.**
       Validated on the panel 2026-09-21; the profile edits are uncommitted

@@ -30,6 +30,11 @@ alone, so naming what moved matters there too.
   reading that grows eats into the dashes instead of being cropped. Give it a
   fixed width and it can carry a label, with its own colour, exactly as a
   whole-row rule does.
+- **One panel sold under several names can share one setup.** The MCDU comes
+  as Captain, Co-Pilot and Observer and the MFD as L, C and R, and each used to
+  need every lamp and field set up again. Choose **uses** in a panel's header
+  and point it at another unit of the same kind: it gets exactly what that one
+  has, and its own setup is kept in case you switch back.
 
 ### Changed
 

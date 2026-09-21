@@ -770,6 +770,40 @@ Its lamps and fields stay in the profile and are simply ignored, so turning the
 panel back on restores exactly what was set up. In the editor the panel's
 section stays closed while it is not driven.
 
+## One panel under several names
+
+WinWing sells some panels as several products with the same hardware and a USB
+id each: the MCDU as Captain, Co-Pilot and Observer, the MFD as L, C and R.
+Each is its own device here, so without help every lamp and field is set up
+once per name. `follows` points one at another instead:
+
+```jsonc
+"follows": {
+  "MCDU_CoPilot": "MCDU_Captain",   // the follower, then the one it copies
+  "MCDU_Observer": "MCDU_Captain"
+}
+```
+
+The follower is driven with a copy of every lamp and field on the device it
+follows, under its own name, when the engine loads the profile. Rules:
+
+- **Only the same hardware.** Two devices qualify when their parts carry the
+  same lamps at the same indices and the same displays. This is worked out from
+  `devices.json` rather than listed, so a new variant needs nothing else.
+- **One step deep.** A device that follows cannot be followed, so there is
+  always one place to edit.
+- **The follower's own rows are kept and not used**, the way a disabled
+  panel's are, so stopping gives back what was there.
+- **Disabling is separate.** A follower is driven unless it is disabled
+  itself, so disabling the device it follows leaves it running.
+
+Two-seat aircraft whose MCDUs show different seats, the AH-64D and CH-47F, do
+not want this: there the seat on each field is what picks the source.
+
+In the editor it is the **uses** dropdown in the panel's header, offered only
+on a panel that has variants. A panel that follows stays closed and says
+whose setup it uses.
+
 ## Display fields
 
 A panel with glass carries `readouts` alongside `bindings`. They have almost

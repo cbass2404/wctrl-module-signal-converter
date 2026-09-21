@@ -980,6 +980,20 @@ details.device.off > summary {
   margin: 0;
 }
 
+/* The follow chooser and the drive box share the right-hand end. */
+.drive + .drive {
+  margin-left: 12px;
+}
+
+/* A unit that takes another's setup. Its own rows are kept, but not used. */
+details.device.follows table {
+  opacity: 0.45;
+}
+
+details.device.follows > summary {
+  cursor: default;
+}
+
 .displays {
   padding: 0 14px 14px;
 }

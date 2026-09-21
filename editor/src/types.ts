@@ -305,6 +305,12 @@ export interface Profile {
    * hides the other.
    */
   disabled_devices?: string[];
+  /**
+   * Devices that take another device's setup, keyed by the one that follows.
+   * Only between variants, and one step deep. The follower's own rows are
+   * kept and ignored while it follows.
+   */
+  follows?: Record<string, string>;
 }
 
 export interface Led {
@@ -405,6 +411,12 @@ export interface Device {
   product_name: string;
   leds: Led[];
   displays: DisplayInfo[];
+  /**
+   * Other devices that are this one under another name: the MCDU's three
+   * seats, the MFD's three positions. A profile can point this one at any of
+   * them rather than setting it up again.
+   */
+  variants: string[];
 }
 
 /** A profile picked for import, before anything is written. */

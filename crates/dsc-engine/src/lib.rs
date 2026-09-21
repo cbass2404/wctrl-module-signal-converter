@@ -205,12 +205,19 @@ pub struct Engine {
     move_clock: u64,
 }
 
+/// Profiles as they run, with every device that follows another given that
+/// device's rows. The one place a follower is resolved, so the engine never
+/// has to know one exists.
+fn running(profiles: Vec<Profile>) -> Vec<Profile> {
+    profiles.iter().map(Profile::with_followers).collect()
+}
+
 impl Engine {
     pub fn new(devices: DeviceInventory, catalogue: Catalogue, profiles: Vec<Profile>) -> Self {
         Engine {
             devices,
             catalogue,
-            profiles,
+            profiles: running(profiles),
             connected: Vec::new(),
             state: BiosState::new(),
             aircraft: None,
@@ -238,7 +245,7 @@ impl Engine {
     /// that just became unbound has to be driven off. Nothing else would
     /// notice either case.
     pub fn set_profiles(&mut self, profiles: Vec<Profile>) -> Batch {
-        self.profiles = profiles;
+        self.profiles = running(profiles);
 
         let Some(aircraft) = self.aircraft.clone() else {
             // Nothing is loaded, so there is nothing to sweep. The new profiles

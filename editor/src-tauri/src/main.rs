@@ -50,7 +50,7 @@ fn devices() -> Reply<Vec<DeviceView>> {
     let mut out: Vec<DeviceView> = inv
         .devices
         .iter()
-        .map(|d| DeviceView::of(d).with_displays(d, &maps))
+        .map(|d| DeviceView::of(d).with_displays(d, &maps).with_variants(d, &inv.devices))
         .collect();
     out.sort_by(|a, b| a.display_name.to_lowercase().cmp(&b.display_name.to_lowercase()));
     Ok(out)

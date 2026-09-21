@@ -62,6 +62,10 @@ pub struct DeviceView {
     /// Segment displays this device carries, if any. Almost every panel has
     /// none, so the window only grows a display section where there is glass.
     pub displays: Vec<DisplayView>,
+    /// Other devices that are this one under another name, which a profile
+    /// can point it at. Worked out here by `same_hardware` so the window does
+    /// not keep a second idea of what counts.
+    pub variants: Vec<String>,
 }
 
 /// A segment display, described only as far as the window needs it.
@@ -192,7 +196,18 @@ impl DeviceView {
             product_name: spec.product_name.clone(),
             leds: spec.leds().map(|(part, led)| LedView::of(part.part_id, led)).collect(),
             displays: Vec::new(),
+            variants: Vec::new(),
         }
+    }
+
+    /// Fill in the other devices that are this one under another name.
+    pub fn with_variants(mut self, spec: &DeviceSpec, all: &[DeviceSpec]) -> Self {
+        self.variants = all
+            .iter()
+            .filter(|d| d.key != spec.key && d.same_hardware(spec))
+            .map(|d| d.key.clone())
+            .collect();
+        self
     }
 
     /// Fill in the display descriptions from the loaded maps.

@@ -104,9 +104,18 @@
     {
       "device": "MCDU_Captain",
       "led": "Screen_Backlight",
-      "conditions": [],
-      "always": true,
-      "off": 255,
+      "conditions": [
+        {
+          "source": "IFEI",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ],
+      "off": 50,
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     },
     {
@@ -746,7 +755,7 @@
         },
         {
           "gap": true,
-          "width": 6
+          "width": 5
         }
       ]
     },
@@ -759,7 +768,9 @@
           "gap": true
         },
         {
-          "text": "MODE",
+          "text": "MD",
+          "width": 3,
+          "align": "right",
           "colour": "green"
         }
       ]
@@ -789,12 +800,12 @@
           "gap": true
         },
         {
-          "source": "IFEI_T",
+          "source": "IFEI_FUEL_UP",
           "colour": "amber"
         },
         {
           "gap": true,
-          "width": 4
+          "width": 3
         }
       ]
     },
@@ -804,10 +815,51 @@
       "cells": "288-311",
       "content": [
         {
+          "source": "IFEI_OIL_PRESS_L",
+          "width": 3,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
+          "text": "OIL",
+          "width": 4,
+          "align": "right",
+          "colour": "white",
+          "small": true
+        },
+        {
+          "source": "IFEI_OIL_PRESS_R",
+          "width": 4,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
           "gap": true
         },
         {
+          "source": "IFEI_CLOCK_H",
+          "colour": "amber"
+        },
+        {
+          "text": ":",
+          "colour": "amber"
+        },
+        {
+          "source": "IFEI_CLOCK_M",
+          "colour": "amber"
+        },
+        {
+          "text": ":",
+          "colour": "amber"
+        },
+        {
+          "source": "IFEI_CLOCK_S",
+          "colour": "amber"
+        },
+        {
           "text": "ET",
+          "width": 3,
+          "align": "right",
           "colour": "green"
         }
       ]
@@ -818,50 +870,15 @@
       "cells": "264-287",
       "content": [
         {
-          "source": "IFEI_OIL_PRESS_L",
-          "width": 4,
-          "colour": "amber"
+          "gap": true
         },
         {
-          "text": "OIL",
-          "width": 3,
-          "small": true
-        },
-        {
-          "source": "IFEI_OIL_PRESS_R",
-          "width": 4,
-          "align": "right",
-          "colour": "amber"
-        },
-        {
-          "gap": true,
-          "width": 1
-        },
-        {
-          "source": "IFEI_TIMER_H",
-          "width": 2,
-          "colour": "amber"
-        },
-        {
-          "text": ":",
-          "width": 1
-        },
-        {
-          "source": "IFEI_TIMER_M",
-          "width": 2,
-          "colour": "amber"
-        },
-        {
-          "text": ":"
-        },
-        {
-          "source": "IFEI_TIMER_S",
-          "width": 2,
-          "colour": "amber"
-        },
-        {
-          "gap": true,
+          "text": "TIME",
           "width": 4
+        },
+        {
+          "gap": true,
+          "width": 5
         }
       ]
     },
@@ -871,31 +888,37 @@
       "cells": "240-263",
       "content": [
         {
-          "gap": true,
-          "width": 10
+          "source": "EXT_NOZZLE_POS_L",
+          "width": 3,
+          "align": "right",
+          "reads": [
+            0.0,
+            100.0
+          ],
+          "colour": "amber"
+        },
+        {
+          "text": "NOZ",
+          "width": 4,
+          "align": "right",
+          "small": true
+        },
+        {
+          "source": "EXT_NOZZLE_POS_R",
+          "width": 4,
+          "align": "right",
+          "reads": [
+            0.0,
+            100.0
+          ],
+          "colour": "amber"
         },
         {
           "gap": true
         },
         {
-          "source": "IFEI_CLOCK_H"
-        },
-        {
-          "text": ":"
-        },
-        {
-          "source": "IFEI_CLOCK_M"
-        },
-        {
-          "text": ":"
-        },
-        {
-          "source": "IFEI_CLOCK_S",
-          "width": 2
-        },
-        {
-          "text": "ZONE",
-          "width": 4,
+          "text": "ZN",
+          "width": 3,
           "align": "right",
           "colour": "green"
         }
@@ -904,31 +927,163 @@
     {
       "device": "MCDU_Captain",
       "display": "MCDU",
-      "cells": "216-239",
+      "cells": "192-215",
       "content": [
         {
-          "text": " ",
-          "width": 4
-        },
-        {
-          "text": "NOZ",
-          "width": 3,
+          "text": "X100",
+          "width": 8,
           "align": "right",
           "small": true
-        },
-        {
-          "text": " ",
-          "width": 4
         },
         {
           "gap": true
         },
         {
-          "text": "TIME"
+          "source": "IFEI_BINGO",
+          "colour": "amber"
+        },
+        {
+          "text": "DN",
+          "width": 3,
+          "align": "right",
+          "colour": "green"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "144-167",
+      "content": [
+        {
+          "gap": true
+        },
+        {
+          "text": "UP",
+          "width": 3,
+          "align": "right",
+          "colour": "green"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "96-119",
+      "content": [
+        {
+          "gap": true
+        },
+        {
+          "text": "QT",
+          "width": 3,
+          "align": "right",
+          "colour": "green"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "120-143",
+      "content": [
+        {
+          "source": "IFEI_TEMP_L",
+          "colour": "amber"
+        },
+        {
+          "text": "TEM",
+          "width": 4,
+          "align": "right",
+          "small": true
+        },
+        {
+          "source": "IFEI_TEMP_R",
+          "width": 4,
+          "align": "centre",
+          "colour": "amber"
+        },
+        {
+          "gap": true
+        },
+        {
+          "source": "IFEI_FUEL_DOWN",
+          "colour": "amber"
         },
         {
           "gap": true,
-          "width": 6
+          "width": 3
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "168-191",
+      "content": [
+        {
+          "source": "IFEI_FF_L",
+          "width": 3,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
+          "text": "FF",
+          "width": 4,
+          "align": "right",
+          "small": true
+        },
+        {
+          "source": "IFEI_FF_R",
+          "width": 4,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
+          "gap": true
+        },
+        {
+          "text": "BINGO",
+          "colour": "white",
+          "small": true
+        },
+        {
+          "gap": true,
+          "width": 4
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "312-335",
+      "content": [
+        {
+          "gap": true
+        },
+        {
+          "source": "IFEI_TIMER_H",
+          "colour": "amber"
+        },
+        {
+          "text": ":",
+          "colour": "amber"
+        },
+        {
+          "source": "IFEI_TIMER_M",
+          "colour": "amber"
+        },
+        {
+          "text": ":",
+          "colour": "amber"
+        },
+        {
+          "source": "IFEI_TIMER_S",
+          "colour": "amber"
+        },
+        {
+          "gap": true,
+          "width": 3
         }
       ]
     }

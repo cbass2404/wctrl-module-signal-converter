@@ -4,7 +4,7 @@
 //! device inventory is `data/devices.json`. Profiles are authored by the user,
 //! keyed by LED rather than by signal  see docs/CONFIG.md.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -134,6 +134,14 @@ pub enum Error {
     RangeOnText(String),
     #[error("profile disables device {0:?}, which is not a device we know")]
     DisablesUnknownDevice(String),
+    #[error("{0:?} is set to follow {1:?}, and {2:?} is not a device we know")]
+    FollowsUnknownDevice(String, String, String),
+    #[error("{0:?} is set to follow itself")]
+    FollowsItself(String),
+    #[error("{0:?} follows {1:?}, which follows another device in turn; point it at that one instead")]
+    FollowChain(String, String),
+    #[error("{0:?} cannot follow {1:?}: they are different hardware, so the lamps and screens would not line up")]
+    FollowsDifferentHardware(String, String),
     #[error("a field is set to seat {0}, but module {1:?} does not report {2}, so nothing would ever be painted there")]
     SeatNotReported(u32, String, &'static str),
     #[error("seat {0} is not one this module has; {1} reports 0 to {2}")]
@@ -469,6 +477,29 @@ impl DeviceSpec {
         self.parts
             .iter()
             .filter_map(|p| p.display.as_deref().map(|d| (p, d)))
+    }
+
+    /// Whether `other` is this device under another name: the same lamps at
+    /// the same indices and the same screens, whatever its part ids and USB id
+    /// say.
+    ///
+    /// WinWing sells one panel as several products, one per seat or position,
+    /// each with its own PID so that more than one can sit on a desk. The
+    /// MCDU is Captain, Co-Pilot and Observer, and the MFD is L, C and R. A
+    /// profile can point one at another rather than setting both up, and this
+    /// is what decides it may. Worked out from the hardware rather than listed,
+    /// so a variant added to the inventory is one without anything else said.
+    pub fn same_hardware(&self, other: &DeviceSpec) -> bool {
+        let shape = |d: &DeviceSpec| {
+            d.parts
+                .iter()
+                .map(|p| {
+                    let leds: Vec<_> = p.leds.iter().map(|l| (l.index, l.name.clone(), l.max)).collect();
+                    (p.display.clone(), leds)
+                })
+                .collect::<Vec<_>>()
+        };
+        shape(self) == shape(other)
     }
 }
 
@@ -1045,6 +1076,20 @@ pub struct Profile {
     /// zero by a sweep.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub disabled_devices: Vec<String>,
+    /// Devices that take another device's setup instead of holding their own,
+    /// keyed by the one that follows.
+    ///
+    /// For variants of one panel, which WinWing sells under a name per seat:
+    /// an MCDU set up as Captain can drive the Co-Pilot and Observer units
+    /// too, rather than every lamp and field being written three times and
+    /// kept in step by hand. Only between the same hardware, see
+    /// [`DeviceSpec::same_hardware`], and one step deep: a device that follows
+    /// cannot be followed, so there is always exactly one place to edit.
+    ///
+    /// The follower's own rows are kept and ignored while it follows, the way
+    /// a disabled device's are, so stopping gives back what was there.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub follows: BTreeMap<String, String>,
 }
 
 fn default_schema() -> u32 {
@@ -1063,6 +1108,40 @@ impl Profile {
     /// leaving its backlight where the user set it beats zeroing it.
     pub fn drives(&self, device: &str) -> bool {
         !self.disabled_devices.iter().any(|d| d == device)
+    }
+
+    /// This profile as it runs: every device that follows another given a
+    /// copy of that device's lamps and fields in place of its own.
+    ///
+    /// Done once, when the engine takes the profile, so nothing downstream has
+    /// a second kind of device to know about. Each follower is still driven,
+    /// disabled or not, under its own name, so disabling the one it follows
+    /// leaves it running.
+    pub fn with_followers(&self) -> Profile {
+        let mut p = self.clone();
+        if self.follows.is_empty() {
+            return p;
+        }
+        p.bindings.retain(|b| !self.follows.contains_key(&b.device));
+        p.readouts.retain(|r| !self.follows.contains_key(&r.device));
+        for (follower, source) in &self.follows {
+            // A chain is refused by `problems`. Should one be loaded anyway,
+            // copying from a follower would copy the rows just set aside.
+            if self.follows.contains_key(source) {
+                continue;
+            }
+            p.bindings.extend(self.bindings.iter().filter(|b| &b.device == source).map(|b| {
+                let mut b = b.clone();
+                b.device = follower.clone();
+                b
+            }));
+            p.readouts.extend(self.readouts.iter().filter(|r| &r.device == source).map(|r| {
+                let mut r = r.clone();
+                r.device = follower.clone();
+                r
+            }));
+        }
+        p
     }
 
     /// A profile with one unassigned row per LED on every device given.
@@ -1097,6 +1176,7 @@ impl Profile {
             // so an empty field needs no record here to be offered.
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
+            follows: BTreeMap::new(),
         }
     }
 
@@ -1418,6 +1498,15 @@ impl Profile {
                 ));
             }
         }
+        for (device, source) in &self.follows {
+            let lamps = self.bindings.iter().filter(|b| &b.device == device && !b.is_placeholder()).count();
+            let fields = self.readouts.iter().filter(|r| &r.device == device).count();
+            if lamps + fields > 0 {
+                out.push(format!(
+                    "{device} follows {source} in this profile, so {lamps} lamp binding(s) and {fields} display field(s) of its own are kept but not used"
+                ));
+            }
+        }
         out
     }
 
@@ -1511,6 +1600,27 @@ impl Profile {
         for name in &self.disabled_devices {
             if devices.device(name).is_none() {
                 out.push(Error::DisablesUnknownDevice(name.clone()));
+            }
+        }
+        for (follower, source) in &self.follows {
+            if follower == source {
+                out.push(Error::FollowsItself(follower.clone()));
+                continue;
+            }
+            let (Some(a), Some(b)) = (devices.device(follower), devices.device(source)) else {
+                let unknown = if devices.device(follower).is_none() { follower } else { source };
+                out.push(Error::FollowsUnknownDevice(
+                    follower.clone(),
+                    source.clone(),
+                    unknown.clone(),
+                ));
+                continue;
+            };
+            if self.follows.contains_key(source) {
+                out.push(Error::FollowChain(follower.clone(), source.clone()));
+            }
+            if !a.same_hardware(b) {
+                out.push(Error::FollowsDifferentHardware(follower.clone(), source.clone()));
             }
         }
         for (i, r) in self.readouts.iter().enumerate() {
@@ -2857,6 +2967,7 @@ mod tests {
             ],
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
+            follows: BTreeMap::new(),
         }
     }
 

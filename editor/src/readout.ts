@@ -1798,7 +1798,7 @@ function removeButton(opts: RowOptions): HTMLElement {
 /**
  * The colour every field on this display already draws in, if they agree.
  *
- * A new divider takes it, because a white rule across a green page reads as a
+ * A new rule takes it, because a white rule across a green page reads as a
  * fault rather than a divider. Undefined where they disagree or there are
  * none, which leaves the rule on the display's own default.
  */
@@ -1886,7 +1886,7 @@ export function displaySection(
           el("div", { class: "meta" }, extent(region.cells)),
         ),
       );
-      const add = (kind: "signal" | "text" | "rule", label: string): HTMLElement => {
+      const add = (kind: SpanKind, label: string): HTMLElement => {
         const button = el("button", { class: "add" }, label);
         button.addEventListener("click", () => {
           const fresh: Readout = {
@@ -1895,19 +1895,26 @@ export function displaySection(
             cells: region.cells,
             source: "",
           };
-          if (kind === "rule") {
-            fresh.divider = true;
-            fresh.colour = agreedColour(mine());
-          } else {
-            setContent(fresh, [newSpan(kind)]);
-          }
+          // Every first piece starts a chain, a rule included. A rule made
+          // here used to be a whole-field divider, which holds no pieces, so
+          // nothing could be added beside it and its kind could not be
+          // changed. A divider already in a profile still loads and edits.
+          const first = newSpan(kind);
+          if (kind === "rule") first.colour = agreedColour(mine());
+          setContent(fresh, [first]);
           readouts.push(fresh);
           redraw();
           onChange();
         });
         return button;
       };
-      const buttons = el("div", { class: "chain-add" }, add("signal", "+ a reading"), add("text", "+ text"));
+      const buttons = el(
+        "div",
+        { class: "chain-add" },
+        add("signal", "+ a reading"),
+        add("text", "+ text"),
+        add("gap", "+ a gap"),
+      );
       // Only a text grid draws a rule. A segment display draws from a glyph
       // table with no dash in it, and the daemon refuses one there.
       if (display.text_grid) buttons.append(add("rule", "+ a rule"));

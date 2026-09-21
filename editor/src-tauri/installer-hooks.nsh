@@ -9,6 +9,7 @@
 ;   * where profiles and the catalogue are written, which is not the install
 ;     folder, because each install replaces that
 ;   * the DCS hook itself, with DSC_DIR filled in, and its removal
+;   * not starting at all while DCS, the daemon or the editor is running
 ;   * not replacing dcs-signal.exe while DCS has it running
 ;
 ; The two folders are recorded under HKCU\Software\DCS Signal Converter, which
@@ -18,6 +19,8 @@
 
 !define DSC_KEY "Software\DCS Signal Converter"
 !define DSC_DAEMON "dcs-signal.exe"
+!define DSC_EDITOR "DCS Signal Converter.exe"
+!define DSC_DCS "DCS.exe"
 !define DSC_HOOK "dcs-signal-hook.lua"
 !define DSC_FOLDER "DCS Signal Converter"
 ; FOLDERID_SavedGames
@@ -38,6 +41,68 @@ Var DscDataDir
   ${EndIf}
   System::Call 'ole32::CoTaskMemFree(p r1)'
 !macroend
+
+; Before the first page, ask for DCS, the daemon and the editor to be closed.
+;
+; Asked up front rather than at the install step, so nobody clicks through
+; every page to be told at the end, and so an update never lands under a
+; running daemon: it reconciles profiles when it starts, and one already
+; running goes on flying the old files until something makes it reload.
+; Closing DCS is what closes the daemon, and a hook DCS has loaded is only
+; replaced by a restart, so DCS is the one named first.
+;
+; Nothing is killed here. The checks in the install and uninstall sections
+; still run, and they are the only ones a silent install reaches, since it
+; has no GUI to initialise.
+;
+; Found with tasklist rather than nsis_tauri_utils: Tauri's template adds its
+; plugin folder after including this file, and a function body is compiled
+; where it stands. A match is a CSV row, which starts with a quote; no match
+; is a message in the system's language, which never does.
+!define MUI_CUSTOMFUNCTION_GUIINIT DscCheckRunning
+!define MUI_CUSTOMFUNCTION_UNGUIINIT un.DscCheckRunning
+
+; $R0 is 1 when a process of this image name is running, else 0.
+!macro DSC_IS_RUNNING image
+  nsExec::ExecToStack 'tasklist /NH /FO CSV /FI "IMAGENAME eq ${image}"'
+  Pop $R0
+  Pop $R2
+  StrCpy $R2 $R2 1
+  ${If} $R2 == '"'
+    StrCpy $R0 1
+  ${Else}
+    StrCpy $R0 0
+  ${EndIf}
+!macroend
+
+!macro DSC_CHECK_RUNNING
+  dsc_running_check:
+  StrCpy $R1 ""
+  !insertmacro DSC_IS_RUNNING "${DSC_DCS}"
+  ${If} $R0 = 1
+    StrCpy $R1 "$R1$\r$\n    DCS World"
+  ${EndIf}
+  !insertmacro DSC_IS_RUNNING "${DSC_DAEMON}"
+  ${If} $R0 = 1
+    StrCpy $R1 "$R1$\r$\n    DCS Signal Converter (running with DCS)"
+  ${EndIf}
+  !insertmacro DSC_IS_RUNNING "${DSC_EDITOR}"
+  ${If} $R0 = 1
+    StrCpy $R1 "$R1$\r$\n    DCS Signal Converter editor"
+  ${EndIf}
+  ${If} $R1 != ""
+    MessageBox MB_RETRYCANCEL|MB_ICONEXCLAMATION "Close these before continuing:$\r$\n$R1$\r$\n$\r$\nThen choose Retry." IDRETRY dsc_running_check
+    Quit
+  ${EndIf}
+!macroend
+
+Function DscCheckRunning
+  !insertmacro DSC_CHECK_RUNNING
+FunctionEnd
+
+Function un.DscCheckRunning
+  !insertmacro DSC_CHECK_RUNNING
+FunctionEnd
 
 ; Wait for the daemon to go before its files are replaced or removed. It runs
 ; while DCS does, and killing it would leave whatever it lit on the panels.

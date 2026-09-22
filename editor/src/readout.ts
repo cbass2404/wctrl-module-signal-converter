@@ -259,6 +259,7 @@ function conversionRow(
   }
 
   const values = el("span", { class: "values-row" });
+  const after = el("span", { class: "values-row" });
   if (span.reads) {
     const number = (value: number, attrs: Record<string, string> = {}): HTMLInputElement =>
       el("input", { type: "number", class: "value", value: String(value), ...attrs });
@@ -300,9 +301,13 @@ function conversionRow(
       high,
       el("span", { class: "sep" }, "with"),
       dp,
-      el("span", { class: "sep" }, "decimals, rounded"),
+      el("span", { class: "sep" }, "decimals"),
+    );
+    // A line of its own: on the first the labels squeezed and broke.
+    after.append(
+      el("span", { class: "sep" }, "rounded"),
       round,
-      el("span", { class: "sep" }, ", wrapping at"),
+      el("span", { class: "sep" }, "and wrapping at"),
       wrap,
     );
   }
@@ -311,6 +316,7 @@ function conversionRow(
     "div",
     {},
     el("div", { class: "test-row" }, select, values),
+    span.reads ? el("div", { class: "test-row" }, after) : "",
     el(
       "span",
       { class: "meta block" },

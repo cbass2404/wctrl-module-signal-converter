@@ -170,9 +170,10 @@ unless this says what moved.
 
 **F/A-18**
 
-- **The JETT lamp on the PTO2 lights.** It was never bound. It now lights
-  with the selective jettison knob on a missile or rack position, or on
-  STORES with a station selected. Row: PTO2 `JETT`.
+- **The JETT lamp on the PTO2 lights when selective jettison is armed.** It
+  was never bound. It now lights with the selective jettison knob on L FUS
+  MSL or R FUS MSL, or on RACK/LCHR or STORES once a station is selected.
+  Row: PTO2 `JETT`.
 - **The MCDU Captain's screen holds 150** instead of following the IFEI
   brightness knob. Row: MCDU Captain `Screen_Backlight`. MCDU Captain
   `Backlight` also has a floor of 150 now, which applies only if the

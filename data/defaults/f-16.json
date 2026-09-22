@@ -852,7 +852,7 @@
           }
         }
       ],
-      "note": "pitch is read in 0.5g's with + equaling nose up and - equaling nose down per dot\nroll is read in 1.0 degrees/second increments per dot - equaling left wing down + equaling right wing down per dot\nyaw is read in 0.5 degrees deflection per dot with left yaw equaling - and right yaw equaling + per dot"
+      "note": "pitch is read in 0.5g's with + equaling nose up and - equaling nose down per dot\nroll is read in 1.0 degrees/second increments per dot - equaling right wing down + equaling left wing down per dot\nyaw is read in 0.5 degrees deflection per dot with left yaw equaling - and right yaw equaling + per dot"
     }
   ],
   "disabled_devices": [

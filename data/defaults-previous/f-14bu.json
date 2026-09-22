@@ -12,36 +12,9 @@
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_LIGHT_INTENT_CONSOLE",
-              "on_when": {
-                "scale": [
-                  0,
-                  8
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "RIO_LIGHT_INTENT_CONSOLE",
-              "on_when": {
-                "scale": [
-                  0,
-                  8
-                ]
-              }
-            }
-          ]
-        }
-      ],
-      "pick": "latest",
-      "note": "Every backlight follows the console light knob turned last, pilot's or RIO's. The module has no seat signal, so the knob in the player's hand is the one that moved; in multiplayer either crew member takes it back by turning theirs. Until one moves, the brighter one lights the panels."
+      "always": true,
+      "on": 175,
+      "note": "Every backlight is held at 175 rather than following a cockpit knob, so the panels stay readable whatever the cockpit lighting is set to. Point this row at a knob to have them dim with the cockpit again."
     },
     {
       "device": "CarrierAce_MFD_L",
@@ -101,7 +74,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Captain",
@@ -170,7 +143,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_CoPilot",
@@ -239,7 +212,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Observer",
@@ -543,14 +516,14 @@
       "source": "RIO_CDNU_LINE1",
       "colour": "green",
       "replace": {
-        "©": "◀",
-        "\u0013": "□",
         "«": "←",
         "®": "Δ",
         "»": "→",
+        "©": "◀",
+        "_": "⬡",
         "}": "↓",
-        "{": "↑",
-        "_": "⬡"
+        "\u0013": "□",
+        "{": "↑"
       },
       "note": "CDNU line 1. The eight 22-character CDNU lines sit on the bottom eight rows, 7 to 14, one column in so they are centred across (the WCtrlDcsBiosBridge uses rows 3 to 10). The F-14 reports no seat and only the RIO has a CDNU, so every MCDU shows the RIO's CDNU from either seat. The replace map turns the module's stand-ins into the font's glyphs: the font files a double-headed vertical arrow under Δ, a horizontal one under ◀, the scratchpad diamond under □ (it arrives as control code 0x13) and the cursor block under ⬡, because its underscore slot draws a cross."
     },
@@ -561,14 +534,14 @@
       "source": "RIO_CDNU_LINE2",
       "colour": "green",
       "replace": {
-        "©": "◀",
         "_": "⬡",
-        "«": "←",
         "\u0013": "□",
         "®": "Δ",
-        "{": "↑",
         "»": "→",
-        "}": "↓"
+        "{": "↑",
+        "«": "←",
+        "}": "↓",
+        "©": "◀"
       }
     },
     {
@@ -578,14 +551,14 @@
       "source": "RIO_CDNU_LINE3",
       "colour": "green",
       "replace": {
-        "_": "⬡",
-        "©": "◀",
         "«": "←",
-        "»": "→",
         "{": "↑",
         "\u0013": "□",
+        "_": "⬡",
+        "»": "→",
+        "}": "↓",
         "®": "Δ",
-        "}": "↓"
+        "©": "◀"
       }
     },
     {
@@ -595,14 +568,14 @@
       "source": "RIO_CDNU_LINE4",
       "colour": "green",
       "replace": {
-        "{": "↑",
         "©": "◀",
-        "_": "⬡",
+        "}": "↓",
+        "»": "→",
         "®": "Δ",
         "«": "←",
-        "»": "→",
         "\u0013": "□",
-        "}": "↓"
+        "{": "↑",
+        "_": "⬡"
       }
     },
     {
@@ -612,14 +585,14 @@
       "source": "RIO_CDNU_LINE5",
       "colour": "green",
       "replace": {
-        "{": "↑",
-        "\u0013": "□",
-        "_": "⬡",
-        "®": "Δ",
-        "}": "↓",
-        "©": "◀",
+        "«": "←",
         "»": "→",
-        "«": "←"
+        "}": "↓",
+        "{": "↑",
+        "®": "Δ",
+        "©": "◀",
+        "_": "⬡",
+        "\u0013": "□"
       }
     },
     {
@@ -629,14 +602,14 @@
       "source": "RIO_CDNU_LINE6",
       "colour": "green",
       "replace": {
-        "{": "↑",
-        "»": "→",
-        "«": "←",
         "®": "Δ",
-        "\u0013": "□",
-        "©": "◀",
+        "{": "↑",
         "_": "⬡",
-        "}": "↓"
+        "\u0013": "□",
+        "}": "↓",
+        "©": "◀",
+        "»": "→",
+        "«": "←"
       }
     },
     {
@@ -646,14 +619,14 @@
       "source": "RIO_CDNU_LINE7",
       "colour": "green",
       "replace": {
-        "®": "Δ",
-        "\u0013": "□",
         "{": "↑",
-        "©": "◀",
+        "\u0013": "□",
         "»": "→",
+        "«": "←",
+        "©": "◀",
         "_": "⬡",
         "}": "↓",
-        "«": "←"
+        "®": "Δ"
       }
     },
     {
@@ -663,12 +636,12 @@
       "source": "RIO_CDNU_LINE8",
       "colour": "green",
       "replace": {
-        "»": "→",
-        "«": "←",
-        "©": "◀",
         "}": "↓",
+        "«": "←",
         "\u0013": "□",
+        "»": "→",
         "®": "Δ",
+        "©": "◀",
         "{": "↑",
         "_": "⬡"
       }
@@ -680,13 +653,13 @@
       "source": "RIO_CDNU_LINE1",
       "colour": "green",
       "replace": {
-        "»": "→",
-        "«": "←",
-        "\u0013": "□",
-        "}": "↓",
-        "{": "↑",
-        "®": "Δ",
         "_": "⬡",
+        "»": "→",
+        "\u0013": "□",
+        "«": "←",
+        "®": "Δ",
+        "{": "↑",
+        "}": "↓",
         "©": "◀"
       }
     },
@@ -697,14 +670,14 @@
       "source": "RIO_CDNU_LINE2",
       "colour": "green",
       "replace": {
-        "\u0013": "□",
-        "}": "↓",
-        "®": "Δ",
-        "»": "→",
         "_": "⬡",
+        "{": "↑",
+        "}": "↓",
+        "»": "→",
         "«": "←",
+        "®": "Δ",
         "©": "◀",
-        "{": "↑"
+        "\u0013": "□"
       }
     },
     {
@@ -714,14 +687,14 @@
       "source": "RIO_CDNU_LINE3",
       "colour": "green",
       "replace": {
-        "}": "↓",
-        "{": "↑",
+        "\u0013": "□",
         "®": "Δ",
+        "_": "⬡",
+        "{": "↑",
+        "}": "↓",
         "«": "←",
         "»": "→",
-        "©": "◀",
-        "\u0013": "□",
-        "_": "⬡"
+        "©": "◀"
       }
     },
     {
@@ -732,11 +705,11 @@
       "colour": "green",
       "replace": {
         "{": "↑",
+        "_": "⬡",
         "»": "→",
+        "®": "Δ",
         "\u0013": "□",
         "}": "↓",
-        "_": "⬡",
-        "®": "Δ",
         "©": "◀",
         "«": "←"
       }
@@ -750,12 +723,12 @@
       "replace": {
         "«": "←",
         "®": "Δ",
-        "©": "◀",
+        "_": "⬡",
         "{": "↑",
-        "\u0013": "□",
-        "»": "→",
         "}": "↓",
-        "_": "⬡"
+        "©": "◀",
+        "\u0013": "□",
+        "»": "→"
       }
     },
     {
@@ -765,14 +738,14 @@
       "source": "RIO_CDNU_LINE6",
       "colour": "green",
       "replace": {
+        "\u0013": "□",
         "»": "→",
-        "{": "↑",
-        "®": "Δ",
-        "«": "←",
         "}": "↓",
-        "©": "◀",
+        "®": "Δ",
         "_": "⬡",
-        "\u0013": "□"
+        "©": "◀",
+        "{": "↑",
+        "«": "←"
       }
     },
     {
@@ -782,14 +755,14 @@
       "source": "RIO_CDNU_LINE7",
       "colour": "green",
       "replace": {
-        "»": "→",
-        "{": "↑",
-        "_": "⬡",
-        "\u0013": "□",
-        "}": "↓",
         "©": "◀",
+        "}": "↓",
+        "{": "↑",
+        "«": "←",
         "®": "Δ",
-        "«": "←"
+        "»": "→",
+        "\u0013": "□",
+        "_": "⬡"
       }
     },
     {
@@ -799,14 +772,14 @@
       "source": "RIO_CDNU_LINE8",
       "colour": "green",
       "replace": {
-        "_": "⬡",
+        "\u0013": "□",
         "}": "↓",
         "»": "→",
-        "®": "Δ",
-        "\u0013": "□",
-        "«": "←",
+        "_": "⬡",
         "©": "◀",
-        "{": "↑"
+        "®": "Δ",
+        "{": "↑",
+        "«": "←"
       }
     },
     {
@@ -816,14 +789,14 @@
       "source": "RIO_CDNU_LINE1",
       "colour": "green",
       "replace": {
-        "«": "←",
-        "\u0013": "□",
-        "}": "↓",
-        "©": "◀",
-        "®": "Δ",
         "»": "→",
         "{": "↑",
-        "_": "⬡"
+        "}": "↓",
+        "\u0013": "□",
+        "©": "◀",
+        "«": "←",
+        "_": "⬡",
+        "®": "Δ"
       }
     },
     {
@@ -833,12 +806,12 @@
       "source": "RIO_CDNU_LINE2",
       "colour": "green",
       "replace": {
-        "\u0013": "□",
-        "_": "⬡",
-        "®": "Δ",
-        "{": "↑",
-        "}": "↓",
         "«": "←",
+        "\u0013": "□",
+        "}": "↓",
+        "®": "Δ",
+        "_": "⬡",
+        "{": "↑",
         "©": "◀",
         "»": "→"
       }
@@ -850,14 +823,14 @@
       "source": "RIO_CDNU_LINE3",
       "colour": "green",
       "replace": {
-        "\u0013": "□",
-        "»": "→",
-        "«": "←",
-        "©": "◀",
-        "{": "↑",
+        "®": "Δ",
         "_": "⬡",
         "}": "↓",
-        "®": "Δ"
+        "«": "←",
+        "»": "→",
+        "©": "◀",
+        "\u0013": "□",
+        "{": "↑"
       }
     },
     {
@@ -867,14 +840,14 @@
       "source": "RIO_CDNU_LINE4",
       "colour": "green",
       "replace": {
+        "»": "→",
+        "«": "←",
+        "\u0013": "□",
+        "_": "⬡",
+        "{": "↑",
         "}": "↓",
         "©": "◀",
-        "»": "→",
-        "_": "⬡",
-        "®": "Δ",
-        "{": "↑",
-        "«": "←",
-        "\u0013": "□"
+        "®": "Δ"
       }
     },
     {
@@ -884,14 +857,14 @@
       "source": "RIO_CDNU_LINE5",
       "colour": "green",
       "replace": {
-        "®": "Δ",
-        "»": "→",
-        "«": "←",
-        "\u0013": "□",
-        "{": "↑",
-        "_": "⬡",
         "©": "◀",
-        "}": "↓"
+        "«": "←",
+        "_": "⬡",
+        "{": "↑",
+        "»": "→",
+        "}": "↓",
+        "\u0013": "□",
+        "®": "Δ"
       }
     },
     {
@@ -901,14 +874,14 @@
       "source": "RIO_CDNU_LINE6",
       "colour": "green",
       "replace": {
-        "\u0013": "□",
+        "_": "⬡",
         "©": "◀",
         "®": "Δ",
-        "»": "→",
+        "}": "↓",
+        "\u0013": "□",
         "{": "↑",
-        "_": "⬡",
         "«": "←",
-        "}": "↓"
+        "»": "→"
       }
     },
     {
@@ -918,14 +891,14 @@
       "source": "RIO_CDNU_LINE7",
       "colour": "green",
       "replace": {
-        "«": "←",
-        "_": "⬡",
-        "»": "→",
-        "®": "Δ",
         "\u0013": "□",
-        "{": "↑",
         "}": "↓",
-        "©": "◀"
+        "«": "←",
+        "®": "Δ",
+        "{": "↑",
+        "»": "→",
+        "©": "◀",
+        "_": "⬡"
       }
     },
     {
@@ -936,13 +909,13 @@
       "colour": "green",
       "replace": {
         "\u0013": "□",
-        "{": "↑",
-        "«": "←",
-        "_": "⬡",
-        "}": "↓",
         "®": "Δ",
+        "_": "⬡",
         "»": "→",
-        "©": "◀"
+        "}": "↓",
+        "©": "◀",
+        "{": "↑",
+        "«": "←"
       }
     }
   ],

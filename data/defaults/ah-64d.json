@@ -12,46 +12,8 @@
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            },
-            {
-              "source": "PLT_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "CPG_INTL_PRIMARY_L_KNB",
-              "on_when": {
-                "scale": [
-                  0,
-                  65535
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "always": true,
+      "on": 175
     },
     {
       "device": "CarrierAce_MFD_L",
@@ -111,7 +73,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Captain",
@@ -180,7 +142,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_CoPilot",
@@ -249,7 +211,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Observer",
@@ -367,7 +329,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Follows the console dimmer at night, and goes full bright when the console is off. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark console, which means daylight, blanked every lamp on the panel. Same daylight floor as FLAG."
+      "note": "Takes the backlight's level, and goes full bright if the backlight is ever at 0. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark backlight would blank every lamp on the panel. Same floor as FLAG."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -376,7 +338,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the interior lighting at night, and goes full bright when it is off, because off means daylight and a dim flag lamp is unreadable then."
+      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Takes the backlight's level, and goes full bright if the backlight is ever at 0, because a dim flag lamp is unreadable in daylight. That case is the off value: a binding that resolves to zero takes its off value."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -752,26 +714,16 @@
     {
       "device": "MCDU_Captain",
       "display": "MCDU",
-      "cells": "289-310",
-      "divider": true,
-      "colour": "amber",
-      "label": "KEYBOARD UNIT",
-      "label_colour": "white",
-      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
       "cells": "313-334",
       "source": "PLT_KU_DISPLAY",
       "seat": 0,
       "colour": "green",
       "replace": {
-        "<": "◀",
-        "=": "■",
-        ">": "▶",
         "~": "█",
-        "#": "█"
+        "<": "◀",
+        "#": "█",
+        "=": "■",
+        ">": "▶"
       },
       "note": "KU scratchpad. The seat's own keyboard unit line, 22 characters, sits on the bottom row, 14, the MCDU's scratchpad row, one column in so it is centred across. SEAT_POSITION picks the pilot's KU (0) or the CPG's (1). The replace map follows the WCtrlDcsBiosBridge's AH-64D listener: ~ and # draw the block cursor, < and > the arrows, = a square."
     },
@@ -783,54 +735,54 @@
       "seat": 1,
       "colour": "green",
       "replace": {
+        "<": "◀",
+        "~": "█",
+        "#": "█",
         "=": "■",
+        ">": "▶"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "289-310",
+      "divider": true,
+      "colour": "amber",
+      "label": "KEYBOARD UNIT",
+      "label_colour": "white",
+      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "PLT_KU_DISPLAY",
+      "seat": 0,
+      "colour": "green",
+      "replace": {
+        "=": "■",
+        "<": "◀",
+        "#": "█",
+        ">": "▶",
+        "~": "█"
+      }
+    },
+    {
+      "device": "MCDU_CoPilot",
+      "display": "MCDU",
+      "cells": "313-334",
+      "source": "CPG_KU_DISPLAY",
+      "seat": 1,
+      "colour": "green",
+      "replace": {
         "~": "█",
         ">": "▶",
+        "=": "■",
         "#": "█",
         "<": "◀"
       }
     },
     {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "289-310",
-      "divider": true,
-      "colour": "amber",
-      "label": "KEYBOARD UNIT",
-      "label_colour": "white",
-      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "PLT_KU_DISPLAY",
-      "seat": 0,
-      "colour": "green",
-      "replace": {
-        "<": "◀",
-        "#": "█",
-        ">": "▶",
-        "=": "■",
-        "~": "█"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        "=": "■",
-        "#": "█",
-        "<": "◀",
-        ">": "▶",
-        "~": "█"
-      }
-    },
-    {
       "device": "MCDU_Observer",
       "display": "MCDU",
       "cells": "289-310",
@@ -848,11 +800,11 @@
       "seat": 0,
       "colour": "green",
       "replace": {
-        ">": "▶",
-        "#": "█",
-        "<": "◀",
         "~": "█",
-        "=": "■"
+        "=": "■",
+        ">": "▶",
+        "<": "◀",
+        "#": "█"
       }
     },
     {
@@ -863,12 +815,27 @@
       "seat": 1,
       "colour": "green",
       "replace": {
-        "#": "█",
-        "~": "█",
+        ">": "▶",
         "<": "◀",
         "=": "■",
-        ">": "▶"
+        "#": "█",
+        "~": "█"
       }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "288-311",
+      "content": [
+        {
+          "gap": true,
+          "rule": true,
+          "label": "KEYBOARD UNIT",
+          "label_colour": "white",
+          "colour": "amber",
+          "small": true
+        }
+      ]
     }
   ],
   "follows": {

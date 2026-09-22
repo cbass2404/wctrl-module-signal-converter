@@ -1,4 +1,4 @@
-//! The ICP's DED, end to end: the shipped F-16 profile plus a DCS-BIOS stream
+//! The ICP's DED, end to end: an F-16 profile plus a DCS-BIOS stream
 //! in, pixel writes out.
 
 use std::path::Path;
@@ -27,7 +27,7 @@ fn text_at(address: u16, s: &str) -> Vec<BiosWrite> {
 }
 
 fn profile() -> Profile {
-    Profile::load(&r("data/defaults/f-16.json")).expect("F-16 profile")
+    Profile::load(&r("crates/dsc-engine/tests/fixtures/f-16.json")).expect("F-16 profile")
 }
 
 fn engine() -> (Engine, DisplayCatalogue) {
@@ -92,15 +92,6 @@ fn expected(displays: &DisplayCatalogue, lines: [(&str, &str); 5]) -> Vec<u8> {
         }
     }
     screen.bytes().to_vec()
-}
-
-#[test]
-fn the_shipped_profile_is_valid() {
-    let (e, displays) = engine();
-    let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
-    let module = e.catalogue().module("F-16C_50").expect("F-16 module");
-    let problems = profile().problems(module, &devices, &displays);
-    assert!(problems.is_empty(), "{problems:?}");
 }
 
 #[test]

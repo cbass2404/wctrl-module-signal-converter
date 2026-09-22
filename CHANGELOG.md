@@ -120,3 +120,60 @@ unless this says what moved.
   1000.
 
 ### Shipped profiles
+
+**Every aircraft**
+
+- **The panel backlights hold a fixed 175 instead of following a cockpit
+  knob.** They stay readable however the cockpit lighting is set, but they
+  no longer dim with the cockpit at night. Every backlight, the PTO2's FLAG
+  and SL, and the MCDU indicators take their level from one row, CarrierAce
+  MFD C `INST_PNL_Backlight`, so that row is the whole change. Until now it
+  followed:
+
+  - A-10C: the console knob on the light control panel
+  - AH-64D: the primary interior lighting knob of whoever is seated
+  - CH-47F: the instrument dimmer of whoever is seated
+  - F-14 and F-14BU: the console light knob turned last, pilot's or RIO's
+  - F-16: the primary consoles knob
+  - F/A-18: the CONSOLES dimmer
+  - Mi-24P: the red-lights transformer of whoever is seated
+  - FC3 was already held on, at full; it is now at 175 like the rest.
+
+  If you have changed that row, you keep your own. To have the panels dim
+  with the cockpit again, point that row at the knob.
+
+**A-10C**
+
+- **An MCDU radio page.** The MCDU Captain's top three rows now show the
+  ARC-210 and ARC-164: each radio's frequency, the ARC-210's modulation, and
+  each radio's preset channel.
+- **Countermeasures on the ICP's DED.** Rows 1, 2, 4 and 5 show the CMSC:
+  jammer, chaff and flare, and missile warning readouts, with the missile
+  launch, priority and unknown lamps drawn as inverse blocks under ML, PRI
+  and UNK.
+
+**AH-64D**
+
+- **The rule above the keyboard unit** is now drawn across the whole of row
+  13 (cells 288-311), no longer inset to the 22 cells of the keyboard unit.
+  It still carries the KEYBOARD UNIT label. The new row replaces the old
+  one on cells 289-310.
+
+**F-16**
+
+- **An MCDU flight page.** The MCDU Captain now shows:
+  - fuel from the totalizer drums, engine RPM and nozzle position
+  - chaff and flare counts, the CMDS program, and the CMDS mode by name (OFF
+    and STBY in red, SEMI and AUTO in green)
+  - a TRIM section with pitch, roll and yaw trim, each as a number with its
+    direction beside it: NU or ND, LWD or RWD, L or R.
+
+**F/A-18**
+
+- **The JETT lamp on the PTO2 lights.** It was never bound. It now lights
+  with the selective jettison knob on a missile or rack position, or on
+  STORES with a station selected. Row: PTO2 `JETT`.
+- **The MCDU Captain's screen holds 150** instead of following the IFEI
+  brightness knob. Row: MCDU Captain `Screen_Backlight`. MCDU Captain
+  `Backlight` also has a floor of 150 now, which applies only if the
+  backlight row is ever at 0.

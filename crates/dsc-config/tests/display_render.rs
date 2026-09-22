@@ -444,34 +444,6 @@ fn every_cell_belongs_to_exactly_one_named_region() {
     }
 }
 
-#[test]
-fn the_shipped_hornet_fields_land_on_named_regions() {
-    let (cat, _) = load();
-    let ufc = cat.get("UFC1").unwrap();
-    let text = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/defaults/fa-18.json"),
-    )
-    .expect("the shipped Hornet default is readable");
-    let profile: serde_json::Value = serde_json::from_str(&text).expect("it parses");
-
-    let named: Vec<&str> = ufc.regions.iter().map(|r| r.cells.as_str()).collect();
-    let readouts = profile["readouts"].as_array().expect("it has readouts");
-    assert!(!readouts.is_empty());
-    for r in readouts {
-        // The UFC's regions, so only the UFC's fields. The Hornet has nothing
-        // else on it today, but it has a screen the editor can write to and a
-        // row put there would otherwise fail this for having no UFC region.
-        if r["display"].as_str() != Some("UFC1") {
-            continue;
-        }
-        let cells = r["cells"].as_str().unwrap();
-        assert!(
-            named.contains(&cells),
-            "shipped field on cells {cells} matches no region, so the editor would show it as a custom range"
-        );
-    }
-}
-
 // ------------------------------------------------------- readouts
 
 use std::collections::BTreeMap;

@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "name": "Console gates (test fixture)",
+  "aircraft": [
+    "A-10C_2"
+  ],
+  "module": "A-10C",
+  "bindings": [
+    {
+      "device": "CarrierAce_MFD_C",
+      "led": "INST_PNL_Backlight",
+      "conditions": [
+        {
+          "source": "LCP_CONSOLE",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "SL",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255
+    },
+    {
+      "device": "TAKEOFF_PLANEL_2",
+      "led": "FLAG",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255
+    }
+  ]
+}

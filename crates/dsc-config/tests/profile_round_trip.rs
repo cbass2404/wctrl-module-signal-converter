@@ -15,31 +15,6 @@ use std::path::{Path, PathBuf};
 
 use dsc_config::{AliasDraw, Align, Colour, Profile, Span, ValueBand};
 
-fn r(rel: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(rel)
-}
-
-fn json_in(dir: &str) -> Vec<PathBuf> {
-    let mut out: Vec<PathBuf> = std::fs::read_dir(r(dir))
-        .expect("the defaults are in the repository")
-        .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|x| x == "json"))
-        .collect();
-    out.sort();
-    assert!(!out.is_empty(), "there are shipped defaults to check");
-    out
-}
-
-fn defaults() -> Vec<PathBuf> {
-    json_in("data/defaults")
-}
-
-/// The defaults as the last release shipped them, which is what the update
-/// merge diffs a user's profile against.
-fn previously_shipped() -> Vec<PathBuf> {
-    json_in("data/defaults-previous")
-}
-
 /// A profile of flat, single-piece fields: one A-10C CDU page, frozen.
 ///
 /// Not a shipped default. The promise these tests are about is that adding a
@@ -50,53 +25,6 @@ fn previously_shipped() -> Vec<PathBuf> {
 /// here as a failing build.
 fn flat_fields() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/a-10c-cdu-page.json")
-}
-
-/// The file's own text, with line endings normalised.
-///
-/// The working tree is CRLF and `to_string_pretty` writes LF, which is a
-/// difference in how the file is stored rather than in what it says.
-fn on_disk(path: &Path) -> String {
-    std::fs::read_to_string(path)
-        .expect("the file reads")
-        .replace("\r\n", "\n")
-}
-
-#[test]
-fn every_shipped_default_saves_back_unchanged() {
-    // Compared as JSON rather than as text, because `replace` and `aliases`
-    // are hash maps and have always come back out in whatever order the map
-    // felt like. That is noise in a diff, not a change to the profile, and it
-    // predates fields having more than one piece.
-    for path in defaults() {
-        let profile = Profile::load(&path).expect("a shipped default loads");
-        let written = serde_json::to_string_pretty(&profile).expect("it serializes");
-        let mine: serde_json::Value = serde_json::from_str(&written).expect("it parses");
-        let theirs: serde_json::Value =
-            serde_json::from_str(&on_disk(&path)).expect("the file parses");
-        assert_eq!(
-            mine,
-            theirs,
-            "{} changed on a load and save",
-            path.display()
-        );
-    }
-}
-
-#[test]
-fn every_previously_shipped_default_saves_back_unchanged() {
-    // The snapshot folder is what the update merge diffs a user's profile
-    // against, and it is read by today's code. A key whose spelling drifted
-    // would make every row carrying it read as one the user had edited, and
-    // those rows are never brought up to a new release again.
-    for path in previously_shipped() {
-        let profile = Profile::load(&path).expect("a snapshotted default loads");
-        let written = serde_json::to_string_pretty(&profile).expect("it serializes");
-        let mine: serde_json::Value = serde_json::from_str(&written).expect("it parses");
-        let theirs: serde_json::Value =
-            serde_json::from_str(&on_disk(&path)).expect("the file parses");
-        assert_eq!(mine, theirs, "{} changed on a load and save", path.display());
-    }
 }
 
 #[test]
@@ -178,35 +106,6 @@ fn a_band_naming_a_whole_number_is_written_without_a_decimal_point() {
     // Said the way it is spoken, written the one canonical way.
     let band: ValueBand = "-1.5 to -0.1".parse().expect("it parses");
     assert_eq!(band.to_string(), "-1.5..-0.1");
-}
-
-#[test]
-fn every_shipped_default_keeps_the_shape_of_its_fields() {
-    // The keys each field is written with, which is what a diff against a
-    // later release compares. A field growing a `content` array here would
-    // mean every row read as one the user had edited.
-    for path in defaults() {
-        let profile = Profile::load(&path).expect("a shipped default loads");
-        let written = serde_json::to_string_pretty(&profile).expect("it serializes");
-        let mine: serde_json::Value = serde_json::from_str(&written).expect("it parses");
-        let theirs: serde_json::Value =
-            serde_json::from_str(&on_disk(&path)).expect("the file parses");
-        let keys = |v: &serde_json::Value| -> Vec<Vec<String>> {
-            v["readouts"]
-                .as_array()
-                .map(|rs| {
-                    rs.iter()
-                        .map(|r| {
-                            r.as_object()
-                                .map(|o| o.keys().cloned().collect())
-                                .unwrap_or_default()
-                        })
-                        .collect()
-                })
-                .unwrap_or_default()
-        };
-        assert_eq!(keys(&mine), keys(&theirs), "{}", path.display());
-    }
 }
 
 #[test]

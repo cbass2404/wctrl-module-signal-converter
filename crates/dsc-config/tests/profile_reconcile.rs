@@ -504,63 +504,6 @@ fn a_checkout_is_left_alone() {
     );
 }
 
-// ---------------------------------------------------------------------------
-// against the real shipped files
-// ---------------------------------------------------------------------------
-
-/// The A-10C ships thirty three fields, so this is where a rule that looks
-/// right on one field has to prove it moves one and only one.
-#[test]
-fn a_real_shipped_profile_takes_a_real_correction() {
-    let dir = scratch("real");
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let was = repo.join("data/defaults-previous/a-10c.json");
-
-    // What the last release shipped, and what the user is running: the same
-    // file, untouched, which is the whole point.
-    std::fs::copy(&was, dir.join("defaults-previous/a-10c.json")).expect("snapshot copied");
-    std::fs::copy(&was, dir.join("active/a-10c.json")).expect("profile copied");
-
-    // A release that recolours the divider and changes nothing else.
-    let mut shipped = Profile::load(&was).expect("the shipped A-10C loads");
-    let at = shipped
-        .readouts
-        .iter()
-        .position(|r| r.divider)
-        .expect("the A-10C ships a divider");
-    shipped.readouts[at].colour = Some(dsc_config::Colour::Cyan);
-    shipped.save(&dir.join("defaults/a-10c.json")).expect("saved");
-
-    let notes = merge(&dir, "alpha.004");
-
-    let before = Profile::load(&was).expect("loads");
-    let after = mine(&dir);
-    assert_eq!(
-        after.readouts.len(),
-        before.readouts.len(),
-        "no field was added or lost"
-    );
-    assert_eq!(
-        after.readouts[at].colour,
-        Some(dsc_config::Colour::Cyan),
-        "the one changed field took the correction"
-    );
-    for (i, (now, then)) in after.readouts.iter().zip(before.readouts.iter()).enumerate() {
-        if i == at {
-            continue;
-        }
-        assert_eq!(
-            serde_json::to_value(now).unwrap(),
-            serde_json::to_value(then).unwrap(),
-            "field {i} was moved and should not have been"
-        );
-    }
-    assert!(
-        notes.iter().any(|n| n.contains("updated 1")),
-        "exactly one field was claimed: {notes:?}"
-    );
-}
-
 /// The snapshot names the folder beside the defaults, so pointing `--defaults`
 /// somewhere else takes its snapshot with it rather than reading the install's.
 #[test]

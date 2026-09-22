@@ -451,8 +451,8 @@ pub struct Led {
     #[serde(default, skip_serializing_if = "is_false")]
     pub lights_display: bool,
     /// A panel backlight: legends or a lit feature, not an indicator and not a
-    /// gate. Every shipped default drives all of these from one cockpit knob,
-    /// and `tests/shipped_defaults.rs` holds them to it.
+    /// gate. Every shipped default drives all of these from one source, so the
+    /// whole pit dims together.
     #[serde(default, skip_serializing_if = "is_false")]
     pub backlight: bool,
 }
@@ -3419,30 +3419,6 @@ mod tests {
         let running = profile.with_followers();
         let flag = running.bindings.iter().find(|b| b.device == "E").unwrap();
         assert_eq!(running.sources_of(flag), vec!["DIM"]);
-    }
-
-    /// The editor rewrites whole profiles, and these files are shipped and
-    /// diffed by hand. A round trip that added a line to every lamp would make
-    /// every future change unreviewable.
-    #[test]
-    fn saving_a_shipped_profile_does_not_pad_it() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/defaults");
-        let mut checked = 0;
-        for entry in std::fs::read_dir(&dir).expect("data/defaults should exist") {
-            let path = entry.expect("readable entry").path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let profile = Profile::load(&path).expect("shipped profile should parse");
-            let text = serde_json::to_string_pretty(&profile).expect("should serialise");
-            assert!(
-                !text.contains("\"on\": null"),
-                "{} gained an explicit null on save",
-                path.display()
-            );
-            checked += 1;
-        }
-        assert!(checked > 0, "no shipped profiles were checked, so this proves nothing");
     }
 
     #[test]

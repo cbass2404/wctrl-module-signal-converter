@@ -1,21 +1,35 @@
 {
   "schema_version": 1,
-  "name": "Mi-24P",
-  "author": "",
+  "name": "F-16",
+  "author": "coryb",
   "profile_version": "0.1.0",
   "aircraft": [
-    "Mi-24P"
+    "F-16C_50",
+    "F-16D_50",
+    "F-16D_50_NS",
+    "F-16D_52",
+    "F-16D_52_NS",
+    "F-16D_Barak_30",
+    "F-16D_Barak_40",
+    "F-16I"
   ],
-  "module": "Mi-24P",
+  "module": "F-16C_50",
   "font": "../mcdu/f14bu-font-21x31.json",
   "bindings": [
     {
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
-      "conditions": [],
-      "always": true,
-      "on": 175,
-      "note": "Every backlight is held at 175 rather than following a cockpit knob, so the panels stay readable whatever the cockpit lighting is set to. Point this row at a knob to have them dim with the cockpit again."
+      "conditions": [
+        {
+          "source": "PRI_CONSOLES_BRT_KNB",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ]
     },
     {
       "device": "CarrierAce_MFD_L",
@@ -36,7 +50,8 @@
       "led": "INST_PNL_Backlight",
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C"
+      "same_as_device": "CarrierAce_MFD_C",
+      "note": "Test only: bound to the same knob as the ICP backlight so a disabled UFC can be seen staying put."
     },
     {
       "device": "CarrierAce_UFC",
@@ -51,7 +66,8 @@
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C"
+      "same_as_device": "CarrierAce_MFD_C",
+      "note": "Test only: bound to the same knob as the ICP backlight so a disabled UFC can be seen staying put."
     },
     {
       "device": "MCDU_Captain",
@@ -75,7 +91,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
     {
       "device": "MCDU_Captain",
@@ -144,7 +160,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
     {
       "device": "MCDU_CoPilot",
@@ -213,7 +229,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
     {
       "device": "MCDU_Observer",
@@ -308,7 +324,14 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Landing_gear_lights",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "LIGHT_GEAR_WARN",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -331,7 +354,14 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Master_Caution",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "LIGHT_MASTER_CAUTION",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -371,7 +401,14 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "NOSE",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "LIGHT_GEAR_N",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -381,12 +418,26 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "RIGHT",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "LIGHT_GEAR_R",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "LEFT",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "LIGHT_GEAR_L",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ]
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -403,7 +454,8 @@
       "led": "Backlight",
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C"
+      "same_as_device": "CarrierAce_MFD_C",
+      "note": "The ICP sits on the instrument panel, so its legends follow the PRIMARY INST PNL knob."
     },
     {
       "device": "ViperAce_ICP",
@@ -416,27 +468,44 @@
   ],
   "readouts": [
     {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "35",
-      "source": "PLT_R828_CHAN_S"
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "0-23",
+      "source": "DED_L1",
+      "format": "DED_L1_FORMAT",
+      "note": "One DCS-BIOS line per DED line, 24 characters for 24 cells. The format line marks the highlighted field, drawn inverse."
     },
     {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "34",
-      "source": "PLT_R863_CHAN_S"
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "24-47",
+      "source": "DED_L2",
+      "format": "DED_L2_FORMAT"
     },
     {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "30-33",
-      "source": "PLT_RV5_ALT",
-      "reads": [
-        0.0,
-        750.0
-      ]
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "48-71",
+      "source": "DED_L3",
+      "format": "DED_L3_FORMAT"
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "72-95",
+      "source": "DED_L4",
+      "format": "DED_L4_FORMAT"
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "96-119",
+      "source": "DED_L5",
+      "format": "DED_L5_FORMAT"
     }
+  ],
+  "disabled_devices": [
+    "CarrierAce_UFC"
   ],
   "follows": {
     "CarrierAce_MFD_L": "CarrierAce_MFD_C",

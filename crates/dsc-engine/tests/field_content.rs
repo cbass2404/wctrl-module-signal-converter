@@ -375,11 +375,11 @@ fn a_run_of_one_cell_is_never_measured_by_character() {
     // whole. Counted by character they all read as a field about to lose its
     // last character, and the editor showed four warnings on a screen that
     // draws exactly what it was built to draw.
-    let p = Profile::load(&r("data/defaults/fa-18.json")).expect("the Hornet default");
+    let p = Profile::load(&r("crates/dsc-engine/tests/fixtures/fa-18.json")).expect("the Hornet fixture");
     let cat = Catalogue::load_dir(&r("data/catalogue")).expect("catalogue");
     let module = cat.module(&p.module).expect("the module");
-    // The whole screen rather than the four fields, because a shipped default
-    // that warns on sight teaches people to scroll past the warnings.
+    // The whole screen rather than the four fields, because a profile that
+    // warns on sight teaches people to scroll past the warnings.
     assert!(
         p.width_cautions(module).is_empty(),
         "the Hornet draws what it was built to draw: {:?}",

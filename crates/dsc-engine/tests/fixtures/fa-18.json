@@ -15,9 +15,17 @@
     {
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
-      "conditions": [],
-      "always": true,
-      "on": 175
+      "conditions": [
+        {
+          "source": "CONSOLES_DIMMER",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ]
     },
     {
       "device": "CarrierAce_MFD_L",
@@ -60,17 +68,24 @@
       "led": "Backlight",
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C",
-      "off": 150
+      "same_as_device": "CarrierAce_MFD_C"
     },
     {
       "device": "MCDU_Captain",
       "led": "Screen_Backlight",
-      "conditions": [],
-      "always": true,
-      "on": 150,
+      "conditions": [
+        {
+          "source": "IFEI",
+          "on_when": {
+            "scale": [
+              0,
+              65535
+            ]
+          }
+        }
+      ],
       "off": 50,
-      "note": "Held at 150, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     },
     {
       "device": "MCDU_Captain",
@@ -79,7 +94,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
     {
       "device": "MCDU_Captain",
@@ -148,7 +163,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
     {
       "device": "MCDU_CoPilot",
@@ -217,7 +232,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
     },
     {
       "device": "MCDU_Observer",
@@ -291,7 +306,7 @@
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
-      "note": "Throttle backlight takes the panel backlight's level. Unlike the PTO2 SL, this only dims A/A and A/G, it does not gate them."
+      "note": "Throttle backlight follows the CONSOLES knob. Unlike the PTO2 SL, this only dims A/A and A/G, it does not gate them."
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -325,7 +340,7 @@
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
-      "note": "Panel backlight takes the same level as every other backlight."
+      "note": "Panel backlight follows the CONSOLES knob, so the panel dims with the cockpit at night."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -347,7 +362,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Takes the backlight's level, and goes full bright if the backlight is ever at 0. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark backlight would blank every lamp on the panel. Same floor as FLAG."
+      "note": "Follows the console dimmer at night, and goes full bright when the console is off. SL is the master gate for indices 4-17: at 0 no indicator lights at all, so without the off value a dark console, which means daylight, would blank every lamp on the panel. Same daylight floor as FLAG."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -356,7 +371,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Takes the backlight's level, and goes full bright if the backlight is ever at 0, because a dim flag lamp is unreadable in daylight. That case is the off value: a binding that resolves to zero takes its off value."
+      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the console dimmer at night, and goes full bright when the console is off, because console off means daylight and a dim flag lamp is unreadable then. The daylight case is the off value: a scale of a zero source resolves to zero, and a binding that resolves to zero takes its off value."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -374,103 +389,7 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "JETT",
-      "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "SJ_CTR_LT",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "SEL_JETT_KNOB",
-              "on_when": {
-                "equals": 4
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SJ_LI_LT",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "SEL_JETT_KNOB",
-              "on_when": {
-                "equals": 4
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SJ_LO_LT",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "SEL_JETT_KNOB",
-              "on_when": {
-                "equals": 4
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SJ_RI_LT",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "SEL_JETT_KNOB",
-              "on_when": {
-                "equals": 4
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SJ_RO_LT",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "SEL_JETT_KNOB",
-              "on_when": {
-                "equals": 4
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEL_JETT_KNOB",
-              "on_when": {
-                "in": [
-                  0,
-                  2,
-                  3
-                ]
-              }
-            }
-          ]
-        }
-      ]
+      "conditions": []
     },
     {
       "device": "TAKEOFF_PLANEL_2",

@@ -9,7 +9,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use dsc_config::{Colour, DeviceSpec, DisplayCatalogue, Families, Led, Module, Profile, ValueLabel};
+use dsc_config::{
+    Colour, DeviceSpec, Display, DisplayCatalogue, Families, Led, Module, Profile, ShapeArt,
+    ValueLabel,
+};
 
 #[derive(Serialize)]
 pub struct LedView {
@@ -165,6 +168,67 @@ pub struct DisplayView {
     /// the glyphs were drawn to match what its module sends. The window checks
     /// the profile's aircraft against this to decide whether to ask.
     pub native_fonts: BTreeMap<String, String>,
+    /// Per shape, what a lit slot looks like, so the window can draw a field
+    /// the way this glass will. Empty on a text grid, which draws from a font
+    /// the window reads instead, and on any shape nothing here can picture.
+    ///
+    /// Sent with the displays rather than asked for, unlike a font: this is a
+    /// dozen numbers a shape, not four fonts of bitmaps.
+    pub art: BTreeMap<String, ShapeArt>,
+}
+
+/// What one cell of a display would light, drawing a value.
+///
+/// The glyph tables are the daemon's, and so is the lookup: which entry a
+/// value lands on depends on the cell it is drawn in, and every quirk of that
+/// is in `Display::glyph`. The window asks rather than working it out, so a
+/// preview cannot draw a character the panel will not.
+#[derive(Serialize)]
+pub struct CellInk {
+    /// The slots lit, with any inverse flip already applied.
+    pub lit: Vec<u8>,
+    /// Which shape's art draws them.
+    pub shape: String,
+    /// Whether the glyph table had anything for the value. A cell it does not
+    /// is dark on the panel, and the window marks it rather than leaving a
+    /// blank that reads as a space.
+    pub drawn: bool,
+}
+
+/// One cell of a field as the window has laid it out.
+#[derive(Deserialize)]
+pub struct CellDraw {
+    pub cell: usize,
+    pub value: String,
+    #[serde(default)]
+    pub inverse: bool,
+}
+
+impl CellInk {
+    /// What each of these cells would light. A cell the display does not have
+    /// is reported as drawing nothing rather than refused: the window checks
+    /// a cell run as it is typed, and half a run is a normal thing to be
+    /// looking at mid-keystroke.
+    pub fn of(display: &Display, cells: &[CellDraw]) -> Vec<CellInk> {
+        cells
+            .iter()
+            .map(|want| {
+                let Some(cell) = display.cell(want.cell) else {
+                    return CellInk {
+                        lit: Vec::new(),
+                        shape: String::new(),
+                        drawn: false,
+                    };
+                };
+                let lit = display.lit(cell, &want.value, want.inverse);
+                CellInk {
+                    drawn: lit.is_some(),
+                    lit: lit.unwrap_or_default(),
+                    shape: cell.shape.clone(),
+                }
+            })
+            .collect()
+    }
 }
 
 /// One font a text grid can be given.
@@ -255,6 +319,7 @@ impl DeviceView {
                     .as_ref()
                     .map(|t| t.native_fonts.iter().map(|(a, f)| (a.clone(), f.clone())).collect())
                     .unwrap_or_default(),
+                art: d.shape_art(),
             })
             .collect();
         self

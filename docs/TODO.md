@@ -22,6 +22,11 @@ do not.
       glass. See [CHANGELOG.md](../CHANGELOG.md) and "Content: what fills a
       field" in [CONFIG.md](CONFIG.md).
 
+- [ ] **Say what colour the UFC and DED glass is.** Their previews are drawn
+      white, because nothing captured says otherwise. A colour per display is
+      a small change in `paintInk`. See "the UFC and the DED are previewed
+      too" in STATUS.md.
+
 - [ ] **Fly `follows` on two MCDUs.** Built 2026-09-21 and tested, not yet on
       a panel. Point the Co-Pilot unit at the Captain in the Hornet and check
       that both show the IFEI page and dim together. See "one panel under

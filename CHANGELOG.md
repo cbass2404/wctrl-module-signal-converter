@@ -59,6 +59,16 @@ unless this says what moved.
 
 ### New Features
 
+- **See what the UFC and the DED will draw.** The editor drew a field before
+  you flew it only on the MCDU. The UFC and the ICP's DED are the screens
+  where that is worth most: they draw from a table of their own, where a value
+  lights a set of segments or pixels that need not look much like the
+  characters it was keyed by, and a two character comm channel is one glyph on
+  one cell. Both are now drawn the way the panel will draw them, segment by
+  segment and pixel by pixel, inverse fields included. A cell this glass has
+  nothing for is marked rather than left looking like a space, and the line
+  under the preview names what would be dark.
+
 - **Show a switch position as a word.** A reading can now be drawn "as
   aliases": each value gets the text to draw in its place, so the F-16 CMDS
   mode knob can read `SEMI` instead of `3`. A switch whose positions DCS-BIOS

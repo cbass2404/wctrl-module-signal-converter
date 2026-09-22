@@ -55,6 +55,51 @@ fn one() -> usize {
     1
 }
 
+/// How one shape's slots are drawn on a screen that is not the panel.
+///
+/// The editor previews a field before anyone flies with it, and a preview of
+/// glass like this cannot be made of characters: a cell draws whatever its
+/// glyph table says it draws, and that is a set of slots, not a letter. The
+/// two kinds of glass answer "what does slot 3 look like" differently, so this
+/// is what the answer is asked for through.
+///
+/// Knowing what a slot looks like is knowing the panel, not knowing the
+/// profile, which is why it lives here beside the glyph tables rather than in
+/// the window.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ShapeArt {
+    /// A rectangle of pixels: slot `n` is the pixel `n % width`, `n / width`.
+    /// Generated from the [`Grid`] that made the cells, so a pixel screen
+    /// never writes its art down.
+    Pixels { width: usize, height: usize },
+    /// Strokes per slot, for glass whose slots are segments rather than
+    /// pixels. There is nothing to generate these from: a segment's shape is
+    /// nowhere in a map of bit indices, so they are written down in the
+    /// display file.
+    Strokes(StrokeArt),
+}
+
+/// The segments of one shape, drawn.
+///
+/// A slot is a list of strokes, and a stroke is a flat run of `x, y` pairs, so
+/// `[1, 2, 5, 2]` is a line and `[3, 4, 3, 4]` a dot. A list rather than one
+/// stroke because a slot is not always one mark: the UFC's option cue is a
+/// single slot that draws two dots.
+///
+/// The coordinates are in a box of `width` by `height` of this shape's own,
+/// which is how a narrow cue cell sits beside a wide letter cell at the size
+/// each really is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrokeArt {
+    pub width: f32,
+    pub height: f32,
+    /// How thick a lit segment is drawn, in the same units.
+    pub stroke: f32,
+    /// Per slot, in the order the glyph tables number them.
+    pub slots: Vec<Vec<Vec<f32>>>,
+}
+
 fn is_false(b: &bool) -> bool {
     !*b
 }
@@ -367,6 +412,12 @@ pub struct Display {
     /// where in the cell the first one goes.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub fonts: HashMap<String, HashMap<String, Vec<String>>>,
+    /// Per shape, what its slots look like, for a preview away from the
+    /// panel. Only on glass whose slots are segments: a pixel screen's art
+    /// falls out of its `grid`, and a text grid draws from a font the editor
+    /// reads for itself.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub art: HashMap<String, StrokeArt>,
     /// Look glyphs up only as sent, never uppercased first.
     ///
     /// The DED needs it: DCS-BIOS spells its arrow `a` and its degree sign
@@ -438,7 +489,11 @@ impl Display {
                     "a text display needs a `text` block saying its size".into()
                 ));
             };
-            if self.grid.is_some() || !self.fonts.is_empty() || !self.glyphs.is_empty() {
+            if self.grid.is_some()
+                || !self.fonts.is_empty()
+                || !self.glyphs.is_empty()
+                || !self.art.is_empty()
+            {
                 return Err(bad(
                     "a text display draws from the panel's font, not from glyphs or a pixel grid"
                         .into(),
@@ -467,7 +522,7 @@ impl Display {
             if !self.fonts.is_empty() {
                 return Err(bad("a font needs a grid to say where its rows go".into()));
             }
-            return Ok(());
+            return self.check_art();
         };
         let slots = g.cell_width * g.cell_height;
         if slots > 256 {
@@ -540,7 +595,69 @@ impl Display {
         self.inverse
             .entry(g.shape.clone())
             .or_insert_with(|| (top * g.cell_width..(bottom + 1) * g.cell_width).map(|s| s as u8).collect());
+        self.check_art()
+    }
+
+    /// Every shape's art names a shape this glass draws in, and gives it one
+    /// stroke list per slot.
+    ///
+    /// The length is the fault worth catching. A glyph names slots by number,
+    /// so art one entry short would draw every glyph of that shape with its
+    /// last segment missing, in the one place nobody can compare it against
+    /// the panel.
+    fn check_art(&self) -> Result<()> {
+        let bad = |why: String| Error::BadDisplay(self.key.clone(), why);
+        for (shape, art) in &self.art {
+            let Some(cell) = self.cells.iter().find(|c| &c.shape == shape) else {
+                return Err(bad(format!("the art draws {shape}, which no cell is")));
+            };
+            if art.slots.len() != cell.segments.len() {
+                return Err(bad(format!(
+                    "the {shape} art draws {} slots and a {shape} cell has {}",
+                    art.slots.len(),
+                    cell.segments.len()
+                )));
+            }
+            for (slot, strokes) in art.slots.iter().enumerate() {
+                for points in strokes {
+                    if points.len() < 4 || points.len() % 2 != 0 {
+                        return Err(bad(format!(
+                            "{shape} slot {slot} has a stroke of {} numbers; a stroke is x and y pairs, two pairs at least",
+                            points.len()
+                        )));
+                    }
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// What each of this display's shapes looks like, for a preview.
+    ///
+    /// A shape with nothing to draw it from is left out rather than guessed
+    /// at, so the window can say it has no picture of this glass instead of
+    /// showing a picture of nothing in particular.
+    pub fn shape_art(&self) -> BTreeMap<String, ShapeArt> {
+        let mut out = BTreeMap::new();
+        for cell in &self.cells {
+            if out.contains_key(&cell.shape) {
+                continue;
+            }
+            if let Some(art) = self.art.get(&cell.shape) {
+                out.insert(cell.shape.clone(), ShapeArt::Strokes(art.clone()));
+            } else if let Some(g) = &self.grid {
+                if g.shape == cell.shape {
+                    out.insert(
+                        cell.shape.clone(),
+                        ShapeArt::Pixels {
+                            width: g.cell_width,
+                            height: g.cell_height,
+                        },
+                    );
+                }
+            }
+        }
+        out
     }
 
     /// The glyph for `value` on `cell`, if that cell's shape can draw it.
@@ -606,6 +723,36 @@ impl Display {
             }
         }
         None
+    }
+
+    /// Which of a cell's slots are lit, drawing `value` in it.
+    ///
+    /// The glyph table's answer with the inverse flip applied, which is the
+    /// whole of what reaches the glass, and so the whole of what a preview
+    /// away from the panel has to draw. `None` where the table has nothing
+    /// for the value: on the panel that cell stays dark.
+    ///
+    /// Slots past the end of the cell are dropped, because they are past the
+    /// end of the screen too. The DED's last row of cells hangs off the
+    /// bottom of the buffer by one pixel row.
+    pub fn lit(&self, cell: &Cell, value: &str, inverse: bool) -> Option<Vec<u8>> {
+        let glyph = self.glyph(cell, value)?;
+        // A slot is a u8, so 256 covers every slot a glyph can name.
+        let mut on = [false; 256];
+        for &slot in glyph {
+            on[slot as usize] = true;
+        }
+        if inverse {
+            for &slot in self.inverse.get(&cell.shape).into_iter().flatten() {
+                on[slot as usize] ^= true;
+            }
+        }
+        Some(
+            (0..cell.segments.len())
+                .filter(|&slot| on.get(slot).copied().unwrap_or(false))
+                .map(|slot| slot as u8)
+                .collect(),
+        )
     }
 
     /// How many write groups the buffer is divided into.
@@ -728,20 +875,14 @@ impl Screen {
         let cell = display
             .cell(index)
             .ok_or_else(|| Error::NoSuchCell(display.key.clone(), index))?;
-        let lit = display.glyph(cell, value).ok_or_else(|| {
+        let lit = display.lit(cell, value, inverse).ok_or_else(|| {
             Error::NoSuchGlyph(value.to_string(), cell.shape.clone(), display.key.clone())
         })?;
-        // A slot is a u8, so 256 covers every slot a glyph can name. A lookup
-        // table rather than `contains`, because a DED cell is 104 slots and
-        // the whole screen is repainted on every batch.
+        // A lookup table rather than `contains`, because a DED cell is 104
+        // slots and the whole screen is repainted on every batch.
         let mut on = [false; 256];
-        for &slot in lit {
+        for slot in lit {
             on[slot as usize] = true;
-        }
-        if inverse {
-            for &slot in display.inverse.get(&cell.shape).into_iter().flatten() {
-                on[slot as usize] ^= true;
-            }
         }
         for (slot, &bit) in cell.segments.iter().enumerate() {
             let (byte, mask) = (bit as usize / 8, 1u8 << (bit % 8));

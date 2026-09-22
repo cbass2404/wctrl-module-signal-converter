@@ -40,7 +40,8 @@ pub fn build_label() -> &'static str {
 pub use display::{
     divider_rule, divider_text, min_divider_cells, text_cells, AliasDraw, Align, Cell, CellRange,
     Colour, ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, Round,
-    RuleCell, Screen, Span, TextCell, TextGrid, Transport, ValueBand, SEAT_SIGNAL,
+    RuleCell, Screen, ShapeArt, Span, StrokeArt, TextCell, TextGrid, Transport, ValueBand,
+    SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]

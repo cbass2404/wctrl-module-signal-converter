@@ -1315,6 +1315,13 @@ canvas.glyph-preview {
   max-width: 100%;
 }
 
+/* Glass whose characters are segments rather than pixels. It is drawn as
+   strokes at twice the size and shown at half, so it wants the smoothing a
+   font's bitmap must not have. */
+canvas.glyph-preview.smooth {
+  image-rendering: auto;
+}
+
 /* An area of the glass with nothing on it yet.
 
    Listed like every other, and like every lamp of a device, because a screen

@@ -441,6 +441,42 @@ export interface DisplayInfo {
    * be a way to draw the wrong symbol.
    */
   native_fonts: Record<string, string>;
+  /**
+   * Per shape, what a lit slot looks like, so a field can be drawn the way
+   * this glass will draw it. Empty on a text grid, which has a font instead.
+   */
+  art: Record<string, ShapeArt>;
+}
+
+/**
+ * How one shape's slots are drawn.
+ *
+ * A pixel screen's slot is a pixel of the cell's box, so it needs only the
+ * size of that box. A segment screen's slot is a stroke of the character, and
+ * nothing about its shape is anywhere in a map of bit indices, so the display
+ * carries the drawing: a slot is a list of strokes, and a stroke is a flat run
+ * of x and y, two pairs of which at the same point is a dot.
+ */
+export type ShapeArt =
+  | { kind: "pixels"; width: number; height: number }
+  | { kind: "strokes"; width: number; height: number; stroke: number; slots: number[][][] };
+
+/** One cell of a field, as the window laid it out, for the backend to look up. */
+export interface CellDraw {
+  cell: number;
+  value: string;
+  inverse?: boolean;
+}
+
+/** What one cell lights, as the backend's own glyph lookup answers it. */
+export interface CellInk {
+  /** The slots lit, with any inverse flip applied. */
+  lit: number[];
+  /** Which shape's art draws them. */
+  shape: string;
+  /** False where the glyph table has nothing for the value, which on the
+   *  panel is a dark cell. */
+  drawn: boolean;
 }
 
 /** One cell of a rule, as the backend lays it out. */

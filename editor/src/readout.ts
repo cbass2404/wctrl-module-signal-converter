@@ -15,7 +15,7 @@
 // up the panel it was drawn, and the only way to reorder was to delete
 // everything and start again.
 
-import { dividerRule, fontGlyphs } from "./api";
+import { cellInk, dividerRule, fontGlyphs } from "./api";
 import { iconButton } from "./binding";
 import { confirmAction } from "./confirm";
 import { contentOf, isLiteral, kindOf, newSpan, setContent } from "./content";
@@ -26,6 +26,7 @@ import { signalPicker } from "./typeahead";
 import { aliasColour, aliasOf, aliasText } from "./types";
 import type {
   AliasDraw,
+  CellDraw,
   Device,
   DisplayInfo,
   FontChoice,
@@ -34,6 +35,7 @@ import type {
   Readout,
   RegionInfo,
   RuleCell,
+  ShapeArt,
   SignalView,
   Span,
 } from "./types";
@@ -1432,12 +1434,311 @@ function glyphsFor(display: string, font: string): Promise<FontGlyphs> {
 }
 
 /**
- * The line as the panel will draw it, in the font it will draw it with.
+ * The cells a field fills, in the order they sit on the glass.
+ *
+ * The same measuring the daemon does, and in the same order: each piece laid
+ * out in turn, a box held to its width, the gaps given whatever is left, and
+ * then the line cropped or padded to the run. A cell carries the piece that
+ * drew it and the character it draws, or null where a reading goes, because
+ * nothing here knows what the aircraft will send.
+ */
+async function layoutCells(
+  readout: Readout,
+  signals: SignalView[],
+  width: number,
+): Promise<{ shown: PreviewCell[]; offset: number }> {
+  // Which piece each cell comes from, so a cell can be drawn in that piece's
+  // colour and size, or left as a block where a reading goes. Built per piece
+  // rather than flat, because a gap cannot be measured until everything that
+  // is not a gap has been laid out, the same way the daemon does it.
+  const spans = contentOf(readout);
+  const groups: PreviewCell[][] = [];
+  const gaps: number[] = [];
+  for (const span of spans) {
+    if (span.gap) {
+      // A boxed gap knows its width before anything else is laid out, so it
+      // is filled below with the rest of the rules. An elastic one waits for
+      // the measuring.
+      if (!span.width) {
+        gaps.push(groups.length);
+        groups.push([]);
+        continue;
+      }
+      groups.push(Array.from({ length: span.width }, () => ({ span, ch: " " })));
+      continue;
+    }
+    const group: PreviewCell[] = [];
+    if (isLiteral(span)) {
+      for (const ch of span.text ?? "") group.push({ span, ch });
+    } else {
+      // In a box, only as many cells as the reading itself can fill: the rest
+      // are blanks being held, and drawing them as more of the reading would
+      // hide the thing the box is for. A reading of no known width could be
+      // any of them, so it takes the lot.
+      const value = span.width
+        ? Math.min(span.width, signalWidth(span, signals) || span.width)
+        : spanWidth(span, signals);
+      for (let i = 0; i < value; i += 1) group.push({ span, ch: null });
+    }
+    // Held to its box before the gaps are measured, which is the whole point
+    // of one: the pieces after it do not move.
+    groups.push(boxFit(span, group));
+  }
+  if (gaps.length > 0) {
+    const fixed = groups.reduce((n, g) => n + g.length, 0);
+    const spare = Math.max(0, width - fixed);
+    const each = Math.floor(spare / gaps.length);
+    const extra = spare % gaps.length;
+    gaps.forEach((at, n) => {
+      const take = each + (n < extra ? 1 : 0);
+      groups[at] = Array.from({ length: take }, () => ({ span: spans[at] as Span, ch: " " }));
+    });
+  }
+  // The rules last, once every one of them knows how wide it is. Asked for
+  // rather than worked out here, because a rule drawn twice is a rule that can
+  // drift from the one the panel gets.
+  await Promise.all(
+    spans.map(async (span, at) => {
+      if (!span.gap || !span.rule) return;
+      const cells = await dividerRule(groups[at]?.length ?? 0, span.label ?? "");
+      groups[at] = cells.map((cell) => ({
+        span,
+        ch: cell.text,
+        colour: cell.label ? span.label_colour ?? span.colour : span.colour,
+      }));
+    }),
+  );
+  let cells = groups.flat();
+  // A one cell run takes the whole line as a single glyph, because that is
+  // what the daemon hands the cell: a two character field really does occupy
+  // one cell on a UFC comm window, and a text grid then draws the first
+  // character of it. Splitting it here instead would preview the wrong half.
+  if (width === 1 && cells.length > 1) {
+    const first = cells[0] as PreviewCell;
+    const whole = cells.every((c) => c.ch !== null) ? cells.map((c) => c.ch).join("") : null;
+    cells = [{ span: first.span, ch: whole, colour: first.colour }];
+  }
+  // Cropped and padded the way the field will be, so the preview shows the
+  // loss rather than a line that fits in the window and not on the panel.
+  const front = padBefore(readout.align, width, cells.length);
+  const shown = cells.length > width ? cells.slice(front, front + width) : cells;
+  return { shown, offset: padBefore(readout.align, shown.length, width) };
+}
+
+/** How tall a cell is drawn in a preview, whatever size the glass is. */
+const CELL_PX = 26;
+
+/** The dim block that stands in for a reading nobody here can know. */
+function drawBlock(ctx: CanvasRenderingContext2D, x: number, w: number, h: number): void {
+  ctx.fillStyle = "#2a3340";
+  ctx.fillRect(x + 1, h * 0.3, w - 2, h * 0.4);
+}
+
+/** A character the glass will not draw, marked so the blank reads as missing. */
+function drawMissing(ctx: CanvasRenderingContext2D, x: number, w: number, h: number): void {
+  ctx.strokeStyle = "#7a2b2b";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 1.5, 1.5, w - 3, h - 3);
+}
+
+/**
+ * The line in the font the panel will draw it with, for a text grid.
  *
  * Checking the typed characters against the alphabet is not enough, because
  * these fonts reuse slots: in the A-10C font `%` draws a question mark. A
  * preview made of the typed string would agree with the user and disagree with
  * the glass, which is the one thing it is here to stop.
+ */
+function paintFont(
+  canvas: HTMLCanvasElement,
+  font: FontGlyphs,
+  shown: PreviewCell[],
+  offset: number,
+  width: number,
+): void {
+  const scale = 0.6;
+  const cw = Math.round(font.width * scale);
+  const chh = Math.round(font.height * scale);
+  canvas.classList.remove("smooth");
+  canvas.width = cw * width;
+  canvas.height = chh;
+  canvas.style.width = `${cw * width}px`;
+  canvas.style.height = `${chh}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = "#05070a";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  shown.forEach((cell, i) => {
+    const x = (offset + i) * cw;
+    // A rule's label carries its own, which is the whole reason it reads as a
+    // label rather than as part of the line.
+    const colour = SWATCH[cell.colour ?? cell.span.colour ?? "white"] ?? "#f2f4f7";
+    if (cell.ch === null) {
+      // Where a reading will go. Drawn as a bar rather than as digits,
+      // because nothing here knows what the aircraft will send.
+      drawBlock(ctx, x, cw, chh);
+      return;
+    }
+    const table = cell.span.small ? font.small : font.large;
+    // One cell holds one character. A one cell field carrying more was joined
+    // whole for the glass that draws it whole, and this is not that glass.
+    const rows = table[[...cell.ch][0] ?? " "];
+    if (!rows) {
+      // A character the font has no glyph for draws nothing at all on the
+      // panel, so it draws nothing here either, marked so the blank is
+      // visibly a missing glyph rather than a space.
+      drawMissing(ctx, x, cw, chh);
+      return;
+    }
+    ctx.fillStyle = cell.span.inverse ? "#05070a" : colour;
+    if (cell.span.inverse) {
+      ctx.save();
+      ctx.fillStyle = colour;
+      ctx.fillRect(x, 0, cw, chh);
+      ctx.restore();
+      ctx.fillStyle = "#05070a";
+    }
+    rows.forEach((row, ry) => {
+      [...row].forEach((bit, rx) => {
+        if (bit === "." || bit === " ") return;
+        ctx.fillRect(x + rx * scale, ry * scale, scale + 0.5, scale + 0.5);
+      });
+    });
+  });
+}
+
+/**
+ * The line as the slots this glass will light, for a UFC or a DED.
+ *
+ * Glass with no font of its own draws whatever its glyph table says, which is
+ * a set of segments or pixels rather than a character, and the table is keyed
+ * by the value the cell is given: a two character comm channel is one glyph,
+ * a spaced digit is another glyph from the bare one, and the DED spells its
+ * arrow with a lowercase letter. So the lit slots are asked for per cell and
+ * only the drawing is done here.
+ *
+ * Returns the values this glass draws nothing for, so the note under the
+ * preview can name them, and null where nothing here knows what its cells
+ * look like.
+ */
+async function paintInk(
+  canvas: HTMLCanvasElement,
+  display: DisplayInfo,
+  shown: PreviewCell[],
+  offset: number,
+  first: number,
+  width: number,
+): Promise<string[] | null> {
+  const arts: ShapeArt[] = [];
+  for (let i = 0; i < width; i += 1) {
+    const art = display.art[display.shapes[first + i] ?? ""];
+    if (!art) return null;
+    arts.push(art);
+  }
+  // Pixels are scaled by whole numbers and left unsmoothed, the way the font
+  // preview is: a pixel of the glass is a square of pixels here. Segments are
+  // drawn at twice the size and shown at half, because a stroke two pixels
+  // wide with hard edges reads as a fault in the panel.
+  const pixels = arts.every((a) => a.kind === "pixels");
+  const over = pixels ? 1 : 2;
+  const scales = arts.map((a) =>
+    a.kind === "pixels" ? Math.max(1, Math.round(CELL_PX / a.height)) : CELL_PX / a.height,
+  );
+  const widths = arts.map((a, i) => Math.round(a.width * (scales[i] ?? 1)));
+  const lefts = widths.map((_, i) => widths.slice(0, i).reduce((n, w) => n + w, 0));
+  const across = widths.reduce((n, w) => n + w, 0);
+  const down = Math.round(Math.max(...arts.map((a, i) => a.height * (scales[i] ?? 1))));
+
+  const cells: CellDraw[] = [];
+  const where: number[] = [];
+  shown.forEach((cell, i) => {
+    if (cell.ch === null) return;
+    cells.push({ cell: first + offset + i, value: cell.ch, inverse: cell.span.inverse === true });
+    where.push(i);
+  });
+  const ink = cells.length > 0 ? await cellInk(display.key, cells) : [];
+
+  canvas.classList.toggle("smooth", !pixels);
+  canvas.width = across * over;
+  canvas.height = down * over;
+  canvas.style.width = `${across}px`;
+  canvas.style.height = `${down}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return [];
+  ctx.scale(over, over);
+  ctx.fillStyle = "#05070a";
+  ctx.fillRect(0, 0, across, down);
+
+  const dark: string[] = [];
+  shown.forEach((cell, i) => {
+    const at = offset + i;
+    const art = arts[at];
+    const scale = scales[at] ?? 1;
+    const x = lefts[at] ?? 0;
+    const w = widths[at] ?? 0;
+    if (!art) return;
+    if (cell.ch === null) {
+      drawBlock(ctx, x, w, down);
+      return;
+    }
+    const lit = ink[where.indexOf(i)];
+    if (!lit || !lit.drawn) {
+      if (cell.ch.trim() !== "") dark.push(cell.ch);
+      drawMissing(ctx, x, w, down);
+      return;
+    }
+    // One colour, because this glass has one: nothing on it is per cell the
+    // way a text grid's colour is, so a piece has none to pick.
+    const colour = SWATCH.white ?? "#f2f4f7";
+    if (art.kind === "pixels") {
+      ctx.fillStyle = colour;
+      for (const slot of lit.lit) {
+        const px = slot % art.width;
+        const py = Math.floor(slot / art.width);
+        ctx.fillRect(x + px * scale, py * scale, scale, scale);
+      }
+      return;
+    }
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = art.stroke * scale;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const slot of lit.lit) {
+      for (const stroke of art.slots[slot] ?? []) {
+        const points: [number, number][] = [];
+        for (let p = 0; p + 1 < stroke.length; p += 2) {
+          points.push([x + (stroke[p] ?? 0) * scale, (stroke[p + 1] ?? 0) * scale]);
+        }
+        const [head, ...rest] = points;
+        if (!head) continue;
+        // A mark with no length is a dot, and a dot drawn as a line of no
+        // length is at the mercy of how the canvas rounds its caps.
+        if (rest.every((p) => p[0] === head[0] && p[1] === head[1])) {
+          ctx.beginPath();
+          ctx.arc(head[0], head[1], (art.stroke * scale) / 2, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
+        ctx.beginPath();
+        ctx.moveTo(head[0], head[1]);
+        for (const point of rest) ctx.lineTo(point[0], point[1]);
+        ctx.stroke();
+      }
+    }
+  });
+  return dark;
+}
+
+/**
+ * The line as the panel will draw it, in whatever this panel draws with.
+ *
+ * A text grid is given a font and draws characters from it. Everything else
+ * draws from a glyph table of its own, where a value lights a set of segments
+ * or pixels that may look nothing like the characters it was keyed by. Both
+ * are previewed, because the point of a preview is the difference between
+ * what was typed and what the glass does with it.
  *
  * A reading is drawn as a dim block per cell rather than as sample characters.
  * Nothing here knows what the aircraft will send, and inventing a number would
@@ -1451,9 +1752,10 @@ function glyphPreview(
 ): { node: HTMLElement; refresh: () => void } {
   const canvas = el("canvas", { class: "glyph-preview" });
   const note = el("div", { class: "meta" });
-  // Which repaint is the current one. Two things are waited on now, the font
-  // and the rules, and a late answer about a layout the user has already moved
-  // on from must not be painted over the one they are looking at.
+  // Which repaint is the current one. Several things are waited on now, the
+  // font, the rules and the glyph lookups, and a late answer about a layout
+  // the user has already moved on from must not be painted over the one they
+  // are looking at.
   let generation = 0;
 
   const refresh = (): void => {
@@ -1461,143 +1763,46 @@ function glyphPreview(
     const width = range ? range[1] - range[0] + 1 : 0;
     const file = fontInUse(display, profile);
     generation += 1;
-    if (!display.text_grid || !file || width === 0) {
+    // A run this screen does not have is a fault the cell box is already
+    // showing in red. Nothing is drawn for it, rather than something said
+    // about glass that has no such cells.
+    const nowhere = !range || range[1] >= display.cells;
+    if (nowhere || (display.text_grid && !file)) {
       canvas.hidden = true;
       note.textContent =
-        display.text_grid && !file ? "No font ships for this screen, so it cannot be drawn here." : "";
+        !nowhere && display.text_grid
+          ? "No font ships for this screen, so it cannot be drawn here."
+          : "";
       return;
     }
     canvas.hidden = false;
     note.textContent = "";
     const mine = generation;
     void (async () => {
-      const font = await glyphsFor(display.key, file);
-      {
-        // Which piece each cell comes from, so a cell can be drawn in that
-        // piece's colour and size, or left as a block where a reading goes.
-        // Built per piece rather than flat, because a gap cannot be measured
-        // until everything that is not a gap has been laid out, the same way
-        // the daemon does it.
-        const spans = contentOf(readout);
-        const groups: PreviewCell[][] = [];
-        const gaps: number[] = [];
-        for (const span of spans) {
-          if (span.gap) {
-            // A boxed gap knows its width before anything else is laid out, so
-            // it is filled below with the rest of the rules. An elastic one
-            // waits for the measuring.
-            if (!span.width) {
-              gaps.push(groups.length);
-              groups.push([]);
-              continue;
-            }
-            groups.push(Array.from({ length: span.width }, () => ({ span, ch: " " })));
-            continue;
-          }
-          const group: PreviewCell[] = [];
-          if (isLiteral(span)) {
-            for (const ch of span.text ?? "") group.push({ span, ch });
-          } else {
-            // In a box, only as many cells as the reading itself can fill:
-            // the rest are blanks being held, and drawing them as more of the
-            // reading would hide the thing the box is for. A reading of no
-            // known width could be any of them, so it takes the lot.
-            const value = span.width
-              ? Math.min(span.width, signalWidth(span, signals) || span.width)
-              : spanWidth(span, signals);
-            for (let i = 0; i < value; i += 1) group.push({ span, ch: null });
-          }
-          // Held to its box before the gaps are measured, which is the whole
-          // point of one: the pieces after it do not move.
-          groups.push(boxFit(span, group));
-        }
-        if (gaps.length > 0) {
-          const fixed = groups.reduce((n, g) => n + g.length, 0);
-          const spare = Math.max(0, width - fixed);
-          const each = Math.floor(spare / gaps.length);
-          const extra = spare % gaps.length;
-          gaps.forEach((at, n) => {
-            const take = each + (n < extra ? 1 : 0);
-            groups[at] = Array.from({ length: take }, () => ({ span: spans[at] as Span, ch: " " }));
-          });
-        }
-        // The rules last, once every one of them knows how wide it is. Asked
-        // for rather than worked out here, because a rule drawn twice is a
-        // rule that can drift from the one the panel gets.
-        await Promise.all(
-          spans.map(async (span, at) => {
-            if (!span.gap || !span.rule) return;
-            const cells = await dividerRule(groups[at]?.length ?? 0, span.label ?? "");
-            groups[at] = cells.map((cell) => ({
-              span,
-              ch: cell.text,
-              colour: cell.label ? span.label_colour ?? span.colour : span.colour,
-            }));
-          }),
-        );
+      const { shown, offset } = await layoutCells(readout, signals, width);
+      if (mine !== generation) return;
+      if (display.text_grid && file) {
+        const font = await glyphsFor(display.key, file);
         if (mine !== generation) return;
-        const cells = groups.flat();
-        // Cropped and padded the way the field will be, so the preview shows
-        // the loss rather than a line that fits in the window and not on the
-        // panel.
-        const front = padBefore(readout.align, width, cells.length);
-        const shown = cells.length > width ? cells.slice(front, front + width) : cells;
-
-        const scale = 0.6;
-        const cw = Math.round(font.width * scale);
-        const chh = Math.round(font.height * scale);
-        canvas.width = cw * width;
-        canvas.height = chh;
-        canvas.style.width = `${cw * width}px`;
-        canvas.style.height = `${chh}px`;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.fillStyle = "#05070a";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const offset = padBefore(readout.align, shown.length, width);
-        shown.forEach((cell, i) => {
-          const x = (offset + i) * cw;
-          // A rule's label carries its own, which is the whole reason it reads
-          // as a label rather than as part of the line.
-          const colour = SWATCH[cell.colour ?? cell.span.colour ?? "white"] ?? "#f2f4f7";
-          if (cell.ch === null) {
-            // Where a reading will go. Drawn as a bar rather than as digits,
-            // because nothing here knows what the aircraft will send.
-            ctx.fillStyle = "#2a3340";
-            ctx.fillRect(x + 1, chh * 0.3, cw - 2, chh * 0.4);
-            return;
-          }
-          const table = cell.span.small ? font.small : font.large;
-          const rows = table[cell.ch];
-          if (!rows) {
-            // A character the font has no glyph for draws nothing at all on
-            // the panel, so it draws nothing here either, marked so the blank
-            // is visibly a missing glyph rather than a space.
-            ctx.strokeStyle = "#7a2b2b";
-            ctx.strokeRect(x + 1.5, 1.5, cw - 3, chh - 3);
-            return;
-          }
-          ctx.fillStyle = cell.span.inverse ? "#05070a" : colour;
-          if (cell.span.inverse) {
-            ctx.save();
-            ctx.fillStyle = colour;
-            ctx.fillRect(x, 0, cw, chh);
-            ctx.restore();
-            ctx.fillStyle = "#05070a";
-          }
-          rows.forEach((row, ry) => {
-            [...row].forEach((bit, rx) => {
-              if (bit === "." || bit === " ") return;
-              ctx.fillRect(x + rx * scale, ry * scale, scale + 0.5, scale + 0.5);
-            });
-          });
-        });
+        paintFont(canvas, font, shown, offset, width);
+        return;
       }
+      const dark = await paintInk(canvas, display, shown, offset, range?.[0] ?? 0, width);
+      if (mine !== generation) return;
+      if (dark === null) {
+        canvas.hidden = true;
+        note.textContent = "There is no drawing of this glass here, so it cannot be shown.";
+        return;
+      }
+      const missing = [...new Set(dark)];
+      note.textContent = missing.length
+        ? `This glass draws nothing for ${missing.map((v) => JSON.stringify(v)).join(", ")}, so ` +
+          `${missing.length === 1 ? "that cell" : "those cells"} would be dark on the panel.`
+        : "";
     })().catch(() => {
       if (mine !== generation) return;
       canvas.hidden = true;
-      note.textContent = "The font could not be read.";
+      note.textContent = "The glyphs could not be read.";
     });
   };
 

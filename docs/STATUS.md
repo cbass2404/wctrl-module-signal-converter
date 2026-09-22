@@ -51,6 +51,40 @@ which put these fields on `MCDU_Captain` only. Whether they ship as the
 Hornet's default MCDU page is a separate decision, and waits for release like
 any changed default.
 
+**Built 2026-09-22: the UFC and the DED are previewed too.** The editor drew a field before it was flown only on the MCDU,
+where a cell is a character of an uploaded font. The other two screens are
+where a preview is worth more, because a value there lights a set of segments
+or pixels that need not resemble the characters it was keyed by: a bare digit
+and a spaced one are different glyphs, a comm channel is two characters on one
+cell, and the DED spells its arrow with a lowercase `a`. The lit slots are
+asked of the backend per cell, so the same lookup the daemon paints with
+answers the preview, and only the drawing happens in the window.
+
+What the drawing needed, and what it costs:
+
+- **A slot has no shape anywhere in the maps.** A buffer of bit indices says
+  which slots a glyph lights and nothing about where they are. The DED is
+  spared this, its slots being pixels of a cell the grid generated, but the
+  UFC's are segments, so `art` in `data/displays/ufc1.json` gives each slot a
+  stroke. Which slot is which segment was read out of the glyph table itself
+  rather than captured, and the derivation is written down in both the file
+  and "Where each segment sits" in [PROTOCOL.md](PROTOCOL.md). So the preview
+  is exactly right about which segments light and only as right about where
+  they sit as that reading. A photograph of the glass would settle it.
+- **One layout, two painters.** The measuring the daemon does was already
+  copied in the window for the MCDU; it is now `layoutCells`, and the font and
+  the slots are two ways of painting what it produces. It picked up the
+  daemon's one cell rule on the way: a single cell field takes the whole line
+  as one glyph, which is what a comm channel needs and what a text grid takes
+  the first character of.
+- **Nothing is invented.** A cell the glyph table has nothing for is marked
+  the way a missing font glyph already was, and the line under the preview
+  names the values that would leave a cell dark. That is the check these two
+  screens never had: `alphabet` only ever answered for a font.
+- **Both are drawn white**, because no capture says what colour either glass
+  is. One colour per display would be a small change in `paintInk` once
+  someone looks at the panels.
+
 **Built 2026-09-21, not yet on a panel: one panel under several names shares a
 setup.** Rebuilding the IFEI showed the cost of the MCDU being three devices: it
 was built on the Captain, and a Co-Pilot or Observer unit would need it all

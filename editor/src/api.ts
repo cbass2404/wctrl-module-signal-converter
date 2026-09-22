@@ -5,6 +5,8 @@ import { invoke } from "@tauri-apps/api/core";
 
 import type {
   CatalogueStatus,
+  CellDraw,
+  CellInk,
   ConverterState,
   Device,
   Findings,
@@ -45,6 +47,17 @@ export const dividerRule = (cells: number, label: string) =>
  */
 export const fontGlyphs = (display: string, font: string) =>
   invoke<FontGlyphs>("font_glyphs", { display, font });
+
+/**
+ * What each of these cells would light, drawing these values.
+ *
+ * For glass that draws from a glyph table rather than from a font: the UFC's
+ * segments and the DED's pixels. Asked of the backend rather than worked out
+ * here for the same reason a divider is, and more so: which glyph a value
+ * lands on depends on the cell it is drawn in, and no two of those cells agree.
+ */
+export const cellInk = (display: string, cells: CellDraw[]) =>
+  invoke<CellInk[]>("cell_ink", { display, cells });
 
 // The converter daemon. Nothing here is needed to edit a profile: a running
 // daemon picks up a saved one on its own. See editor/src/converter.ts.

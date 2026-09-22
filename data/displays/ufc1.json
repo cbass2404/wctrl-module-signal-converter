@@ -10,7 +10,8 @@
     "The comm preset cells 34 and 35 are two digits on one cell: a units digit and a partial tens that can only draw 1 or 2. The vendor spells the tens as a prefix character, '`' for 1 and '~' for 2, so 12 is the glyph '`2' and 20 is '~0'. DCS-BIOS sends '12', so `spellings` rewrites it. CONFIRMED on hardware 2026-09-17: the daemon drove a two digit comm preset onto the real glass in a live mission. The reading that predicted it: '`X' is exactly ' X' plus slots 6 and 7 for all ten digits, and '~0' is exactly ' 0' plus the four slots of '~', which is what a separate digit position looks like. The table holds ' 1' to ' 9', '`0' to '`9' and '~0' and nothing else of that form, which is precisely the 1 to 20 a Hornet comm preset can take.",
     "Cells 34 and 35 hold two characters and carry `width: 2`. Their slots split cleanly in two with no overlap: the units digit is slots 1,2,3,4,9,11,13 and the tens is 0,5,6,7,15, which is what the ' X' keys and the '`'/'~' prefixes light respectively. A value is trimmed and right aligned to the cell width before lookup, because modules disagree about padding: the Hornet sends ' 2' for channel 2, the Hind sends '1' from a one character field and '1 ' from a two character one. Fitting has to happen BEFORE the lookup, not as a fallback after it, because a bare '1' is a real entry in the shared table and would draw two strokes of the units digit.",
     "Glyph lookup is two passes, uppercase then the value as sent, and within each pass the form the cell prefers and then the bare trimmed value. Uppercase leads because this panel was built for the Hornet and DCS-BIOS reports the Hornet UFC in capitals throughout: every letter in both captured pages is a capital, the small forms were never exercised, and the lowercase set is incomplete with no r, u, w, y or z. Another module naming a guard channel 'g' should reach the glass looking like the rest of the panel. Falling back to the value as sent is what keeps that safe: digit7 has a 'p' and a 'w' and no capitals at all. A wide cell prefers its full width; an ordinary cell prefers the spaced form of a single character, because a digit has two forms there (' 3' and '3') and the only digit captured on such a cell is the spaced one, cell 0 on the COMM page. The bare value then rescues everything with no spaced form: DCS-BIOS pads a string out to its max_length while DCS's own indication does not, so a scratchpad letter arrives as ' G' and a guard channel as ' g'.",
-    "`regions` names the areas of the glass, taken from SimAppPro's own cell map for the Hornet (F18_lcd.js DCSToCharPos), which accounts for all 36 cells with no gaps and no overlaps. They exist for the editor: a cell run like '30-33' says nothing to someone deciding what to put on the panel. The names describe the position rather than the Hornet's use of it, because the same glass serves other modules, and each note says what the Hornet does with it."
+    "`regions` names the areas of the glass, taken from SimAppPro's own cell map for the Hornet (F18_lcd.js DCSToCharPos), which accounts for all 36 cells with no gaps and no overlaps. They exist for the editor: a cell run like '30-33' says nothing to someone deciding what to put on the panel. The names describe the position rather than the Hornet's use of it, because the same glass serves other modules, and each note says what the Hornet does with it.",
+    "`art` is the segments drawn, for the editor's preview of a field before it is flown. Nothing on the wire uses it. Which slot is which segment was worked out from the glyph table rather than captured: '0' lights 0,5,6,7,9,13 and ' 0' lights 1,2,3,4,9,13, so 0,5,6,7 are the left of the cell and 1,2,3,4 the right; '`1' lights 2,3,6,7, one digit each side; 'Z' lights 10 and 14, so those are the diagonals running top right to bottom left, and 'X' adds 8 and 12 for the other pair; 'B' takes 11 where 'F' takes 15, so 11 is the right half of the middle bar and 15 the left. The preview is therefore exactly right about which segments light and only as right about where they sit as that reading of the table. The option cue is one slot, drawn as the colon its glyph is keyed by."
   ],
   "displays": [
     {
@@ -765,6 +766,53 @@
         "18": "`8",
         "19": "`9",
         "20": "~0"
+      },
+      "art": {
+        "alnum16": {
+          "width": 10,
+          "height": 16,
+          "stroke": 1.4,
+          "slots": [
+            [[1.6, 1, 4.4, 1]],
+            [[5.6, 1, 8.4, 1]],
+            [[9, 1.6, 9, 7.4]],
+            [[9, 8.6, 9, 14.4]],
+            [[5.6, 15, 8.4, 15]],
+            [[1.6, 15, 4.4, 15]],
+            [[1, 8.6, 1, 14.4]],
+            [[1, 1.6, 1, 7.4]],
+            [[1.9, 2.1, 4.1, 6.9]],
+            [[5, 1.7, 5, 7.2]],
+            [[8.1, 2.1, 5.9, 6.9]],
+            [[5.6, 8, 8.4, 8]],
+            [[5.9, 9.1, 8.1, 13.9]],
+            [[5, 8.8, 5, 14.3]],
+            [[4.1, 9.1, 1.9, 13.9]],
+            [[1.6, 8, 4.4, 8]]
+          ]
+        },
+        "digit7": {
+          "width": 8,
+          "height": 16,
+          "stroke": 1.4,
+          "slots": [
+            [[1.6, 1, 6.4, 1]],
+            [[7, 1.6, 7, 7.4]],
+            [[7, 8.6, 7, 14.4]],
+            [[1.6, 15, 6.4, 15]],
+            [[1, 8.6, 1, 14.4]],
+            [[1, 1.6, 1, 7.4]],
+            [[1.6, 8, 6.4, 8]]
+          ]
+        },
+        "single": {
+          "width": 4,
+          "height": 16,
+          "stroke": 1.8,
+          "slots": [
+            [[2, 5, 2, 5], [2, 11, 2, 11]]
+          ]
+        }
       },
       "glyphs": {
         "alnum16": {

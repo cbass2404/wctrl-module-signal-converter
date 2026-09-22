@@ -193,13 +193,20 @@ function namedPositions(signal: SignalView | undefined): Record<string, string> 
  * value already is the number, and is shown as sent.
  */
 function startReading(span: Span, signal: SignalView | undefined): void {
-  delete span.reads;
-  delete span.decimals;
-  delete span.value_aliases;
+  clearReading(span);
   if (!signal || signal.text) return;
   const named = namedPositions(signal);
   if (Object.keys(named).length > 0) span.value_aliases = named;
   else if (signal.max_value >= 65535) span.reads = [0, 100];
+}
+
+/** Forget how a number was drawn, ahead of drawing it some other way. */
+function clearReading(span: Span): void {
+  delete span.reads;
+  delete span.decimals;
+  delete span.round;
+  delete span.wrap;
+  delete span.value_aliases;
 }
 
 /**
@@ -229,9 +236,7 @@ function conversionRow(
     // as sent did, so the choice changes nothing until a number is changed.
     // Aliasing starts from the catalogue's position names, where it has any.
     // Decimals mean nothing on a whole number sent as it is.
-    delete span.reads;
-    delete span.decimals;
-    delete span.value_aliases;
+    clearReading(span);
     if (select.value === "converted") span.reads = [0, max];
     if (select.value === "aliased") span.value_aliases = namedPositions(signal);
     rebuild();
@@ -260,21 +265,45 @@ function conversionRow(
     const low = number(span.reads[0]);
     const high = number(span.reads[1]);
     const dp = number(span.decimals ?? 0, { min: "0", max: "3" });
+    // Empty rather than 0 when there is none, so the box reads as "never"
+    // and a range starting at 0 is not confused with a wrap of 0.
+    const wrap = el("input", {
+      type: "number",
+      class: "value",
+      min: "0",
+      value: span.wrap ? String(span.wrap) : "",
+      placeholder: "never",
+    });
+    const round = el("select", { class: "test" });
+    round.append(
+      el("option", { value: "nearest" }, "to the nearest"),
+      el("option", { value: "down" }, "down"),
+    );
+    round.value = span.round ?? "nearest";
     const sync = (): void => {
       span.reads = [Number(low.value) || 0, Number(high.value) || 0];
       const places = Number(dp.value) || 0;
       if (places > 0) span.decimals = places;
       else delete span.decimals;
+      const every = Number(wrap.value);
+      if (Number.isFinite(every) && every > 0) span.wrap = every;
+      else delete span.wrap;
+      if (round.value === "down") span.round = "down";
+      else delete span.round;
       edited();
     };
-    for (const box of [low, high, dp]) box.addEventListener("input", sync);
+    for (const box of [low, high, dp, wrap]) box.addEventListener("input", sync);
+    round.addEventListener("change", sync);
     values.append(
       low,
       el("span", { class: "sep" }, "to"),
       high,
       el("span", { class: "sep" }, "with"),
       dp,
-      el("span", { class: "sep" }, "decimals"),
+      el("span", { class: "sep" }, "decimals, rounded"),
+      round,
+      el("span", { class: "sep" }, ", wrapping at"),
+      wrap,
     );
   }
 
@@ -289,7 +318,10 @@ function conversionRow(
         ? `DCS-BIOS sends 0 to ${max}, and this is what the dial is marked ` +
             "with at each end. It reports a needle as a position, not a value, " +
             "so this is yours to give. A face that starts below zero or runs " +
-            "backwards is fine."
+            "backwards is fine. Round down for a drum or a counter, which only " +
+            "shows a digit once it has clicked over. Wrap for anything that " +
+            "starts again from 0: one drum digit is 0 to 10 wrapping at 10, and " +
+            "a compass is 0 to 360 wrapping at 360."
         : `The number DCS-BIOS sends, 0 to ${max}, drawn as it is. Right for ` +
             "a count or a selector. A needle wants converting.",
     ),
@@ -1025,8 +1057,22 @@ function spanWidth(span: Span, signals: SignalView[]): number {
     Object.keys(aliases).length > max &&
     Array.from({ length: max + 1 }, (_, v) => String(v) in aliases).every(Boolean);
   if (everyValue) return longest;
-  const ends = span.reads ?? [0, max];
+  const [low, high] = span.reads ?? [0, max];
   const dp = span.decimals ?? 0;
+  const every = span.wrap && span.wrap > 0 ? span.wrap : 0;
+  // Settled the way the daemon settles them: rounded, wrapped, and never -0.
+  const settle = (end: number): number => {
+    const rounded = span.round === "down" ? Math.floor(end * 10 ** dp) / 10 ** dp : Number(end.toFixed(dp));
+    const wrapped = every ? ((rounded % every) + every) % every : rounded;
+    return wrapped === 0 ? 0 : wrapped;
+  };
+  const ends = [settle(low), settle(high)];
+  // A reading that starts over between its ends can draw anything up to the
+  // last value before it does.
+  const [a, b] = [Math.min(low, high), Math.max(low, high)];
+  if (every && (b - a >= every || Math.floor(a / every) !== Math.floor(b / every))) {
+    ends.push(Math.max(0, every - 10 ** -dp));
+  }
   return Math.max(longest, ...ends.map((end) => end.toFixed(dp).length));
 }
 
@@ -1986,7 +2032,9 @@ function describeField(readout: Readout, display: DisplayInfo): string {
       const drawn = aliases.length
         ? ` as ${aliases.map(([v, a]) => `${v}=${a}`).join(" ")}`
         : s.reads
-          ? ` converted to ${s.reads[0]} to ${s.reads[1]}`
+          ? ` converted to ${s.reads[0]} to ${s.reads[1]}` +
+            (s.round === "down" ? ", rounded down" : "") +
+            (s.wrap ? `, wrapping at ${s.wrap}` : "")
           : "";
       return `${s.source ? s.source : "a reading nobody has chosen yet"}${drawn}${held}`;
     }

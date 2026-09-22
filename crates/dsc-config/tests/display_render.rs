@@ -475,7 +475,8 @@ fn the_shipped_hornet_fields_land_on_named_regions() {
 // ------------------------------------------------------- readouts
 
 use dsc_config::{
-    divider_rule, divider_text, min_divider_cells, Align, CellRange, Colour, Reading, Readout, Span,
+    divider_rule, divider_text, min_divider_cells, Align, CellRange, Colour, Reading, Readout,
+    Round, Span,
 };
 
 fn readout(cells: &str, source: &str) -> Readout {
@@ -685,6 +686,103 @@ fn a_selector_whose_value_is_already_the_number_needs_no_special_case() {
     for n in 0..=10u16 {
         assert_eq!(s.format_number(n, 10), n.to_string());
     }
+}
+
+/// Where DCS-BIOS puts a float of 0 to 1, as the Lua export does: the nearest
+/// step, not the exact position.
+fn raw(position: f64) -> u16 {
+    (position * 65535.0).round() as u16
+}
+
+/// One odometer drum: a full turn is the digits 0 to 9, drawn as they click
+/// over.
+fn drum(r: &mut Readout) -> Span {
+    span(r).reads = Some([0.0, 10.0]);
+    span(r).wrap = Some(10.0);
+    span(r).round = Round::Down;
+    span(r).clone()
+}
+
+#[test]
+fn a_drum_draws_every_digit_it_sits_on_including_zero() {
+    // The F-16 fuel totalizer drums, among many. Sitting on digit 7 is 0.7 of
+    // a turn, which DCS-BIOS sends as 45875 and which converts to a hair under
+    // 7. Rounding down without allowing for that drew a 6.
+    let mut r = readout("2", "FUELTOTALIZER_1K");
+    let s = drum(&mut r);
+    for digit in 0..10u16 {
+        assert_eq!(
+            s.format_number(raw(f64::from(digit) / 10.0), 65535),
+            digit.to_string(),
+            "digit {digit}"
+        );
+    }
+    // A full turn is back on 0, drawn as 0 rather than 10 or nothing.
+    assert_eq!(s.format_number(65535, 65535), "0");
+}
+
+#[test]
+fn a_drum_between_digits_draws_the_one_it_has_left() {
+    let mut r = readout("2", "FUELTOTALIZER_1K");
+    let s = drum(&mut r);
+    // Most of the way from 4 to 5 is still 4 on a drum. Rounded to the
+    // nearest it read 5 while the drum below it still read 9.
+    assert_eq!(s.format_number(raw(0.48), 65535), "4");
+    assert_eq!(s.format_number(raw(0.99), 65535), "9");
+}
+
+#[test]
+fn a_reading_that_goes_round_more_than_once_draws_where_it_is_in_the_turn() {
+    // Twelve turns of 0 to 999 on one signal: the three digits a needle or a
+    // counter shows, not the running total behind them.
+    let mut r = readout("2-4", "MULTI_TURN");
+    span(&mut r).reads = Some([0.0, 12000.0]);
+    span(&mut r).wrap = Some(1000.0);
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(0, 65535), "0");
+    assert_eq!(s.format_number(raw(0.5), 65535), "0", "6000 is a whole turn");
+    assert_eq!(s.format_number(raw(7250.0 / 12000.0), 65535), "250");
+    assert_eq!(span(&mut r).widest(None, Some(65535)), Some(3));
+}
+
+#[test]
+fn a_full_scale_wraps_to_zero_at_the_top_after_rounding() {
+    let mut r = readout("2-4", "HEADING");
+    span(&mut r).reads = Some([0.0, 360.0]);
+    span(&mut r).wrap = Some(360.0);
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(65535, 65535), "0");
+    // 359.7 rounds to 360 first, which is 0, rather than drawing 360.
+    assert_eq!(s.format_number(raw(359.7 / 360.0), 65535), "0");
+    assert_eq!(s.format_number(raw(0.5), 65535), "180");
+    assert_eq!(span(&mut r).widest(None, Some(65535)), Some(3));
+}
+
+#[test]
+fn zero_is_never_drawn_as_minus_zero() {
+    let mut r = readout("2-8", "ACCEL_G");
+    span(&mut r).reads = Some([-10.0, 12.0]);
+    span(&mut r).decimals = 1;
+    let s = span(&mut r).clone();
+    // -0.01 g, which the formatter alone drew as "-0.0".
+    let near_zero = raw(9.99 / 22.0);
+    assert_eq!(s.format_number(near_zero, 65535), "0.0");
+}
+
+#[test]
+fn a_drum_round_trips_flat_and_a_plain_reading_gains_no_keys() {
+    let mut r = readout("2", "FUELTOTALIZER_1K");
+    drum(&mut r);
+    let json = serde_json::to_value(&r).unwrap();
+    assert_eq!(json["wrap"], 10.0);
+    assert_eq!(json["round"], "down");
+    assert!(json.get("content").is_none(), "one drum stays in the flat shape");
+    let back: Readout = serde_json::from_value(json).unwrap();
+    assert_eq!(back.content[0].wrap, Some(10.0));
+    assert_eq!(back.content[0].round, Round::Down);
+
+    let plain = serde_json::to_value(readout("2", "OIL_TEMP")).unwrap();
+    assert!(plain.get("wrap").is_none() && plain.get("round").is_none());
 }
 
 #[test]

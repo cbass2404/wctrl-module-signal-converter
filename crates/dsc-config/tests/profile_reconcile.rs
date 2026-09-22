@@ -196,6 +196,46 @@ fn a_field_the_user_gave_aliases_is_left_alone() {
     assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
 }
 
+/// A drum digit as it shipped before `wrap` and `round` existed.
+const DRUM_OLD: &str = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "30",
+                            "source": "CDU_BRT", "reads": [0, 9] }"#;
+
+/// The same drum, drawn as the digit it has clicked over to.
+const DRUM_NEW: &str = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "30",
+                            "source": "CDU_BRT", "reads": [0, 10], "wrap": 10, "round": "down" }"#;
+
+#[test]
+fn a_drum_the_user_left_alone_takes_the_wrap_and_rounding() {
+    // A profile written before the two keys existed has neither, and has to
+    // read as untouched rather than as somebody's edit, or no drum anyone
+    // already has would ever get the fix.
+    let dir = scratch("drum-takes-new");
+    lay(&dir, Some(DRUM_OLD), DRUM_NEW, DRUM_OLD);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let span = &mine(&dir).readouts[0].content[0];
+    assert_eq!(span.reads, Some([0.0, 10.0]));
+    assert_eq!(span.wrap, Some(10.0));
+    assert_eq!(span.round, dsc_config::Round::Down);
+    assert!(touched_a_field(&notes), "and it was reported: {notes:?}");
+}
+
+#[test]
+fn a_wrap_the_user_set_is_left_alone() {
+    let dir = scratch("drum-theirs");
+    let theirs = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "30",
+                      "source": "CDU_BRT", "reads": [0, 9], "wrap": 5 }"#;
+    lay(&dir, Some(DRUM_OLD), DRUM_NEW, theirs);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let span = &mine(&dir).readouts[0].content[0];
+    assert_eq!(span.wrap, Some(5.0), "their wrap survived");
+    assert_eq!(span.round, dsc_config::Round::Nearest, "and ours did not land beside it");
+    assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
+}
+
 // ---------------------------------------------------------------------------
 // removal, the branch worth distrusting
 // ---------------------------------------------------------------------------

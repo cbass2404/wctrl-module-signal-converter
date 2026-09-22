@@ -39,8 +39,8 @@ pub fn build_label() -> &'static str {
 
 pub use display::{
     divider_rule, divider_text, min_divider_cells, text_cells, Align, Cell, CellRange, Colour,
-    ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, RuleCell,
-    Screen, Span, TextCell, TextGrid, Transport, SEAT_SIGNAL,
+    ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, Round,
+    RuleCell, Screen, Span, TextCell, TextGrid, Transport, SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -1935,7 +1935,7 @@ impl Profile {
                 // one rule, that the font can draw them, is in text_problems
                 // where the font is known.
                 if !span.is_signal() {
-                    if span.reads.is_some() || span.decimals != 0 {
+                    if span.shapes_a_number() {
                         out.push(Error::RangeOnText(span.text.clone()));
                     }
                     if !span.value_aliases.is_empty() {
@@ -1952,7 +1952,7 @@ impl Profile {
                 // screen, but the editor says so where the choice is made,
                 // and it draws exactly what it says it will.
                 if output.r#type == "string" {
-                    if span.reads.is_some() {
+                    if span.reads.is_some() || span.wrap.is_some() || span.round != Round::Nearest {
                         out.push(Error::RangeOnText(span.source.clone()));
                     }
                     if !span.value_aliases.is_empty() {

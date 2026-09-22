@@ -843,6 +843,8 @@ brightness, a field asks "which cells, fed by what" and resolves to characters.
     "source": "PLT_RV5_ALT",
     "reads": [0, 750],       // what the dial is marked with, numbers only
     "decimals": 0,
+    "round": "down",         // absent rounds to the nearest
+    "wrap": 360,             // start again from 0 every this many
     "align": "right",        // only means something across several cells
     "seat": 0,               // only where the module reports one
     "aliases": { "--": "_" },
@@ -869,6 +871,27 @@ marked with, so it is yours to give. Faces that start below zero or run
 backwards both work: a g meter is `[-10, 12]`, and a gauge whose numbers
 descend is `[100, 0]`. A signal that already reports characters needs no
 conversion, and giving it a range is an error rather than a no-op.
+
+**`round` and `wrap` are for readings that click over or go round.** The
+conversion is still a straight line from 0 to 65535 onto `reads`. After it,
+the number is rounded to `decimals` places, to the nearest unless `round` is
+`"down"`, and then `wrap` takes the remainder, so the reading starts again
+from 0 every `wrap`. Rounding comes first, so a compass at 359.7 draws 0
+rather than 360.
+
+- One odometer drum digit, such as each of the F-16's `FUELTOTALIZER_*`
+  drums, is `reads [0, 10]`, `round "down"`, `wrap 10`. DCS-BIOS reports a
+  drum as how far it has turned, and a full turn passes all ten digits.
+  Rounding down shows a digit only once the drum has reached it, which keeps
+  the drums beside it agreeing during a roll-over. A drum sitting exactly on
+  a digit draws that digit: the conversion allows for DCS-BIOS rounding the
+  position to its nearest step.
+- A signal that makes several turns is its whole travel wrapping at one turn:
+  twelve turns of 0 to 999 is `reads [0, 12000]`, `wrap 1000`.
+- A full circle is `reads [0, 360]`, `wrap 360`.
+
+The width check allows for the wrap: a reading that wraps is measured up to
+the last value before it starts over, not by the ends of `reads`.
 
 **`aliases` is for a value the glass cannot draw.** DCS-BIOS reports the Hornet
 scratchpad cursor as `--` where the cockpit shows `_`, and `--` is not a glyph,
@@ -908,7 +931,7 @@ and would come apart the moment the number changed width.
 
 **A piece carries `text` or `source`, never both**, and naming both is refused
 rather than resolved one way. Everything else on a piece shapes the one value
-it draws, which is why `reads`, `decimals`, `aliases`, `format`, `colours`,
+it draws, which is why `reads`, `decimals`, `round`, `wrap`, `aliases`, `format`, `colours`,
 `replace`, `colour` and `small` all belong to the piece: one chain can hold two
 signals that need different treatment. What belongs to the field is what is
 about the run of cells as a whole, which is `cells`, `align`, `seat` and `note`.

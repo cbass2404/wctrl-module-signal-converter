@@ -888,6 +888,18 @@ impl<'de> Deserialize<'de> for CellRange {
     }
 }
 
+/// How a converted number lands on its last decimal place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Round {
+    /// To the nearest, which is what a needle wants and what every reading
+    /// did before this was a choice.
+    #[default]
+    Nearest,
+    /// Down, which is what a drum or anything else that clicks over wants.
+    Down,
+}
+
 /// Which end of a cell run the text is anchored to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1102,6 +1114,24 @@ pub struct Span {
     /// Decimal places for a numeric source.
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub decimals: u8,
+    /// How a number lands on its last decimal place: to the nearest, or down.
+    ///
+    /// Nearest is right for a needle, where 4.6 is closer to 5 than to 4.
+    /// Down is right for anything that clicks over: an odometer drum shows 4
+    /// until the 5 has fully arrived, and rounding to the nearest would put
+    /// the 5 up while the drum beside it still reads 9.
+    #[serde(default, skip_serializing_if = "is_nearest")]
+    pub round: Round,
+    /// Start again from zero every this many, after converting and rounding.
+    ///
+    /// A drum or a needle that goes round more than once reports where it is
+    /// in its turn, and a scale that goes all the way round reads 0 at the top
+    /// rather than its full value. So the reading is the remainder: `reads` 0
+    /// to 10 wrapping at 10 is one drum digit, and 0 to 360 wrapping at 360 is
+    /// a compass that draws 0 where it would have drawn 360. None for a
+    /// reading that never starts over; anything not above zero counts as none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrap: Option<f64>,
     /// What to draw for each value of a numeric source, in place of the
     /// number.
     ///
@@ -1175,6 +1205,12 @@ impl Span {
         !self.source.is_empty()
     }
 
+    /// Whether anything here says how to draw a number: a range, decimal
+    /// places, rounding or a wrap.
+    pub fn shapes_a_number(&self) -> bool {
+        self.reads.is_some() || self.decimals != 0 || self.round != Round::Nearest || self.wrap.is_some()
+    }
+
     /// Whether the user has finished saying what this part draws.
     ///
     /// An empty part is unfinished work rather than a mistake, but it still
@@ -1206,7 +1242,42 @@ impl Span {
         }
         let [low, high] = self.reads.unwrap_or([0.0, max as f64]);
         let travel = if max == 0 { 0.0 } else { value as f64 / max as f64 };
-        format!("{:.*}", self.decimals as usize, low + travel * (high - low))
+        // Half of one raw step, in what the face reads. DCS-BIOS sends the
+        // nearest step to where the drum is, so a drum sitting exactly on its
+        // 7 can arrive a hair short of it, and rounding down must not make
+        // that a 6.
+        let half_step = if max == 0 { 0.0 } else { (high - low).abs() / max as f64 / 2.0 };
+        self.format_number_at(self.settle(low + travel * (high - low), half_step))
+    }
+
+    /// Round a converted reading the way this part says, then wrap it.
+    ///
+    /// Rounded before wrapping, so a compass at 359.7 rounds to 360 and then
+    /// draws 0, and a drum at 9.8 rounded to the nearest draws 0 rather than
+    /// a 10 that does not fit its cell.
+    fn settle(&self, reading: f64, half_step: f64) -> f64 {
+        let places = self.decimals as usize;
+        let rounded = match self.round {
+            // Through the formatter, which is how every reading was rounded
+            // before this setting existed, so nothing already on the glass
+            // moves by so much as a digit.
+            Round::Nearest => format!("{reading:.places$}").parse().unwrap_or(reading),
+            Round::Down => {
+                let scale = 10f64.powi(i32::from(self.decimals));
+                ((reading + half_step) * scale).floor() / scale
+            }
+        };
+        let wrapped = match self.wrap {
+            Some(every) if every > 0.0 => rounded.rem_euclid(every),
+            _ => rounded,
+        };
+        // Zero is drawn as 0. Negative zero, from a face that runs up from
+        // below it or a remainder taken of one, would otherwise draw as -0.
+        if wrapped == 0.0 {
+            0.0
+        } else {
+            wrapped
+        }
     }
 
     /// The glyph this part draws in place of `value`, where it has one.
@@ -1265,11 +1336,21 @@ impl Span {
             return Some(longest_alias);
         }
         let [low, high] = self.reads.unwrap_or([0.0, f64::from(max)]);
-        let ends = [
-            self.format_number_at(low),
-            self.format_number_at(high),
-        ];
-        let number = ends.iter().map(|s| s.chars().count()).max().unwrap_or(0);
+        let mut ends = vec![self.settle(low, 0.0), self.settle(high, 0.0)];
+        // A reading that starts over somewhere between its ends can draw
+        // anything up to the last value before it does, whatever the ends
+        // themselves come to.
+        if let Some(every) = self.wrap.filter(|&w| w > 0.0) {
+            let (a, b) = (low.min(high), low.max(high));
+            if b - a >= every || (a / every).floor() != (b / every).floor() {
+                ends.push((every - 10f64.powi(-i32::from(self.decimals))).max(0.0));
+            }
+        }
+        let number = ends
+            .into_iter()
+            .map(|end| self.format_number_at(end).chars().count())
+            .max()
+            .unwrap_or(0);
         Some(number.max(longest_alias))
     }
 
@@ -1472,6 +1553,10 @@ struct ReadoutRepr {
     reads: Option<[f64; 2]>,
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     decimals: u8,
+    #[serde(default, skip_serializing_if = "is_nearest")]
+    round: Round,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wrap: Option<f64>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     value_aliases: BTreeMap<u16, String>,
     #[serde(default, skip_serializing_if = "is_left")]
@@ -1515,6 +1600,8 @@ impl From<ReadoutRepr> for Readout {
                 gap: r.gap,
                 reads: r.reads,
                 decimals: r.decimals,
+                round: r.round,
+                wrap: r.wrap,
                 value_aliases: r.value_aliases,
                 aliases: r.aliases,
                 format: r.format,
@@ -1583,6 +1670,8 @@ impl From<Readout> for ReadoutRepr {
             seat: r.seat,
             reads: span.reads,
             decimals: span.decimals,
+            round: span.round,
+            wrap: span.wrap,
             value_aliases: span.value_aliases,
             align: r.align,
             format: span.format,
@@ -1651,6 +1740,10 @@ fn is_zero_usize(n: &usize) -> bool {
 
 fn is_left(a: &Align) -> bool {
     *a == Align::Left
+}
+
+fn is_nearest(r: &Round) -> bool {
+    *r == Round::Nearest
 }
 
 impl Readout {

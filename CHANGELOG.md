@@ -38,6 +38,9 @@ unless this says what moved.
   offered "as sent" for a switch or a count, and the profile was then refused
   for having no range.
 
+- **A converted reading at zero draws 0, not -0.** A face that starts below
+  zero, such as a g meter, drew `-0.0` just under zero.
+
 - **The signal tooltip says how long a text signal is** instead of showing
   "0 to 65535", which suggested a range to convert.
 
@@ -53,5 +56,14 @@ unless this says what moved.
   mode knob can read `SEMI` instead of `3`. A switch whose positions DCS-BIOS
   names starts with those names filled in. Shorten them to fit your cells. A
   value with no alias draws as the number.
+
+- **Drums, counters and dials that go all the way round.** A converted
+  reading can now round down instead of to the nearest, and start again from
+  0 at a value you choose. One odometer drum digit is 0 to 10, rounded down,
+  wrapping at 10: it shows each digit once the drum has clicked over to it,
+  and 0 after 9. A compass is 0 to 360 wrapping at 360, so it reads 0 at the
+  top instead of 360. A signal that makes several turns is its whole travel
+  wrapping at one turn: twelve turns of 0 to 999 is 0 to 12000 wrapping at
+  1000.
 
 ### Shipped profiles

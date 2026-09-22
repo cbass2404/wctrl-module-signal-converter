@@ -100,6 +100,17 @@ export interface Span {
   reads?: [number, number];
   decimals?: number;
   /**
+   * How a number lands on its last decimal place. Absent is to the nearest,
+   * which a needle wants; `down` is for a drum or anything else that clicks
+   * over, which shows 4 until the 5 has fully arrived.
+   */
+  round?: "down";
+  /**
+   * Start again from zero every this many, after converting and rounding: a
+   * drum digit is 0 to 10 wrapping at 10, a compass 0 to 360 wrapping at 360.
+   */
+  wrap?: number;
+  /**
    * What to draw for each value of a number, in place of the number: `SEMI`
    * for a knob at 3. A value with no entry draws as the number. Numbers only.
    */
@@ -229,6 +240,8 @@ export interface Readout {
    */
   reads?: [number, number];
   decimals?: number;
+  round?: "down";
+  wrap?: number;
   /** What to draw for each value of a number, in place of the number. */
   value_aliases?: Record<string, string>;
   align?: "left" | "right" | "centre";

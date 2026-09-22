@@ -94,6 +94,10 @@ unless this says what moved.
   nobody catches. Aliases without a colour are drawn in the piece's colour as
   before.
 
+- **An alias can draw inverse**, on screens that draw inverse at all, such as
+  the DED. It is how a band stands out on glass with no colours, and an alias
+  of a single space ticked inverse draws a solid block.
+
 - **Draw a reading without its sign.** A face that runs each way from zero is
   read as a magnitude and a direction: the F-16's trim indicators are marked
   in units nose up and units nose down, so `-1.0 ND` says the same thing

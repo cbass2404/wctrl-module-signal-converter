@@ -1225,21 +1225,24 @@ impl<'de> Deserialize<'de> for ValueBand {
 }
 
 /// What an alias draws: the characters, and a colour of its own where it wants
-/// one.
+/// one, or inverse.
 ///
 /// A band is often a warning about where the needle is, and a warning that
 /// reads in the same colour as the row around it is one nobody catches. The
 /// colour belongs to the band rather than the piece because that is the whole
-/// point: the same reading draws amber in one band and red in the next.
+/// point: the same reading draws amber in one band and red in the next. Inverse
+/// is the same thing on glass with no colours to pick from, such as the DED,
+/// and a blank drawn inverse is a solid block.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(from = "AliasRepr", into = "AliasRepr")]
 pub struct AliasDraw {
     pub text: String,
     pub colour: Option<Colour>,
+    pub inverse: bool,
 }
 
 /// An alias as it is written on disk: bare characters, or an object once it
-/// has a colour to carry.
+/// has a colour or inverse to carry.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 enum AliasRepr {
@@ -1248,21 +1251,35 @@ enum AliasRepr {
         text: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         colour: Option<Colour>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        inverse: bool,
     },
 }
 
 impl From<AliasRepr> for AliasDraw {
     fn from(r: AliasRepr) -> Self {
         match r {
-            AliasRepr::Text(text) => AliasDraw { text, colour: None },
-            AliasRepr::Styled { text, colour } => AliasDraw { text, colour },
+            AliasRepr::Text(text) => AliasDraw {
+                text,
+                colour: None,
+                inverse: false,
+            },
+            AliasRepr::Styled {
+                text,
+                colour,
+                inverse,
+            } => AliasDraw {
+                text,
+                colour,
+                inverse,
+            },
         }
     }
 }
 
 impl From<AliasDraw> for AliasRepr {
-    /// A colour is the only reason for the object shape, so an alias without
-    /// one goes back as the bare string it arrived as.
+    /// A colour or inverse is the only reason for the object shape, so an
+    /// alias with neither goes back as the bare string it arrived as.
     ///
     /// Not a tidiness: the update merge compares rows as JSON to decide
     /// whether one is still as the last release shipped it. An alias that came
@@ -1270,28 +1287,30 @@ impl From<AliasDraw> for AliasRepr {
     /// read as one the user had edited, and those rows are never updated
     /// again.
     fn from(a: AliasDraw) -> Self {
-        match a.colour {
-            Some(colour) => AliasRepr::Styled {
-                text: a.text,
-                colour: Some(colour),
-            },
-            None => AliasRepr::Text(a.text),
+        if a.colour.is_none() && !a.inverse {
+            return AliasRepr::Text(a.text);
+        }
+        AliasRepr::Styled {
+            text: a.text,
+            colour: a.colour,
+            inverse: a.inverse,
         }
     }
 }
 
 impl From<&str> for AliasDraw {
     fn from(text: &str) -> Self {
-        AliasDraw {
-            text: text.to_string(),
-            colour: None,
-        }
+        AliasDraw::from(text.to_string())
     }
 }
 
 impl From<String> for AliasDraw {
     fn from(text: String) -> Self {
-        AliasDraw { text, colour: None }
+        AliasDraw {
+            text,
+            colour: None,
+            inverse: false,
+        }
     }
 }
 
@@ -1675,7 +1694,7 @@ impl Span {
     }
 
     /// Turn a raw signal value into the characters this part should show, and
-    /// the colour the band it landed in asks for.
+    /// the band it landed in, whose colour and inverse are the paint's to use.
     ///
     /// `max` is the source's own declared maximum, so a needle at 0..65535 and
     /// a selector at 0..10 go through the same arithmetic. With no `reads` the
@@ -1688,7 +1707,7 @@ impl Span {
     /// Only if none does is the number drawn, and only then is the sign
     /// dropped for `abs`, so a band written for negative readings still
     /// matches on a piece that draws magnitudes.
-    pub fn format_reading(&self, value: u16, max: u16) -> (String, Option<Colour>) {
+    pub fn format_reading(&self, value: u16, max: u16) -> (String, Option<&AliasDraw>) {
         let [low, high] = self.reads.unwrap_or([0.0, max as f64]);
         let travel = if max == 0 { 0.0 } else { value as f64 / max as f64 };
         // Half of one raw step, in what the face reads. DCS-BIOS sends the
@@ -1698,7 +1717,7 @@ impl Span {
         let half_step = if max == 0 { 0.0 } else { (high - low).abs() / max as f64 / 2.0 };
         let reading = self.settle(low + travel * (high - low), half_step);
         if let Some(drawn) = self.band_for(reading) {
-            return (drawn.text.clone(), drawn.colour);
+            return (drawn.text.clone(), Some(drawn));
         }
         let shown = if self.abs { reading.abs() } else { reading };
         (self.format_number_at(shown), None)
@@ -2410,12 +2429,16 @@ impl Readout {
             // specific, this is the user speaking about this reading, and the
             // piece's own colour is the user speaking about the whole piece.
             let mut banded: Option<Colour> = None;
+            // A band drawn inverse adds to the piece's own, the way a format
+            // signal does: any of them asking is enough.
+            let mut band_inverse = false;
             let value = if span.is_signal() {
                 match read(&span.source) {
                     Some(Reading::Text(t)) => t,
                     Some(Reading::Number { value, max }) => {
-                        let (text, colour) = span.format_reading(value, max);
-                        banded = colour;
+                        let (text, band) = span.format_reading(value, max);
+                        banded = band.and_then(|b| b.colour);
+                        band_inverse = band.is_some_and(|b| b.inverse);
                         text
                     }
                     None => {
@@ -2469,7 +2492,9 @@ impl Readout {
                     text: span.alias(&value).to_string(),
                     colour: colours.first().copied().flatten().or(banded).or(span.colour),
                     small: span.small,
-                    inverse: span.inverse || inverse.first().copied().unwrap_or(false),
+                    inverse: span.inverse
+                        || band_inverse
+                        || inverse.first().copied().unwrap_or(false),
                 });
                 drew = true;
                 groups.push(glyphs);
@@ -2481,7 +2506,9 @@ impl Readout {
                     text: span.alias(&one).to_string(),
                     colour: colours.get(i).copied().flatten().or(banded).or(span.colour),
                     small: span.small,
-                    inverse: span.inverse || inverse.get(i).copied().unwrap_or(false),
+                    inverse: span.inverse
+                        || band_inverse
+                        || inverse.get(i).copied().unwrap_or(false),
                 });
             }
             drew |= !glyphs.is_empty();

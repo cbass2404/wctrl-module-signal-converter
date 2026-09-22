@@ -1195,15 +1195,42 @@ fn a_band_carries_its_own_colour() {
         AliasDraw {
             text: "NU".into(),
             colour: Some(Colour::Green),
+            inverse: false,
         },
     )]
     .into_iter()
     .collect();
     let s = s.clone();
-    assert_eq!(s.format_reading(65535, 65535), ("NU".into(), Some(Colour::Green)));
+    let (text, band) = s.format_reading(65535, 65535);
+    assert_eq!(text, "NU");
+    assert_eq!(band.and_then(|b| b.colour), Some(Colour::Green));
     // A reading no band claims takes no colour of its own, so the piece's
     // stands.
-    assert_eq!(s.format_reading(0, 65535), ("-1.5".into(), None));
+    let (text, band) = s.format_reading(0, 65535);
+    assert_eq!(text, "-1.5");
+    assert!(band.is_none());
+}
+
+#[test]
+fn a_band_can_draw_inverse() {
+    // A blank drawn inverse is a solid block, which is the cursor on glass with
+    // no block glyph of its own.
+    let mut r = readout("2-3", "KNOB");
+    span(&mut r).value_aliases = [(
+        ValueBand::One(1.0),
+        AliasDraw {
+            text: " ".into(),
+            colour: None,
+            inverse: true,
+        },
+    )]
+    .into_iter()
+    .collect();
+    let number = |value: u16| move |_: &str| Some(Reading::Number { value, max: 1 });
+    let glyphs = r.compose(number(1)).unwrap();
+    assert!(glyphs[0].inverse, "the band claimed it");
+    let glyphs = r.compose(number(0)).unwrap();
+    assert!(glyphs.iter().all(|g| !g.inverse), "a reading no band claims draws plainly");
 }
 
 #[test]

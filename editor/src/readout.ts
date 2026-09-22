@@ -23,7 +23,7 @@ import type { SpanKind } from "./content";
 import { cautionSlot, flagSlot } from "./flags";
 import { noteEditor } from "./note";
 import { signalPicker } from "./typeahead";
-import { aliasColour, aliasOf, aliasText } from "./types";
+import { aliasColour, aliasInverse, aliasOf, aliasText } from "./types";
 import type {
   AliasDraw,
   CellDraw,
@@ -245,6 +245,7 @@ function conversionRow(
   signal: SignalView | undefined,
   set: string | null,
   colours: string[],
+  inverse: boolean,
   edited: () => void,
   rebuild: () => void,
 ): HTMLElement {
@@ -334,7 +335,7 @@ function conversionRow(
     {},
     el("div", { class: "test-row" }, select, values),
     span.reads ? el("div", { class: "test-row" }, after) : "",
-    valueAliasEditor(span, signal, set, colours, edited),
+    valueAliasEditor(span, signal, set, colours, inverse, edited),
     el(
       "span",
       { class: "meta block" },
@@ -673,6 +674,7 @@ interface AliasRow {
   band: string;
   text: string;
   colour: string;
+  inverse: boolean;
 }
 
 /**
@@ -725,6 +727,7 @@ function valueAliasEditor(
   signal: SignalView | undefined,
   set: string | null,
   colours: string[],
+  inverse: boolean,
   onChange: () => void,
 ): HTMLElement {
   const wrap = el("div", { class: "aliases" });
@@ -735,6 +738,7 @@ function valueAliasEditor(
     band,
     text: aliasText(drawn),
     colour: aliasColour(drawn) ?? "",
+    inverse: aliasInverse(drawn),
   }));
 
   const store = (): void => {
@@ -743,7 +747,7 @@ function valueAliasEditor(
       // A row with no band yet is one half typed, not one that draws nothing.
       // The drawing itself may be blank on purpose.
       if (row.band.trim() === "" || bandTrouble(row.band)) continue;
-      out[row.band.trim()] = aliasOf(row.text, row.colour || undefined);
+      out[row.band.trim()] = aliasOf(row.text, row.colour || undefined, row.inverse);
     }
     if (Object.keys(out).length > 0) span.value_aliases = out;
     else delete span.value_aliases;
@@ -807,6 +811,18 @@ function valueAliasEditor(
         });
         cell.append(el("span", { class: "meta" }, "in"), pick);
       }
+      // The same box a piece of text gets, and only where the glass draws
+      // inverse. On a screen with no colours it is the way a band stands out,
+      // and a blank drawn inverse is a solid block.
+      if (inverse) {
+        const flip = el("input", { type: "checkbox" });
+        flip.checked = row.inverse;
+        flip.addEventListener("change", () => {
+          row.inverse = flip.checked;
+          store();
+        });
+        cell.append(el("label", { class: "meta" }, flip, " inverse"));
+      }
       cell.append(drop, trouble);
       check();
       rows.append(cell);
@@ -815,7 +831,7 @@ function valueAliasEditor(
 
   const add = el("button", { class: "add small" }, "Add an alias");
   add.addEventListener("click", () => {
-    held.push({ band: "", text: "", colour: "" });
+    held.push({ band: "", text: "", colour: "", inverse: false });
     draw();
   });
 
@@ -825,7 +841,7 @@ function valueAliasEditor(
   const fill = el("button", { class: "add small" }, "Name its positions");
   fill.addEventListener("click", () => {
     for (const [value, name] of Object.entries(named)) {
-      held.push({ band: value, text: name, colour: "" });
+      held.push({ band: value, text: name, colour: "", inverse: false });
     }
     draw();
     store();
@@ -1998,11 +2014,19 @@ function spanEditor(
         const signal = signals.find((s) => s.id === span.source);
         const set = alphabet(display, profile, span.small ?? false);
         body.append(
-          conversionRow(span, signal, set, display.text_grid ? display.colours : [], edited, () => {
-            setContent(readout, spans);
-            redraw();
-            onChange();
-          }),
+          conversionRow(
+            span,
+            signal,
+            set,
+            display.text_grid ? display.colours : [],
+            display.draws_inverse,
+            edited,
+            () => {
+              setContent(readout, spans);
+              redraw();
+              onChange();
+            },
+          ),
         );
       }
       // A substitution is about what this signal sends, so it belongs to the

@@ -71,14 +71,14 @@ export interface Binding {
 
 /**
  * What one alias band draws: the characters, and a colour of its own where it
- * wants one.
+ * wants one, or inverse.
  *
- * Bare characters when there is no colour, which is the shape every alias
+ * Bare characters when there is neither, which is the shape every alias
  * written before colours had. It has to go back that way too: the update merge
  * compares rows as JSON, so an alias that changed shape would read as one the
  * user had edited and stop being brought up to a new release.
  */
-export type AliasDraw = string | { text: string; colour?: string };
+export type AliasDraw = string | { text: string; colour?: string; inverse?: boolean };
 
 /** The characters an alias draws, whichever shape it is written in. */
 export function aliasText(drawn: AliasDraw): string {
@@ -90,12 +90,21 @@ export function aliasColour(drawn: AliasDraw): string | undefined {
   return typeof drawn === "string" ? undefined : drawn.colour;
 }
 
+/** Whether an alias draws inverse. */
+export function aliasInverse(drawn: AliasDraw): boolean {
+  return typeof drawn !== "string" && drawn.inverse === true;
+}
+
 /**
  * An alias in the shape it is stored in: bare characters unless it has a
- * colour, so a row with no colour is byte for byte what it was.
+ * colour or is inverse, so a plain row is byte for byte what it was.
  */
-export function aliasOf(text: string, colour?: string): AliasDraw {
-  return colour ? { text, colour } : text;
+export function aliasOf(text: string, colour?: string, inverse?: boolean): AliasDraw {
+  if (!colour && !inverse) return text;
+  const out: { text: string; colour?: string; inverse?: boolean } = { text };
+  if (colour) out.colour = colour;
+  if (inverse) out.inverse = true;
+  return out;
 }
 
 /**

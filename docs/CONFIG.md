@@ -920,6 +920,10 @@ of its own:
 - `{ "text": "NU", "colour": "red" }` draws in its own colour, which a plain
   string leaves to the piece. A band is often a caution, and one drawn in the
   colour of the row around it is one nobody catches.
+- `{ "text": " ", "inverse": true }` draws inverse, on glass that draws inverse
+  at all; anywhere else the profile is refused, as for an inverse piece. It is
+  the colour of a screen with none, such as the DED, and a blank drawn inverse
+  is a solid block.
 
 **Two keys claiming one reading is a caution, and the lower one draws.** Keys
 are held in order of where they start, so which one draws is settled and does

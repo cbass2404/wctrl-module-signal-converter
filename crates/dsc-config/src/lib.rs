@@ -2084,8 +2084,13 @@ impl Profile {
 
             // Inverse is the one piece of styling a span can ask for on glass
             // that is not a text grid, so it is checked against what the
-            // display can actually do rather than lumped in with colour.
-            if !display.draws_inverse() && r.content.iter().any(|s| s.inverse) {
+            // display can actually do rather than lumped in with colour. A
+            // band can ask for it too.
+            let asks_inverse = r
+                .content
+                .iter()
+                .any(|s| s.inverse || s.value_aliases.values().any(|a| a.inverse));
+            if !display.draws_inverse() && asks_inverse {
                 out.push(Error::FormatNotDrawn(r.display.clone(), r.cells.to_string()));
             }
 

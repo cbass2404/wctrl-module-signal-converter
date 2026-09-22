@@ -120,6 +120,7 @@ fn an_alias_with_no_colour_is_written_as_bare_characters() {
         AliasDraw {
             text: "ON".into(),
             colour: None,
+            inverse: false,
         },
     );
     let written = serde_json::to_string(&built).expect("it serializes");
@@ -130,12 +131,32 @@ fn an_alias_with_no_colour_is_written_as_bare_characters() {
         AliasDraw {
             text: "WARN".into(),
             colour: Some(Colour::Red),
+            inverse: false,
         },
     );
     let written = serde_json::to_string(&built).expect("it serializes");
     assert!(
         written.contains(r#""2":{"text":"WARN","colour":"red"}"#),
-        "a colour is the one thing that grows the object: {written}"
+        "a colour grows the object: {written}"
+    );
+
+    built.readouts[0].content[0].value_aliases.insert(
+        ValueBand::One(3.0),
+        AliasDraw {
+            text: " ".into(),
+            colour: None,
+            inverse: true,
+        },
+    );
+    let written = serde_json::to_string(&built).expect("it serializes");
+    assert!(
+        written.contains(r#""3":{"text":" ","inverse":true}"#),
+        "and so does inverse: {written}"
+    );
+    let back: Profile = serde_json::from_str(&written).expect("it parses back");
+    assert_eq!(
+        back.readouts[0].content[0].value_aliases,
+        built.readouts[0].content[0].value_aliases
     );
 }
 

@@ -935,17 +935,16 @@ function labelEditor(
     }
     const cells = room();
     if (cells === null) {
-      // A rule with no fixed width is as wide as the rest of the line leaves
-      // it, which changes with every reading beside it. A label on one would
-      // fit at one reading and be dropped at the next, coming and going on the
-      // glass with nothing to say why, so the backend refuses it.
-      box.classList.add("bad");
-      trouble.classList.add("bad");
+      // The room for the label is whatever the readings beside it are not
+      // using, so it fits at one reading and is dropped at the next. A
+      // caution and not a refusal: the rule draws either way, and only the
+      // user knows how wide their readings really get.
+      box.classList.remove("bad");
+      trouble.classList.remove("bad");
       trouble.textContent =
-        "A label needs a rule that cannot change width, so give this one a " +
-        "fixed width below. Without one it is as wide as the rest of the row " +
-        "leaves it, and the label would come and go as the readings beside it " +
-        "change.";
+        "The readings beside this rule decide how wide it is, so the label " +
+        "is dropped in any frame where they take the room it needs. Give it " +
+        "a fixed width below to hold it for certain.";
       return;
     }
     // A dash and a blank each side of it. The backend refuses a label with
@@ -1252,6 +1251,47 @@ function padBefore(align: string | undefined, len: number, width: number): numbe
 function cellCount(cells: string): number {
   const range = parseCells(cells);
   return range ? range[1] - range[0] + 1 : 0;
+}
+
+/**
+ * How many cells the piece at `index` draws, where that never changes.
+ *
+ * `Readout::settled_cells` read the same way, kept here because the label
+ * check runs on every keystroke. A box is the whole answer, and typed
+ * characters are their own length. An elastic gap has one too, but only when
+ * every piece it shares the line with is itself settled: the leftover is what
+ * the rest did not use, so one reading that sheds a digit widens the gaps
+ * beside it. A rule with the line to itself is the plain case, and the one
+ * that matters here: nothing is taking cells off it, so it is the whole run
+ * in every frame.
+ *
+ * Null for a piece as wide as whatever it reads, and for a gap on a line
+ * carrying one, which is the answer that turns the label check into a caution
+ * rather than a measurement.
+ */
+function settledCells(readout: Readout, spans: Span[], index: number): number | null {
+  const piece = spans[index];
+  if (!piece) return null;
+  const cells = cellCount(readout.cells);
+  // A one cell run takes a piece's whole value as a single glyph, which is
+  // what the daemon does, so its length is the run's rather than its text's.
+  const settled = (s: Span): number | null =>
+    s.width ? s.width : s.gap ? null : cells === 1 ? 1 : s.source ? null : (s.text ?? "").length;
+  if (!piece.gap || piece.width) return settled(piece);
+  let used = 0;
+  const elastic: number[] = [];
+  for (const [at, other] of spans.entries()) {
+    const room = settled(other);
+    if (room !== null) used += room;
+    else if (other.gap) elastic.push(at);
+    else return null;
+  }
+  // The same sum the daemon does: the leftover split evenly, the remainder
+  // going to the earlier gaps.
+  const spare = Math.max(0, cells - used);
+  const rank = elastic.indexOf(index);
+  if (rank < 0) return null;
+  return Math.floor(spare / elastic.length) + (rank < spare % elastic.length ? 1 : 0);
 }
 
 /** One cell of the preview: which piece drew it, what it draws, and in what. */
@@ -1624,7 +1664,7 @@ function spanEditor(
   const body = el("div", { class: "span-body" });
 
   if (span.rule) {
-    body.append(spanRule(span, opts, edited));
+    body.append(spanRule(spans, index, opts, edited));
   } else if (span.gap) {
     body.append(
       el(
@@ -1844,11 +1884,23 @@ function spanEditor(
  * Its own colour comes from the style row, the same chooser every piece has.
  * The label's is here, beside the label, because it is the label's.
  */
-function spanRule(span: Span, opts: RowOptions, edited: () => void): HTMLElement {
-  const { display, profile } = opts;
-  const label = labelEditor(span, () => span.width || null, display, profile, edited);
-  // Re-run when the width changes, which is what decides whether a label can
-  // be here at all and whether it fits.
+function spanRule(
+  spans: Span[],
+  index: number,
+  opts: RowOptions,
+  edited: () => void,
+): HTMLElement {
+  const { readout, display, profile } = opts;
+  const span = spans[index] as Span;
+  const label = labelEditor(
+    span,
+    () => settledCells(readout, spans, index),
+    display,
+    profile,
+    edited,
+  );
+  // Re-run when the width changes, which is what decides how much room the
+  // label has and whether that room holds still.
   ruleChecks.set(span, label.check);
   return el(
     "div",
@@ -1859,7 +1911,7 @@ function spanRule(span: Span, opts: RowOptions, edited: () => void): HTMLElement
       "A line of dashes, as wide as whatever the rest of the row leaves. It " +
         "reads nothing, so it is on the glass from the moment the aircraft " +
         "loads. Give it a fixed width below to hold it to a size, which is " +
-        "also what a label needs.",
+        "what a label needs when a reading beside it can change width.",
     ),
     label.node,
   );
@@ -2123,6 +2175,10 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
     // out, and the row's own one-line preview further up the page.
     refresh = (): void => {
       drawFit();
+      // A rule's room is whatever the rest of the line leaves it, so a
+      // keystroke in another piece is what decides whether its label holds
+      // still, and whether it fits.
+      for (const piece of spans) ruleChecks.get(piece)?.();
       preview.refresh();
       refreshPreview();
     };

@@ -1120,13 +1120,21 @@ addition rather than something the cockpit decided. A rule on a piece that
 draws its own content is refused, since there would be nowhere to put it, and
 so is one on glass that is not a text grid.
 
-**A labelled rule needs a `width`.** The label, its blank each side and its own
-`label_colour` work exactly as they do on a divider, but an elastic rule is as
-wide as the rest of the line leaves it, and that changes with every reading
-beside it. `divider_rule` leaves a label it cannot fit off the line, which on a
-rule that keeps changing width means a label appearing and vanishing on the
-glass with nothing to say why. With a width the rule cannot change size, the
-check is exact, and a label too wide for it is refused the way a divider's is.
+**A labelled rule needs a width that holds still, which is not the same as a
+`width`.** The label, its blank each side and its own `label_colour` work
+exactly as they do on a divider, and the room the label has to fit is whatever
+the rest of the line leaves the rule. Where every other piece on the line is
+itself fixed, that leftover is the same in every frame, so the check is exact
+and a label too wide for it is refused the way a divider's is. A rule with the
+line to itself is the plain case of that: nothing is taking cells off it, so it
+is the whole run, and a label there needs no `width` at all.
+
+Where the line carries a reading as wide as whatever it reads, the leftover
+moves with it. `divider_rule` leaves a label it cannot fit off the line and
+draws a plain rule, so the label comes and goes with the reading beside it.
+That is a caution on the field and not a refusal: the rule draws either way,
+only the user knows how wide their readings really get, and a `width` on the
+rule is the fix where it bites.
 
 ### Text grids
 

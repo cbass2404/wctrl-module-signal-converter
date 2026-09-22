@@ -102,6 +102,16 @@ fn row(w: &LcdWrite, n: usize) -> String {
 }
 
 /// Everything the daemon would refuse this profile for, in its own words.
+/// What the editor would show on the fields themselves: everything that loads
+/// but wants a second look.
+fn cautions(p: &Profile) -> Vec<String> {
+    let e = engine(p.clone());
+    let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
+    let module = e.catalogue().module(&p.module).expect("the module");
+    p.field_cautions(module, &devices, &displays).into_iter().map(|(_, c)| c).collect()
+}
+
 fn refusals(p: &Profile) -> Vec<String> {
     let e = engine(p.clone());
     let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
@@ -620,18 +630,86 @@ fn a_boxed_rule_carries_a_label_and_its_own_colour() {
 }
 
 #[test]
-fn a_label_on_a_rule_that_can_change_width_is_refused() {
-    // An elastic rule is as wide as the chain leaves it, so a label on one
-    // would fit at one reading and be dropped at the next, coming and going on
-    // the glass with nothing to say why.
+fn a_label_on_a_rule_a_reading_can_squeeze_is_cautioned_not_refused() {
+    // An elastic rule beside a reading is as wide as that reading leaves it,
+    // so the label fits at one reading and is dropped at the next. Said on the
+    // field rather than refused: whether the reading ever really gets that
+    // wide is the user's to judge, and the rule draws either way.
     let mut p = profile();
     p.readouts.push(on_row_one(vec![
         text("NAV"),
         Span { gap: true, rule: true, label: "FUEL".into(), ..Span::default() },
         reading("CDU_LINE1"),
     ]));
+    assert!(refusals(&p).is_empty(), "{:?}", refusals(&p));
     assert!(
-        refusals(&p).iter().any(|e| e.contains("has no fixed width")),
+        cautions(&p).iter().any(|c| c.contains("may come and go")),
+        "{:?}",
+        cautions(&p)
+    );
+}
+
+#[test]
+fn a_rule_with_the_line_to_itself_carries_a_label_without_a_box() {
+    // Nothing else on the row is taking cells off it, so it is the whole run
+    // in every frame: a width that holds still without anybody writing one
+    // down, which is all a label ever needed.
+    let mut p = profile();
+    p.readouts
+        .push(on_row_one(vec![Span { gap: true, rule: true, label: "FUEL".into(), ..Span::default() }]));
+    assert!(refusals(&p).is_empty(), "{:?}", refusals(&p));
+    assert!(cautions(&p).is_empty(), "{:?}", cautions(&p));
+    let mut e = engine(p);
+    let batch = fly(&mut e, "A-10C", &[]);
+    assert_eq!(row(screen(&batch), 1), dsc_config::divider_text(24, "FUEL"));
+}
+
+#[test]
+fn two_rules_on_a_settled_line_split_the_leftover_and_the_odd_cell_goes_left() {
+    // Both rules hold still here, so both labels are measured rather than
+    // cautioned, and against different widths: the leftover is split evenly
+    // and the remainder goes to the earlier gap. A label needing exactly the
+    // wider share is the test of it, since it fits the first rule and not the
+    // second.
+    let label = "STEERPNT"; // eight characters, so twelve cells with its dashes and blanks
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        text("A"),
+        Span { gap: true, rule: true, label: label.into(), ..Span::default() },
+        Span { gap: true, rule: true, ..Span::default() },
+    ]));
+    assert!(refusals(&p).is_empty(), "{:?}", refusals(&p));
+    let mut e = engine(p.clone());
+    let batch = fly(&mut e, "A-10C", &[]);
+    assert_eq!(
+        row(screen(&batch), 1),
+        format!("A{}{}", dsc_config::divider_text(12, label), dsc_config::divider_text(11, ""))
+    );
+
+    let field = p.readouts.last_mut().expect("the field just pushed");
+    field.content[1].label = String::new();
+    field.content[2].label = label.into();
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("does not fit")),
+        "{:?}",
+        refusals(&p)
+    );
+}
+
+#[test]
+fn a_label_too_wide_for_the_cells_a_settled_rule_gets_is_refused() {
+    // The leftover is certain here: typed characters and a box each side, so
+    // the rule is the same six cells in every frame and the label will never
+    // fit. Refused like a boxed rule that is too narrow, because the width it
+    // is measured against cannot change.
+    let mut p = profile();
+    p.readouts.push(on_row_one(vec![
+        text("NAV"),
+        Span { gap: true, rule: true, label: "STEERPOINT".into(), ..Span::default() },
+        Span { source: "CDU_LINE1".into(), width: 15, ..Span::default() },
+    ]));
+    assert!(
+        refusals(&p).iter().any(|e| e.contains("does not fit")),
         "{:?}",
         refusals(&p)
     );

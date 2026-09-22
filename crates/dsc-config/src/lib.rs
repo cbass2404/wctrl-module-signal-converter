@@ -107,8 +107,8 @@ pub enum Error {
     DividerLabelTooWide(String, String, usize, usize, String),
     #[error("a rule on {1} of display {0:?} is written on a piece that draws its own content; only a gap can be a rule")]
     RuleNotOnGap(String, String),
-    #[error("the label {2:?} on a rule on {1} of display {0:?} has no fixed width; an elastic rule is as wide as the rest of the line leaves, so a label on one would come and go as the readings beside it change width")]
-    RuleLabelNeedsWidth(String, String, String),
+    #[error("the label {2:?} on a rule on {1} of display {0:?} may come and go: the rule is as wide as the readings beside it leave it, so the label is dropped in any frame where they take the room it needs")]
+    RuleLabelMayNotFit(String, String, String),
     #[error("the label {4:?} on a rule on {1} of display {0:?} does not fit: the rule is {2} cells wide and needs {3}, a dash and a blank each side of the label")]
     RuleLabelTooWide(String, String, usize, usize, String),
     #[error("a label {2:?} on {1} of display {0:?} is written on a piece that is not a rule; only a rule sets a label into itself")]
@@ -175,6 +175,13 @@ impl Error {
     /// configuration, and the likeliest way to write one is to band a
     /// converted face in the raw counts DCS-BIOS sends.
     ///
+    /// A label on a rule whose width the readings beside it decide is one
+    /// too. It is not certain, which is the whole of it: the rule may well
+    /// have the room in every frame the aircraft actually flies, and only the
+    /// user knows how wide their readings get. `divider_rule` drops a label
+    /// that will not fit and draws a plain line, so the cost of being wrong
+    /// is a line without its name rather than a broken field.
+    ///
     /// Two bands claiming one reading is a caution rather than a refusal even
     /// though it is ambiguous, because it is not undefined: bands are held in
     /// order of where they start, so the lower one draws, every time. Unlike
@@ -192,7 +199,24 @@ impl Error {
                 | Error::FormatNotText(_)
                 | Error::AliasBandUnreachable(..)
                 | Error::AliasBandsOverlap(..)
+                | Error::RuleLabelMayNotFit(..)
         )
+    }
+
+    /// Why an advisory loads anyway, to follow what it says.
+    ///
+    /// Two different reasons, so two sentences. Most of these hang on
+    /// DCS-BIOS metadata, which may simply be wrong about the signal. A
+    /// label that may not fit hangs on nothing outside the profile: the
+    /// arithmetic is certain and it is the readings it depends on, which only
+    /// the user can say the real width of.
+    pub fn advisory_note(&self) -> &'static str {
+        match self {
+            Error::RuleLabelMayNotFit(..) => {
+                "It will load anyway: give the rule a fixed width to hold the label for certain."
+            }
+            _ => "It will load anyway, in case DCS-BIOS is wrong about it.",
+        }
     }
 }
 
@@ -1490,9 +1514,7 @@ impl Profile {
             .enumerate()
             .filter(|(_, e)| e.is_advisory())
             .filter_map(|(at, e)| {
-                owner(at).map(|i| {
-                    (i, format!("{e}. It will load anyway, in case DCS-BIOS is wrong about it."))
-                })
+                owner(at).map(|i| (i, format!("{e}. {}", e.advisory_note())))
             })
             .collect()
     }
@@ -1867,7 +1889,7 @@ impl Profile {
                 continue;
             }
 
-            for span in &r.content {
+            for (at, span) in r.content.iter().enumerate() {
                 // A box wider than the run it sits in cannot be drawn: the
                 // field crops what will not fit, so the piece would take the
                 // whole run and whatever shares it would be the part that
@@ -1905,26 +1927,37 @@ impl Profile {
                             r.cells.to_string(),
                             span.label.clone(),
                         ));
-                    } else if span.width == 0 {
-                        // An elastic rule is as wide as the chain leaves it,
-                        // which changes with every reading beside it, so there
-                        // is no width to check a label against. `divider_rule`
-                        // drops a label it cannot fit, which on a rule that
-                        // keeps changing width means a label appearing and
-                        // vanishing on the glass with nothing to say why.
-                        out.push(Error::RuleLabelNeedsWidth(
-                            r.display.clone(),
-                            r.cells.to_string(),
-                            span.label.clone(),
-                        ));
-                    } else if span.width < min_divider_cells(&span.label) {
-                        out.push(Error::RuleLabelTooWide(
-                            r.display.clone(),
-                            r.cells.to_string(),
-                            span.width,
-                            min_divider_cells(&span.label),
-                            span.label.clone(),
-                        ));
+                    } else {
+                        // A box is not what a label needs; a width that holds
+                        // still is, and a rule sharing its line with nothing
+                        // that changes width has one without being boxed. A
+                        // rule with the line to itself is the plain case:
+                        // nothing else is taking room off it, so it is the
+                        // whole run in every frame.
+                        match r.settled_cells(at) {
+                            Some(cells) if cells < min_divider_cells(&span.label) => {
+                                out.push(Error::RuleLabelTooWide(
+                                    r.display.clone(),
+                                    r.cells.to_string(),
+                                    cells,
+                                    min_divider_cells(&span.label),
+                                    span.label.clone(),
+                                ));
+                            }
+                            Some(_) => {}
+                            // As wide as the readings beside it leave it, so
+                            // the room for the label is whatever they are not
+                            // using. `divider_rule` drops a label it cannot
+                            // fit and draws a plain line, so the label comes
+                            // and goes. Cautioned rather than refused: only
+                            // the user knows how wide their readings really
+                            // get, and a fixed width is the fix when it bites.
+                            None => out.push(Error::RuleLabelMayNotFit(
+                                r.display.clone(),
+                                r.cells.to_string(),
+                                span.label.clone(),
+                            )),
+                        }
                     }
                 }
                 // A gap draws nothing and measures itself from what is left,

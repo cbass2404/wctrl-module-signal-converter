@@ -2160,6 +2160,59 @@ impl Readout {
         divider_rule(self.cells.len(), &self.label)
     }
 
+    /// How many cells the piece at `index` draws, where that never changes.
+    ///
+    /// A box is the whole answer, and typed characters are their own length.
+    /// An elastic gap has one too, but only when every piece it shares the
+    /// line with is itself settled: the leftover is what the rest did not
+    /// use, so one reading that sheds a digit widens the gaps beside it. On a
+    /// line of boxes and typed characters, or on a line the gap has to
+    /// itself, the leftover is the same in every frame and a rule there is as
+    /// good as boxed.
+    ///
+    /// None for a piece as wide as whatever it reads, and for a gap on a line
+    /// carrying one. Ahead of a single frame arriving, which is what lets the
+    /// editor tell a label that will hold still from one that would come and
+    /// go.
+    pub fn settled_cells(&self, index: usize) -> Option<usize> {
+        let span = self.content.get(index)?;
+        if !span.gap || span.width > 0 {
+            return self.settled_span(span);
+        }
+        let mut used = 0usize;
+        let mut elastic: Vec<usize> = Vec::new();
+        for (at, other) in self.content.iter().enumerate() {
+            match self.settled_span(other) {
+                Some(cells) => used += cells,
+                None if other.gap => elastic.push(at),
+                None => return None,
+            }
+        }
+        // The same sum `compose` does: the leftover split evenly, the
+        // remainder going to the earlier gaps.
+        let spare = self.cells.len().saturating_sub(used);
+        let rank = elastic.iter().position(|&at| at == index)?;
+        Some(spare / elastic.len() + usize::from(rank < spare % elastic.len()))
+    }
+
+    /// What one piece takes off the line before the gaps are measured. None
+    /// for an elastic gap, which is measured from the leftover, and for a
+    /// piece as wide as whatever it reads.
+    fn settled_span(&self, span: &Span) -> Option<usize> {
+        if span.width > 0 {
+            return Some(span.width);
+        }
+        if span.gap {
+            return None;
+        }
+        // A one cell run takes a piece's whole value as a single glyph, the
+        // same as `compose` does, so its length is the run's.
+        if self.cells.len() == 1 {
+            return Some(1);
+        }
+        (!span.is_signal()).then(|| span.text.chars().count())
+    }
+
     /// The glyphs this field draws right now, one per cell, or None while it
     /// is still waiting on every signal it reads.
     ///

@@ -17,6 +17,14 @@ unless this says what moved.
 
 ### Changed
 
+- **A labelled rule no longer has to be given a fixed width.** A rule with a
+  line to itself is the whole line in every frame, so its label was never
+  going anywhere, and the profile was refused for a width it did not need.
+  The width is now only asked for where a reading beside the rule can squeeze
+  it, and there it is a caution on the field rather than a refusal: the rule
+  draws either way, and the label is dropped only in the frames where the
+  reading really does take the room.
+
 - **Cautions about a display field now show on that field** rather than in
   the list at the top of the profile: text too wide for its cells, and
   settings DCS-BIOS says mean nothing. The top of the profile keeps what is

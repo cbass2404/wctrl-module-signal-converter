@@ -30,7 +30,7 @@ fn text_at(address: u16, s: &str) -> Vec<BiosWrite> {
 }
 
 fn hornet() -> Profile {
-    Profile::load(&r("data/defaults/fa-18.json")).expect("hornet")
+    Profile::load(&r("crates/dsc-engine/tests/fixtures/fa-18.json")).expect("hornet")
 }
 
 fn fly(profile: Profile) -> Vec<Batch> {

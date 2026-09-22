@@ -1,8 +1,9 @@
 # Changelog
 
-What changed in each release, for the people running it. The release pipeline
-puts the matching section at the top of the release notes, so anything written
-here reaches users; development detail belongs in
+What changed in the release being prepared, for the people running it. Only
+the current version is kept here: the release pipeline puts this section at
+the top of that release's notes, and each earlier release already carries its
+own. Anything written here reaches users; development detail belongs in
 [docs/STATUS.md](docs/STATUS.md) instead.
 
 **When a shipped profile changes**, say so here and name the rows. An update
@@ -12,121 +13,168 @@ release shipped it is brought up to the new one for you. A fix to something
 you have touched only reaches you if you reset it, and you cannot decide to
 unless this says what moved.
 
-## 1.0.0-alpha.005
+## 1.0.0-alpha.006
 
 ### Changed
 
-- **Setup asks you to close DCS World, DCS Signal Converter and its editor
-  before it starts**, naming whichever of them are running, instead of
-  finding the daemon only once you had clicked through to the install step.
-  Uninstalling asks the same.
+- **A labelled rule no longer has to be given a fixed width.** A rule with a
+  line to itself is the whole line in every frame, so its label was never
+  going anywhere, and the profile was refused for a width it did not need.
+  The width is now only asked for where a reading beside the rule can squeeze
+  it, and there it is a caution on the field rather than a refusal: the rule
+  draws either way, and the label is dropped only in the frames where the
+  reading really does take the room.
+
+- **Cautions about a display field now show on that field** rather than in
+  the list at the top of the profile: text too wide for its cells, and
+  settings DCS-BIOS says mean nothing. The top of the profile keeps what is
+  about the whole profile, what will stop it loading, and signals your
+  DCS-BIOS version lacks.
 
 ### Fixed
 
-- **Updating now carries lamp rows and profile settings forward, not just
-  display fields.** Upgrading to alpha.004 left every panel on "its own setup"
-  instead of following the one it shipped following, kept each backlight on its
-  own knob instead of matching the PTO2's, and left the MCDU without the font
-  the new Hornet page is drawn in. The Hornet profile was then refused at
-  start and the cockpit stayed dark until the profile was saved again. Lamp
-  rows, `follows`, the font and disabled panels are now updated wherever they
-  still match what the previous release shipped, and left alone wherever you
-  changed them.
+- **Opening the options or controls menu mid-flight no longer blanks the
+  panels.** The menu pauses DCS-BIOS, and after 20 seconds of that every
+  lamp and screen was cleared and rebuilt on the way back. The panels now
+  keep the last cockpit until a new aircraft loads or DCS closes.
 
-## 1.0.0-alpha.004
+- **Importing a profile over one with the same name works.** Taking every
+  aircraft from the old profile deletes it, so its name is free, but the
+  import still refused the name as taken.
+
+- **A number shown as sent no longer stops a profile loading.** The editor
+  offered "as sent" for a switch or a count, and the profile was then refused
+  for having no range.
+
+- **A converted reading at zero draws 0, not -0.** A face that starts below
+  zero, such as a g meter, drew `-0.0` just under zero.
+
+- **The signal tooltip says how long a text signal is** instead of showing
+  "0 to 65535", which suggested a range to convert.
+
+- **What DCS-BIOS says a signal is no longer stops a profile loading.** Its
+  metadata is not right for every module. A range or aliases on a signal it
+  calls text, or a highlighting signal it calls a number, is now a caution:
+  the profile loads and you judge the result on the panel.
 
 ### New Features
 
-- **A piece of a display field can be held to a fixed width.** Give it a number
-  of cells and it takes exactly that many whatever it reads, so the pieces
-  after it stay where they are as the reading changes width. Choose where the
-  value sits inside it: centred for a label, or right for a number, which keeps
-  the digits pinned and grows the blanks in front of them as it counts down
-  from 1000 to 9. It also means you can tell, while you are building a row,
-  whether anything will ever run off the edge of the screen.
-- **A whole field can be centred in its cells**, alongside left and right.
-- **A gap can draw a rule instead of blanks**, so a line of dashes can sit
-  between two pieces of the same row rather than needing a field of its own.
-  Left to size itself it takes whatever the pieces each side leave, so a
-  reading that grows eats into the dashes instead of being cropped. Give it a
-  fixed width and it can carry a label, with its own colour, exactly as a
-  whole-row rule does.
-- **One panel sold under several names can share one setup.** The MCDU comes
-  as Captain, Co-Pilot and Observer and the MFD as L, C and R, and each used to
-  need every lamp and field set up again. Choose **uses** in a panel's header
-  and point it at another unit of the same kind: it gets exactly what that one
-  has, and its own setup is kept in case you switch back.
-- **A lamp can match a lamp on another panel.** "Match another lamp" now lists
-  the dimmers on every panel, not only its own, so an MFD's backlight can
-  follow the throttle's and the whole pit dims from one place. Two lamps still
-  cannot follow each other, on one panel or across two.
+- **Give each seat its own version of a display field.** On an aircraft with
+  more than one crew station, a field set to one seat now offers a copy for
+  each seat that has none on those cells yet, so the pilot and the gunner can
+  see different things in the same window. The copy starts out the same as
+  the field it came from, ready to point at the other seat's signals.
 
-### Changed
+- **See what the UFC and the DED will draw.** The editor drew a field before
+  you flew it only on the MCDU. The UFC and the ICP's DED are the screens
+  where that is worth most: they draw from a table of their own, where a value
+  lights a set of segments or pixels that need not look much like the
+  characters it was keyed by, and a two character comm channel is one glyph on
+  one cell. Both are now drawn the way the panel will draw them, segment by
+  segment and pixel by pixel, inverse fields included. A cell this glass has
+  nothing for is marked rather than left looking like a space, and the line
+  under the preview names what would be dark.
 
-- **A number on a display is chosen the way a lamp's test is.** Pick the
-  signal, then say how to show it: as sent, or converted to what the dial is
-  marked with, with the decimals beside it. A needle (0 to 65535) arrives
-  converted and anything narrower arrives as sent, so picking the signal is
-  usually the only step. Before, every number was forced through a 0 to 100
-  conversion, which turned a selector's 0 to 3 into 0, 33, 67 and 100.
-- **A number shown as sent is measured from its maximum**, so a field says
-  exactly how many characters it would lose instead of warning that it might
-  run past its cells.
+- **Show a switch position as a word.** A reading can now be drawn "as
+  aliases": each value gets the text to draw in its place, so the F-16 CMDS
+  mode knob can read `SEMI` instead of `3`. A switch whose positions DCS-BIOS
+  names starts with those names filled in. Shorten them to fit your cells. A
+  value with no alias draws as the number.
+
+- **Name a band of a dial, not just one value.** An alias now claims one
+  reading, a list of them, or a range: `-1.5..-0.1` draws `ND` anywhere below
+  centre. The range is in what the dial is marked with, not the 0 to 65535
+  DCS-BIOS sends, so you write the numbers you can read off the gauge and they
+  keep meaning the same thing if you retune the range. A needle sitting
+  between two bands lands in one of them. A reading no band claims still draws
+  as the number, so a face can be part named and part read.
+
+- **An alias can have its own colour.** A band is often a warning about where
+  the needle is, and a warning in the same colour as the row around it is one
+  nobody catches. Aliases without a colour are drawn in the piece's colour as
+  before.
+
+- **An alias can draw inverse**, on screens that draw inverse at all, such as
+  the DED. It is how a band stands out on glass with no colours, and an alias
+  of a single space ticked inverse draws a solid block.
+
+- **Draw a reading without its sign.** A face that runs each way from zero is
+  read as a magnitude and a direction: the F-16's trim indicators are marked
+  in units nose up and units nose down, so `-1.0 ND` says the same thing
+  twice. Tick "without its sign" and the number is the magnitude, with a band
+  beside it naming the direction. Offered only on a range that goes below
+  zero, since it does nothing to any other.
+
+- **Aliases and a converted range work together.** Naming values used to mean
+  giving up the conversion, and the two were a choice of one. The menu now
+  picks "as sent" or "converted to", and aliases sit on top of whichever it
+  is. Nothing you have already set up changes.
+
+- **Drums, counters and dials that go all the way round.** A converted
+  reading can now round down instead of to the nearest, and start again from
+  0 at a value you choose. One odometer drum digit is 0 to 10, rounded down,
+  wrapping at 10: it shows each digit once the drum has clicked over to it,
+  and 0 after 9. A compass is 0 to 360 wrapping at 360, so it reads 0 at the
+  top instead of 360. A signal that makes several turns is its whole travel
+  wrapping at one turn: twelve turns of 0 to 999 is 0 to 12000 wrapping at
+  1000.
 
 ### Shipped profiles
 
-- **Hornet:** the UFC scratchpad number is held to its 7 cells and aligned
-  right within them. It draws exactly as it did. DCS-BIOS sends 8 characters
-  for 7 cells, so one of them was always going, and saying which in the profile
-  is what stops the editor warning that one might.
-- **Every aircraft: one knob dims the whole pit.** Every backlight on every
-  panel now matches the centre MFD's backlight (the MFD C's
-  `INST_PNL_Backlight`) instead of reading the cockpit knob for itself. That is
-  the same knob as before, so the lamps look the same until you change the MFD
-  C's row, and then they all follow it. Rows: `Backlight`,
-  `INST_PNL_Backlight`, `HUD_INST_PNL_Backlight`, `Marker_Light`, `SL`, `FLAG`,
-  `Backlight_L`, `Backlight_R` and `Logo` on every panel except the MFD C.
-- **Every aircraft: the MFD L and R use the MFD C's setup, and the MCDU
-  Co-Pilot and Observer use the Captain's.** Their own rows stay in the profile
-  and come back if you point **uses** back at the panel itself.
-- **F-14, F-14BU and Mi-24P:** the MCDU `Marker_Light` and the PTO2 `SL` and
-  `FLAG` were held at full. They now dim with the console lights, and go full
-  bright when the console lights are off.
-- **F-14 and F-14BU:** the PTO2 is wired. `LEFT`, `NOSE` and `RIGHT` show the
-  gear, `HALF` and `FULL` the flaps, `FLAPS` and `HOOK` their warning lights,
-  `Landing_gear_lights` the gear handle light, and `Master_Caution` lights for
-  the pilot's or the RIO's master caution.
-- **F-16:** the PTO2 `LEFT`, `NOSE` and `RIGHT` show the gear.
-- **AH-64D:** the PTO2 `LI`, `LO`, `RI` and `RO` show the jettison stations
-  selected in your seat, `JETT` lights when any station is selected in either
-  seat, and `Master_Caution` follows your seat and lights for a master warning
-  as well as a master caution.
-- **A-10C:** the throttle's `A/A` lights with the master arm at ARM, and `A/G`
-  with the GUN/PAC switch at ARM, where the gun is live. The UFC's `HUD_INST_PNL_Backlight` goes full
-  bright when the console lights are off.
-- **CH-47F and F-14:** the ICP is no longer switched off, so its backlight
-  follows the pit.
-- **No aircraft:** every panel is switched off, so nothing lights while you
-  spectate.
+**Every aircraft**
 
-### Fixed
+- **The panel backlights hold a fixed 175 instead of following a cockpit
+  knob.** They stay readable however the cockpit lighting is set, but they
+  no longer dim with the cockpit at night. Every backlight, the PTO2's FLAG
+  and SL, and the MCDU indicators take their level from one row, CarrierAce
+  MFD C `INST_PNL_Backlight`, so that row is the whole change. Until now it
+  followed:
 
-- The editor refused a label on a rule that the panel would have drawn. It was
-  still asking for a blank margin at each end of the line, which went when the
-  rule was changed to run corner to corner, so it wanted two cells more than
-  the rule actually needs.
-- A field one cell wide no longer warns that it is about to lose a character.
-  A single cell takes its whole value as one glyph, which is how the Hornet UFC
-  draws a two-digit comm channel and a scratchpad mark, so nothing was ever
-  being dropped. The check was counting characters and put four warnings on the
-  Hornet for a screen drawing exactly what it was built to draw.
-- Profiles are saved with Windows line endings again. Every profile was written
-  with CRLF and the editor was saving them back with LF, which turned a change
-  to one row into a change to every line of the file and left it as one long
-  line in anything that still wants the pair. The catalogue is written the same
-  way now.
-- A rule started in an empty area of a screen can now have text, readings and
-  gaps added beside it, and can be changed to another kind of piece. It was
-  being made as a whole-row rule, which holds nothing else, so the only way
-  round it was to add the text first and move a rule above it. An empty area
-  can also start with a gap now.
+  - A-10C: the console knob on the light control panel
+  - AH-64D: the primary interior lighting knob of whoever is seated
+  - CH-47F: the instrument dimmer of whoever is seated
+  - F-14 and F-14BU: the console light knob turned last, pilot's or RIO's
+  - F-16: the primary consoles knob
+  - F/A-18: the CONSOLES dimmer
+  - Mi-24P: the red-lights transformer of whoever is seated
+  - FC3 was already held on, at full; it is now at 175 like the rest.
+
+  If you have changed that row, you keep your own. To have the panels dim
+  with the cockpit again, point that row at the knob.
+
+**A-10C**
+
+- **An MCDU radio page.** The MCDU Captain's top three rows now show the
+  ARC-210 and ARC-164: each radio's frequency, the ARC-210's modulation, and
+  each radio's preset channel.
+- **Countermeasures on the ICP's DED.** Rows 1, 2, 4 and 5 show the CMSC:
+  jammer, chaff and flare, and missile warning readouts, with the missile
+  launch, priority and unknown lamps drawn as inverse blocks under ML, PRI
+  and UNK.
+
+**AH-64D**
+
+- **The rule above the keyboard unit** is now drawn across the whole of row
+  13 (cells 288-311), no longer inset to the 22 cells of the keyboard unit.
+  It still carries the KEYBOARD UNIT label. The new row replaces the old
+  one on cells 289-310.
+
+**F-16**
+
+- **An MCDU flight page.** The MCDU Captain now shows:
+  - fuel from the totalizer drums, engine RPM and nozzle position
+  - chaff and flare counts, the CMDS program, and the CMDS mode by name (OFF
+    and STBY in red, SEMI and AUTO in green)
+  - a TRIM section with pitch, roll and yaw trim, each as a number with its
+    direction beside it: NU or ND, LWD or RWD, L or R.
+
+**F/A-18**
+
+- **The JETT lamp on the PTO2 lights when selective jettison is armed.** It
+  was never bound. It now lights with the selective jettison knob on L FUS
+  MSL or R FUS MSL, or on RACK/LCHR or STORES once a station is selected.
+  Row: PTO2 `JETT`.
+- **The MCDU Captain's screen holds 150** instead of following the IFEI
+  brightness knob. Row: MCDU Captain `Screen_Backlight`. MCDU Captain
+  `Backlight` also has a floor of 150 now, which applies only if the
+  backlight row is ever at 0.

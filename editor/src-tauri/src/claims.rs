@@ -78,6 +78,9 @@ pub fn write_new(active: &Path, profile: Profile) -> Result<String, String> {
 /// A shipped profile deleted this way stays deleted, because the new profile
 /// now claims every aircraft it had, and seeding brings a default back only
 /// for aircraft nothing claims.
+///
+/// A profile being deleted gives up its name too, so the new one may take it,
+/// file and all: importing a newer copy of a profile over the old one.
 pub fn write_new_deleting(active: &Path, mut profile: Profile, delete: &[String]) -> Result<String, String> {
     profile.name = profile.name.trim().to_string();
     if profile.name.is_empty() {
@@ -92,20 +95,25 @@ pub fn write_new_deleting(active: &Path, mut profile: Profile, delete: &[String]
     }
     let file = format!("{stem}.json");
     let path = active.join(&file);
-    if path.exists() {
+
+    let (releases, mut gone) = plan(active, &profile.aircraft, delete)?;
+    // Written over rather than deleted, when the new profile takes its file.
+    let replaced = gone.contains(&file);
+    gone.retain(|g| *g != file);
+    if path.exists() && !replaced {
         return Err(format!("{file} already exists. Give the profile another name."));
     }
     // The file name follows the profile name, so this is usually the same
     // answer as above. Not always: two names can differ only in punctuation
     // the file name drops, and the list would then show them alike.
-    if let Some(taken) = Profiles::new(active, active).name_taken(&file, &profile.name) {
+    let mut skip: Vec<&str> = gone.iter().map(String::as_str).collect();
+    skip.push(&file);
+    if let Some(taken) = Profiles::new(active, active).name_taken_except(&skip, &profile.name) {
         return Err(format!("Another profile is already called {taken}. Give this one another name."));
     }
-
-    let (releases, gone) = plan(active, &profile.aircraft, delete)?;
     // Everything this may change, as it is now, to put back on a failure.
     let mut before = Vec::new();
-    for f in releases.iter().map(|r| &r.file).chain(&gone) {
+    for f in releases.iter().map(|r| &r.file).chain(&gone).chain(replaced.then_some(&file)) {
         let bytes = std::fs::read(active.join(f)).map_err(|e| format!("reading {f}: {e}"))?;
         before.push((f.clone(), bytes));
     }
@@ -124,7 +132,9 @@ pub fn write_new_deleting(active: &Path, mut profile: Profile, delete: &[String]
         Ok(())
     };
     if let Err(why) = moved() {
-        let _ = std::fs::remove_file(&path);
+        if !replaced {
+            let _ = std::fs::remove_file(&path);
+        }
         let unrestored: Vec<&str> = before
             .iter()
             .filter(|(f, bytes)| std::fs::write(active.join(f), bytes).is_err())
@@ -285,6 +295,33 @@ mod tests {
         write_new_deleting(&dir, profile("Shared", &["A-10C_2"]), &["a-10c-2.json".into()]).unwrap();
         assert!(!dir.join("a-10c-2.json").exists(), "the emptied profile went");
         assert!(dir.join("shared.json").exists());
+    }
+
+    #[test]
+    fn an_import_may_take_the_name_of_the_profile_it_replaces() {
+        // Importing a newer copy over the old one: every aircraft moves, the
+        // old profile is deleted, and its name and file go to the new one.
+        let dir = scratch("replace");
+        profile("A-10C II", &["A-10C_2"]).save(&dir.join("a-10c-ii.json")).unwrap();
+
+        assert!(write_new(&dir, profile("A-10C II", &["A-10C_2"])).is_err(), "not without deleting it");
+
+        let mut newer = profile("A-10C II", &["A-10C_2"]);
+        newer.author = "someone".into();
+        let file = write_new_deleting(&dir, newer, &["a-10c-ii.json".into()]).unwrap();
+        assert_eq!(file, "a-10c-ii.json");
+        assert_eq!(Profile::load(&dir.join(&file)).unwrap().author, "someone", "the new one is there");
+    }
+
+    #[test]
+    fn a_replaced_profile_under_another_file_name_is_deleted() {
+        // Renamed after it was written, so its file no longer follows its name.
+        let dir = scratch("replace-renamed");
+        profile("A-10C II", &["A-10C_2"]).save(&dir.join("mine.json")).unwrap();
+
+        let file = write_new_deleting(&dir, profile("A-10C II", &["A-10C_2"]), &["mine.json".into()]).unwrap();
+        assert_eq!(file, "a-10c-ii.json");
+        assert!(!dir.join("mine.json").exists());
     }
 
     #[test]

@@ -14,6 +14,7 @@
       "key": "TAKEOFF_PLANEL_2",
       "display_name": "PTO2",
       "product_name": "WINCTRL CarrierAce PTO 2",
+      "protocol": "wctrl",
       "usb_pid": 48901,
       "parts": [
         {
@@ -199,6 +200,7 @@
       "key": "Orion_Throttle_Base_II",
       "display_name": "Orion Throttle Base II",
       "product_name": "WINCTRL Orion Throttle Base II",
+      "protocol": "wctrl",
       "usb_pid": 48484,
       "parts": [
         {
@@ -258,6 +260,7 @@
       "key": "CarrierAce_UFC",
       "display_name": "CarrierAce UFC + HUD",
       "product_name": "WINCTRL CarrierAce UFC + CarrierAce HUD",
+      "protocol": "wctrl",
       "usb_pid": 48862,
       "parts": [
         {
@@ -318,6 +321,7 @@
       "key": "ViperAce_ICP",
       "display_name": "ViperAce ICP",
       "product_name": "WINCTRL ViperAce ICP",
+      "protocol": "wctrl",
       "usb_pid": 48902,
       "parts": [
         {
@@ -360,6 +364,7 @@
       "key": "CarrierAce_MFD_L",
       "display_name": "CarrierAce MFD L",
       "product_name": "WINCTRL CarrierAce MFD L",
+      "protocol": "wctrl",
       "usb_pid": 48865,
       "parts": [
         {
@@ -389,6 +394,7 @@
       "key": "CarrierAce_MFD_C",
       "display_name": "CarrierAce MFD C",
       "product_name": "WINCTRL CarrierAce MFD C",
+      "protocol": "wctrl",
       "usb_pid": 48864,
       "parts": [
         {
@@ -416,6 +422,7 @@
       "key": "CarrierAce_MFD_R",
       "display_name": "CarrierAce MFD R",
       "product_name": "WINCTRL CarrierAce MFD R",
+      "protocol": "wctrl",
       "usb_pid": 48866,
       "parts": [
         {
@@ -443,6 +450,7 @@
       "key": "Orion_Combat_Rudder_Pedals",
       "display_name": "Orion Combat Rudder Pedals",
       "product_name": "WINCTRL Orion Combat Rudder Pedals Metal",
+      "protocol": "wctrl",
       "usb_pid": 48880,
       "parts": [
         {
@@ -492,6 +500,7 @@
       "key": "MCDU_Captain",
       "display_name": "MCDU Captain",
       "product_name": "WINCTRL 32 MCDU CAPTAIN",
+      "protocol": "wctrl",
       "usb_pid": 47926,
       "parts": [
         {
@@ -624,6 +633,7 @@
       "key": "MCDU_CoPilot",
       "display_name": "MCDU Co-Pilot",
       "product_name": "WINCTRL 32 MCDU CO-PILOT",
+      "protocol": "wctrl",
       "usb_pid": 47934,
       "parts": [
         {
@@ -753,6 +763,7 @@
       "key": "MCDU_Observer",
       "display_name": "MCDU Observer",
       "product_name": "WINCTRL 32 MCDU OBSERVER",
+      "protocol": "wctrl",
       "usb_pid": 47930,
       "parts": [
         {

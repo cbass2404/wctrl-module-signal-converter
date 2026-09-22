@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "name": "F-16 trim bands (test fixture)",
+  "aircraft": [
+    "F-16C_50"
+  ],
+  "module": "F-16C_50",
+  "font": "../mcdu/f14bu-font-21x31.json",
+  "bindings": [],
+  "readouts": [
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "0-23",
+      "divider": true,
+      "label": "TRIM",
+      "colour": "amber",
+      "label_colour": "white"
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "24-47",
+      "content": [
+        {
+          "source": "PITCHTRIMIND",
+          "reads": [
+            -1.5,
+            1.5
+          ],
+          "decimals": 1,
+          "abs": true,
+          "width": 4,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
+          "source": "PITCHTRIMIND",
+          "reads": [
+            -1.5,
+            1.5
+          ],
+          "decimals": 1,
+          "width": 3,
+          "value_aliases": {
+            "-1.5..-0.1": "ND",
+            "0": " ",
+            "0.1..1.5": {
+              "text": "NU",
+              "colour": "green"
+            }
+          }
+        },
+        {
+          "gap": true
+        },
+        {
+          "source": "ROLLTRIMIND",
+          "reads": [
+            -3,
+            3
+          ],
+          "width": 4,
+          "value_aliases": {
+            "-3..-1": "LWD",
+            "0": " ",
+            "1..3": "RWD"
+          }
+        },
+        {
+          "gap": true
+        },
+        {
+          "source": "YAW_TRIM",
+          "reads": [
+            -1.5,
+            1.5
+          ],
+          "decimals": 1,
+          "width": 4,
+          "align": "right",
+          "value_aliases": {
+            "-1.5,-1.4,-1.3": "L3",
+            "0": " "
+          }
+        }
+      ]
+    }
+  ]
+}

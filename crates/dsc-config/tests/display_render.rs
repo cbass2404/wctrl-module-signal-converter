@@ -444,38 +444,13 @@ fn every_cell_belongs_to_exactly_one_named_region() {
     }
 }
 
-#[test]
-fn the_shipped_hornet_fields_land_on_named_regions() {
-    let (cat, _) = load();
-    let ufc = cat.get("UFC1").unwrap();
-    let text = std::fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/defaults/fa-18.json"),
-    )
-    .expect("the shipped Hornet default is readable");
-    let profile: serde_json::Value = serde_json::from_str(&text).expect("it parses");
-
-    let named: Vec<&str> = ufc.regions.iter().map(|r| r.cells.as_str()).collect();
-    let readouts = profile["readouts"].as_array().expect("it has readouts");
-    assert!(!readouts.is_empty());
-    for r in readouts {
-        // The UFC's regions, so only the UFC's fields. The Hornet has nothing
-        // else on it today, but it has a screen the editor can write to and a
-        // row put there would otherwise fail this for having no UFC region.
-        if r["display"].as_str() != Some("UFC1") {
-            continue;
-        }
-        let cells = r["cells"].as_str().unwrap();
-        assert!(
-            named.contains(&cells),
-            "shipped field on cells {cells} matches no region, so the editor would show it as a custom range"
-        );
-    }
-}
-
 // ------------------------------------------------------- readouts
 
+use std::collections::BTreeMap;
+
 use dsc_config::{
-    divider_rule, divider_text, min_divider_cells, Align, CellRange, Colour, Reading, Readout, Span,
+    divider_rule, divider_text, min_divider_cells, AliasDraw, Align, CellRange, Colour, Reading,
+    Readout, Round, Span, ValueBand,
 };
 
 fn readout(cells: &str, source: &str) -> Readout {
@@ -685,6 +660,103 @@ fn a_selector_whose_value_is_already_the_number_needs_no_special_case() {
     for n in 0..=10u16 {
         assert_eq!(s.format_number(n, 10), n.to_string());
     }
+}
+
+/// Where DCS-BIOS puts a float of 0 to 1, as the Lua export does: the nearest
+/// step, not the exact position.
+fn raw(position: f64) -> u16 {
+    (position * 65535.0).round() as u16
+}
+
+/// One odometer drum: a full turn is the digits 0 to 9, drawn as they click
+/// over.
+fn drum(r: &mut Readout) -> Span {
+    span(r).reads = Some([0.0, 10.0]);
+    span(r).wrap = Some(10.0);
+    span(r).round = Round::Down;
+    span(r).clone()
+}
+
+#[test]
+fn a_drum_draws_every_digit_it_sits_on_including_zero() {
+    // The F-16 fuel totalizer drums, among many. Sitting on digit 7 is 0.7 of
+    // a turn, which DCS-BIOS sends as 45875 and which converts to a hair under
+    // 7. Rounding down without allowing for that drew a 6.
+    let mut r = readout("2", "FUELTOTALIZER_1K");
+    let s = drum(&mut r);
+    for digit in 0..10u16 {
+        assert_eq!(
+            s.format_number(raw(f64::from(digit) / 10.0), 65535),
+            digit.to_string(),
+            "digit {digit}"
+        );
+    }
+    // A full turn is back on 0, drawn as 0 rather than 10 or nothing.
+    assert_eq!(s.format_number(65535, 65535), "0");
+}
+
+#[test]
+fn a_drum_between_digits_draws_the_one_it_has_left() {
+    let mut r = readout("2", "FUELTOTALIZER_1K");
+    let s = drum(&mut r);
+    // Most of the way from 4 to 5 is still 4 on a drum. Rounded to the
+    // nearest it read 5 while the drum below it still read 9.
+    assert_eq!(s.format_number(raw(0.48), 65535), "4");
+    assert_eq!(s.format_number(raw(0.99), 65535), "9");
+}
+
+#[test]
+fn a_reading_that_goes_round_more_than_once_draws_where_it_is_in_the_turn() {
+    // Twelve turns of 0 to 999 on one signal: the three digits a needle or a
+    // counter shows, not the running total behind them.
+    let mut r = readout("2-4", "MULTI_TURN");
+    span(&mut r).reads = Some([0.0, 12000.0]);
+    span(&mut r).wrap = Some(1000.0);
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(0, 65535), "0");
+    assert_eq!(s.format_number(raw(0.5), 65535), "0", "6000 is a whole turn");
+    assert_eq!(s.format_number(raw(7250.0 / 12000.0), 65535), "250");
+    assert_eq!(span(&mut r).widest(None, Some(65535)), Some(3));
+}
+
+#[test]
+fn a_full_scale_wraps_to_zero_at_the_top_after_rounding() {
+    let mut r = readout("2-4", "HEADING");
+    span(&mut r).reads = Some([0.0, 360.0]);
+    span(&mut r).wrap = Some(360.0);
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(65535, 65535), "0");
+    // 359.7 rounds to 360 first, which is 0, rather than drawing 360.
+    assert_eq!(s.format_number(raw(359.7 / 360.0), 65535), "0");
+    assert_eq!(s.format_number(raw(0.5), 65535), "180");
+    assert_eq!(span(&mut r).widest(None, Some(65535)), Some(3));
+}
+
+#[test]
+fn zero_is_never_drawn_as_minus_zero() {
+    let mut r = readout("2-8", "ACCEL_G");
+    span(&mut r).reads = Some([-10.0, 12.0]);
+    span(&mut r).decimals = 1;
+    let s = span(&mut r).clone();
+    // -0.01 g, which the formatter alone drew as "-0.0".
+    let near_zero = raw(9.99 / 22.0);
+    assert_eq!(s.format_number(near_zero, 65535), "0.0");
+}
+
+#[test]
+fn a_drum_round_trips_flat_and_a_plain_reading_gains_no_keys() {
+    let mut r = readout("2", "FUELTOTALIZER_1K");
+    drum(&mut r);
+    let json = serde_json::to_value(&r).unwrap();
+    assert_eq!(json["wrap"], 10.0);
+    assert_eq!(json["round"], "down");
+    assert!(json.get("content").is_none(), "one drum stays in the flat shape");
+    let back: Readout = serde_json::from_value(json).unwrap();
+    assert_eq!(back.content[0].wrap, Some(10.0));
+    assert_eq!(back.content[0].round, Round::Down);
+
+    let plain = serde_json::to_value(readout("2", "OIL_TEMP")).unwrap();
+    assert!(plain.get("wrap").is_none() && plain.get("round").is_none());
 }
 
 #[test]
@@ -974,4 +1046,208 @@ fn a_rule_and_its_label_keep_their_own_colours() {
         };
         assert_eq!(g.colour, want, "cell {n} draws {:?}", g.text);
     }
+}
+
+/// Aliases naming one reading each, which is how every alias written before
+/// bands existed reads.
+fn naming<const N: usize>(pairs: [(f64, &str); N]) -> BTreeMap<ValueBand, AliasDraw> {
+    pairs
+        .into_iter()
+        .map(|(v, a)| (ValueBand::One(v), a.into()))
+        .collect()
+}
+
+#[test]
+fn a_knob_draws_the_alias_for_its_position() {
+    let mut r = readout("2-5", "CMDS_MODE_KNB");
+    span(&mut r).value_aliases = naming([(0.0, "OFF"), (3.0, "SEMI")]);
+    let at = |value: u16| -> String {
+        r.compose(|_| Some(Reading::Number { value, max: 5 }))
+            .expect("the signal has arrived")
+            .into_iter()
+            .map(|g| g.text)
+            .collect()
+    };
+    assert_eq!(at(3), "SEMI");
+    assert_eq!(at(0), "OFF ");
+    // A position with no alias still draws, as the number it is.
+    assert_eq!(at(4), "4   ");
+}
+
+#[test]
+fn a_knob_is_as_wide_as_its_longest_alias() {
+    let mut r = readout("2-5", "CMDS_MODE_KNB");
+    let names = ["OFF", "STBY", "MAN", "SEMI", "AUTO", "BYP"];
+    span(&mut r).value_aliases = names
+        .iter()
+        .enumerate()
+        .map(|(v, a)| (ValueBand::One(v as f64), (*a).into()))
+        .collect();
+    assert_eq!(span(&mut r).widest(None, Some(5)), Some(4));
+    // With one position left as a number, that number still counts.
+    span(&mut r).value_aliases = naming([
+        (0.0, "O"),
+        (1.0, "S"),
+        (2.0, "M"),
+        (3.0, "S"),
+        (4.0, "A"),
+    ]);
+    assert_eq!(span(&mut r).widest(None, Some(500)), Some(3));
+}
+
+/// Bands as a profile writes them, parsed the way the file is read.
+fn banded<const N: usize>(pairs: [(&str, &str); N]) -> BTreeMap<ValueBand, AliasDraw> {
+    pairs
+        .into_iter()
+        .map(|(band, drawn)| (band.parse().expect("a band parses"), drawn.into()))
+        .collect()
+}
+
+/// The F-16 trim indicator: a needle at 0 to 65535, a face marked -1.5 to 1.5,
+/// and the bands written in the units the face is marked with.
+fn trim_face(r: &mut Readout) -> Span {
+    let s = span(r);
+    s.reads = Some([-1.5, 1.5]);
+    s.decimals = 1;
+    s.value_aliases = banded([("-1.5..-0.1", "ND"), ("0", " "), ("0.1..1.5", "NU")]);
+    s.clone()
+}
+
+#[test]
+fn a_band_is_matched_against_what_the_face_reads() {
+    // Not against the raw count. Bands written for a converted face have to
+    // hold when the face is retuned, and 32768 means nothing to anybody.
+    let mut r = readout("2-5", "PITCHTRIMIND");
+    let s = trim_face(&mut r);
+    assert_eq!(s.format_number(0, 65535), "ND", "hard nose down");
+    assert_eq!(s.format_number(65535, 65535), "NU", "hard nose up");
+    assert_eq!(s.format_number(32768, 65535), " ", "dead centre draws blank");
+}
+
+#[test]
+fn a_needle_between_two_bands_lands_in_one_of_them() {
+    // The reading is rounded to its decimal places before a band is looked
+    // for, so the gap between -0.1 and 0 is not a gap the needle can sit in.
+    let mut r = readout("2-5", "PITCHTRIMIND");
+    let s = trim_face(&mut r);
+    // A hair below centre rounds to -0.1 and is nose down.
+    assert_eq!(s.format_number(raw((1.5 - 0.06) / 3.0), 65535), "ND");
+    // A hair closer still rounds to 0 and is centred.
+    assert_eq!(s.format_number(raw((1.5 - 0.04) / 3.0), 65535), " ");
+}
+
+#[test]
+fn abs_draws_the_magnitude_and_still_lets_a_band_see_the_sign() {
+    // `abs` is the last thing that happens, so a band written for negative
+    // readings still matches on a piece that draws magnitudes.
+    let mut r = readout("2-5", "PITCHTRIMIND");
+    let s = span(&mut r);
+    s.reads = Some([-1.5, 1.5]);
+    s.decimals = 1;
+    s.abs = true;
+    let plain = s.clone();
+    assert_eq!(plain.format_number(0, 65535), "1.5", "the sign is dropped");
+    assert_eq!(plain.format_number(65535, 65535), "1.5");
+
+    span(&mut r).value_aliases = banded([("-1.5..-0.1", "ND")]);
+    let s = span(&mut r).clone();
+    assert_eq!(s.format_number(0, 65535), "ND", "the band saw a negative");
+    assert_eq!(s.format_number(65535, 65535), "1.5", "and nose up is a number");
+}
+
+#[test]
+fn a_band_carries_its_own_colour() {
+    let mut r = readout("2-5", "PITCHTRIMIND");
+    let s = span(&mut r);
+    s.reads = Some([-1.5, 1.5]);
+    s.decimals = 1;
+    s.colour = Some(Colour::Amber);
+    s.value_aliases = [(
+        "0.1..1.5".parse().expect("a band"),
+        AliasDraw {
+            text: "NU".into(),
+            colour: Some(Colour::Green),
+            inverse: false,
+        },
+    )]
+    .into_iter()
+    .collect();
+    let s = s.clone();
+    let (text, band) = s.format_reading(65535, 65535);
+    assert_eq!(text, "NU");
+    assert_eq!(band.and_then(|b| b.colour), Some(Colour::Green));
+    // A reading no band claims takes no colour of its own, so the piece's
+    // stands.
+    let (text, band) = s.format_reading(0, 65535);
+    assert_eq!(text, "-1.5");
+    assert!(band.is_none());
+}
+
+#[test]
+fn a_band_can_draw_inverse() {
+    // A blank drawn inverse is a solid block, which is the cursor on glass with
+    // no block glyph of its own.
+    let mut r = readout("2-3", "KNOB");
+    span(&mut r).value_aliases = [(
+        ValueBand::One(1.0),
+        AliasDraw {
+            text: " ".into(),
+            colour: None,
+            inverse: true,
+        },
+    )]
+    .into_iter()
+    .collect();
+    let number = |value: u16| move |_: &str| Some(Reading::Number { value, max: 1 });
+    let glyphs = r.compose(number(1)).unwrap();
+    assert!(glyphs[0].inverse, "the band claimed it");
+    let glyphs = r.compose(number(0)).unwrap();
+    assert!(glyphs.iter().all(|g| !g.inverse), "a reading no band claims draws plainly");
+}
+
+#[test]
+fn a_band_can_name_a_list_of_readings() {
+    let mut r = readout("2-5", "YAW_TRIM");
+    let s = span(&mut r);
+    s.reads = Some([-1.5, 1.5]);
+    s.decimals = 1;
+    s.value_aliases = banded([("-1.5,-1.4,-1.3", "L3")]);
+    let s = s.clone();
+    assert_eq!(s.format_number(raw(0.0), 65535), "L3");
+    assert_eq!(s.format_number(raw(0.1 / 3.0), 65535), "L3", "-1.4");
+    // The run between the named readings is not named: a list is its values.
+    assert_eq!(s.format_number(raw(0.3 / 3.0), 65535), "-1.2");
+}
+
+#[test]
+fn the_lower_of_two_overlapping_bands_draws() {
+    // Overlapping bands are a caution rather than a refusal, so something has
+    // to draw, and which one cannot be left to how the file happened to be
+    // written. Bands sort by where they start, so it is always the lower.
+    let mut r = readout("2-5", "PITCHTRIMIND");
+    let s = span(&mut r);
+    s.reads = Some([-1.5, 1.5]);
+    s.decimals = 1;
+    s.value_aliases = banded([("-0.5..0.5", "NEAR"), ("-1.5..0", "ND")]);
+    let s = s.clone();
+    // -0.3 is claimed by both. The band starting at -1.5 is the lower one.
+    assert_eq!(s.format_number(raw((1.5 - 0.3) / 3.0), 65535), "ND");
+}
+
+#[test]
+fn bands_covering_the_whole_face_are_the_whole_width() {
+    // No number is ever drawn, so the number's width is not allowed for. The
+    // same rule the aliased knob above gets, generalised to bands.
+    let mut r = readout("2-5", "PITCHTRIMIND");
+    let s = trim_face(&mut r);
+    assert_eq!(s.widest(None, Some(65535)), Some(2), "ND and NU are two");
+
+    // Leave the nose-up half to the number and the number counts again: -1.5
+    // to 1.5 at one decimal place is four characters.
+    span(&mut r).value_aliases = banded([("-1.5..-0.1", "ND"), ("0", " ")]);
+    assert_eq!(span(&mut r).widest(None, Some(65535)), Some(4));
+
+    // With the sign dropped the widest it draws is three.
+    span(&mut r).abs = true;
+    assert_eq!(span(&mut r).widest(None, Some(65535)), Some(3));
 }

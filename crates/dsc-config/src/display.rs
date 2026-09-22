@@ -20,7 +20,7 @@
 //!   and the cell reads as a different, wrong letter in between. Diffing whole
 //!   groups from a settled buffer is what keeps that off the glass.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -53,6 +53,51 @@ pub struct Cell {
 
 fn one() -> usize {
     1
+}
+
+/// How one shape's slots are drawn on a screen that is not the panel.
+///
+/// The editor previews a field before anyone flies with it, and a preview of
+/// glass like this cannot be made of characters: a cell draws whatever its
+/// glyph table says it draws, and that is a set of slots, not a letter. The
+/// two kinds of glass answer "what does slot 3 look like" differently, so this
+/// is what the answer is asked for through.
+///
+/// Knowing what a slot looks like is knowing the panel, not knowing the
+/// profile, which is why it lives here beside the glyph tables rather than in
+/// the window.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum ShapeArt {
+    /// A rectangle of pixels: slot `n` is the pixel `n % width`, `n / width`.
+    /// Generated from the [`Grid`] that made the cells, so a pixel screen
+    /// never writes its art down.
+    Pixels { width: usize, height: usize },
+    /// Strokes per slot, for glass whose slots are segments rather than
+    /// pixels. There is nothing to generate these from: a segment's shape is
+    /// nowhere in a map of bit indices, so they are written down in the
+    /// display file.
+    Strokes(StrokeArt),
+}
+
+/// The segments of one shape, drawn.
+///
+/// A slot is a list of strokes, and a stroke is a flat run of `x, y` pairs, so
+/// `[1, 2, 5, 2]` is a line and `[3, 4, 3, 4]` a dot. A list rather than one
+/// stroke because a slot is not always one mark: the UFC's option cue is a
+/// single slot that draws two dots.
+///
+/// The coordinates are in a box of `width` by `height` of this shape's own,
+/// which is how a narrow cue cell sits beside a wide letter cell at the size
+/// each really is.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StrokeArt {
+    pub width: f32,
+    pub height: f32,
+    /// How thick a lit segment is drawn, in the same units.
+    pub stroke: f32,
+    /// Per slot, in the order the glyph tables number them.
+    pub slots: Vec<Vec<Vec<f32>>>,
 }
 
 fn is_false(b: &bool) -> bool {
@@ -367,6 +412,12 @@ pub struct Display {
     /// where in the cell the first one goes.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub fonts: HashMap<String, HashMap<String, Vec<String>>>,
+    /// Per shape, what its slots look like, for a preview away from the
+    /// panel. Only on glass whose slots are segments: a pixel screen's art
+    /// falls out of its `grid`, and a text grid draws from a font the editor
+    /// reads for itself.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub art: HashMap<String, StrokeArt>,
     /// Look glyphs up only as sent, never uppercased first.
     ///
     /// The DED needs it: DCS-BIOS spells its arrow `a` and its degree sign
@@ -438,7 +489,11 @@ impl Display {
                     "a text display needs a `text` block saying its size".into()
                 ));
             };
-            if self.grid.is_some() || !self.fonts.is_empty() || !self.glyphs.is_empty() {
+            if self.grid.is_some()
+                || !self.fonts.is_empty()
+                || !self.glyphs.is_empty()
+                || !self.art.is_empty()
+            {
                 return Err(bad(
                     "a text display draws from the panel's font, not from glyphs or a pixel grid"
                         .into(),
@@ -467,7 +522,7 @@ impl Display {
             if !self.fonts.is_empty() {
                 return Err(bad("a font needs a grid to say where its rows go".into()));
             }
-            return Ok(());
+            return self.check_art();
         };
         let slots = g.cell_width * g.cell_height;
         if slots > 256 {
@@ -540,7 +595,69 @@ impl Display {
         self.inverse
             .entry(g.shape.clone())
             .or_insert_with(|| (top * g.cell_width..(bottom + 1) * g.cell_width).map(|s| s as u8).collect());
+        self.check_art()
+    }
+
+    /// Every shape's art names a shape this glass draws in, and gives it one
+    /// stroke list per slot.
+    ///
+    /// The length is the fault worth catching. A glyph names slots by number,
+    /// so art one entry short would draw every glyph of that shape with its
+    /// last segment missing, in the one place nobody can compare it against
+    /// the panel.
+    fn check_art(&self) -> Result<()> {
+        let bad = |why: String| Error::BadDisplay(self.key.clone(), why);
+        for (shape, art) in &self.art {
+            let Some(cell) = self.cells.iter().find(|c| &c.shape == shape) else {
+                return Err(bad(format!("the art draws {shape}, which no cell is")));
+            };
+            if art.slots.len() != cell.segments.len() {
+                return Err(bad(format!(
+                    "the {shape} art draws {} slots and a {shape} cell has {}",
+                    art.slots.len(),
+                    cell.segments.len()
+                )));
+            }
+            for (slot, strokes) in art.slots.iter().enumerate() {
+                for points in strokes {
+                    if points.len() < 4 || points.len() % 2 != 0 {
+                        return Err(bad(format!(
+                            "{shape} slot {slot} has a stroke of {} numbers; a stroke is x and y pairs, two pairs at least",
+                            points.len()
+                        )));
+                    }
+                }
+            }
+        }
         Ok(())
+    }
+
+    /// What each of this display's shapes looks like, for a preview.
+    ///
+    /// A shape with nothing to draw it from is left out rather than guessed
+    /// at, so the window can say it has no picture of this glass instead of
+    /// showing a picture of nothing in particular.
+    pub fn shape_art(&self) -> BTreeMap<String, ShapeArt> {
+        let mut out = BTreeMap::new();
+        for cell in &self.cells {
+            if out.contains_key(&cell.shape) {
+                continue;
+            }
+            if let Some(art) = self.art.get(&cell.shape) {
+                out.insert(cell.shape.clone(), ShapeArt::Strokes(art.clone()));
+            } else if let Some(g) = &self.grid {
+                if g.shape == cell.shape {
+                    out.insert(
+                        cell.shape.clone(),
+                        ShapeArt::Pixels {
+                            width: g.cell_width,
+                            height: g.cell_height,
+                        },
+                    );
+                }
+            }
+        }
+        out
     }
 
     /// The glyph for `value` on `cell`, if that cell's shape can draw it.
@@ -606,6 +723,36 @@ impl Display {
             }
         }
         None
+    }
+
+    /// Which of a cell's slots are lit, drawing `value` in it.
+    ///
+    /// The glyph table's answer with the inverse flip applied, which is the
+    /// whole of what reaches the glass, and so the whole of what a preview
+    /// away from the panel has to draw. `None` where the table has nothing
+    /// for the value: on the panel that cell stays dark.
+    ///
+    /// Slots past the end of the cell are dropped, because they are past the
+    /// end of the screen too. The DED's last row of cells hangs off the
+    /// bottom of the buffer by one pixel row.
+    pub fn lit(&self, cell: &Cell, value: &str, inverse: bool) -> Option<Vec<u8>> {
+        let glyph = self.glyph(cell, value)?;
+        // A slot is a u8, so 256 covers every slot a glyph can name.
+        let mut on = [false; 256];
+        for &slot in glyph {
+            on[slot as usize] = true;
+        }
+        if inverse {
+            for &slot in self.inverse.get(&cell.shape).into_iter().flatten() {
+                on[slot as usize] ^= true;
+            }
+        }
+        Some(
+            (0..cell.segments.len())
+                .filter(|&slot| on.get(slot).copied().unwrap_or(false))
+                .map(|slot| slot as u8)
+                .collect(),
+        )
     }
 
     /// How many write groups the buffer is divided into.
@@ -728,20 +875,14 @@ impl Screen {
         let cell = display
             .cell(index)
             .ok_or_else(|| Error::NoSuchCell(display.key.clone(), index))?;
-        let lit = display.glyph(cell, value).ok_or_else(|| {
+        let lit = display.lit(cell, value, inverse).ok_or_else(|| {
             Error::NoSuchGlyph(value.to_string(), cell.shape.clone(), display.key.clone())
         })?;
-        // A slot is a u8, so 256 covers every slot a glyph can name. A lookup
-        // table rather than `contains`, because a DED cell is 104 slots and
-        // the whole screen is repainted on every batch.
+        // A lookup table rather than `contains`, because a DED cell is 104
+        // slots and the whole screen is repainted on every batch.
         let mut on = [false; 256];
-        for &slot in lit {
+        for slot in lit {
             on[slot as usize] = true;
-        }
-        if inverse {
-            for &slot in display.inverse.get(&cell.shape).into_iter().flatten() {
-                on[slot as usize] ^= true;
-            }
         }
         for (slot, &bit) in cell.segments.iter().enumerate() {
             let (byte, mask) = (bit as usize / 8, 1u8 << (bit % 8));
@@ -886,6 +1027,303 @@ impl<'de> Deserialize<'de> for CellRange {
         let s = String::deserialize(d)?;
         s.parse().map_err(serde::de::Error::custom)
     }
+}
+
+/// Which readings one alias claims: a value, a list of them, or a closed band.
+///
+/// Written `"3"`, `"0,1,2"` or `"-1.5..-0.1"`, and matched against what the
+/// face reads rather than the raw count DCS-BIOS sends. The numbers here are
+/// the ones on the dial, so a trim indicator converted to -1.5 to 1.5 is
+/// banded in those units and stays banded if the range is retuned. A needle
+/// sitting between two bands lands in one of them, because the reading is
+/// rounded to `decimals` before it is matched.
+///
+/// `-` is not the separator, unlike a cell run: a cell is never negative and
+/// `"-1.5--1.0"` has no unambiguous reading. `..` is what gets written, and
+/// `to` is accepted in its place so a band can be typed the way it is said.
+///
+/// The spelling it arrived as is kept rather than normalised into one form.
+/// Expanding `"0,1,2"` into three entries would rewrite the user's file.
+#[derive(Debug, Clone)]
+pub enum ValueBand {
+    One(f64),
+    List(Vec<f64>),
+    Range { lo: f64, hi: f64 },
+}
+
+impl ValueBand {
+    /// Whether this band claims `reading`, within `tol` of its edges.
+    ///
+    /// The tolerance is half of the last decimal place the reading is shown
+    /// to. Both sides are decimal numbers, one parsed from the profile and one
+    /// arrived at by converting and rounding a raw count, and they can differ
+    /// in the last bit without differing in anything the user can see.
+    pub fn matches(&self, reading: f64, tol: f64) -> bool {
+        match self {
+            ValueBand::One(v) => (v - reading).abs() <= tol,
+            ValueBand::List(vs) => vs.iter().any(|v| (v - reading).abs() <= tol),
+            ValueBand::Range { lo, hi } => reading >= lo - tol && reading <= hi + tol,
+        }
+    }
+
+    /// The lowest reading this band claims.
+    pub fn lowest(&self) -> f64 {
+        match self {
+            ValueBand::One(v) => *v,
+            ValueBand::List(vs) => vs.iter().copied().fold(f64::INFINITY, f64::min),
+            ValueBand::Range { lo, .. } => *lo,
+        }
+    }
+
+    /// The highest reading this band claims.
+    pub fn highest(&self) -> f64 {
+        match self {
+            ValueBand::One(v) => *v,
+            ValueBand::List(vs) => vs.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+            ValueBand::Range { hi, .. } => *hi,
+        }
+    }
+
+    /// Whether this band and `other` both claim some reading.
+    pub fn overlaps(&self, other: &ValueBand, tol: f64) -> bool {
+        // Two ranges meet when neither ends before the other starts, which is
+        // the same sum `CellRange::overlaps` does. A value or a list has to be
+        // asked value by value: 0 and 2 do not overlap 1 even though they
+        // straddle it.
+        match (self, other) {
+            (ValueBand::Range { .. }, ValueBand::Range { .. }) => {
+                self.lowest() <= other.highest() + tol && other.lowest() <= self.highest() + tol
+            }
+            (ValueBand::Range { .. }, one) | (one, ValueBand::Range { .. }) => {
+                one.values().iter().any(|v| self.matches(*v, tol) && other.matches(*v, tol))
+            }
+            (a, b) => a.values().iter().any(|v| b.matches(*v, tol)),
+        }
+    }
+
+    /// The values a band names one by one, empty for a range.
+    fn values(&self) -> Vec<f64> {
+        match self {
+            ValueBand::One(v) => vec![*v],
+            ValueBand::List(vs) => vs.clone(),
+            ValueBand::Range { .. } => Vec::new(),
+        }
+    }
+
+    /// Everything that tells one band from another, in the order they sort by:
+    /// where it starts, where it ends, which spelling it is, and then the
+    /// values themselves, so two lists that start and end together are still
+    /// two keys rather than one that quietly replaced the other.
+    fn ordering(&self) -> (f64, f64, u8, Vec<f64>) {
+        let rank = match self {
+            ValueBand::One(_) => 0,
+            ValueBand::List(_) => 1,
+            ValueBand::Range { .. } => 2,
+        };
+        let parts = match self {
+            ValueBand::Range { lo, hi } => vec![*lo, *hi],
+            other => other.values(),
+        };
+        (self.lowest(), self.highest(), rank, parts)
+    }
+}
+
+impl Ord for ValueBand {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let (al, ah, ar, av) = self.ordering();
+        let (bl, bh, br, bv) = other.ordering();
+        al.total_cmp(&bl)
+            .then(ah.total_cmp(&bh))
+            .then(ar.cmp(&br))
+            .then(av.len().cmp(&bv.len()))
+            .then_with(|| {
+                av.iter()
+                    .zip(&bv)
+                    .map(|(x, y)| x.total_cmp(y))
+                    .find(|o| o.is_ne())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    }
+}
+
+impl PartialOrd for ValueBand {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for ValueBand {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == std::cmp::Ordering::Equal
+    }
+}
+
+impl Eq for ValueBand {}
+
+impl std::fmt::Display for ValueBand {
+    /// The canonical spelling, which is what gets written back.
+    ///
+    /// Rust draws a whole f64 without a fractional part, so `One(3.0)` writes
+    /// `"3"` and not `"3.0"`. That is load-bearing rather than tidy: the
+    /// update merge decides whether a row is still as it shipped by comparing
+    /// rows as JSON, so a key that changed spelling here would make every
+    /// aliased row in every profile read as one the user had edited.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueBand::One(v) => write!(f, "{v}"),
+            ValueBand::List(vs) => {
+                let written: Vec<String> = vs.iter().map(|v| v.to_string()).collect();
+                write!(f, "{}", written.join(","))
+            }
+            ValueBand::Range { lo, hi } => write!(f, "{lo}..{hi}"),
+        }
+    }
+}
+
+impl std::str::FromStr for ValueBand {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        let bad = || {
+            format!(
+                "expected a reading like \"3\", a list like \"0,1,2\" or a band like \"-1.5..-0.1\", got {s:?}"
+            )
+        };
+        let one = |part: &str| -> std::result::Result<f64, String> {
+            match part.trim().parse::<f64>() {
+                Ok(v) if v.is_finite() => Ok(v),
+                _ => Err(bad()),
+            }
+        };
+        let s = s.trim();
+        if let Some((a, b)) = s.split_once("..").or_else(|| s.split_once(" to ")) {
+            let (lo, hi) = (one(a)?, one(b)?);
+            if hi < lo {
+                return Err(format!("band {s:?} ends before it starts"));
+            }
+            return Ok(ValueBand::Range { lo, hi });
+        }
+        if s.contains(',') {
+            let values = s.split(',').map(one).collect::<std::result::Result<Vec<_>, _>>()?;
+            return Ok(ValueBand::List(values));
+        }
+        Ok(ValueBand::One(one(s)?))
+    }
+}
+
+impl Serialize for ValueBand {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        s.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ValueBand {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+/// What an alias draws: the characters, and a colour of its own where it wants
+/// one, or inverse.
+///
+/// A band is often a warning about where the needle is, and a warning that
+/// reads in the same colour as the row around it is one nobody catches. The
+/// colour belongs to the band rather than the piece because that is the whole
+/// point: the same reading draws amber in one band and red in the next. Inverse
+/// is the same thing on glass with no colours to pick from, such as the DED,
+/// and a blank drawn inverse is a solid block.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "AliasRepr", into = "AliasRepr")]
+pub struct AliasDraw {
+    pub text: String,
+    pub colour: Option<Colour>,
+    pub inverse: bool,
+}
+
+/// An alias as it is written on disk: bare characters, or an object once it
+/// has a colour or inverse to carry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum AliasRepr {
+    Text(String),
+    Styled {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colour: Option<Colour>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        inverse: bool,
+    },
+}
+
+impl From<AliasRepr> for AliasDraw {
+    fn from(r: AliasRepr) -> Self {
+        match r {
+            AliasRepr::Text(text) => AliasDraw {
+                text,
+                colour: None,
+                inverse: false,
+            },
+            AliasRepr::Styled {
+                text,
+                colour,
+                inverse,
+            } => AliasDraw {
+                text,
+                colour,
+                inverse,
+            },
+        }
+    }
+}
+
+impl From<AliasDraw> for AliasRepr {
+    /// A colour or inverse is the only reason for the object shape, so an
+    /// alias with neither goes back as the bare string it arrived as.
+    ///
+    /// Not a tidiness: the update merge compares rows as JSON to decide
+    /// whether one is still as the last release shipped it. An alias that came
+    /// back in a different shape would make every aliased row in every profile
+    /// read as one the user had edited, and those rows are never updated
+    /// again.
+    fn from(a: AliasDraw) -> Self {
+        if a.colour.is_none() && !a.inverse {
+            return AliasRepr::Text(a.text);
+        }
+        AliasRepr::Styled {
+            text: a.text,
+            colour: a.colour,
+            inverse: a.inverse,
+        }
+    }
+}
+
+impl From<&str> for AliasDraw {
+    fn from(text: &str) -> Self {
+        AliasDraw::from(text.to_string())
+    }
+}
+
+impl From<String> for AliasDraw {
+    fn from(text: String) -> Self {
+        AliasDraw {
+            text,
+            colour: None,
+            inverse: false,
+        }
+    }
+}
+
+/// How a converted number lands on its last decimal place.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Round {
+    /// To the nearest, which is what a needle wants and what every reading
+    /// did before this was a choice.
+    #[default]
+    Nearest,
+    /// Down, which is what a drum or anything else that clicks over wants.
+    Down,
 }
 
 /// Which end of a cell run the text is anchored to.
@@ -1102,6 +1540,56 @@ pub struct Span {
     /// Decimal places for a numeric source.
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub decimals: u8,
+    /// How a number lands on its last decimal place: to the nearest, or down.
+    ///
+    /// Nearest is right for a needle, where 4.6 is closer to 5 than to 4.
+    /// Down is right for anything that clicks over: an odometer drum shows 4
+    /// until the 5 has fully arrived, and rounding to the nearest would put
+    /// the 5 up while the drum beside it still reads 9.
+    #[serde(default, skip_serializing_if = "is_nearest")]
+    pub round: Round,
+    /// Start again from zero every this many, after converting and rounding.
+    ///
+    /// A drum or a needle that goes round more than once reports where it is
+    /// in its turn, and a scale that goes all the way round reads 0 at the top
+    /// rather than its full value. So the reading is the remainder: `reads` 0
+    /// to 10 wrapping at 10 is one drum digit, and 0 to 360 wrapping at 360 is
+    /// a compass that draws 0 where it would have drawn 360. None for a
+    /// reading that never starts over; anything not above zero counts as none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wrap: Option<f64>,
+    /// What to draw for each reading of a numeric source, in place of the
+    /// number.
+    ///
+    /// A knob reports its position, and `3` on a screen says less than `SEMI`
+    /// does. The editor fills this from the position names the catalogue has,
+    /// and the user shortens them to fit. Looked up on the whole value, before
+    /// it is split into cells, so an alias is drawn as the characters it is. A
+    /// reading no band claims draws as the number.
+    ///
+    /// The key is matched against **what the face reads**: converted by
+    /// `reads`, rounded to `decimals` and wrapped by `wrap` first. That is the
+    /// number the user is looking at, and it is what lets a band be written in
+    /// the units the dial is marked with instead of in raw counts. A signal
+    /// with no `reads` converts through its own range, which is the identity,
+    /// so a key naming a position still matches the position.
+    ///
+    /// Not `aliases`, which rewrites characters a module sends as text. This
+    /// one names numbers.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub value_aliases: BTreeMap<ValueBand, AliasDraw>,
+    /// Draw a converted reading without its sign.
+    ///
+    /// A face that runs each way from zero is read as a magnitude and a
+    /// direction, not as a negative number: the F-16's trim indicators are
+    /// marked in units nose up and units nose down, and a needle below zero
+    /// reading `-1.0 ND` says the same thing twice. With the sign dropped the
+    /// number is the magnitude and a band beside it names the direction.
+    ///
+    /// Applied last, after a band has had its turn, so a band written for
+    /// negative readings still matches on a piece that draws magnitudes.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub abs: bool,
     /// Values this module words differently from the glyph table.
     ///
     /// DCS-BIOS does not always report what DCS's own indication does: the
@@ -1161,6 +1649,22 @@ impl Span {
         !self.source.is_empty()
     }
 
+    /// Whether anything here says how to draw a number: a range, decimal
+    /// places, rounding, a wrap or a dropped sign.
+    pub fn shapes_a_number(&self) -> bool {
+        self.reads.is_some()
+            || self.decimals != 0
+            || self.round != Round::Nearest
+            || self.wrap.is_some()
+            || self.abs
+    }
+
+    /// Half of the last decimal place a reading is shown to, which is how
+    /// close a reading has to be to a band's edge to count as inside it.
+    pub(crate) fn tolerance(&self) -> f64 {
+        10f64.powi(-i32::from(self.decimals)) / 2.0
+    }
+
     /// Whether the user has finished saying what this part draws.
     ///
     /// An empty part is unfinished work rather than a mistake, but it still
@@ -1182,14 +1686,126 @@ impl Span {
 
     /// Turn a raw signal value into the characters this part should show.
     ///
-    /// `max` is the source's own declared maximum, so a needle at 0..65535 and
-    /// a selector at 0..10 go through the same arithmetic. A selector whose
-    /// value already is the number needs `reads` set to its own range, which
-    /// makes the conversion an identity rather than a special case.
+    /// The text half of [`format_reading`](Self::format_reading), for the
+    /// callers that only draw characters: the `listen` log, and every test
+    /// that measures what a face reads.
     pub fn format_number(&self, value: u16, max: u16) -> String {
+        self.format_reading(value, max).0
+    }
+
+    /// Turn a raw signal value into the characters this part should show, and
+    /// the band it landed in, whose colour and inverse are the paint's to use.
+    ///
+    /// `max` is the source's own declared maximum, so a needle at 0..65535 and
+    /// a selector at 0..10 go through the same arithmetic. With no `reads` the
+    /// range is the signal's own, which makes the conversion an identity: the
+    /// number as sent.
+    ///
+    /// The order is the whole of the design. Convert, round and wrap first, so
+    /// a band is matched against the number on the dial rather than the raw
+    /// count. Then a band claims the reading and draws its own characters.
+    /// Only if none does is the number drawn, and only then is the sign
+    /// dropped for `abs`, so a band written for negative readings still
+    /// matches on a piece that draws magnitudes.
+    pub fn format_reading(&self, value: u16, max: u16) -> (String, Option<&AliasDraw>) {
         let [low, high] = self.reads.unwrap_or([0.0, max as f64]);
         let travel = if max == 0 { 0.0 } else { value as f64 / max as f64 };
-        format!("{:.*}", self.decimals as usize, low + travel * (high - low))
+        // Half of one raw step, in what the face reads. DCS-BIOS sends the
+        // nearest step to where the drum is, so a drum sitting exactly on its
+        // 7 can arrive a hair short of it, and rounding down must not make
+        // that a 6.
+        let half_step = if max == 0 { 0.0 } else { (high - low).abs() / max as f64 / 2.0 };
+        let reading = self.settle(low + travel * (high - low), half_step);
+        if let Some(drawn) = self.band_for(reading) {
+            return (drawn.text.clone(), Some(drawn));
+        }
+        let shown = if self.abs { reading.abs() } else { reading };
+        (self.format_number_at(shown), None)
+    }
+
+    /// Whether the bands between them claim every reading this face can show.
+    ///
+    /// A reading no band claims draws as a number, so this is what decides
+    /// whether the number's width has to be allowed for at all. Exact rather
+    /// than cautious, because the editor's answer is how many characters will
+    /// be dropped and a maybe would make that a guess.
+    ///
+    /// Walked as intervals rather than by each band's ends, so a list is its
+    /// own values and not the run between them: `"0,2"` leaves 1 to the
+    /// number. Neighbours are allowed one step of daylight between them,
+    /// because a reading between two bands a step apart is one the face cannot
+    /// show once it has been rounded.
+    fn bands_cover(&self, low: f64, high: f64) -> bool {
+        if self.value_aliases.is_empty() {
+            return false;
+        }
+        let (lo, hi) = (low.min(high), low.max(high));
+        let step = 10f64.powi(-i32::from(self.decimals));
+        let tol = self.tolerance();
+        let mut spans: Vec<(f64, f64)> = self
+            .value_aliases
+            .keys()
+            .flat_map(|band| match band {
+                ValueBand::Range { lo, hi } => vec![(*lo, *hi)],
+                other => other.values().into_iter().map(|v| (v, v)).collect(),
+            })
+            .collect();
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // Everything below the face counts as behind us already, so the first
+        // band is held to the same test as every other one.
+        let mut reach = lo - step;
+        for (start, end) in spans {
+            if start > reach + step + tol {
+                return false;
+            }
+            reach = reach.max(end);
+        }
+        reach >= hi - tol
+    }
+
+    /// The band claiming a settled reading, where one does.
+    ///
+    /// Two bands claiming one reading is a caution rather than a refusal, so
+    /// this has to settle it, and the first match is what it settles on. Bands
+    /// are held in order of where they start, so that is the lower of the two,
+    /// every time and on every machine. The order they were written in never
+    /// decides anything.
+    fn band_for(&self, reading: f64) -> Option<&AliasDraw> {
+        let tol = self.tolerance();
+        self.value_aliases
+            .iter()
+            .find(|(band, _)| band.matches(reading, tol))
+            .map(|(_, drawn)| drawn)
+    }
+
+    /// Round a converted reading the way this part says, then wrap it.
+    ///
+    /// Rounded before wrapping, so a compass at 359.7 rounds to 360 and then
+    /// draws 0, and a drum at 9.8 rounded to the nearest draws 0 rather than
+    /// a 10 that does not fit its cell.
+    fn settle(&self, reading: f64, half_step: f64) -> f64 {
+        let places = self.decimals as usize;
+        let rounded = match self.round {
+            // Through the formatter, which is how every reading was rounded
+            // before this setting existed, so nothing already on the glass
+            // moves by so much as a digit.
+            Round::Nearest => format!("{reading:.places$}").parse().unwrap_or(reading),
+            Round::Down => {
+                let scale = 10f64.powi(i32::from(self.decimals));
+                ((reading + half_step) * scale).floor() / scale
+            }
+        };
+        let wrapped = match self.wrap {
+            Some(every) if every > 0.0 => rounded.rem_euclid(every),
+            _ => rounded,
+        };
+        // Zero is drawn as 0. Negative zero, from a face that runs up from
+        // below it or a remainder taken of one, would otherwise draw as -0.
+        if wrapped == 0.0 {
+            0.0
+        } else {
+            wrapped
+        }
     }
 
     /// The glyph this part draws in place of `value`, where it has one.
@@ -1241,12 +1857,39 @@ impl Span {
         let Some(max) = number_max else {
             return max_length;
         };
+        let longest_alias = self
+            .value_aliases
+            .values()
+            .map(|a| a.text.chars().count())
+            .max()
+            .unwrap_or(0);
         let [low, high] = self.reads.unwrap_or([0.0, f64::from(max)]);
-        let ends = [
-            self.format_number_at(low),
-            self.format_number_at(high),
-        ];
-        Some(ends.iter().map(|s| s.chars().count()).max().unwrap_or(0))
+        // Bands covering the whole face mean no number is ever drawn, so only
+        // the bands count. Bands that stop short leave the rest as numbers.
+        if self.bands_cover(low, high) {
+            return Some(longest_alias);
+        }
+        let mut ends = vec![self.settle(low, 0.0), self.settle(high, 0.0)];
+        // A reading that starts over somewhere between its ends can draw
+        // anything up to the last value before it does, whatever the ends
+        // themselves come to.
+        if let Some(every) = self.wrap.filter(|&w| w > 0.0) {
+            let (a, b) = (low.min(high), low.max(high));
+            if b - a >= every || (a / every).floor() != (b / every).floor() {
+                ends.push((every - 10f64.powi(-i32::from(self.decimals))).max(0.0));
+            }
+        }
+        let number = ends
+            .into_iter()
+            // The sign goes before the width is taken, or a face running below
+            // zero is measured a cell wider than it ever draws.
+            .map(|end| {
+                let shown = if self.abs { end.abs() } else { end };
+                self.format_number_at(shown).chars().count()
+            })
+            .max()
+            .unwrap_or(0);
+        Some(number.max(longest_alias))
     }
 
     /// The characters this part would draw for one real reading, used to
@@ -1448,6 +2091,14 @@ struct ReadoutRepr {
     reads: Option<[f64; 2]>,
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     decimals: u8,
+    #[serde(default, skip_serializing_if = "is_nearest")]
+    round: Round,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wrap: Option<f64>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    abs: bool,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    value_aliases: BTreeMap<ValueBand, AliasDraw>,
     #[serde(default, skip_serializing_if = "is_left")]
     align: Align,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1489,6 +2140,10 @@ impl From<ReadoutRepr> for Readout {
                 gap: r.gap,
                 reads: r.reads,
                 decimals: r.decimals,
+                round: r.round,
+                wrap: r.wrap,
+                abs: r.abs,
+                value_aliases: r.value_aliases,
                 aliases: r.aliases,
                 format: r.format,
                 colour: r.colour,
@@ -1556,6 +2211,10 @@ impl From<Readout> for ReadoutRepr {
             seat: r.seat,
             reads: span.reads,
             decimals: span.decimals,
+            round: span.round,
+            wrap: span.wrap,
+            abs: span.abs,
+            value_aliases: span.value_aliases,
             align: r.align,
             format: span.format,
             colour: if r.divider { r.colour } else { span.colour },
@@ -1625,6 +2284,10 @@ fn is_left(a: &Align) -> bool {
     *a == Align::Left
 }
 
+fn is_nearest(r: &Round) -> bool {
+    *r == Round::Nearest
+}
+
 impl Readout {
     /// Every signal this field reads, in the order the parts are drawn.
     ///
@@ -1655,6 +2318,59 @@ impl Readout {
     /// The rule this divider draws, one glyph per cell, its label marked.
     pub fn divider_cells(&self) -> Vec<RuleCell> {
         divider_rule(self.cells.len(), &self.label)
+    }
+
+    /// How many cells the piece at `index` draws, where that never changes.
+    ///
+    /// A box is the whole answer, and typed characters are their own length.
+    /// An elastic gap has one too, but only when every piece it shares the
+    /// line with is itself settled: the leftover is what the rest did not
+    /// use, so one reading that sheds a digit widens the gaps beside it. On a
+    /// line of boxes and typed characters, or on a line the gap has to
+    /// itself, the leftover is the same in every frame and a rule there is as
+    /// good as boxed.
+    ///
+    /// None for a piece as wide as whatever it reads, and for a gap on a line
+    /// carrying one. Ahead of a single frame arriving, which is what lets the
+    /// editor tell a label that will hold still from one that would come and
+    /// go.
+    pub fn settled_cells(&self, index: usize) -> Option<usize> {
+        let span = self.content.get(index)?;
+        if !span.gap || span.width > 0 {
+            return self.settled_span(span);
+        }
+        let mut used = 0usize;
+        let mut elastic: Vec<usize> = Vec::new();
+        for (at, other) in self.content.iter().enumerate() {
+            match self.settled_span(other) {
+                Some(cells) => used += cells,
+                None if other.gap => elastic.push(at),
+                None => return None,
+            }
+        }
+        // The same sum `compose` does: the leftover split evenly, the
+        // remainder going to the earlier gaps.
+        let spare = self.cells.len().saturating_sub(used);
+        let rank = elastic.iter().position(|&at| at == index)?;
+        Some(spare / elastic.len() + usize::from(rank < spare % elastic.len()))
+    }
+
+    /// What one piece takes off the line before the gaps are measured. None
+    /// for an elastic gap, which is measured from the leftover, and for a
+    /// piece as wide as whatever it reads.
+    fn settled_span(&self, span: &Span) -> Option<usize> {
+        if span.width > 0 {
+            return Some(span.width);
+        }
+        if span.gap {
+            return None;
+        }
+        // A one cell run takes a piece's whole value as a single glyph, the
+        // same as `compose` does, so its length is the run's.
+        if self.cells.len() == 1 {
+            return Some(1);
+        }
+        (!span.is_signal()).then(|| span.text.chars().count())
     }
 
     /// The glyphs this field draws right now, one per cell, or None while it
@@ -1707,10 +2423,24 @@ impl Readout {
                 continue;
             }
             let mut glyphs: Vec<Glyph> = Vec::new();
+            // The colour the band this reading landed in asked for, if any. It
+            // sits between the two that already exist: a `colours` signal is
+            // the module speaking about one exact cell and stays the most
+            // specific, this is the user speaking about this reading, and the
+            // piece's own colour is the user speaking about the whole piece.
+            let mut banded: Option<Colour> = None;
+            // A band drawn inverse adds to the piece's own, the way a format
+            // signal does: any of them asking is enough.
+            let mut band_inverse = false;
             let value = if span.is_signal() {
                 match read(&span.source) {
                     Some(Reading::Text(t)) => t,
-                    Some(Reading::Number { value, max }) => span.format_number(value, max),
+                    Some(Reading::Number { value, max }) => {
+                        let (text, band) = span.format_reading(value, max);
+                        banded = band.and_then(|b| b.colour);
+                        band_inverse = band.is_some_and(|b| b.inverse);
+                        text
+                    }
                     None => {
                         // Room held rather than content: a boxed piece keeps
                         // its cells from the first frame, so what sits beside
@@ -1760,9 +2490,11 @@ impl Readout {
             if width == 1 {
                 glyphs.push(Glyph {
                     text: span.alias(&value).to_string(),
-                    colour: colours.first().copied().flatten().or(span.colour),
+                    colour: colours.first().copied().flatten().or(banded).or(span.colour),
                     small: span.small,
-                    inverse: span.inverse || inverse.first().copied().unwrap_or(false),
+                    inverse: span.inverse
+                        || band_inverse
+                        || inverse.first().copied().unwrap_or(false),
                 });
                 drew = true;
                 groups.push(glyphs);
@@ -1772,9 +2504,11 @@ impl Readout {
                 let one = ch.to_string();
                 glyphs.push(Glyph {
                     text: span.alias(&one).to_string(),
-                    colour: colours.get(i).copied().flatten().or(span.colour),
+                    colour: colours.get(i).copied().flatten().or(banded).or(span.colour),
                     small: span.small,
-                    inverse: span.inverse || inverse.get(i).copied().unwrap_or(false),
+                    inverse: span.inverse
+                        || band_inverse
+                        || inverse.get(i).copied().unwrap_or(false),
                 });
             }
             drew |= !glyphs.is_empty();

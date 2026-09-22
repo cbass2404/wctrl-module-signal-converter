@@ -15,15 +15,18 @@
 // up the panel it was drawn, and the only way to reorder was to delete
 // everything and start again.
 
-import { dividerRule, fontGlyphs } from "./api";
+import { cellInk, dividerRule, fontGlyphs } from "./api";
 import { iconButton } from "./binding";
 import { confirmAction } from "./confirm";
 import { contentOf, isLiteral, kindOf, newSpan, setContent } from "./content";
 import type { SpanKind } from "./content";
-import { flagSlot } from "./flags";
+import { cautionSlot, flagSlot } from "./flags";
 import { noteEditor } from "./note";
 import { signalPicker } from "./typeahead";
+import { aliasColour, aliasInverse, aliasOf, aliasText } from "./types";
 import type {
+  AliasDraw,
+  CellDraw,
   Device,
   DisplayInfo,
   FontChoice,
@@ -32,6 +35,7 @@ import type {
   Readout,
   RegionInfo,
   RuleCell,
+  ShapeArt,
   SignalView,
   Span,
 } from "./types";
@@ -158,7 +162,13 @@ function maxOf(signals: SignalView[], id: string): number {
   return signals.find((x) => x.id === id)?.max_value ?? 65535;
 }
 
-/** How a reading draws a number: as DCS-BIOS sends it, or converted. */
+/** How a reading draws a number: as DCS-BIOS sends it, or converted.
+ *
+ * Aliases are not a third way of drawing a number, they sit on top of either.
+ * A band is matched against what the face reads, so naming one needs the
+ * conversion as well, and a knob's positions are named with no conversion at
+ * all.
+ */
 type ReadingKind = "sent" | "converted";
 
 const READING_LABELS: Record<ReadingKind, string> = {
@@ -167,17 +177,58 @@ const READING_LABELS: Record<ReadingKind, string> = {
 };
 
 /**
+ * The catalogue's name for each position of a switch, as a starting set of
+ * aliases. Empty for a signal whose positions have no names, which is most
+ * counts: their labels are only the numbers again.
+ */
+function namedPositions(signal: SignalView | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!signal || signal.text) return out;
+  if (!signal.values.some((v) => v.label !== String(v.value))) return out;
+  for (const v of signal.values) out[String(v.value)] = v.label;
+  return out;
+}
+
+/**
  * A sensible way to show a number the user has just chosen, so that picking
  * the signal is usually the only step, the way a lamp's test is filled in.
+ * It is only where the choice starts: every signal can be switched to any of
+ * the three.
  *
- * A full word is a needle's position rather than a quantity, and 0 to 65535
- * means nothing on a screen, so it arrives converted, to a range the user then
- * sets from the dial. Anything narrower is a count or a selector whose value
- * already is the number, and is shown as sent.
+ * A switch whose positions have names arrives aliased to them, ready to be
+ * shortened. A full word is a needle's position rather than a quantity, and 0
+ * to 65535 means nothing on a screen, so it arrives converted, to a range the
+ * user then sets from the dial. Anything else is a count or a selector whose
+ * value already is the number, and is shown as sent.
  */
-function defaultReads(signal: SignalView | undefined): [number, number] | undefined {
-  if (!signal || signal.text || signal.max_value < 65535) return undefined;
-  return [0, 100];
+function startReading(span: Span, signal: SignalView | undefined): void {
+  clearReading(span);
+  // A different signal, so the old one's bands mean nothing: they named
+  // readings of a face this piece no longer reads. `clearReading` leaves them
+  // alone on purpose, because switching between as sent and converted must
+  // not throw away typed words, and changing the signal is the other case.
+  delete span.value_aliases;
+  if (!signal || signal.text) return;
+  const named = namedPositions(signal);
+  if (Object.keys(named).length > 0) span.value_aliases = named;
+  else if (signal.max_value >= 65535) span.reads = [0, 100];
+}
+
+/**
+ * Forget how a number was shaped, ahead of shaping it some other way.
+ *
+ * Aliases are deliberately left alone. They are matched against the reading
+ * whichever way it is drawn, so switching between as sent and converted is a
+ * change to the arithmetic and not a reason to throw away the words the user
+ * has typed. Clearing them here would lose a page of bands to one stray click
+ * on the menu.
+ */
+function clearReading(span: Span): void {
+  delete span.reads;
+  delete span.decimals;
+  delete span.round;
+  delete span.wrap;
+  delete span.abs;
 }
 
 /**
@@ -191,10 +242,14 @@ function defaultReads(signal: SignalView | undefined): [number, number] | undefi
  */
 function conversionRow(
   span: Span,
-  max: number,
+  signal: SignalView | undefined,
+  set: string | null,
+  colours: string[],
+  inverse: boolean,
   edited: () => void,
   rebuild: () => void,
 ): HTMLElement {
+  const max = signal?.max_value ?? 65535;
   const select = el("select", { class: "test" });
   for (const kind of Object.keys(READING_LABELS) as ReadingKind[]) {
     select.append(el("option", { value: kind }, READING_LABELS[kind]));
@@ -204,29 +259,61 @@ function conversionRow(
     // Converting starts from the signal's own range, which draws exactly what
     // as sent did, so the choice changes nothing until a number is changed.
     // Decimals mean nothing on a whole number sent as it is.
+    clearReading(span);
     if (select.value === "converted") span.reads = [0, max];
-    else {
-      delete span.reads;
-      delete span.decimals;
-    }
     rebuild();
   });
 
   const values = el("span", { class: "values-row" });
+  const after = el("span", { class: "values-row" });
   if (span.reads) {
     const number = (value: number, attrs: Record<string, string> = {}): HTMLInputElement =>
       el("input", { type: "number", class: "value", value: String(value), ...attrs });
     const low = number(span.reads[0]);
     const high = number(span.reads[1]);
     const dp = number(span.decimals ?? 0, { min: "0", max: "3" });
+    // Empty rather than 0 when there is none, so the box reads as "never"
+    // and a range starting at 0 is not confused with a wrap of 0.
+    const wrap = el("input", {
+      type: "number",
+      class: "value",
+      min: "0",
+      value: span.wrap ? String(span.wrap) : "",
+      placeholder: "never",
+    });
+    const round = el("select", { class: "test" });
+    round.append(
+      el("option", { value: "nearest" }, "to the nearest"),
+      el("option", { value: "down" }, "down"),
+    );
+    round.value = span.round ?? "nearest";
+    // Only offered on a face that runs below zero, because that is the only
+    // face it does anything to and an offer that changes nothing is a question
+    // the user has to answer for no reason. Checked as the ends are typed, so
+    // a face made signed by typing -3 offers it without being drawn again.
+    const signed = (): boolean => (span.reads ?? [0, 0]).some((end) => end < 0);
+    const abs = el("input", { type: "checkbox" });
+    abs.checked = span.abs === true;
+    const unsign = el("label", { class: "meta" }, abs, " without its sign");
+    unsign.hidden = !signed();
     const sync = (): void => {
       span.reads = [Number(low.value) || 0, Number(high.value) || 0];
       const places = Number(dp.value) || 0;
       if (places > 0) span.decimals = places;
       else delete span.decimals;
+      const every = Number(wrap.value);
+      if (Number.isFinite(every) && every > 0) span.wrap = every;
+      else delete span.wrap;
+      if (round.value === "down") span.round = "down";
+      else delete span.round;
+      unsign.hidden = !signed();
+      if (abs.checked && signed()) span.abs = true;
+      else delete span.abs;
       edited();
     };
-    for (const box of [low, high, dp]) box.addEventListener("input", sync);
+    for (const box of [low, high, dp, wrap]) box.addEventListener("input", sync);
+    round.addEventListener("change", sync);
+    abs.addEventListener("change", sync);
     values.append(
       low,
       el("span", { class: "sep" }, "to"),
@@ -235,12 +322,22 @@ function conversionRow(
       dp,
       el("span", { class: "sep" }, "decimals"),
     );
+    // A line of its own: on the first the labels squeezed and broke.
+    after.append(
+      el("span", { class: "sep" }, "rounded"),
+      round,
+      el("span", { class: "sep" }, "and wrapping at"),
+      wrap,
+      unsign,
+    );
   }
 
   return el(
     "div",
     {},
     el("div", { class: "test-row" }, select, values),
+    span.reads ? el("div", { class: "test-row" }, after) : "",
+    valueAliasEditor(span, signal, set, colours, inverse, edited),
     el(
       "span",
       { class: "meta block" },
@@ -248,7 +345,10 @@ function conversionRow(
         ? `DCS-BIOS sends 0 to ${max}, and this is what the dial is marked ` +
             "with at each end. It reports a needle as a position, not a value, " +
             "so this is yours to give. A face that starts below zero or runs " +
-            "backwards is fine."
+            "backwards is fine. Round down for a drum or a counter, which only " +
+            "shows a digit once it has clicked over. Wrap for anything that " +
+            "starts again from 0: one drum digit is 0 to 10 wrapping at 10, and " +
+            "a compass is 0 to 360 wrapping at 360."
         : `The number DCS-BIOS sends, 0 to ${max}, drawn as it is. Right for ` +
             "a count or a selector. A needle wants converting.",
     ),
@@ -354,6 +454,44 @@ function seatChooser(
         "seat, which is what lets two fields share the same cells.",
     ),
   );
+}
+
+/**
+ * A copy of this field for each other seat, where none is on these cells yet.
+ *
+ * Only once the field names a seat. A field for any seat already paints in
+ * every station, and a copy of it would fight it for the same cells. The copy
+ * starts as this field does, since the other seat usually wants the same
+ * layout read from its own signals.
+ */
+function seatCopies(
+  opts: RowOptions,
+  options: { value: number; label: string }[],
+): HTMLElement[] {
+  const { readout, all, onAdd } = opts;
+  if (readout.seat === undefined || !onAdd) return [];
+  const taken = new Set(
+    all
+      .filter(
+        (r) =>
+          r.device === readout.device &&
+          r.display === readout.display &&
+          r.cells === readout.cells,
+      )
+      .map((r) => r.seat),
+  );
+  return options
+    .filter((seat) => !taken.has(seat.value))
+    .map((seat) => {
+      const button = el("button", { class: "add small", type: "button" }, `+ a version for ${seat.label}`);
+      button.title = `Copy this field for ${seat.label}, on the same cells, to edit on its own.`;
+      button.addEventListener("click", () => {
+        const copy = structuredClone(readout);
+        copy.seat = seat.value;
+        onAdd(copy);
+      });
+      return button;
+    });
 }
 
 /** The sentinel for the "somewhere else" row of the region menu. A cell run
@@ -532,6 +670,201 @@ function aliasEditor(span: Span, onChange: () => void): HTMLElement {
   return wrap;
 }
 
+/** One row of the alias editor while it is being typed in. */
+interface AliasRow {
+  /** The readings this row claims: `3`, `0,1,2` or `-1.5..-0.1`. */
+  band: string;
+  text: string;
+  colour: string;
+  inverse: boolean;
+}
+
+/**
+ * Whether a band is one the backend will accept, said the same way it says it.
+ *
+ * Checked here as well as there because the answer has to arrive as the user
+ * types. The grammar is small enough to keep in step, and the backend still
+ * has the last word.
+ */
+function bandTrouble(band: string): string {
+  const s = band.trim();
+  if (s === "") return "";
+  const number = (part: string): boolean => {
+    const v = Number(part.trim());
+    return part.trim() !== "" && Number.isFinite(v);
+  };
+  const split = s.includes("..") ? ".." : s.includes(" to ") ? " to " : "";
+  if (split) {
+    const at = s.indexOf(split);
+    const lo = s.slice(0, at);
+    const hi = s.slice(at + split.length);
+    if (!number(lo) || !number(hi)) {
+      return 'A band is two readings, as in "-1.5..-0.1".';
+    }
+    if (Number(hi) < Number(lo)) return "This band ends before it starts.";
+    return "";
+  }
+  if (s.includes(",")) {
+    return s.split(",").every(number) ? "" : 'A list is readings separated by commas, as in "0,1,2".';
+  }
+  return number(s) ? "" : 'A reading, a list like "0,1,2" or a band like "-1.5..-0.1".';
+}
+
+/**
+ * What a number draws at each reading, one row a reading or a band of them.
+ *
+ * Laid out like the substitutions, which are the same shape of thing. Arrives
+ * filled with the catalogue's position names where there are any, which are
+ * often longer than the cells a user has to spare, so every one is theirs to
+ * shorten, clear or remove. A character the font lacks is said beside the row
+ * as it is typed, the way it is for typed text.
+ *
+ * A key is a reading, a list of them or a closed band, matched against what
+ * the face reads rather than the raw count. A blank drawing is allowed and
+ * means exactly that: the centre of a trim indicator is worth a row of its own
+ * that draws nothing, rather than a zero nobody needs to read.
+ */
+function valueAliasEditor(
+  span: Span,
+  signal: SignalView | undefined,
+  set: string | null,
+  colours: string[],
+  inverse: boolean,
+  onChange: () => void,
+): HTMLElement {
+  const wrap = el("div", { class: "aliases" });
+  const rows = el("div", { class: "alias-rows" });
+  // Rows rather than the object, for the same reason as the substitutions:
+  // changing a key half way through typing it would collide with another.
+  const held: AliasRow[] = Object.entries(span.value_aliases ?? {}).map(([band, drawn]) => ({
+    band,
+    text: aliasText(drawn),
+    colour: aliasColour(drawn) ?? "",
+    inverse: aliasInverse(drawn),
+  }));
+
+  const store = (): void => {
+    const out: Record<string, AliasDraw> = {};
+    for (const row of held) {
+      // A row with no band yet is one half typed, not one that draws nothing.
+      // The drawing itself may be blank on purpose.
+      if (row.band.trim() === "" || bandTrouble(row.band)) continue;
+      out[row.band.trim()] = aliasOf(row.text, row.colour || undefined, row.inverse);
+    }
+    if (Object.keys(out).length > 0) span.value_aliases = out;
+    else delete span.value_aliases;
+    onChange();
+  };
+
+  const draw = (): void => {
+    rows.textContent = "";
+    held.forEach((row, i) => {
+      const band = el("input", {
+        type: "text",
+        class: "alias",
+        value: row.band,
+        placeholder: "reads",
+      });
+      const alias = el("input", {
+        type: "text",
+        class: "alias",
+        value: row.text,
+        placeholder: "blank",
+      });
+      const trouble = el("span", { class: "meta bad" });
+      const check = (): void => {
+        const missing = set ? [...new Set([...row.text].filter((c) => !set.includes(c)))] : [];
+        const bad = bandTrouble(row.band);
+        band.classList.toggle("bad", bad !== "");
+        alias.classList.toggle("bad", missing.length > 0);
+        trouble.textContent =
+          bad ||
+          (missing.length
+            ? `The font does not draw ${missing.map((c) => JSON.stringify(c)).join(", ")}.`
+            : "");
+      };
+      band.addEventListener("input", () => {
+        row.band = band.value;
+        check();
+        store();
+      });
+      alias.addEventListener("input", () => {
+        row.text = alias.value;
+        check();
+        store();
+      });
+      const drop = el("button", { class: "icon danger", title: "Remove this alias" }, "\u{1F5D1}");
+      drop.addEventListener("click", () => {
+        held.splice(i, 1);
+        draw();
+        store();
+      });
+      const cell = el("div", { class: "alias-row" }, band, el("span", { class: "meta" }, "shows as"), alias);
+      // Only where the glass has colours to draw. A band's colour is the point
+      // of banding a caution, but on segments there is nothing to pick from.
+      if (colours.length > 0) {
+        const pick = el("select", { class: "colour" });
+        pick.append(el("option", { value: "" }, "same as the piece"));
+        for (const name of colours) pick.append(el("option", { value: name }, name));
+        pick.value = row.colour;
+        pick.addEventListener("change", () => {
+          row.colour = pick.value;
+          store();
+        });
+        cell.append(el("span", { class: "meta" }, "in"), pick);
+      }
+      // The same box a piece of text gets, and only where the glass draws
+      // inverse. On a screen with no colours it is the way a band stands out,
+      // and a blank drawn inverse is a solid block.
+      if (inverse) {
+        const flip = el("input", { type: "checkbox" });
+        flip.checked = row.inverse;
+        flip.addEventListener("change", () => {
+          row.inverse = flip.checked;
+          store();
+        });
+        cell.append(el("label", { class: "meta" }, flip, " inverse"));
+      }
+      cell.append(drop, trouble);
+      check();
+      rows.append(cell);
+    });
+  };
+
+  const add = el("button", { class: "add small" }, "Add an alias");
+  add.addEventListener("click", () => {
+    held.push({ band: "", text: "", colour: "", inverse: false });
+    draw();
+  });
+
+  // The catalogue's position names, offered once and only where the reading
+  // has none of its own yet, so picking a knob is usually the only step.
+  const named = namedPositions(signal);
+  const fill = el("button", { class: "add small" }, "Name its positions");
+  fill.addEventListener("click", () => {
+    for (const [value, name] of Object.entries(named)) {
+      held.push({ band: value, text: name, colour: "", inverse: false });
+    }
+    draw();
+    store();
+  });
+
+  draw();
+  wrap.append(el("label", { class: "meta" }, "aliases"), rows, add);
+  if (held.length === 0 && Object.keys(named).length > 0) wrap.append(fill);
+  wrap.append(
+    el(
+      "span",
+      { class: "meta block" },
+      "What to draw instead of the number. A row claims one reading (3), a " +
+        'list of them (0,1,2) or a band ("-1.5..-0.1"), in what the face ' +
+        "reads rather than the number DCS-BIOS sends. A reading no row claims " +
+        "is drawn as the number, and two rows claiming one reading is refused.",
+    ),
+  );
+  return wrap;
+}
+
 /**
  * What a divider shows, in place of a signal picker.
  *
@@ -660,17 +993,16 @@ function labelEditor(
     }
     const cells = room();
     if (cells === null) {
-      // A rule with no fixed width is as wide as the rest of the line leaves
-      // it, which changes with every reading beside it. A label on one would
-      // fit at one reading and be dropped at the next, coming and going on the
-      // glass with nothing to say why, so the backend refuses it.
-      box.classList.add("bad");
-      trouble.classList.add("bad");
+      // The room for the label is whatever the readings beside it are not
+      // using, so it fits at one reading and is dropped at the next. A
+      // caution and not a refusal: the rule draws either way, and only the
+      // user knows how wide their readings really get.
+      box.classList.remove("bad");
+      trouble.classList.remove("bad");
       trouble.textContent =
-        "A label needs a rule that cannot change width, so give this one a " +
-        "fixed width below. Without one it is as wide as the rest of the row " +
-        "leaves it, and the label would come and go as the readings beside it " +
-        "change.";
+        "The readings beside this rule decide how wide it is, so the label " +
+        "is dropped in any frame where they take the room it needs. Give it " +
+        "a fixed width below to hold it for certain.";
       return;
     }
     // A dash and a blank each side of it. The backend refuses a label with
@@ -766,6 +1098,8 @@ interface RowOptions {
   onRemove: () => void;
   /** Swap this field for another and redraw the screen it is on. */
   onReplace: (next: Readout) => void;
+  /** Put a new field just after this one and redraw the screen it is on. */
+  onAdd?: (next: Readout) => void;
 }
 
 /**
@@ -827,12 +1161,19 @@ function fieldShape(r: Readout): string {
   );
 }
 
-/** The shipped field for these cells, where the default has one. */
+/**
+ * The shipped field for these cells, where the default has one.
+ *
+ * The one for the same seat first: where the default splits a window between
+ * seats, each copy resets to its own seat's version and not to whichever the
+ * default happens to list first.
+ */
 function shippedFor(readout: Readout, shipped: Readout[]): Readout | undefined {
-  return shipped.find(
+  const here = shipped.filter(
     (s) =>
       s.device === readout.device && s.display === readout.display && s.cells === readout.cells,
   );
+  return here.find((s) => s.seat === readout.seat) ?? here[0];
 }
 
 /**
@@ -889,10 +1230,73 @@ function spanWidth(span: Span, signals: SignalView[]): number {
   if (!span.source) return 0;
   if (isText(signals, span.source)) return textLength(signals, span.source);
   // As sent is a conversion onto the signal's own range, so both measure the
-  // same way, as the daemon does.
-  const ends = span.reads ?? [0, maxOf(signals, span.source)];
+  // same way, as the daemon does. Aliases count as what they draw, and only
+  // leave the number to measure when some reading has no band.
+  const max = maxOf(signals, span.source);
+  const aliases = span.value_aliases ?? {};
+  const longest = Math.max(0, ...Object.values(aliases).map((a) => [...aliasText(a)].length));
+  const [low, high] = span.reads ?? [0, max];
   const dp = span.decimals ?? 0;
-  return Math.max(...ends.map((end) => end.toFixed(dp).length));
+  if (bandsCover(Object.keys(aliases), low, high, dp)) return longest;
+  const every = span.wrap && span.wrap > 0 ? span.wrap : 0;
+  // Settled the way the daemon settles them: rounded, wrapped, and never -0.
+  const settle = (end: number): number => {
+    const rounded = span.round === "down" ? Math.floor(end * 10 ** dp) / 10 ** dp : Number(end.toFixed(dp));
+    const wrapped = every ? ((rounded % every) + every) % every : rounded;
+    return wrapped === 0 ? 0 : wrapped;
+  };
+  const ends = [settle(low), settle(high)];
+  // A reading that starts over between its ends can draw anything up to the
+  // last value before it does.
+  const [a, b] = [Math.min(low, high), Math.max(low, high)];
+  if (every && (b - a >= every || Math.floor(a / every) !== Math.floor(b / every))) {
+    ends.push(Math.max(0, every - 10 ** -dp));
+  }
+  // The sign goes before the width is taken, or a face running below zero is
+  // measured a cell wider than it ever draws.
+  const shown = (end: number): number => (span.abs ? Math.abs(end) : end);
+  return Math.max(longest, ...ends.map((end) => shown(end).toFixed(dp).length));
+}
+
+/**
+ * Whether the bands between them claim every reading a face can show.
+ *
+ * The same sum `Span::bands_cover` does, kept here because the preview needs
+ * it per keystroke. Walked as intervals so a list is its own values and not
+ * the run between them, and neighbours are allowed one step of daylight,
+ * because a reading between two bands a step apart is one the face cannot show
+ * once it has been rounded.
+ */
+function bandsCover(keys: string[], low: number, high: number, dp: number): boolean {
+  if (keys.length === 0) return false;
+  const step = 10 ** -dp;
+  const tol = step / 2;
+  const spans: [number, number][] = [];
+  for (const key of keys) {
+    const at = key.includes("..") ? key.indexOf("..") : -1;
+    if (at >= 0) {
+      const lo = Number(key.slice(0, at));
+      const hi = Number(key.slice(at + 2));
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return false;
+      spans.push([lo, hi]);
+      continue;
+    }
+    for (const part of key.split(",")) {
+      const v = Number(part);
+      if (!Number.isFinite(v)) return false;
+      spans.push([v, v]);
+    }
+  }
+  spans.sort((a, b) => a[0] - b[0]);
+  const [lo, hi] = [Math.min(low, high), Math.max(low, high)];
+  // Everything below the face counts as behind us already, so the first band
+  // is held to the same test as every other one.
+  let reach = lo - step;
+  for (const [start, end] of spans) {
+    if (start > reach + step + tol) return false;
+    reach = Math.max(reach, end);
+  }
+  return reach >= hi - tol;
 }
 
 /**
@@ -914,6 +1318,47 @@ function padBefore(align: string | undefined, len: number, width: number): numbe
 function cellCount(cells: string): number {
   const range = parseCells(cells);
   return range ? range[1] - range[0] + 1 : 0;
+}
+
+/**
+ * How many cells the piece at `index` draws, where that never changes.
+ *
+ * `Readout::settled_cells` read the same way, kept here because the label
+ * check runs on every keystroke. A box is the whole answer, and typed
+ * characters are their own length. An elastic gap has one too, but only when
+ * every piece it shares the line with is itself settled: the leftover is what
+ * the rest did not use, so one reading that sheds a digit widens the gaps
+ * beside it. A rule with the line to itself is the plain case, and the one
+ * that matters here: nothing is taking cells off it, so it is the whole run
+ * in every frame.
+ *
+ * Null for a piece as wide as whatever it reads, and for a gap on a line
+ * carrying one, which is the answer that turns the label check into a caution
+ * rather than a measurement.
+ */
+function settledCells(readout: Readout, spans: Span[], index: number): number | null {
+  const piece = spans[index];
+  if (!piece) return null;
+  const cells = cellCount(readout.cells);
+  // A one cell run takes a piece's whole value as a single glyph, which is
+  // what the daemon does, so its length is the run's rather than its text's.
+  const settled = (s: Span): number | null =>
+    s.width ? s.width : s.gap ? null : cells === 1 ? 1 : s.source ? null : (s.text ?? "").length;
+  if (!piece.gap || piece.width) return settled(piece);
+  let used = 0;
+  const elastic: number[] = [];
+  for (const [at, other] of spans.entries()) {
+    const room = settled(other);
+    if (room !== null) used += room;
+    else if (other.gap) elastic.push(at);
+    else return null;
+  }
+  // The same sum the daemon does: the leftover split evenly, the remainder
+  // going to the earlier gaps.
+  const spare = Math.max(0, cells - used);
+  const rank = elastic.indexOf(index);
+  if (rank < 0) return null;
+  return Math.floor(spare / elastic.length) + (rank < spare % elastic.length ? 1 : 0);
 }
 
 /** One cell of the preview: which piece drew it, what it draws, and in what. */
@@ -1054,12 +1499,311 @@ function glyphsFor(display: string, font: string): Promise<FontGlyphs> {
 }
 
 /**
- * The line as the panel will draw it, in the font it will draw it with.
+ * The cells a field fills, in the order they sit on the glass.
+ *
+ * The same measuring the daemon does, and in the same order: each piece laid
+ * out in turn, a box held to its width, the gaps given whatever is left, and
+ * then the line cropped or padded to the run. A cell carries the piece that
+ * drew it and the character it draws, or null where a reading goes, because
+ * nothing here knows what the aircraft will send.
+ */
+async function layoutCells(
+  readout: Readout,
+  signals: SignalView[],
+  width: number,
+): Promise<{ shown: PreviewCell[]; offset: number }> {
+  // Which piece each cell comes from, so a cell can be drawn in that piece's
+  // colour and size, or left as a block where a reading goes. Built per piece
+  // rather than flat, because a gap cannot be measured until everything that
+  // is not a gap has been laid out, the same way the daemon does it.
+  const spans = contentOf(readout);
+  const groups: PreviewCell[][] = [];
+  const gaps: number[] = [];
+  for (const span of spans) {
+    if (span.gap) {
+      // A boxed gap knows its width before anything else is laid out, so it
+      // is filled below with the rest of the rules. An elastic one waits for
+      // the measuring.
+      if (!span.width) {
+        gaps.push(groups.length);
+        groups.push([]);
+        continue;
+      }
+      groups.push(Array.from({ length: span.width }, () => ({ span, ch: " " })));
+      continue;
+    }
+    const group: PreviewCell[] = [];
+    if (isLiteral(span)) {
+      for (const ch of span.text ?? "") group.push({ span, ch });
+    } else {
+      // In a box, only as many cells as the reading itself can fill: the rest
+      // are blanks being held, and drawing them as more of the reading would
+      // hide the thing the box is for. A reading of no known width could be
+      // any of them, so it takes the lot.
+      const value = span.width
+        ? Math.min(span.width, signalWidth(span, signals) || span.width)
+        : spanWidth(span, signals);
+      for (let i = 0; i < value; i += 1) group.push({ span, ch: null });
+    }
+    // Held to its box before the gaps are measured, which is the whole point
+    // of one: the pieces after it do not move.
+    groups.push(boxFit(span, group));
+  }
+  if (gaps.length > 0) {
+    const fixed = groups.reduce((n, g) => n + g.length, 0);
+    const spare = Math.max(0, width - fixed);
+    const each = Math.floor(spare / gaps.length);
+    const extra = spare % gaps.length;
+    gaps.forEach((at, n) => {
+      const take = each + (n < extra ? 1 : 0);
+      groups[at] = Array.from({ length: take }, () => ({ span: spans[at] as Span, ch: " " }));
+    });
+  }
+  // The rules last, once every one of them knows how wide it is. Asked for
+  // rather than worked out here, because a rule drawn twice is a rule that can
+  // drift from the one the panel gets.
+  await Promise.all(
+    spans.map(async (span, at) => {
+      if (!span.gap || !span.rule) return;
+      const cells = await dividerRule(groups[at]?.length ?? 0, span.label ?? "");
+      groups[at] = cells.map((cell) => ({
+        span,
+        ch: cell.text,
+        colour: cell.label ? span.label_colour ?? span.colour : span.colour,
+      }));
+    }),
+  );
+  let cells = groups.flat();
+  // A one cell run takes the whole line as a single glyph, because that is
+  // what the daemon hands the cell: a two character field really does occupy
+  // one cell on a UFC comm window, and a text grid then draws the first
+  // character of it. Splitting it here instead would preview the wrong half.
+  if (width === 1 && cells.length > 1) {
+    const first = cells[0] as PreviewCell;
+    const whole = cells.every((c) => c.ch !== null) ? cells.map((c) => c.ch).join("") : null;
+    cells = [{ span: first.span, ch: whole, colour: first.colour }];
+  }
+  // Cropped and padded the way the field will be, so the preview shows the
+  // loss rather than a line that fits in the window and not on the panel.
+  const front = padBefore(readout.align, width, cells.length);
+  const shown = cells.length > width ? cells.slice(front, front + width) : cells;
+  return { shown, offset: padBefore(readout.align, shown.length, width) };
+}
+
+/** How tall a cell is drawn in a preview, whatever size the glass is. */
+const CELL_PX = 26;
+
+/** The dim block that stands in for a reading nobody here can know. */
+function drawBlock(ctx: CanvasRenderingContext2D, x: number, w: number, h: number): void {
+  ctx.fillStyle = "#2a3340";
+  ctx.fillRect(x + 1, h * 0.3, w - 2, h * 0.4);
+}
+
+/** A character the glass will not draw, marked so the blank reads as missing. */
+function drawMissing(ctx: CanvasRenderingContext2D, x: number, w: number, h: number): void {
+  ctx.strokeStyle = "#7a2b2b";
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 1.5, 1.5, w - 3, h - 3);
+}
+
+/**
+ * The line in the font the panel will draw it with, for a text grid.
  *
  * Checking the typed characters against the alphabet is not enough, because
  * these fonts reuse slots: in the A-10C font `%` draws a question mark. A
  * preview made of the typed string would agree with the user and disagree with
  * the glass, which is the one thing it is here to stop.
+ */
+function paintFont(
+  canvas: HTMLCanvasElement,
+  font: FontGlyphs,
+  shown: PreviewCell[],
+  offset: number,
+  width: number,
+): void {
+  const scale = 0.6;
+  const cw = Math.round(font.width * scale);
+  const chh = Math.round(font.height * scale);
+  canvas.classList.remove("smooth");
+  canvas.width = cw * width;
+  canvas.height = chh;
+  canvas.style.width = `${cw * width}px`;
+  canvas.style.height = `${chh}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = "#05070a";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  shown.forEach((cell, i) => {
+    const x = (offset + i) * cw;
+    // A rule's label carries its own, which is the whole reason it reads as a
+    // label rather than as part of the line.
+    const colour = SWATCH[cell.colour ?? cell.span.colour ?? "white"] ?? "#f2f4f7";
+    if (cell.ch === null) {
+      // Where a reading will go. Drawn as a bar rather than as digits,
+      // because nothing here knows what the aircraft will send.
+      drawBlock(ctx, x, cw, chh);
+      return;
+    }
+    const table = cell.span.small ? font.small : font.large;
+    // One cell holds one character. A one cell field carrying more was joined
+    // whole for the glass that draws it whole, and this is not that glass.
+    const rows = table[[...cell.ch][0] ?? " "];
+    if (!rows) {
+      // A character the font has no glyph for draws nothing at all on the
+      // panel, so it draws nothing here either, marked so the blank is
+      // visibly a missing glyph rather than a space.
+      drawMissing(ctx, x, cw, chh);
+      return;
+    }
+    ctx.fillStyle = cell.span.inverse ? "#05070a" : colour;
+    if (cell.span.inverse) {
+      ctx.save();
+      ctx.fillStyle = colour;
+      ctx.fillRect(x, 0, cw, chh);
+      ctx.restore();
+      ctx.fillStyle = "#05070a";
+    }
+    rows.forEach((row, ry) => {
+      [...row].forEach((bit, rx) => {
+        if (bit === "." || bit === " ") return;
+        ctx.fillRect(x + rx * scale, ry * scale, scale + 0.5, scale + 0.5);
+      });
+    });
+  });
+}
+
+/**
+ * The line as the slots this glass will light, for a UFC or a DED.
+ *
+ * Glass with no font of its own draws whatever its glyph table says, which is
+ * a set of segments or pixels rather than a character, and the table is keyed
+ * by the value the cell is given: a two character comm channel is one glyph,
+ * a spaced digit is another glyph from the bare one, and the DED spells its
+ * arrow with a lowercase letter. So the lit slots are asked for per cell and
+ * only the drawing is done here.
+ *
+ * Returns the values this glass draws nothing for, so the note under the
+ * preview can name them, and null where nothing here knows what its cells
+ * look like.
+ */
+async function paintInk(
+  canvas: HTMLCanvasElement,
+  display: DisplayInfo,
+  shown: PreviewCell[],
+  offset: number,
+  first: number,
+  width: number,
+): Promise<string[] | null> {
+  const arts: ShapeArt[] = [];
+  for (let i = 0; i < width; i += 1) {
+    const art = display.art[display.shapes[first + i] ?? ""];
+    if (!art) return null;
+    arts.push(art);
+  }
+  // Pixels are scaled by whole numbers and left unsmoothed, the way the font
+  // preview is: a pixel of the glass is a square of pixels here. Segments are
+  // drawn at twice the size and shown at half, because a stroke two pixels
+  // wide with hard edges reads as a fault in the panel.
+  const pixels = arts.every((a) => a.kind === "pixels");
+  const over = pixels ? 1 : 2;
+  const scales = arts.map((a) =>
+    a.kind === "pixels" ? Math.max(1, Math.round(CELL_PX / a.height)) : CELL_PX / a.height,
+  );
+  const widths = arts.map((a, i) => Math.round(a.width * (scales[i] ?? 1)));
+  const lefts = widths.map((_, i) => widths.slice(0, i).reduce((n, w) => n + w, 0));
+  const across = widths.reduce((n, w) => n + w, 0);
+  const down = Math.round(Math.max(...arts.map((a, i) => a.height * (scales[i] ?? 1))));
+
+  const cells: CellDraw[] = [];
+  const where: number[] = [];
+  shown.forEach((cell, i) => {
+    if (cell.ch === null) return;
+    cells.push({ cell: first + offset + i, value: cell.ch, inverse: cell.span.inverse === true });
+    where.push(i);
+  });
+  const ink = cells.length > 0 ? await cellInk(display.key, cells) : [];
+
+  canvas.classList.toggle("smooth", !pixels);
+  canvas.width = across * over;
+  canvas.height = down * over;
+  canvas.style.width = `${across}px`;
+  canvas.style.height = `${down}px`;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return [];
+  ctx.scale(over, over);
+  ctx.fillStyle = "#05070a";
+  ctx.fillRect(0, 0, across, down);
+
+  const dark: string[] = [];
+  shown.forEach((cell, i) => {
+    const at = offset + i;
+    const art = arts[at];
+    const scale = scales[at] ?? 1;
+    const x = lefts[at] ?? 0;
+    const w = widths[at] ?? 0;
+    if (!art) return;
+    if (cell.ch === null) {
+      drawBlock(ctx, x, w, down);
+      return;
+    }
+    const lit = ink[where.indexOf(i)];
+    if (!lit || !lit.drawn) {
+      if (cell.ch.trim() !== "") dark.push(cell.ch);
+      drawMissing(ctx, x, w, down);
+      return;
+    }
+    // One colour, because this glass has one: nothing on it is per cell the
+    // way a text grid's colour is, so a piece has none to pick.
+    const colour = SWATCH.white ?? "#f2f4f7";
+    if (art.kind === "pixels") {
+      ctx.fillStyle = colour;
+      for (const slot of lit.lit) {
+        const px = slot % art.width;
+        const py = Math.floor(slot / art.width);
+        ctx.fillRect(x + px * scale, py * scale, scale, scale);
+      }
+      return;
+    }
+    ctx.strokeStyle = colour;
+    ctx.fillStyle = colour;
+    ctx.lineWidth = art.stroke * scale;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    for (const slot of lit.lit) {
+      for (const stroke of art.slots[slot] ?? []) {
+        const points: [number, number][] = [];
+        for (let p = 0; p + 1 < stroke.length; p += 2) {
+          points.push([x + (stroke[p] ?? 0) * scale, (stroke[p + 1] ?? 0) * scale]);
+        }
+        const [head, ...rest] = points;
+        if (!head) continue;
+        // A mark with no length is a dot, and a dot drawn as a line of no
+        // length is at the mercy of how the canvas rounds its caps.
+        if (rest.every((p) => p[0] === head[0] && p[1] === head[1])) {
+          ctx.beginPath();
+          ctx.arc(head[0], head[1], (art.stroke * scale) / 2, 0, Math.PI * 2);
+          ctx.fill();
+          continue;
+        }
+        ctx.beginPath();
+        ctx.moveTo(head[0], head[1]);
+        for (const point of rest) ctx.lineTo(point[0], point[1]);
+        ctx.stroke();
+      }
+    }
+  });
+  return dark;
+}
+
+/**
+ * The line as the panel will draw it, in whatever this panel draws with.
+ *
+ * A text grid is given a font and draws characters from it. Everything else
+ * draws from a glyph table of its own, where a value lights a set of segments
+ * or pixels that may look nothing like the characters it was keyed by. Both
+ * are previewed, because the point of a preview is the difference between
+ * what was typed and what the glass does with it.
  *
  * A reading is drawn as a dim block per cell rather than as sample characters.
  * Nothing here knows what the aircraft will send, and inventing a number would
@@ -1073,9 +1817,10 @@ function glyphPreview(
 ): { node: HTMLElement; refresh: () => void } {
   const canvas = el("canvas", { class: "glyph-preview" });
   const note = el("div", { class: "meta" });
-  // Which repaint is the current one. Two things are waited on now, the font
-  // and the rules, and a late answer about a layout the user has already moved
-  // on from must not be painted over the one they are looking at.
+  // Which repaint is the current one. Several things are waited on now, the
+  // font, the rules and the glyph lookups, and a late answer about a layout
+  // the user has already moved on from must not be painted over the one they
+  // are looking at.
   let generation = 0;
 
   const refresh = (): void => {
@@ -1083,143 +1828,46 @@ function glyphPreview(
     const width = range ? range[1] - range[0] + 1 : 0;
     const file = fontInUse(display, profile);
     generation += 1;
-    if (!display.text_grid || !file || width === 0) {
+    // A run this screen does not have is a fault the cell box is already
+    // showing in red. Nothing is drawn for it, rather than something said
+    // about glass that has no such cells.
+    const nowhere = !range || range[1] >= display.cells;
+    if (nowhere || (display.text_grid && !file)) {
       canvas.hidden = true;
       note.textContent =
-        display.text_grid && !file ? "No font ships for this screen, so it cannot be drawn here." : "";
+        !nowhere && display.text_grid
+          ? "No font ships for this screen, so it cannot be drawn here."
+          : "";
       return;
     }
     canvas.hidden = false;
     note.textContent = "";
     const mine = generation;
     void (async () => {
-      const font = await glyphsFor(display.key, file);
-      {
-        // Which piece each cell comes from, so a cell can be drawn in that
-        // piece's colour and size, or left as a block where a reading goes.
-        // Built per piece rather than flat, because a gap cannot be measured
-        // until everything that is not a gap has been laid out, the same way
-        // the daemon does it.
-        const spans = contentOf(readout);
-        const groups: PreviewCell[][] = [];
-        const gaps: number[] = [];
-        for (const span of spans) {
-          if (span.gap) {
-            // A boxed gap knows its width before anything else is laid out, so
-            // it is filled below with the rest of the rules. An elastic one
-            // waits for the measuring.
-            if (!span.width) {
-              gaps.push(groups.length);
-              groups.push([]);
-              continue;
-            }
-            groups.push(Array.from({ length: span.width }, () => ({ span, ch: " " })));
-            continue;
-          }
-          const group: PreviewCell[] = [];
-          if (isLiteral(span)) {
-            for (const ch of span.text ?? "") group.push({ span, ch });
-          } else {
-            // In a box, only as many cells as the reading itself can fill:
-            // the rest are blanks being held, and drawing them as more of the
-            // reading would hide the thing the box is for. A reading of no
-            // known width could be any of them, so it takes the lot.
-            const value = span.width
-              ? Math.min(span.width, signalWidth(span, signals) || span.width)
-              : spanWidth(span, signals);
-            for (let i = 0; i < value; i += 1) group.push({ span, ch: null });
-          }
-          // Held to its box before the gaps are measured, which is the whole
-          // point of one: the pieces after it do not move.
-          groups.push(boxFit(span, group));
-        }
-        if (gaps.length > 0) {
-          const fixed = groups.reduce((n, g) => n + g.length, 0);
-          const spare = Math.max(0, width - fixed);
-          const each = Math.floor(spare / gaps.length);
-          const extra = spare % gaps.length;
-          gaps.forEach((at, n) => {
-            const take = each + (n < extra ? 1 : 0);
-            groups[at] = Array.from({ length: take }, () => ({ span: spans[at] as Span, ch: " " }));
-          });
-        }
-        // The rules last, once every one of them knows how wide it is. Asked
-        // for rather than worked out here, because a rule drawn twice is a
-        // rule that can drift from the one the panel gets.
-        await Promise.all(
-          spans.map(async (span, at) => {
-            if (!span.gap || !span.rule) return;
-            const cells = await dividerRule(groups[at]?.length ?? 0, span.label ?? "");
-            groups[at] = cells.map((cell) => ({
-              span,
-              ch: cell.text,
-              colour: cell.label ? span.label_colour ?? span.colour : span.colour,
-            }));
-          }),
-        );
+      const { shown, offset } = await layoutCells(readout, signals, width);
+      if (mine !== generation) return;
+      if (display.text_grid && file) {
+        const font = await glyphsFor(display.key, file);
         if (mine !== generation) return;
-        const cells = groups.flat();
-        // Cropped and padded the way the field will be, so the preview shows
-        // the loss rather than a line that fits in the window and not on the
-        // panel.
-        const front = padBefore(readout.align, width, cells.length);
-        const shown = cells.length > width ? cells.slice(front, front + width) : cells;
-
-        const scale = 0.6;
-        const cw = Math.round(font.width * scale);
-        const chh = Math.round(font.height * scale);
-        canvas.width = cw * width;
-        canvas.height = chh;
-        canvas.style.width = `${cw * width}px`;
-        canvas.style.height = `${chh}px`;
-        const ctx = canvas.getContext("2d");
-        if (!ctx) return;
-        ctx.fillStyle = "#05070a";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const offset = padBefore(readout.align, shown.length, width);
-        shown.forEach((cell, i) => {
-          const x = (offset + i) * cw;
-          // A rule's label carries its own, which is the whole reason it reads
-          // as a label rather than as part of the line.
-          const colour = SWATCH[cell.colour ?? cell.span.colour ?? "white"] ?? "#f2f4f7";
-          if (cell.ch === null) {
-            // Where a reading will go. Drawn as a bar rather than as digits,
-            // because nothing here knows what the aircraft will send.
-            ctx.fillStyle = "#2a3340";
-            ctx.fillRect(x + 1, chh * 0.3, cw - 2, chh * 0.4);
-            return;
-          }
-          const table = cell.span.small ? font.small : font.large;
-          const rows = table[cell.ch];
-          if (!rows) {
-            // A character the font has no glyph for draws nothing at all on
-            // the panel, so it draws nothing here either, marked so the blank
-            // is visibly a missing glyph rather than a space.
-            ctx.strokeStyle = "#7a2b2b";
-            ctx.strokeRect(x + 1.5, 1.5, cw - 3, chh - 3);
-            return;
-          }
-          ctx.fillStyle = cell.span.inverse ? "#05070a" : colour;
-          if (cell.span.inverse) {
-            ctx.save();
-            ctx.fillStyle = colour;
-            ctx.fillRect(x, 0, cw, chh);
-            ctx.restore();
-            ctx.fillStyle = "#05070a";
-          }
-          rows.forEach((row, ry) => {
-            [...row].forEach((bit, rx) => {
-              if (bit === "." || bit === " ") return;
-              ctx.fillRect(x + rx * scale, ry * scale, scale + 0.5, scale + 0.5);
-            });
-          });
-        });
+        paintFont(canvas, font, shown, offset, width);
+        return;
       }
+      const dark = await paintInk(canvas, display, shown, offset, range?.[0] ?? 0, width);
+      if (mine !== generation) return;
+      if (dark === null) {
+        canvas.hidden = true;
+        note.textContent = "There is no drawing of this glass here, so it cannot be shown.";
+        return;
+      }
+      const missing = [...new Set(dark)];
+      note.textContent = missing.length
+        ? `This glass draws nothing for ${missing.map((v) => JSON.stringify(v)).join(", ")}, so ` +
+          `${missing.length === 1 ? "that cell" : "those cells"} would be dark on the panel.`
+        : "";
     })().catch(() => {
       if (mine !== generation) return;
       canvas.hidden = true;
-      note.textContent = "The font could not be read.";
+      note.textContent = "The glyphs could not be read.";
     });
   };
 
@@ -1286,7 +1934,7 @@ function spanEditor(
   const body = el("div", { class: "span-body" });
 
   if (span.rule) {
-    body.append(spanRule(span, opts, edited));
+    body.append(spanRule(spans, index, opts, edited));
   } else if (span.gap) {
     body.append(
       el(
@@ -1343,10 +1991,7 @@ function spanEditor(
         // swapping the signal under a tuned range does not discard it, the
         // same bargain a lamp's test makes.
         if (!was || isText(signals, was)) {
-          const reads = defaultReads(signals.find((s) => s.id === id));
-          if (reads) span.reads = reads;
-          else delete span.reads;
-          delete span.decimals;
+          startReading(span, signals.find((s) => s.id === id));
         }
         // A different signal brings a different set of controls with it: a
         // range where the old one was a number, none where it reports
@@ -1359,20 +2004,31 @@ function spanEditor(
     body.append(picker);
 
     if (span.source) {
-      if (isText(signals, span.source)) {
-        // A signal that already reports characters needs no range, and
-        // offering one would invite a conversion that means nothing.
-        delete span.reads;
-        delete span.decimals;
-      } else {
-        // Choosing between as sent and converted changes which boxes there
-        // are, so that rebuilds. Typing in them does not.
+      // A signal the catalogue says reports characters is offered no range,
+      // since one would usually mean nothing. One written anyway is kept and
+      // shown: DCS-BIOS is not always right about what a signal is, the check
+      // cautions rather than refuses, and quietly dropping it here would undo
+      // the user's choice the moment the field was drawn.
+      const textual = isText(signals, span.source);
+      if (!textual || span.reads || span.value_aliases) {
+        // Choosing between as sent, converted and aliases changes which boxes
+        // there are, so that rebuilds. Typing in them does not.
+        const signal = signals.find((s) => s.id === span.source);
+        const set = alphabet(display, profile, span.small ?? false);
         body.append(
-          conversionRow(span, maxOf(signals, span.source), edited, () => {
-            setContent(readout, spans);
-            redraw();
-            onChange();
-          }),
+          conversionRow(
+            span,
+            signal,
+            set,
+            display.text_grid ? display.colours : [],
+            display.draws_inverse,
+            edited,
+            () => {
+              setContent(readout, spans);
+              redraw();
+              onChange();
+            },
+          ),
         );
       }
       // A substitution is about what this signal sends, so it belongs to the
@@ -1506,11 +2162,23 @@ function spanEditor(
  * Its own colour comes from the style row, the same chooser every piece has.
  * The label's is here, beside the label, because it is the label's.
  */
-function spanRule(span: Span, opts: RowOptions, edited: () => void): HTMLElement {
-  const { display, profile } = opts;
-  const label = labelEditor(span, () => span.width || null, display, profile, edited);
-  // Re-run when the width changes, which is what decides whether a label can
-  // be here at all and whether it fits.
+function spanRule(
+  spans: Span[],
+  index: number,
+  opts: RowOptions,
+  edited: () => void,
+): HTMLElement {
+  const { readout, display, profile } = opts;
+  const span = spans[index] as Span;
+  const label = labelEditor(
+    span,
+    () => settledCells(readout, spans, index),
+    display,
+    profile,
+    edited,
+  );
+  // Re-run when the width changes, which is what decides how much room the
+  // label has and whether that room holds still.
   ruleChecks.set(span, label.check);
   return el(
     "div",
@@ -1521,7 +2189,7 @@ function spanRule(span: Span, opts: RowOptions, edited: () => void): HTMLElement
       "A line of dashes, as wide as whatever the rest of the row leaves. It " +
         "reads nothing, so it is on the glass from the moment the aircraft " +
         "loads. Give it a fixed width below to hold it to a size, which is " +
-        "also what a label needs.",
+        "what a label needs when a reading beside it can change width.",
     ),
     label.node,
   );
@@ -1773,7 +2441,16 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
       );
     }
     const stations = seats(signals);
-    if (stations.length > 1) extras.append(seatChooser(readout, stations, onChange));
+    if (stations.length > 1) {
+      // Redrawn on a change, since whether a copy is offered follows the seat.
+      extras.append(
+        seatChooser(readout, stations, () => {
+          redraw();
+          onChange();
+        }),
+        ...seatCopies(opts, stations),
+      );
+    }
     extras.append(noteEditor(readout, "field", onChange));
     const reset = resetButton(opts);
     if (reset) extras.append(reset);
@@ -1785,6 +2462,10 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
     // out, and the row's own one-line preview further up the page.
     refresh = (): void => {
       drawFit();
+      // A rule's room is whatever the rest of the line leaves it, so a
+      // keystroke in another piece is what decides whether its label holds
+      // still, and whether it fits.
+      for (const piece of spans) ruleChecks.get(piece)?.();
       preview.refresh();
       refreshPreview();
     };
@@ -1819,7 +2500,7 @@ function row(opts: RowOptions): HTMLTableRowElement {
   const shows = el("td");
   const draw = (): void => {
     shows.textContent = "";
-    shows.append(flagSlot(readout), chainEditor(opts, () => {}));
+    shows.append(flagSlot(readout), cautionSlot(readout), chainEditor(opts, () => {}));
   };
   rebuild = draw;
   draw();
@@ -1845,7 +2526,20 @@ function describeField(readout: Readout, display: DisplayInfo): string {
     if (s.rule) return s.label ? `a rule labelled ${s.label}${held}` : `a rule${held}`;
     if (s.gap) return `a gap${held}`;
     if (kindOf(s) === "signal") {
-      return `${s.source ? s.source : "a reading nobody has chosen yet"}${held}`;
+      // How it draws the number, so a reset that only changes that says so
+      // rather than showing the same line twice.
+      const aliases = Object.entries(s.value_aliases ?? {});
+      const converted = s.reads
+        ? ` converted to ${s.reads[0]} to ${s.reads[1]}` +
+          (s.round === "down" ? ", rounded down" : "") +
+          (s.wrap ? `, wrapping at ${s.wrap}` : "") +
+          (s.abs ? ", without its sign" : "")
+        : "";
+      const named = aliases.length
+        ? ` drawn as ${aliases.map(([v, a]) => `${v}=${aliasText(a)}`).join(" ")}`
+        : "";
+      const drawn = `${converted}${named}`;
+      return `${s.source ? s.source : "a reading nobody has chosen yet"}${drawn}${held}`;
     }
     return `${s.text ? JSON.stringify(s.text) : "an empty piece of text"}${held}`;
   });
@@ -1953,6 +2647,11 @@ export function displaySection(
           const at = readouts.indexOf(r);
           if (at < 0) return;
           readouts[at] = next;
+          redraw();
+          onChange();
+        },
+        onAdd: (next) => {
+          readouts.splice(readouts.indexOf(r) + 1, 0, next);
           redraw();
           onChange();
         },

@@ -31,6 +31,16 @@ fn module() -> Module {
               "id": "CHAN",
               "control_type": "display",
               "outputs": [{"address": 200, "mask": null, "max_value": null, "max_length": 2, "type": "string"}]
+            },
+            {
+              "id": "KNOB",
+              "control_type": "selector",
+              "outputs": [{"address": 300, "mask": 224, "shift": 5, "max_value": 5, "max_length": null}]
+            },
+            {
+              "id": "NEEDLE",
+              "control_type": "analog_gauge",
+              "outputs": [{"address": 400, "mask": 65535, "shift": 0, "max_value": 65535, "max_length": null}]
             }
           ]
         }"#,
@@ -261,4 +271,155 @@ fn a_lamp_cannot_reach_itself_through_a_panel_that_follows() {
     let problems = found(&p);
     assert_eq!(problems.len(), 1, "{problems:?}");
     assert!(problems[0].contains("mirrors something itself"), "{:?}", problems[0]);
+}
+
+#[test]
+fn a_number_shown_as_sent_needs_no_range() {
+    // A six position knob drawn as the digit DCS-BIOS sends. The editor
+    // offers that, so the check has to let it through.
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "KNOB"}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+}
+
+#[test]
+fn a_number_can_be_shown_by_its_aliases() {
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "KNOB",
+             "value_aliases": {"0": "OFF", "3": "SEMI"}}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+}
+
+#[test]
+fn a_reading_can_be_banded_across_a_converted_face() {
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "NEEDLE",
+             "reads": [-1.5, 1.5], "decimals": 1, "abs": true,
+             "value_aliases": {"-1.5..-0.1": "ND", "0": " ", "0.1..1.5": "NU"}}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+}
+
+#[test]
+fn two_bands_claiming_one_reading_are_a_caution() {
+    // Ambiguous but not undefined: bands are held in order of where they
+    // start, so the lower one draws. A profile is refused whole, so refusing
+    // this would take every lamp and screen dark over one row drawing the
+    // first of two words the user wrote.
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "NEEDLE",
+             "reads": [-1.5, 1.5], "decimals": 1,
+             "value_aliases": {"-1.5..0": "ND", "-0.5..0.5": "NEAR"}}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+    let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
+    let cautions = p.field_cautions(&module(), &devices, &displays);
+    assert_eq!(cautions.len(), 1, "{cautions:?}");
+    assert!(
+        cautions[0].1.contains("the lower one draws it"),
+        "{:?}",
+        cautions[0]
+    );
+}
+
+#[test]
+fn a_band_nothing_can_reach_is_a_caution() {
+    // The likeliest way to get this wrong: band a converted face in the
+    // numbers DCS-BIOS sends instead of the ones the dial is marked with. A
+    // band past the top of the face can never draw, and nothing else can tell
+    // the user so.
+    //
+    // Only a band wholly outside the face counts. One that reaches into it
+    // draws for part of its travel, which is a band written loosely rather
+    // than a band written for the wrong numbers.
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "NEEDLE",
+             "reads": [-1.5, 1.5], "decimals": 1,
+             "value_aliases": {"32768..65535": "NU"}}
+        ]"#,
+    );
+    // A caution, so the profile still loads and the panel settles it.
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+    let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
+    let cautions = p.field_cautions(&module(), &devices, &displays);
+    assert_eq!(cautions.len(), 1, "{cautions:?}");
+    assert!(
+        cautions[0].1.contains("outside everything the face reads"),
+        "{:?}",
+        cautions[0]
+    );
+}
+
+#[test]
+fn a_bands_colour_on_glass_that_draws_none_is_refused() {
+    // The same answer a piece's own colour gets there. The UFC is segments: it
+    // has no colours to draw, so a band asking for one is a setting nothing
+    // would ever honour.
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "NEEDLE",
+             "reads": [-1.5, 1.5], "decimals": 1,
+             "value_aliases": {"0.1..1.5": {"text": "NU", "colour": "green"}}}
+        ]"#,
+    );
+    let found = found(&p);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert!(
+        found[0].contains("colour or size, which only a text grid draws"),
+        "{found:?}"
+    );
+}
+
+#[test]
+fn what_dcs_bios_says_a_signal_is_cautions_rather_than_refuses() {
+    // DCS-BIOS marks CHAN as text, so aliases for its values should mean
+    // nothing. Its metadata is not right for every module, so the user is
+    // told and the profile still loads.
+    // A clean field comes first, so the caution has to find its way to the
+    // second one rather than landing on whatever is at the top.
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "20-23", "source": "KNOB"},
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-31", "source": "CHAN",
+             "value_aliases": {"0": "OFF"}}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+    let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
+    let cautions = p.field_cautions(&module(), &devices, &displays);
+    assert_eq!(cautions.len(), 1, "{cautions:?}");
+    assert_eq!(cautions[0].0, 1, "on the field it is about");
+    assert!(cautions[0].1.contains("aliases for its values"), "{:?}", cautions[0]);
+}
+
+#[test]
+fn a_field_too_narrow_for_its_text_is_cautioned_on_that_field() {
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "20-23", "source": "KNOB"},
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-31", "text": "ABCDE"}
+        ]"#,
+    );
+    let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
+    let cautions = p.field_cautions(&module(), &devices, &displays);
+    assert_eq!(cautions.len(), 1, "{cautions:?}");
+    assert_eq!(cautions[0].0, 1, "on the field it is about");
+    assert!(cautions[0].1.starts_with("This field needs up to 5 cells"), "{:?}", cautions[0]);
+    // And not in the profile's own list, which is for the profile as a whole.
+    assert!(p.cautions(&devices).is_empty());
 }

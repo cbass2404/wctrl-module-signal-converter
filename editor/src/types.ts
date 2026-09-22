@@ -70,6 +70,44 @@ export interface Binding {
 }
 
 /**
+ * What one alias band draws: the characters, and a colour of its own where it
+ * wants one, or inverse.
+ *
+ * Bare characters when there is neither, which is the shape every alias
+ * written before colours had. It has to go back that way too: the update merge
+ * compares rows as JSON, so an alias that changed shape would read as one the
+ * user had edited and stop being brought up to a new release.
+ */
+export type AliasDraw = string | { text: string; colour?: string; inverse?: boolean };
+
+/** The characters an alias draws, whichever shape it is written in. */
+export function aliasText(drawn: AliasDraw): string {
+  return typeof drawn === "string" ? drawn : drawn.text;
+}
+
+/** The colour an alias asks for, if any. */
+export function aliasColour(drawn: AliasDraw): string | undefined {
+  return typeof drawn === "string" ? undefined : drawn.colour;
+}
+
+/** Whether an alias draws inverse. */
+export function aliasInverse(drawn: AliasDraw): boolean {
+  return typeof drawn !== "string" && drawn.inverse === true;
+}
+
+/**
+ * An alias in the shape it is stored in: bare characters unless it has a
+ * colour or is inverse, so a plain row is byte for byte what it was.
+ */
+export function aliasOf(text: string, colour?: string, inverse?: boolean): AliasDraw {
+  if (!colour && !inverse) return text;
+  const out: { text: string; colour?: string; inverse?: boolean } = { text };
+  if (colour) out.colour = colour;
+  if (inverse) out.inverse = true;
+  return out;
+}
+
+/**
  * One piece of a field's content: characters the user typed, or a signal.
  *
  * A field is a chain of these drawn end to end, because a reading on its own
@@ -99,6 +137,32 @@ export interface Span {
   /** What the gauge reads at each end of its travel. Numbers only. */
   reads?: [number, number];
   decimals?: number;
+  /**
+   * How a number lands on its last decimal place. Absent is to the nearest,
+   * which a needle wants; `down` is for a drum or anything else that clicks
+   * over, which shows 4 until the 5 has fully arrived.
+   */
+  round?: "down";
+  /**
+   * Start again from zero every this many, after converting and rounding: a
+   * drum digit is 0 to 10 wrapping at 10, a compass 0 to 360 wrapping at 360.
+   */
+  wrap?: number;
+  /**
+   * Draw a converted reading without its sign, so a face running each way from
+   * zero reads as a magnitude with a band beside it naming the direction.
+   */
+  abs?: boolean;
+  /**
+   * What to draw for each reading of a number, in place of the number: `SEMI`
+   * for a knob at 3, or `ND` for a trim needle anywhere below centre.
+   *
+   * The key is one reading (`3`), a list of them (`0,1,2`) or a closed band
+   * (`-1.5..-0.1`), matched against what the face reads once `reads`,
+   * `decimals` and `wrap` have had their turn. A reading no key claims draws
+   * as the number. Numbers only.
+   */
+  value_aliases?: Record<string, AliasDraw>;
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
   /** A second text signal whose `i` marks the characters to draw inverse. */
@@ -216,13 +280,20 @@ export interface Readout {
   /**
    * What the gauge reads in the cockpit at each end of its travel.
    *
-   * Required for a number, meaningless for a signal that already reports
-   * characters. DCS-BIOS gives a needle as a position, not a quantity, and
-   * nothing says what the dial face is marked with, so this is the user's to
-   * supply. Handles faces that start below zero, and ones that run backwards.
+   * For a number, and meaningless for a signal that already reports
+   * characters. Absent draws the number as sent. DCS-BIOS gives a needle as a
+   * position, not a quantity, and nothing says what the dial face is marked
+   * with, so this is the user's to supply. Handles faces that start below
+   * zero, and ones that run backwards.
    */
   reads?: [number, number];
   decimals?: number;
+  round?: "down";
+  wrap?: number;
+  /** Draw a converted reading without its sign. */
+  abs?: boolean;
+  /** What to draw for each reading of a number, in place of the number. */
+  value_aliases?: Record<string, AliasDraw>;
   align?: "left" | "right" | "centre";
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
@@ -258,13 +329,22 @@ export type FlagView = { text: string } & (
   | { at: "field"; readout: number }
 );
 
+/** A caution about one display field, by its index in `readouts`. */
+export interface FieldCaution {
+  readout: number;
+  text: string;
+}
+
 /**
  * What a check found. Problems stop the profile loading; cautions and flags
  * do not.
  */
 export interface Findings {
   problems: string[];
+  /** About the profile as a whole, listed at the top of the page. */
   cautions: string[];
+  /** About what one display field will draw, shown on that field. */
+  field_cautions: FieldCaution[];
   flags: FlagView[];
   /** One line for the page, only when a flagged row needs the DCS-BIOS nightly. */
   notice: string | null;
@@ -370,6 +450,42 @@ export interface DisplayInfo {
    * be a way to draw the wrong symbol.
    */
   native_fonts: Record<string, string>;
+  /**
+   * Per shape, what a lit slot looks like, so a field can be drawn the way
+   * this glass will draw it. Empty on a text grid, which has a font instead.
+   */
+  art: Record<string, ShapeArt>;
+}
+
+/**
+ * How one shape's slots are drawn.
+ *
+ * A pixel screen's slot is a pixel of the cell's box, so it needs only the
+ * size of that box. A segment screen's slot is a stroke of the character, and
+ * nothing about its shape is anywhere in a map of bit indices, so the display
+ * carries the drawing: a slot is a list of strokes, and a stroke is a flat run
+ * of x and y, two pairs of which at the same point is a dot.
+ */
+export type ShapeArt =
+  | { kind: "pixels"; width: number; height: number }
+  | { kind: "strokes"; width: number; height: number; stroke: number; slots: number[][][] };
+
+/** One cell of a field, as the window laid it out, for the backend to look up. */
+export interface CellDraw {
+  cell: number;
+  value: string;
+  inverse?: boolean;
+}
+
+/** What one cell lights, as the backend's own glyph lookup answers it. */
+export interface CellInk {
+  /** The slots lit, with any inverse flip applied. */
+  lit: number[];
+  /** Which shape's art draws them. */
+  shape: string;
+  /** False where the glyph table has nothing for the value, which on the
+   *  panel is a dark cell. */
+  drawn: boolean;
 }
 
 /** One cell of a rule, as the backend lays it out. */

@@ -843,6 +843,13 @@ brightness, a field asks "which cells, fed by what" and resolves to characters.
     "source": "PLT_RV5_ALT",
     "reads": [0, 750],       // what the dial is marked with, numbers only
     "decimals": 0,
+    "round": "down",         // absent rounds to the nearest
+    "wrap": 360,             // start again from 0 every this many
+    "abs": true,             // draw the reading without its sign
+    "value_aliases": {       // what to draw instead of the number
+      "3": "SEMI",
+      "-1.5..-0.1": "ND",
+    },
     "align": "right",        // only means something across several cells
     "seat": 0,               // only where the module reports one
     "aliases": { "--": "_" },
@@ -869,6 +876,76 @@ marked with, so it is yours to give. Faces that start below zero or run
 backwards both work: a g meter is `[-10, 12]`, and a gauge whose numbers
 descend is `[100, 0]`. A signal that already reports characters needs no
 conversion, and giving it a range is an error rather than a no-op.
+
+**`round` and `wrap` are for readings that click over or go round.** The
+conversion is still a straight line from 0 to 65535 onto `reads`. After it,
+the number is rounded to `decimals` places, to the nearest unless `round` is
+`"down"`, and then `wrap` takes the remainder, so the reading starts again
+from 0 every `wrap`. Rounding comes first, so a compass at 359.7 draws 0
+rather than 360.
+
+- One odometer drum digit, such as each of the F-16's `FUELTOTALIZER_*`
+  drums, is `reads [0, 10]`, `round "down"`, `wrap 10`. DCS-BIOS reports a
+  drum as how far it has turned, and a full turn passes all ten digits.
+  Rounding down shows a digit only once the drum has reached it, which keeps
+  the drums beside it agreeing during a roll-over. A drum sitting exactly on
+  a digit draws that digit: the conversion allows for DCS-BIOS rounding the
+  position to its nearest step.
+- A signal that makes several turns is its whole travel wrapping at one turn:
+  twelve turns of 0 to 999 is `reads [0, 12000]`, `wrap 1000`.
+- A full circle is `reads [0, 360]`, `wrap 360`.
+
+The width check allows for the wrap: a reading that wraps is measured up to
+the last value before it starts over, not by the ends of `reads`.
+
+**`value_aliases` draws a word in place of a number.** A knob reports its
+position, and `3` on a screen says less than `SEMI` does. A needle on a face
+marked each way from zero is read as a direction, and `-1.0` says less than
+`1.0 ND` does. Each key says which readings it claims and the value says what
+to draw for them; a reading no key claims draws as the number.
+
+The key is matched against **what the face reads**, not the raw count
+DCS-BIOS sends: `reads`, `decimals` and `wrap` all have their turn first. So a
+band is written in the units the dial is marked with and survives the range
+being retuned. A signal with no `reads` converts through its own range, which
+is the identity, so a key naming a position still names that position.
+
+Three spellings, and a value may be bare characters or an object with a colour
+of its own:
+
+- `"3"` is one reading. `"0,1,2"` is a list of them.
+- `"-1.5..-0.1"` is a closed band, ends included. `to` may be written in place
+  of `..`. `-` is not the separator, unlike `cells`: a cell is never negative
+  and `"-1.5--1.0"` has no unambiguous reading.
+- `{ "text": "NU", "colour": "red" }` draws in its own colour, which a plain
+  string leaves to the piece. A band is often a caution, and one drawn in the
+  colour of the row around it is one nobody catches.
+- `{ "text": " ", "inverse": true }` draws inverse, on glass that draws inverse
+  at all; anywhere else the profile is refused, as for an inverse piece. It is
+  the colour of a screen with none, such as the DED, and a blank drawn inverse
+  is a solid block.
+
+**Two keys claiming one reading is a caution, and the lower one draws.** Keys
+are held in order of where they start, so which one draws is settled and does
+not depend on how the file was written. Unlike two fields claiming one cell it
+is not refused: a profile is refused whole, and taking every lamp and screen
+dark over one row drawing the first of two words you wrote is the wrong trade.
+
+A key wholly outside `reads` is a caution too, since it draws nothing rather
+than drawing something wrong. That is the check that catches the likeliest
+mistake, which is banding a converted face in raw counts.
+
+A needle between two bands is not a reading nothing claims: the reading is
+rounded to `decimals` first, so bands a step apart leave no gap for it to sit
+in. The width check allows for this too, and measures only the words when the
+bands cover the whole face, since then no number is ever drawn.
+
+**`abs` drops the sign after converting.** For a face read as a magnitude and a
+direction: the F-16's trim indicators are marked in units nose up and nose
+down, so `-1.0 ND` says the same thing twice. With `abs` the number is the
+magnitude and a band beside it names the direction. It applies last, after a
+band has had its turn, so a band written for negative readings still matches on
+a piece that draws magnitudes.
 
 **`aliases` is for a value the glass cannot draw.** DCS-BIOS reports the Hornet
 scratchpad cursor as `--` where the cockpit shows `_`, and `--` is not a glyph,
@@ -908,7 +985,7 @@ and would come apart the moment the number changed width.
 
 **A piece carries `text` or `source`, never both**, and naming both is refused
 rather than resolved one way. Everything else on a piece shapes the one value
-it draws, which is why `reads`, `decimals`, `aliases`, `format`, `colours`,
+it draws, which is why `reads`, `decimals`, `round`, `wrap`, `aliases`, `format`, `colours`,
 `replace`, `colour` and `small` all belong to the piece: one chain can hold two
 signals that need different treatment. What belongs to the field is what is
 about the run of cells as a whole, which is `cells`, `align`, `seat` and `note`.
@@ -1047,13 +1124,21 @@ addition rather than something the cockpit decided. A rule on a piece that
 draws its own content is refused, since there would be nowhere to put it, and
 so is one on glass that is not a text grid.
 
-**A labelled rule needs a `width`.** The label, its blank each side and its own
-`label_colour` work exactly as they do on a divider, but an elastic rule is as
-wide as the rest of the line leaves it, and that changes with every reading
-beside it. `divider_rule` leaves a label it cannot fit off the line, which on a
-rule that keeps changing width means a label appearing and vanishing on the
-glass with nothing to say why. With a width the rule cannot change size, the
-check is exact, and a label too wide for it is refused the way a divider's is.
+**A labelled rule needs a width that holds still, which is not the same as a
+`width`.** The label, its blank each side and its own `label_colour` work
+exactly as they do on a divider, and the room the label has to fit is whatever
+the rest of the line leaves the rule. Where every other piece on the line is
+itself fixed, that leftover is the same in every frame, so the check is exact
+and a label too wide for it is refused the way a divider's is. A rule with the
+line to itself is the plain case of that: nothing is taking cells off it, so it
+is the whole run, and a label there needs no `width` at all.
+
+Where the line carries a reading as wide as whatever it reads, the leftover
+moves with it. `divider_rule` leaves a label it cannot fit off the line and
+draws a plain rule, so the label comes and goes with the reading beside it.
+That is a caution on the field and not a refusal: the rule draws either way,
+only the user knows how wide their readings really get, and a `width` on the
+rule is the fix where it bites.
 
 ### Text grids
 

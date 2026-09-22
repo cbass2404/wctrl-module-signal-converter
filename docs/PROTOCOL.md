@@ -448,6 +448,28 @@ table. Verified live: DCS-BIOS reported `UFC_COMM1_DISPLAY` as `' 2'` and the
 hardware was sent the `' 2'` glyph. Look up the whole value first; SimAppPro
 only falls back to OR-ing two glyphs when the pair is absent.
 
+### Where each segment sits, for the editor's preview
+
+Nothing on the wire needs it, and nothing did until the editor started drawing
+a field before it is flown. A buffer of bit indices says which slots a glyph
+lights and nothing at all about where they are, so `art` in `ufc1.json` gives
+each slot a stroke, and where each one sits was read out of the glyph table
+rather than captured:
+
+- The pair above splits the cell. `'0'` takes 0,5,6,7 and `' 0'` takes 1,2,3,4,
+  so those are the left and right of a 16 segment box, with 9 and 13 the
+  centre bar both halves share. `` `1 `` lights 2,3,6,7: one digit each side.
+- `'Z'` lights 10 and 14, so they are the diagonals running top right to
+  bottom left, and `'X'` adds 8 and 12 for the other pair.
+- `'B'` takes 11 where `'F'` takes 15, which puts 11 on the right of the
+  middle bar and 15 on the left.
+
+So the preview is exactly right about which segments light, since the daemon's
+own lookup answers that, and only as right about where they sit as that
+reading of the table. Replace it if a photograph of the glass ever says
+otherwise. The DED needs none of this: its slots are pixels of the cell, and
+the cell is generated from the grid.
+
 ### Where the UFC's cells come from, for the Hornet
 
 | Cells                             | Shape   | DCS-BIOS signal                  | Rule                |

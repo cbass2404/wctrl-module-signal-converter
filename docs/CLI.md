@@ -29,7 +29,7 @@ installed program and the profiles folder chosen at install.
 | `--dry-run` | off | Prints every write and opens no device. Nothing touches the hardware. Worth one pass to confirm the aircraft is detected and the right profile is picked. |
 | `--verbose` | off | Puts every action on the console as it happens. See below. The session log holds it either way, so this is only for watching a run live. |
 | `--seconds <N>` | runs until Ctrl-C | Stops after N seconds. Useful for a quick check without having to interrupt it. |
-| `--exit-when-idle <N>` | off | Clears the panels and exits after N seconds with no export stream, once it has seen the stream at least once. Used by the DCS hook. |
+| `--exit-when-idle <N>` | off | Clears the panels and exits once there has been no export stream for N seconds and DCS is no longer running, once it has seen the stream at least once. Used by the DCS hook. |
 | `--profiles <DIR>` | `data/profiles` | Where profiles are read from, and where a starter profile is written for an aircraft that has none. Seeded from `--defaults` at startup. |
 | `--defaults <DIR>` | `data/defaults` | Shipped profiles. Copied into `--profiles` for any name not already there, and never over one that is. |
 | `--catalogue <DIR>` | `data/catalogue` | Generated signal catalogue. See above. |
@@ -232,8 +232,9 @@ VBS shim exists so no console window flashes on every mission start.
 DCS is killed or crashes, and the panels latch, so a shutdown message would be
 missing in exactly the case that needs it most. The daemon is launched with
 `--exit-when-idle` instead and leaves on its own once the export stream falls
-silent, which covers a crash, a kill and an ordinary mission end under one rule.
-Starting the next mission brings it back.
+silent and DCS has closed, which covers a crash, a kill and an ordinary exit
+under one rule. A quiet stream while DCS is still running, such as the options
+menu or the main menu between missions, leaves the panels as they were.
 
 `--exit-when-idle <SECONDS>` is ignored until the stream has been heard at least
 once, so launching before DCS is up is a wait rather than an immediate exit.
@@ -246,8 +247,8 @@ panel look fine until one exits and clears the lamps while the other is still
 lighting them.
 
 The new one backing off is deliberate. The daemon already running is synced to
-the stream and heals itself, clearing the panels when the stream goes quiet and
-sweeping again when a mission loads. Replacing it would gain nothing and would
+the stream and heals itself, holding the last cockpit through a quiet stream and
+sweeping again when a new aircraft loads. Replacing it would gain nothing and would
 mean killing a process mid-write. If you do want to replace it, stop it first;
 the message says so.
 

@@ -1,0 +1,195 @@
+{
+  "schema_version": 1,
+  "name": "A-10C CDU page (test fixture)",
+  "author": "coryb",
+  "profile_version": "0.1.0",
+  "aircraft": [
+    "A-10C_2",
+    "A-10C"
+  ],
+  "module": "A-10C",
+  "bindings": [],
+  "readouts": [
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "72-95",
+      "divider": true,
+      "colour": "amber",
+      "note": "A rule on row 4, where the page starts. The A-10C's CDU is ten lines and the MCDU is fourteen, so rows 1 to 3 stay dark and the content below needs a top edge to read as a page."
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "96-119",
+      "source": "CDU_LINE0",
+      "colour": "green",
+      "replace": {
+        "«": "←",
+        "¡": "☐",
+        "?": "%",
+        "¶": "⬡",
+        "®": "Δ",
+        "±": "_",
+        "©": "^",
+        "»": "→"
+      },
+      "note": "CDU line 1. The ten CDU lines sit on rows 5 to 14, so the CDU's line select keys, beside its lines 3, 5, 7 and 9, land beside MCDU rows 7, 9, 11 and 13, and the scratchpad on line 10 lands on the MCDU's scratchpad row."
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "120-143",
+      "source": "CDU_LINE1",
+      "colour": "green",
+      "replace": {
+        "«": "←",
+        "¡": "☐",
+        "±": "_",
+        "®": "Δ",
+        "©": "^",
+        "?": "%",
+        "¶": "⬡",
+        "»": "→"
+      },
+      "note": "DCS-BIOS sends the CDU's symbols as single bytes above ASCII (A-10C.lua, cdu_replace_map). replace turns each into the character whose glyph the A-10C font draws for it: the arrows, the box, the up-down arrow (Delta), the cursor block (hexagon), and ? whose glyph is the % slot. Taken from WCtrlDcsBiosBridge's A-10C listener."
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "144-167",
+      "source": "CDU_LINE2",
+      "colour": "green",
+      "replace": {
+        "©": "^",
+        "¡": "☐",
+        "»": "→",
+        "?": "%",
+        "®": "Δ",
+        "¶": "⬡",
+        "«": "←",
+        "±": "_"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "168-191",
+      "source": "CDU_LINE3",
+      "colour": "green",
+      "replace": {
+        "®": "Δ",
+        "±": "_",
+        "¡": "☐",
+        "?": "%",
+        "¶": "⬡",
+        "»": "→",
+        "«": "←",
+        "©": "^"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "192-215",
+      "source": "CDU_LINE4",
+      "colour": "green",
+      "replace": {
+        "¶": "⬡",
+        "±": "_",
+        "?": "%",
+        "¡": "☐",
+        "©": "^",
+        "®": "Δ",
+        "»": "→",
+        "«": "←"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "216-239",
+      "source": "CDU_LINE5",
+      "colour": "green",
+      "replace": {
+        "±": "_",
+        "©": "^",
+        "¶": "⬡",
+        "¡": "☐",
+        "®": "Δ",
+        "»": "→",
+        "?": "%",
+        "«": "←"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "240-263",
+      "source": "CDU_LINE6",
+      "colour": "green",
+      "replace": {
+        "®": "Δ",
+        "«": "←",
+        "©": "^",
+        "±": "_",
+        "¶": "⬡",
+        "?": "%",
+        "»": "→",
+        "¡": "☐"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "264-287",
+      "source": "CDU_LINE7",
+      "colour": "green",
+      "replace": {
+        "©": "^",
+        "±": "_",
+        "»": "→",
+        "?": "%",
+        "®": "Δ",
+        "«": "←",
+        "¡": "☐",
+        "¶": "⬡"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "288-311",
+      "source": "CDU_LINE8",
+      "colour": "green",
+      "replace": {
+        "?": "%",
+        "»": "→",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
+        "¶": "⬡",
+        "¡": "☐",
+        "«": "←"
+      }
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "312-335",
+      "source": "CDU_LINE9",
+      "colour": "green",
+      "replace": {
+        "?": "%",
+        "«": "←",
+        "©": "^",
+        "®": "Δ",
+        "¡": "☐",
+        "»": "→",
+        "¶": "⬡",
+        "±": "_"
+      },
+      "note": "CDU line 10, the scratchpad."
+    }
+  ]
+}

@@ -51,6 +51,40 @@ which put these fields on `MCDU_Captain` only. Whether they ship as the
 Hornet's default MCDU page is a separate decision, and waits for release like
 any changed default.
 
+**Built 2026-09-22: the UFC and the DED are previewed too.** The editor drew a field before it was flown only on the MCDU,
+where a cell is a character of an uploaded font. The other two screens are
+where a preview is worth more, because a value there lights a set of segments
+or pixels that need not resemble the characters it was keyed by: a bare digit
+and a spaced one are different glyphs, a comm channel is two characters on one
+cell, and the DED spells its arrow with a lowercase `a`. The lit slots are
+asked of the backend per cell, so the same lookup the daemon paints with
+answers the preview, and only the drawing happens in the window.
+
+What the drawing needed, and what it costs:
+
+- **A slot has no shape anywhere in the maps.** A buffer of bit indices says
+  which slots a glyph lights and nothing about where they are. The DED is
+  spared this, its slots being pixels of a cell the grid generated, but the
+  UFC's are segments, so `art` in `data/displays/ufc1.json` gives each slot a
+  stroke. Which slot is which segment was read out of the glyph table itself
+  rather than captured, and the derivation is written down in both the file
+  and "Where each segment sits" in [PROTOCOL.md](PROTOCOL.md). So the preview
+  is exactly right about which segments light and only as right about where
+  they sit as that reading. A photograph of the glass would settle it.
+- **One layout, two painters.** The measuring the daemon does was already
+  copied in the window for the MCDU; it is now `layoutCells`, and the font and
+  the slots are two ways of painting what it produces. It picked up the
+  daemon's one cell rule on the way: a single cell field takes the whole line
+  as one glyph, which is what a comm channel needs and what a text grid takes
+  the first character of.
+- **Nothing is invented.** A cell the glyph table has nothing for is marked
+  the way a missing font glyph already was, and the line under the preview
+  names the values that would leave a cell dark. That is the check these two
+  screens never had: `alphabet` only ever answered for a font.
+- **Both are drawn white**, because no capture says what colour either glass
+  is. One colour per display would be a small change in `paintInk` once
+  someone looks at the panels.
+
 **Built 2026-09-21, not yet on a panel: one panel under several names shares a
 setup.** Rebuilding the IFEI showed the cost of the MCDU being three devices: it
 was built on the Captain, and a Co-Pilot or Observer unit would need it all
@@ -1066,12 +1100,14 @@ AH-64D.
 `CHANGELOG.md` is the user-facing record, and the release pipeline puts the
 section matching the version at the top of the release notes, above the
 provenance it already wrote. A version with no section still releases; the awk
-simply finds nothing.
+simply finds nothing. It holds the current version only: once a release ships,
+its notes on GitHub are the record, and the next bump replaces the section
+rather than adding one above it.
 
 **A release that changes a shipped profile has to say which rows**, because an
 update never rewrites a row the user has changed: a fix reaches them only if
 they reset that lamp, and they cannot choose to unless the notes name it. The
-alpha.002 entry does that for the two MCDU dividers.
+alpha.002 release notes do that for the two MCDU dividers.
 
 ## Development mode, and three faults it uncovered
 
@@ -1465,6 +1501,99 @@ Why A won:
 **Hard dependency: DCS-BIOS.** It is the only signal source. Without it there is
 nothing to read, and there is no fallback.
 
+## Making room for other brands
+
+Written 2026-09-22. Nothing here changes what a user sees; it is the seam a
+second brand of hardware plugs into, put in while there was only one brand to
+get wrong.
+
+**Every device names its protocol.** `DeviceSpec.protocol` in
+`data/devices.json`, defaulting to `wctrl` when absent, so a device file from
+an older release or written by hand still loads. Declared per device rather
+than read off the USB vendor id, because a vendor can ship more than one
+protocol and a protocol can outlive the ids it started on.
+
+**Two traits, in `crates/dsc-cli/src/panels/`.** `Protocol` finds and opens a
+brand's devices; `Panel` drives one that is open. `panels::all()` builds the
+ones this release can drive, and the run loop picks one per device by name. A
+device asking for a protocol this build lacks is skipped with a warning and the
+other panels still run, because that is what an inventory from a newer release
+looks like, not a broken one.
+
+`Panel` is three methods: `set_lamp`, `write_display`, `flush`. It ended up
+smaller than planned. The commit pass used to be `commit(part_id)` and lived in
+`apply()`, tracking which parts of which devices were owed a commit. Once the
+backend sees whole `LcdWrite`s it can track that itself, so it became `flush()`
+and a protocol with no commit model implements it as a no-op instead of being
+asked about parts it does not have.
+
+**Why this was cheap.** The engine was already free of I/O, so the boundary was
+discovered rather than invented: `dsc-engine`, `dsc-config`, `dsc-bios` and the
+whole editor never touched HID and none of them changed. The work was eight
+call sites in one file. It also pulled real state out of the app:
+`prepare_text_grid`, the map of which font each grid is holding, the 40ms pause
+after a screen, and the `handles.remove()`/reinsert contortion that existed only
+so the handle and the font map could be borrowed at once. `main.rs` came out 187
+lines shorter.
+
+**Why now and not when the hardware lands.** Profiles are the user's files and
+`data/devices.json` ships to them, so a schema change costs real money once
+people have both. A `#[serde(default)]` field added before 1.0 goes out costs
+nothing. The refactor itself is behaviour-preserving, which means it could be
+proven on the panels already here rather than shipped on faith.
+
+**What was deliberately left alone.** A lamp is still addressed as
+`(device, part_id, index)` and its value is still a `u8`, which are WinWing's
+answers, not universal ones. Generalising them now would be designing against
+imagination; the point of waiting is to have a real second device to design
+against. The traits also live inside `dsc-cli` rather than in a crate of their
+own, so reshaping them when the first one is wrong costs nothing.
+
+**The diagnostics are outside the seam on purpose.** `parts`, `led`, `blink`,
+`sweep`, `probe-brightness` and `mcdu-test` take a raw part id and index and
+poke one protocol deliberately. There is no honest generic version of that, so
+they call `wctrl_hid` directly and a second brand gets its own commands rather
+than a shared vocabulary that fits neither. `devices` is the exception: it is
+discovery, so it asks every protocol and a newly plugged brand shows up there
+before anything can drive it.
+
+### What VIRPIL will need decided
+
+Gear expected around January 2027; see the blocked item in
+[TODO.md](TODO.md). The transport is the easy part. These are not:
+
+1. **Volatile or persistent?** VIRPIL's LED settings are configured in the VPC
+   Configuration Tool and saved to the device. If the only path to the LEDs is
+   writing that persistent config, this project cannot use it: that would mean
+   flash writes at signal rate, wearing the device and clobbering whatever the
+   user saved in VPC. It is exactly what `wctrl-hid`'s forbidden list refuses
+   and for the same reason. **The first thing a capture has to answer is
+   whether moving the brightness slider in VPC produces traffic immediately or
+   only on save to device.** Everything else waits on that.
+
+2. **RGB breaks the `u8`.** VIRPIL backlights are colour, and a lamp here is one
+   byte from `Led.max` through the binding's on/off values to the editor's
+   number inputs. The cheap answer, and the whole of "run the backlights through
+   the program", is a fixed colour per lamp in `data/devices.json` with the
+   backend scaling it by the brightness the engine already sends: no engine,
+   schema or editor change. Colour as a bindable signal, so a lamp turns red on
+   a caution, is a much larger separate feature and should stay one. The fixed
+   field is forward compatible with it either way.
+
+3. **Capture is harder than it was here.** SimAppPro wrote `WWTHID.log` and
+   handed us the frames, which is what `docs/PROTOCOL.md` is built on. VPC
+   almost certainly does not, so this means USBPcap and Wireshark: raw URBs,
+   with no vendor pretty-printing and no help separating a command channel from
+   routine HID polling. Two things already here transfer: `declares_output` in
+   `wctrl-hid` walks a report descriptor for an Output item, which says whether
+   host-to-device writes are even declared before any sniffing, and `devices`
+   with the vendor filter lifted reads the real ids off the hardware rather
+   than trusting a number from memory.
+
+Findings observed on the wire are ours. Anything taken from decompiled VPC
+internals is not, and does not go in; see `THIRD_PARTY_NOTICES.md` for how the
+WwDevicesDotnet port is attributed.
+
 ## Verified facts
 
 Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
@@ -1549,14 +1678,15 @@ crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0      (10 tests)
 crates/dsc-bios       export-stream decoder + address space       (10 tests)
 crates/dsc-config     catalogue, inventory, profiles, displays    (83 tests)
 crates/dsc-engine     aircraft detection, sweep, writes, learn    (48 tests)
-crates/dsc-cli        the dcs-signal binary                       (5 tests)
+crates/dsc-cli        the dcs-signal binary                       (8 tests)
+crates/dsc-cli/src/panels  Protocol/Panel traits, one module per brand
 editor/src-tauri      editor backend, learn listener, claims      (7 tests)
 data/defaults         shipped profiles, tracked in git
 data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
 crates/dsc-cli        `dcs-signal`  devices/parts/led/blink/sweep/listen/learn/run
 data/catalogue        50 modules, generated, version-stamped
-data/devices.json     every connected panel verified, MCDU screen still unmapped
+data/devices.json     every connected panel verified; each names its protocol
 tools/                catalogue builder, HID probe, WWTHID log parser,
                       daemon benchmark (results in docs/PERFORMANCE.md)
 ```

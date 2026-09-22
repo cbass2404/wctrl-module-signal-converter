@@ -135,6 +135,24 @@ fn divider_rule(cells: usize, label: String) -> Reply<Vec<RuleCell>> {
     Ok(rule_for(cells, &label))
 }
 
+/// What each cell of a field would light, for the preview of glass that draws
+/// from a glyph table rather than from a font.
+///
+/// Asked of the backend for the same reason a divider is. Which glyph a value
+/// lands on is decided by the cell it is drawn in, not by the value alone: a
+/// wide cell takes a two character value whole, a digit cell has a spaced form
+/// and a bare one, and the DED is the only display that never uppercases. A
+/// second copy of that in TypeScript would be a preview that agrees with the
+/// user and disagrees with the glass.
+#[tauri::command]
+fn cell_ink(display: String, cells: Vec<view::CellDraw>) -> Reply<Vec<view::CellInk>> {
+    let paths = Paths::resolve();
+    let maps = dsc_config::DisplayCatalogue::load_dir(&paths.displays)
+        .map_err(|e| format!("loading {}: {e}", paths.displays.display()))?;
+    let map = maps.get(&display).ok_or_else(|| format!("no display named {display}"))?;
+    Ok(view::CellInk::of(map, &cells))
+}
+
 #[tauri::command]
 fn open_profile(file: String) -> Reply<Profile> {
     let paths = Paths::resolve();
@@ -289,6 +307,8 @@ fn learn_stop(learn: tauri::State<learn::State>) -> Reply<()> {
 struct Findings {
     problems: Vec<String>,
     cautions: Vec<String>,
+    /// Cautions about what one display field will draw, shown on that field.
+    field_cautions: Vec<check::FieldCaution>,
     flags: Vec<check::FlagView>,
     /// One line for the top of the page, only when a flagged row reads
     /// something the DCS-BIOS nightly has.
@@ -308,6 +328,7 @@ fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<F
     Ok(Findings {
         problems: cache.problems(&paths, &profile),
         cautions: cache.cautions(&paths, &profile),
+        field_cautions: cache.field_cautions(&paths, &profile),
         flags,
         notice,
     })
@@ -468,6 +489,7 @@ fn main() {
             profiles,
             signals,
             divider_rule,
+            cell_ink,
             font_glyphs,
             converter::converter_state,
             converter::converter_restart,

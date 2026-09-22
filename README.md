@@ -332,9 +332,9 @@ signal addresses change between DCS-BIOS releases, and it is rebuilt on its own
 whenever DCS-BIOS changes.
 
 The DCS hook only ever starts the converter. The converter clears the panels
-itself when the DCS-BIOS stream goes quiet, and exits when DCS closes, because a
-hook cannot run when DCS crashes and the panels keep whatever was last sent to
-them until something clears them.
+and exits itself once the DCS-BIOS stream has gone quiet and DCS has closed,
+because a hook cannot run when DCS crashes and the panels keep whatever was last
+sent to them until something clears them.
 
 The details, and the reasons for each, are in the [further reading](#further-reading).
 

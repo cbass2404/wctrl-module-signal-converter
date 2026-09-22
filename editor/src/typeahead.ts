@@ -147,7 +147,16 @@ export function hintFor(signal: SignalView): HTMLElement {
     el("code", { class: "hint-id block" }, signal.id),
     el("span", { class: "meta block" }, `${signal.control_type} · ${signal.category}`),
   );
-  if (signal.reads) {
+  if (signal.text) {
+    // Characters have no range, and 0 to 65535 would suggest one to convert.
+    lines.append(
+      el(
+        "span",
+        { class: "block" },
+        signal.length > 0 ? `text, up to ${signal.length} characters` : "text",
+      ),
+    );
+  } else if (signal.reads) {
     lines.append(el("span", { class: "block" }, `${signal.reads}, 0 to ${signal.max_value}`));
   } else {
     lines.append(el("span", { class: "block" }, `0 to ${signal.max_value}`));

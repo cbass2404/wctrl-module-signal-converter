@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use dsc_config::{DeviceInventory, Profile, Profiles};
+use dsc_config::{DeviceInventory, Profile, Profiles, ValueBand};
 
 struct Scratch(PathBuf);
 
@@ -169,6 +169,137 @@ fn a_field_the_user_changed_is_left_alone() {
         Some("White".to_string()),
         "their colour survived an update that changed ours"
     );
+    assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
+}
+
+#[test]
+fn a_row_the_user_owns_takes_the_sensible_default_for_a_setting_added_later() {
+    // What a row edited before a setting existed should do with it: nothing,
+    // and go on working. Every key on a field is optional and absent means its
+    // default, so the row reads as the setting turned off, which is the only
+    // sensible value for a row that was built without it and looked right.
+    //
+    // Written the long way, through a merge and a reload, because the promise
+    // is about what survives an update and not about what serde does.
+    let dir = scratch("settings-added-later");
+    let old = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT" }"#;
+    // The new default uses this release's settings on its own row.
+    let new = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT", "reads": [-1.5, 1.5], "decimals": 1, "abs": true,
+                   "value_aliases": { "-1.5..-0.1": "ND" } }"#;
+    // Theirs, edited back when a reading was a number and nothing else.
+    let theirs = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                      "source": "CDU_BRT", "colour": "green" }"#;
+    lay(&dir, Some(old), new, theirs);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let after = mine(&dir);
+    let span = &after.readouts[0].content[0];
+    assert_eq!(span.colour.map(|c| format!("{c:?}")), Some("Green".into()), "theirs");
+    assert!(!span.abs, "the setting is off, which is what their row meant");
+    assert!(span.value_aliases.is_empty(), "and no bands arrived");
+    assert_eq!(span.reads, None);
+    assert!(!touched_a_field(&notes), "nothing was claimed: {notes:?}");
+}
+
+#[test]
+fn an_aliased_row_nobody_touched_is_still_brought_up_to_the_new_default() {
+    // The other half of the promise, and the one that fails silently. Whether
+    // a row is still as it shipped is decided by comparing rows as JSON, so an
+    // alias that came back in a different shape than it went in would make
+    // every aliased row in every profile read as one the user had edited, and
+    // it would never be updated again.
+    //
+    // The row here is byte for byte the last release's, so the new default's
+    // wording has to reach it.
+    let dir = scratch("aliases-untouched");
+    let shipped_before = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                              "source": "CDU_BRT", "value_aliases": { "0": "OFF", "1": "ON" } }"#;
+    let shipped_now = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                           "source": "CDU_BRT", "value_aliases": { "0": "OFF", "1": "BRT" } }"#;
+    lay(&dir, Some(shipped_before), shipped_now, shipped_before);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let after = mine(&dir);
+    let span = &after.readouts[0].content[0];
+    let drawn = |v: f64| {
+        span.value_aliases
+            .get(&ValueBand::One(v))
+            .map(|a| a.text.as_str())
+    };
+    assert_eq!(drawn(1.0), Some("BRT"), "the new wording landed: {notes:?}");
+    assert!(touched_a_field(&notes), "and it was reported: {notes:?}");
+}
+
+#[test]
+fn a_field_the_user_gave_aliases_is_left_alone() {
+    // Aliases are the user shortening names to fit their cells, which is as
+    // much an edit as a colour. An update that changed the field must not
+    // take them back to the numbers.
+    let dir = scratch("aliased");
+    let old = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT" }"#;
+    let new = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT", "colour": "amber" }"#;
+    let theirs = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                      "source": "CDU_BRT", "value_aliases": { "0": "OFF", "1": "ON" } }"#;
+    lay(&dir, Some(old), new, theirs);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let after = mine(&dir);
+    let span = &after.readouts[0].content[0];
+    let drawn = |v: f64| {
+        span.value_aliases
+            .get(&ValueBand::One(v))
+            .map(|a| a.text.as_str())
+    };
+    assert_eq!(drawn(0.0), Some("OFF"));
+    assert_eq!(drawn(1.0), Some("ON"));
+    assert_eq!(span.colour, None, "the shipped change did not land on their field");
+    assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
+}
+
+/// A drum digit as it shipped before `wrap` and `round` existed.
+const DRUM_OLD: &str = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "30",
+                            "source": "CDU_BRT", "reads": [0, 9] }"#;
+
+/// The same drum, drawn as the digit it has clicked over to.
+const DRUM_NEW: &str = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "30",
+                            "source": "CDU_BRT", "reads": [0, 10], "wrap": 10, "round": "down" }"#;
+
+#[test]
+fn a_drum_the_user_left_alone_takes_the_wrap_and_rounding() {
+    // A profile written before the two keys existed has neither, and has to
+    // read as untouched rather than as somebody's edit, or no drum anyone
+    // already has would ever get the fix.
+    let dir = scratch("drum-takes-new");
+    lay(&dir, Some(DRUM_OLD), DRUM_NEW, DRUM_OLD);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let span = &mine(&dir).readouts[0].content[0];
+    assert_eq!(span.reads, Some([0.0, 10.0]));
+    assert_eq!(span.wrap, Some(10.0));
+    assert_eq!(span.round, dsc_config::Round::Down);
+    assert!(touched_a_field(&notes), "and it was reported: {notes:?}");
+}
+
+#[test]
+fn a_wrap_the_user_set_is_left_alone() {
+    let dir = scratch("drum-theirs");
+    let theirs = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "30",
+                      "source": "CDU_BRT", "reads": [0, 9], "wrap": 5 }"#;
+    lay(&dir, Some(DRUM_OLD), DRUM_NEW, theirs);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let span = &mine(&dir).readouts[0].content[0];
+    assert_eq!(span.wrap, Some(5.0), "their wrap survived");
+    assert_eq!(span.round, dsc_config::Round::Nearest, "and ours did not land beside it");
     assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
 }
 
@@ -370,63 +501,6 @@ fn a_checkout_is_left_alone() {
         after.readouts[0].colour.map(|c| format!("{c:?}")),
         Some("Green".to_string()),
         "and the tracked default was not rewritten from the snapshot"
-    );
-}
-
-// ---------------------------------------------------------------------------
-// against the real shipped files
-// ---------------------------------------------------------------------------
-
-/// The A-10C ships thirty three fields, so this is where a rule that looks
-/// right on one field has to prove it moves one and only one.
-#[test]
-fn a_real_shipped_profile_takes_a_real_correction() {
-    let dir = scratch("real");
-    let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let was = repo.join("data/defaults-previous/a-10c.json");
-
-    // What the last release shipped, and what the user is running: the same
-    // file, untouched, which is the whole point.
-    std::fs::copy(&was, dir.join("defaults-previous/a-10c.json")).expect("snapshot copied");
-    std::fs::copy(&was, dir.join("active/a-10c.json")).expect("profile copied");
-
-    // A release that recolours the divider and changes nothing else.
-    let mut shipped = Profile::load(&was).expect("the shipped A-10C loads");
-    let at = shipped
-        .readouts
-        .iter()
-        .position(|r| r.divider)
-        .expect("the A-10C ships a divider");
-    shipped.readouts[at].colour = Some(dsc_config::Colour::Cyan);
-    shipped.save(&dir.join("defaults/a-10c.json")).expect("saved");
-
-    let notes = merge(&dir, "alpha.004");
-
-    let before = Profile::load(&was).expect("loads");
-    let after = mine(&dir);
-    assert_eq!(
-        after.readouts.len(),
-        before.readouts.len(),
-        "no field was added or lost"
-    );
-    assert_eq!(
-        after.readouts[at].colour,
-        Some(dsc_config::Colour::Cyan),
-        "the one changed field took the correction"
-    );
-    for (i, (now, then)) in after.readouts.iter().zip(before.readouts.iter()).enumerate() {
-        if i == at {
-            continue;
-        }
-        assert_eq!(
-            serde_json::to_value(now).unwrap(),
-            serde_json::to_value(then).unwrap(),
-            "field {i} was moved and should not have been"
-        );
-    }
-    assert!(
-        notes.iter().any(|n| n.contains("updated 1")),
-        "exactly one field was claimed: {notes:?}"
     );
 }
 

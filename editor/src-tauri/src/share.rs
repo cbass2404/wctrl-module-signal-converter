@@ -138,7 +138,7 @@ pub async fn import_pick(app: tauri::AppHandle, cache: tauri::State<'_, Cache>) 
         bound: profile.bindings.iter().filter(|b| !b.is_placeholder()).count(),
         total: profile.bindings.len(),
         flagged: flags.len(),
-        cautions: cache.cautions(&paths, &profile),
+        cautions: cache.all_cautions(&paths, &profile),
     }))
 }
 

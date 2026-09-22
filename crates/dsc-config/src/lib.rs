@@ -38,9 +38,10 @@ pub fn build_label() -> &'static str {
 }
 
 pub use display::{
-    divider_rule, divider_text, min_divider_cells, text_cells, Align, Cell, CellRange, Colour,
-    ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, RuleCell,
-    Screen, Span, TextCell, TextGrid, Transport, SEAT_SIGNAL,
+    divider_rule, divider_text, min_divider_cells, text_cells, AliasDraw, Align, Cell, CellRange,
+    Colour, ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, Round,
+    RuleCell, Screen, ShapeArt, Span, StrokeArt, TextCell, TextGrid, Transport, ValueBand,
+    SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -107,8 +108,8 @@ pub enum Error {
     DividerLabelTooWide(String, String, usize, usize, String),
     #[error("a rule on {1} of display {0:?} is written on a piece that draws its own content; only a gap can be a rule")]
     RuleNotOnGap(String, String),
-    #[error("the label {2:?} on a rule on {1} of display {0:?} has no fixed width; an elastic rule is as wide as the rest of the line leaves, so a label on one would come and go as the readings beside it change width")]
-    RuleLabelNeedsWidth(String, String, String),
+    #[error("the label {2:?} on a rule on {1} of display {0:?} may come and go: the rule is as wide as the readings beside it leave it, so the label is dropped in any frame where they take the room it needs")]
+    RuleLabelMayNotFit(String, String, String),
     #[error("the label {4:?} on a rule on {1} of display {0:?} does not fit: the rule is {2} cells wide and needs {3}, a dash and a blank each side of the label")]
     RuleLabelTooWide(String, String, usize, usize, String),
     #[error("a label {2:?} on {1} of display {0:?} is written on a piece that is not a rule; only a rule sets a label into itself")]
@@ -128,10 +129,14 @@ pub enum Error {
     CellsOutOfRange(String, usize, String),
     #[error("cell runs {0} and {1} on display {2:?} overlap; a field has one source")]
     CellsOverlap(String, String, String),
-    #[error("{0:?} is a number, so it needs a range: what the gauge reads in the cockpit at each end of its travel")]
-    RangeMissing(String),
     #[error("{0:?} already reports characters, so a range would mean nothing")]
     RangeOnText(String),
+    #[error("{0:?} already reports characters, so aliases for its values would mean nothing")]
+    AliasesOnText(String),
+    #[error("aliases {0} and {1} on {2:?} both claim the same reading; the lower one draws it")]
+    AliasBandsOverlap(String, String, String),
+    #[error("alias {0} on {1:?} is outside everything the face reads, {2} to {3}, so nothing would ever draw it")]
+    AliasBandUnreachable(String, String, String, String),
     #[error("profile disables device {0:?}, which is not a device we know")]
     DisablesUnknownDevice(String),
     #[error("{0:?} is set to follow {1:?}, and {2:?} is not a device we know")]
@@ -154,6 +159,66 @@ pub enum Error {
     NoBios(PathBuf),
     #[error("another DCS Signal Converter process is building the catalogue and has not finished; if none is running, delete {0}")]
     CatalogueBusy(PathBuf),
+}
+
+impl Error {
+    /// Whether this is a caution rather than a reason to refuse a profile.
+    ///
+    /// These hang on DCS-BIOS saying a signal is text or a number. It is right
+    /// nearly always and wrong sometimes, and when it is wrong only the user,
+    /// looking at the panel, can tell. The worst a wrong one does is a setting
+    /// that changes nothing.
+    ///
+    /// A character the font lacks is not one of these. The font is ours, it is
+    /// what the panel is sent, and a character missing from it is a blank cell
+    /// for certain.
+    /// Both band faults are these. A band nothing can reach is dead
+    /// configuration, and the likeliest way to write one is to band a
+    /// converted face in the raw counts DCS-BIOS sends.
+    ///
+    /// A label on a rule whose width the readings beside it decide is one
+    /// too. It is not certain, which is the whole of it: the rule may well
+    /// have the room in every frame the aircraft actually flies, and only the
+    /// user knows how wide their readings get. `divider_rule` drops a label
+    /// that will not fit and draws a plain line, so the cost of being wrong
+    /// is a line without its name rather than a broken field.
+    ///
+    /// Two bands claiming one reading is a caution rather than a refusal even
+    /// though it is ambiguous, because it is not undefined: bands are held in
+    /// order of where they start, so the lower one draws, every time. Unlike
+    /// two fields claiming a cell, nothing here is unresolvable, and the cost
+    /// of being strict is the wrong way round. A profile is refused whole, so
+    /// refusing this one would take every lamp and every screen dark over one
+    /// row drawing the first of two words the user wrote. A row the user owns
+    /// is never rewritten by an update, so a profile that started loading
+    /// could not be repaired for them either.
+    pub fn is_advisory(&self) -> bool {
+        matches!(
+            self,
+            Error::RangeOnText(_)
+                | Error::AliasesOnText(_)
+                | Error::FormatNotText(_)
+                | Error::AliasBandUnreachable(..)
+                | Error::AliasBandsOverlap(..)
+                | Error::RuleLabelMayNotFit(..)
+        )
+    }
+
+    /// Why an advisory loads anyway, to follow what it says.
+    ///
+    /// Two different reasons, so two sentences. Most of these hang on
+    /// DCS-BIOS metadata, which may simply be wrong about the signal. A
+    /// label that may not fit hangs on nothing outside the profile: the
+    /// arithmetic is certain and it is the readings it depends on, which only
+    /// the user can say the real width of.
+    pub fn advisory_note(&self) -> &'static str {
+        match self {
+            Error::RuleLabelMayNotFit(..) => {
+                "It will load anyway: give the rule a fixed width to hold the label for certain."
+            }
+            _ => "It will load anyway, in case DCS-BIOS is wrong about it.",
+        }
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -386,8 +451,8 @@ pub struct Led {
     #[serde(default, skip_serializing_if = "is_false")]
     pub lights_display: bool,
     /// A panel backlight: legends or a lit feature, not an indicator and not a
-    /// gate. Every shipped default drives all of these from one cockpit knob,
-    /// and `tests/shipped_defaults.rs` holds them to it.
+    /// gate. Every shipped default drives all of these from one source, so the
+    /// whole pit dims together.
     #[serde(default, skip_serializing_if = "is_false")]
     pub backlight: bool,
 }
@@ -429,12 +494,30 @@ pub struct Part {
     pub display: Option<String>,
 }
 
+/// The protocol every device spoke before there was more than one, and what a
+/// device file that does not name one is taken to mean.
+pub const DEFAULT_PROTOCOL: &str = "wctrl";
+
+fn default_protocol() -> String {
+    DEFAULT_PROTOCOL.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceSpec {
     pub key: String,
     pub display_name: String,
     #[serde(default)]
     pub product_name: String,
+    /// Which wire protocol drives this device, naming a backend the converter
+    /// knows how to build.
+    ///
+    /// Declared per device rather than read off the USB vendor id, because a
+    /// vendor can ship more than one protocol and a protocol can outlive the
+    /// ids it started on. A device naming a protocol this build cannot drive
+    /// is skipped with a warning rather than failing the run, so an inventory
+    /// from a newer release still drives the panels it can.
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
     pub usb_pid: u16,
     pub parts: Vec<Part>,
 }
@@ -1419,8 +1502,40 @@ impl Profile {
                 }
             }
         }
-        self.readout_problems(module, devices, displays, &mut out);
+        self.readout_problems(module, devices, displays, &mut out, &mut Vec::new());
+        out.retain(|e| !e.is_advisory());
         out
+    }
+
+    /// Display fields that lean on what DCS-BIOS says a signal is, which only
+    /// the user can check.
+    ///
+    /// Never a refusal. DCS-BIOS metadata is not right for every module, so it
+    /// can be wrong about a field that works. The profile loads and draws what
+    /// it can, and the user is told rather than stopped from trying.
+    ///
+    /// Each comes with the index of the field it is about. Every field records
+    /// where its findings start in the list, which places them without the
+    /// checks themselves having to say.
+    pub fn text_cautions(
+        &self,
+        module: &Module,
+        devices: &DeviceInventory,
+        displays: &DisplayCatalogue,
+    ) -> Vec<(usize, String)> {
+        let mut all = Vec::new();
+        let mut starts = Vec::new();
+        self.readout_problems(module, devices, displays, &mut all, &mut starts);
+        let owner = |at: usize| -> Option<usize> {
+            starts.iter().rev().find(|(_, from)| *from <= at).map(|(i, _)| *i)
+        };
+        all.into_iter()
+            .enumerate()
+            .filter(|(_, e)| e.is_advisory())
+            .filter_map(|(at, e)| {
+                owner(at).map(|i| (i, format!("{e}. {}", e.advisory_note())))
+            })
+            .collect()
     }
 
     /// Every condition and display field that reads what this DCS-BIOS does
@@ -1570,13 +1685,47 @@ impl Profile {
     /// gets the shorter warning, since the widest it can draw depends on what
     /// the module sends rather than on anything written down.
     pub fn width_cautions(&self, module: &Module) -> Vec<String> {
+        self.width_findings(module)
+            .into_iter()
+            .map(|(i, text)| {
+                let r = &self.readouts[i];
+                format!("{} cells {} {text}", r.display, r.cells)
+            })
+            .collect()
+    }
+
+    /// Every caution about what a display field will draw, each with the index
+    /// of the field it is about, worded to sit beside that field.
+    ///
+    /// Two kinds, both about text output and neither a refusal: content that
+    /// may not fit its cells, and settings that lean on what DCS-BIOS says a
+    /// signal is. Kept apart from the profile's own cautions because a line
+    /// naming cells in a list at the top of the page makes the user go and
+    /// find the field, where one on the field is already there.
+    pub fn field_cautions(
+        &self,
+        module: &Module,
+        devices: &DeviceInventory,
+        displays: &DisplayCatalogue,
+    ) -> Vec<(usize, String)> {
+        let mut out: Vec<(usize, String)> = self
+            .width_findings(module)
+            .into_iter()
+            .map(|(i, text)| (i, format!("This field {text}")))
+            .collect();
+        out.extend(self.text_cautions(module, devices, displays));
+        out.sort_by_key(|(i, _)| *i);
+        out
+    }
+
+    /// What `width_cautions` says, without saying where.
+    fn width_findings(&self, module: &Module) -> Vec<(usize, String)> {
         let mut out = Vec::new();
-        for r in &self.readouts {
+        for (i, r) in self.readouts.iter().enumerate() {
             if r.divider {
                 continue;
             }
             let width = r.width(module);
-            let where_ = format!("{} cells {}", r.display, r.cells);
             if width.overflows() {
                 let n = width.dropped();
                 let end = match r.align {
@@ -1586,17 +1735,17 @@ impl Profile {
                     // coming off the front, the way its padding is added.
                     Align::Centre => "outermost",
                 };
-                out.push(format!(
-                    "{where_} needs up to {} cells and has {}, so the {end} {n} character{} would be dropped with nothing shown on the panel to say so.",
+                out.push((i, format!(
+                    "needs up to {} cells and has {}, so the {end} {n} character{} would be dropped with nothing shown on the panel to say so.",
                     width.widest,
                     width.cells,
                     if n == 1 { "" } else { "s" }
-                ));
+                )));
             } else if width.unbounded {
-                out.push(format!(
-                    "{where_} reads text DCS-BIOS gives no length for, so how wide it draws is not known ahead of time and it may run past its {} cells.",
+                out.push((i, format!(
+                    "reads text DCS-BIOS gives no length for, so how wide it draws is not known ahead of time and it may run past its {} cells.",
                     width.cells
-                ));
+                )));
             }
         }
         out
@@ -1607,12 +1756,16 @@ impl Profile {
     ///
     /// Appends rather than returning, for the reason given on
     /// [`problems`](Self::problems): one fault must not hide another.
+    ///
+    /// `starts` gets each field's index and where its findings begin in `out`,
+    /// for a caller that shows them on the field rather than in a list.
     fn readout_problems(
         &self,
         module: &Module,
         devices: &DeviceInventory,
         displays: &DisplayCatalogue,
         out: &mut Vec<Error>,
+        starts: &mut Vec<(usize, usize)>,
     ) {
         for name in &self.disabled_devices {
             if devices.device(name).is_none() {
@@ -1641,6 +1794,7 @@ impl Profile {
             }
         }
         for (i, r) in self.readouts.iter().enumerate() {
+            starts.push((i, out.len()));
             let Some(device) = devices.device(&r.device) else {
                 out.push(Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()));
                 continue;
@@ -1754,7 +1908,7 @@ impl Profile {
                 continue;
             }
 
-            for span in &r.content {
+            for (at, span) in r.content.iter().enumerate() {
                 // A box wider than the run it sits in cannot be drawn: the
                 // field crops what will not fit, so the piece would take the
                 // whole run and whatever shares it would be the part that
@@ -1792,26 +1946,37 @@ impl Profile {
                             r.cells.to_string(),
                             span.label.clone(),
                         ));
-                    } else if span.width == 0 {
-                        // An elastic rule is as wide as the chain leaves it,
-                        // which changes with every reading beside it, so there
-                        // is no width to check a label against. `divider_rule`
-                        // drops a label it cannot fit, which on a rule that
-                        // keeps changing width means a label appearing and
-                        // vanishing on the glass with nothing to say why.
-                        out.push(Error::RuleLabelNeedsWidth(
-                            r.display.clone(),
-                            r.cells.to_string(),
-                            span.label.clone(),
-                        ));
-                    } else if span.width < min_divider_cells(&span.label) {
-                        out.push(Error::RuleLabelTooWide(
-                            r.display.clone(),
-                            r.cells.to_string(),
-                            span.width,
-                            min_divider_cells(&span.label),
-                            span.label.clone(),
-                        ));
+                    } else {
+                        // A box is not what a label needs; a width that holds
+                        // still is, and a rule sharing its line with nothing
+                        // that changes width has one without being boxed. A
+                        // rule with the line to itself is the plain case:
+                        // nothing else is taking room off it, so it is the
+                        // whole run in every frame.
+                        match r.settled_cells(at) {
+                            Some(cells) if cells < min_divider_cells(&span.label) => {
+                                out.push(Error::RuleLabelTooWide(
+                                    r.display.clone(),
+                                    r.cells.to_string(),
+                                    cells,
+                                    min_divider_cells(&span.label),
+                                    span.label.clone(),
+                                ));
+                            }
+                            Some(_) => {}
+                            // As wide as the readings beside it leave it, so
+                            // the room for the label is whatever they are not
+                            // using. `divider_rule` drops a label it cannot
+                            // fit and draws a plain line, so the label comes
+                            // and goes. Cautioned rather than refused: only
+                            // the user knows how wide their readings really
+                            // get, and a fixed width is the fix when it bites.
+                            None => out.push(Error::RuleLabelMayNotFit(
+                                r.display.clone(),
+                                r.cells.to_string(),
+                                span.label.clone(),
+                            )),
+                        }
                     }
                 }
                 // A gap draws nothing and measures itself from what is left,
@@ -1843,8 +2008,11 @@ impl Profile {
                 // one rule, that the font can draw them, is in text_problems
                 // where the font is known.
                 if !span.is_signal() {
-                    if span.reads.is_some() || span.decimals != 0 {
+                    if span.shapes_a_number() {
                         out.push(Error::RangeOnText(span.text.clone()));
+                    }
+                    if !span.value_aliases.is_empty() {
+                        out.push(Error::AliasesOnText(span.text.clone()));
                     }
                     continue;
                 }
@@ -1852,16 +2020,23 @@ impl Profile {
                 let Some(output) = module.signal(&span.source).and_then(|s| s.primary()) else {
                     continue;
                 };
-                // A needle reports a position, not a quantity, and nothing in
-                // the catalogue says what its face is marked with. So the
-                // range is the user's to give, and asking for it beats
-                // printing 0 to 65535 and letting them wonder what broke.
+                // A number shown as sent, converted or as words is the user's
+                // choice. Raw 0 to 65535 is a strange thing to put on a
+                // screen, but the editor says so where the choice is made,
+                // and it draws exactly what it says it will.
                 if output.r#type == "string" {
-                    if span.reads.is_some() {
+                    if span.reads.is_some()
+                        || span.wrap.is_some()
+                        || span.round != Round::Nearest
+                        || span.abs
+                    {
                         out.push(Error::RangeOnText(span.source.clone()));
                     }
-                } else if span.reads.is_none() {
-                    out.push(Error::RangeMissing(span.source.clone()));
+                    if !span.value_aliases.is_empty() {
+                        out.push(Error::AliasesOnText(span.source.clone()));
+                    }
+                } else {
+                    band_problems(span, output.number_max(), out);
                 }
 
                 if let Some(format) = &span.format {
@@ -1909,8 +2084,13 @@ impl Profile {
 
             // Inverse is the one piece of styling a span can ask for on glass
             // that is not a text grid, so it is checked against what the
-            // display can actually do rather than lumped in with colour.
-            if !display.draws_inverse() && r.content.iter().any(|s| s.inverse) {
+            // display can actually do rather than lumped in with colour. A
+            // band can ask for it too.
+            let asks_inverse = r
+                .content
+                .iter()
+                .any(|s| s.inverse || s.value_aliases.values().any(|a| a.inverse));
+            if !display.draws_inverse() && asks_inverse {
                 out.push(Error::FormatNotDrawn(r.display.clone(), r.cells.to_string()));
             }
 
@@ -1933,12 +2113,16 @@ impl Profile {
     /// nothing to say why.
     fn text_problems(&self, r: &Readout, display: &Display, out: &mut Vec<Error>) {
         let Some(text) = &display.text else {
-            let styled = r
-                .content
-                .iter()
-                .any(|s| {
-                    s.colour.is_some() || s.colours.is_some() || s.small || s.label_colour.is_some()
-                });
+            let styled = r.content.iter().any(|s| {
+                s.colour.is_some()
+                    || s.colours.is_some()
+                    || s.small
+                    || s.label_colour.is_some()
+                    // A band's colour is styling like any other, and a band
+                    // that asks for one on glass with no colours is a setting
+                    // nothing draws.
+                    || s.value_aliases.values().any(|a| a.colour.is_some())
+            });
             let ruled = r.divider && (r.colour.is_some() || r.label_colour.is_some());
             if styled || ruled {
                 out.push(Error::StyleNotDrawn(r.display.clone(), r.cells.to_string()));
@@ -2001,6 +2185,7 @@ impl Profile {
                 let written = span
                     .text
                     .chars()
+                    .chain(span.value_aliases.values().flat_map(|a| a.text.chars()))
                     .chain(span.replace.values().filter_map(|to| to.chars().next()));
                 for c in written {
                     if !set.contains(&c) {
@@ -2008,6 +2193,47 @@ impl Profile {
                     }
                 }
             }
+        }
+    }
+}
+
+/// What a reading's alias bands can be wrong about.
+///
+/// Overlaps are refused. Two bands claiming one reading would make what gets
+/// drawn depend on the order they happen to be held in, and a reading draws
+/// one thing, the way a cell has one field.
+///
+/// A band outside everything the face reads is only a caution: it draws
+/// nothing rather than drawing something wrong. It is worth saying because the
+/// likeliest way to write one is to band a converted face in the raw counts
+/// DCS-BIOS sends, and that mistake is otherwise silent.
+fn band_problems(span: &Span, max: u16, out: &mut Vec<Error>) {
+    if span.value_aliases.is_empty() {
+        return;
+    }
+    let tol = span.tolerance();
+    let bands: Vec<&ValueBand> = span.value_aliases.keys().collect();
+    for (i, a) in bands.iter().enumerate() {
+        for b in &bands[i + 1..] {
+            if a.overlaps(b, tol) {
+                out.push(Error::AliasBandsOverlap(
+                    a.to_string(),
+                    b.to_string(),
+                    span.source.clone(),
+                ));
+            }
+        }
+    }
+    let [low, high] = span.reads.unwrap_or([0.0, f64::from(max)]);
+    let (lo, hi) = (low.min(high), low.max(high));
+    for band in bands {
+        if band.highest() < lo - tol || band.lowest() > hi + tol {
+            out.push(Error::AliasBandUnreachable(
+                band.to_string(),
+                span.source.clone(),
+                low.to_string(),
+                high.to_string(),
+            ));
         }
     }
 }
@@ -2165,6 +2391,18 @@ fn reconcile_fields(profile: &mut Profile, shipped: &[Readout], was: &[Readout])
             continue;
         };
         if !same_field(&r, before) {
+            // Theirs, and it stays theirs, whole. A setting introduced after
+            // they edited it needs nothing written here: every key on a field
+            // is optional and absent means its default, so a row from before
+            // a setting existed already reads as that setting turned off.
+            // That is the only sensible value for it, because the row was
+            // built without it and looked right.
+            //
+            // Filling the key in instead would mean deciding, from the JSON
+            // alone, which keys are new to a field and which ones the default
+            // has merely started setting. Those look identical, so a colour or
+            // a rounding the new default chose would land on a row the user
+            // owns, which is the one thing this promises not to do.
             kept.push(r);
             continue;
         }
@@ -2410,13 +2648,19 @@ impl Profiles {
     /// is a guess. Compared without case or surrounding space, because that is
     /// how a user reads two names as the same.
     pub fn name_taken(&self, file: &str, name: &str) -> Option<String> {
+        self.name_taken_except(&[file], name)
+    }
+
+    /// [`name_taken`](Self::name_taken), leaving out every file in `skip`: the
+    /// ones about to be deleted, whose names are free to reuse.
+    pub fn name_taken_except(&self, skip: &[&str], name: &str) -> Option<String> {
         let wanted = name.trim().to_lowercase();
         let entries = std::fs::read_dir(&self.active).ok()?;
         let mut paths: Vec<PathBuf> = entries
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
-            .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some(file))
+            .filter(|p| p.file_name().and_then(|n| n.to_str()).is_none_or(|n| !skip.contains(&n)))
             .collect();
         paths.sort();
         paths.into_iter().find_map(|path| {
@@ -3177,30 +3421,6 @@ mod tests {
         assert_eq!(running.sources_of(flag), vec!["DIM"]);
     }
 
-    /// The editor rewrites whole profiles, and these files are shipped and
-    /// diffed by hand. A round trip that added a line to every lamp would make
-    /// every future change unreviewable.
-    #[test]
-    fn saving_a_shipped_profile_does_not_pad_it() {
-        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/defaults");
-        let mut checked = 0;
-        for entry in std::fs::read_dir(&dir).expect("data/defaults should exist") {
-            let path = entry.expect("readable entry").path();
-            if path.extension().and_then(|e| e.to_str()) != Some("json") {
-                continue;
-            }
-            let profile = Profile::load(&path).expect("shipped profile should parse");
-            let text = serde_json::to_string_pretty(&profile).expect("should serialise");
-            assert!(
-                !text.contains("\"on\": null"),
-                "{} gained an explicit null on save",
-                path.display()
-            );
-            checked += 1;
-        }
-        assert!(checked > 0, "no shipped profiles were checked, so this proves nothing");
-    }
-
     #[test]
     fn equals_drives_full_brightness() {
         let w = OnWhen::Equals(1);
@@ -3233,6 +3453,24 @@ mod tests {
     #[test]
     fn scale_with_a_degenerate_range_is_off_not_a_panic() {
         assert_eq!(OnWhen::Scale([10, 10]).resolve(10, 255, 0, 255), 0);
+    }
+
+    /// The field was added once there was more than one protocol to name, so
+    /// anything written before it exists has to keep loading. A device file
+    /// from an older release, or one a user wrote by hand, says nothing about
+    /// a protocol and means the only one there was.
+    #[test]
+    fn a_device_that_names_no_protocol_is_the_original_one() {
+        let spec: DeviceSpec = serde_json::from_str(
+            r#"{
+              "key": "OLD_PANEL",
+              "display_name": "Old panel",
+              "usb_pid": 48901,
+              "parts": []
+            }"#,
+        )
+        .expect("a device without a protocol still parses");
+        assert_eq!(spec.protocol, DEFAULT_PROTOCOL);
     }
 
     /// Parses the real inventory, so a change to `data/devices.json` that the

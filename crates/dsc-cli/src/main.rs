@@ -2400,7 +2400,6 @@ fn run(
     let idle_limit = exit_when_idle.map(Duration::from_secs);
     let mut last_traffic: Option<Instant> = None;
     let mut next_dcs_check = Instant::now();
-    let mut cleared_for_idle = false;
 
     // Profile hot reload. The directory is checked on a timer, and a change is
     // acted on only once it has stopped changing, so a profile caught halfway
@@ -2435,13 +2434,10 @@ fn run(
                     // to, and the answer is otherwise nowhere in the file.
                     if last_traffic.is_none() {
                         say!("stream   first frame after {} ms", started.elapsed().as_millis());
-                    } else if cleared_for_idle {
-                        say!("stream   frames again after the quiet spell");
                     }
                     trace.tally.frames += 1;
                     trace.tally.words += writes.len() as u64;
                     last_traffic = Some(Instant::now());
-                    cleared_for_idle = false;
                 }
             }
             Err(e)
@@ -2453,26 +2449,16 @@ fn run(
         let now = Instant::now();
         let elapsed = started.elapsed().as_millis();
 
-        // A quiet stream means the cockpit is gone, which is worth clearing the
-        // panels for either way: they latch, so the last frame of the last
-        // mission would otherwise stay lit. Whether to *exit* is a separate
-        // question, and only a dead DCS answers it yes. Sitting in the menu
-        // between missions is silent too, and exiting there would leave the
-        // panels working only on the first mission of each session.
+        // A quiet stream alone is not a reason to touch the panels: the options
+        // and controls menus pause the export too, and clearing there only
+        // meant rebuilding everything on the way back. The last cockpit stays
+        // lit until a new aircraft sweeps it or DCS itself is gone, and leaving
+        // the loop clears the panels on the way out.
         if let (Some(limit), Some(seen)) = (idle_limit, last_traffic) {
             if now.saturating_duration_since(seen) >= limit && now >= next_dcs_check {
                 next_dcs_check = now + DCS_RECHECK;
-
-                if !cleared_for_idle {
-                    cleared_for_idle = true;
-                    let batch = engine.mission_ended();
-                    apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
-                    last_aircraft = None;
-                    say!("stream quiet for {}s. Panels cleared.", limit.as_secs());
-                }
-
                 if !dcs_is_running() {
-                    say!("DCS is no longer running. Exiting.");
+                    say!("stream quiet for {}s and DCS is no longer running. Exiting.", limit.as_secs());
                     break;
                 }
             }

@@ -289,10 +289,13 @@ function conversionRow(
     round.value = span.round ?? "nearest";
     // Only offered on a face that runs below zero, because that is the only
     // face it does anything to and an offer that changes nothing is a question
-    // the user has to answer for no reason.
-    const signed = span.reads[0] < 0 || span.reads[1] < 0;
+    // the user has to answer for no reason. Checked as the ends are typed, so
+    // a face made signed by typing -3 offers it without being drawn again.
+    const signed = (): boolean => (span.reads ?? [0, 0]).some((end) => end < 0);
     const abs = el("input", { type: "checkbox" });
     abs.checked = span.abs === true;
+    const unsign = el("label", { class: "meta" }, abs, " without its sign");
+    unsign.hidden = !signed();
     const sync = (): void => {
       span.reads = [Number(low.value) || 0, Number(high.value) || 0];
       const places = Number(dp.value) || 0;
@@ -303,7 +306,8 @@ function conversionRow(
       else delete span.wrap;
       if (round.value === "down") span.round = "down";
       else delete span.round;
-      if (abs.checked) span.abs = true;
+      unsign.hidden = !signed();
+      if (abs.checked && signed()) span.abs = true;
       else delete span.abs;
       edited();
     };
@@ -324,10 +328,8 @@ function conversionRow(
       round,
       el("span", { class: "sep" }, "and wrapping at"),
       wrap,
+      unsign,
     );
-    if (signed) {
-      after.append(el("label", { class: "meta" }, abs, " without its sign"));
-    }
   }
 
   return el(

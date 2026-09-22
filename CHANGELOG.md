@@ -59,6 +59,12 @@ unless this says what moved.
 
 ### New Features
 
+- **Give each seat its own version of a display field.** On an aircraft with
+  more than one crew station, a field set to one seat now offers a copy for
+  each seat that has none on those cells yet, so the pilot and the gunner can
+  see different things in the same window. The copy starts out the same as
+  the field it came from, ready to point at the other seat's signals.
+
 - **See what the UFC and the DED will draw.** The editor drew a field before
   you flew it only on the MCDU. The UFC and the ICP's DED are the screens
   where that is worth most: they draw from a table of their own, where a value

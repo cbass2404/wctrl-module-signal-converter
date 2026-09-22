@@ -453,6 +453,44 @@ function seatChooser(
   );
 }
 
+/**
+ * A copy of this field for each other seat, where none is on these cells yet.
+ *
+ * Only once the field names a seat. A field for any seat already paints in
+ * every station, and a copy of it would fight it for the same cells. The copy
+ * starts as this field does, since the other seat usually wants the same
+ * layout read from its own signals.
+ */
+function seatCopies(
+  opts: RowOptions,
+  options: { value: number; label: string }[],
+): HTMLElement[] {
+  const { readout, all, onAdd } = opts;
+  if (readout.seat === undefined || !onAdd) return [];
+  const taken = new Set(
+    all
+      .filter(
+        (r) =>
+          r.device === readout.device &&
+          r.display === readout.display &&
+          r.cells === readout.cells,
+      )
+      .map((r) => r.seat),
+  );
+  return options
+    .filter((seat) => !taken.has(seat.value))
+    .map((seat) => {
+      const button = el("button", { class: "add small", type: "button" }, `+ a version for ${seat.label}`);
+      button.title = `Copy this field for ${seat.label}, on the same cells, to edit on its own.`;
+      button.addEventListener("click", () => {
+        const copy = structuredClone(readout);
+        copy.seat = seat.value;
+        onAdd(copy);
+      });
+      return button;
+    });
+}
+
 /** The sentinel for the "somewhere else" row of the region menu. A cell run
  *  is digits and a dash, so this can never collide with one. */
 const CUSTOM = "custom";
@@ -1042,6 +1080,8 @@ interface RowOptions {
   onRemove: () => void;
   /** Swap this field for another and redraw the screen it is on. */
   onReplace: (next: Readout) => void;
+  /** Put a new field just after this one and redraw the screen it is on. */
+  onAdd?: (next: Readout) => void;
 }
 
 /**
@@ -1103,12 +1143,19 @@ function fieldShape(r: Readout): string {
   );
 }
 
-/** The shipped field for these cells, where the default has one. */
+/**
+ * The shipped field for these cells, where the default has one.
+ *
+ * The one for the same seat first: where the default splits a window between
+ * seats, each copy resets to its own seat's version and not to whichever the
+ * default happens to list first.
+ */
 function shippedFor(readout: Readout, shipped: Readout[]): Readout | undefined {
-  return shipped.find(
+  const here = shipped.filter(
     (s) =>
       s.device === readout.device && s.display === readout.display && s.cells === readout.cells,
   );
+  return here.find((s) => s.seat === readout.seat) ?? here[0];
 }
 
 /**
@@ -2368,7 +2415,16 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
       );
     }
     const stations = seats(signals);
-    if (stations.length > 1) extras.append(seatChooser(readout, stations, onChange));
+    if (stations.length > 1) {
+      // Redrawn on a change, since whether a copy is offered follows the seat.
+      extras.append(
+        seatChooser(readout, stations, () => {
+          redraw();
+          onChange();
+        }),
+        ...seatCopies(opts, stations),
+      );
+    }
     extras.append(noteEditor(readout, "field", onChange));
     const reset = resetButton(opts);
     if (reset) extras.append(reset);
@@ -2565,6 +2621,11 @@ export function displaySection(
           const at = readouts.indexOf(r);
           if (at < 0) return;
           readouts[at] = next;
+          redraw();
+          onChange();
+        },
+        onAdd: (next) => {
+          readouts.splice(readouts.indexOf(r) + 1, 0, next);
           redraw();
           onChange();
         },

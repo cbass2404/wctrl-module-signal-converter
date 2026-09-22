@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Measure what `dcs-signal run` costs in CPU and memory.
 
-  python tools/bench_daemon.py                          # dry run, A-10C, all scenarios
+  python tools/bench_daemon.py                          # A-10C, all scenarios
   python tools/bench_daemon.py --aircraft F-16C_50 --module F-16C_50
   python tools/bench_daemon.py --scenario stress --seconds 60
-  python tools/bench_daemon.py --live                   # drives the real panels
 
 No DCS needed. The tool plays a synthetic DCS-BIOS export stream onto the
 multicast group (239.255.50.10:5010), shaped like the real one: a frame every
@@ -19,9 +18,12 @@ Scenarios:
     typical  30 Hz, 20 integer outputs and 1 text field moving per frame
     stress   60 Hz, every output in the module rewritten every frame
 
---dry-run is the default so a benchmark never lights panels across the room;
---live opens the devices and measures the HID writes too. The daemon's own
-output goes to NUL either way, since printing it would be the thing measured.
+The daemon always runs with --dry-run. It finds the panels but never opens or
+writes to them, so they must be plugged in, or it exits with nothing to drive.
+There is deliberately no way to drive them: the stress scenario rewrites every
+lamp and screen 60 times a second for minutes, which is not worth risking real
+hardware for, and the one live run measured the same as a dry run. The
+daemon's own output goes to NUL, since printing it would be the thing measured.
 
 CPU is reported as a percentage of one core, from GetProcessTimes deltas, and
 memory from GetProcessMemoryInfo. The first --warmup seconds are dropped so the
@@ -191,9 +193,7 @@ def memory(handle):
 
 def measure(args, scenario):
     exe = os.path.join(ROOT, "target", "release", "dcs-signal.exe")
-    cmd = [exe, "run", "--seconds", str(int(args.seconds + args.warmup) + 2)]
-    if not args.live:
-        cmd.append("--dry-run")
+    cmd = [exe, "run", "--dry-run", "--seconds", str(int(args.seconds + args.warmup) + 2)]
     proc = subprocess.Popen(
         cmd, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
     )
@@ -223,8 +223,8 @@ def measure(args, scenario):
     m = memory(handle)
     frames = (stream.frames - frames0) if stream else 0
 
-    # Let --seconds run out rather than killing it: TerminateProcess skips the
-    # daemon's clear on exit, and the panels latch whatever was last written.
+    # Let --seconds run out rather than killing it, so the daemon shuts down
+    # the way it does in use.
     stop.set()
     try:
         proc.wait(timeout=10)
@@ -252,7 +252,6 @@ def main():
     ap.add_argument("--seconds", type=float, default=30, help="measured window per scenario")
     ap.add_argument("--warmup", type=float, default=3)
     ap.add_argument("--interval", type=float, default=1, help="sample period for peaks")
-    ap.add_argument("--live", action="store_true", help="drive the real panels")
     args = ap.parse_args()
     args.catalogue = os.path.join(ROOT, "data", "catalogue", args.module + ".json")
 
@@ -261,8 +260,7 @@ def main():
     if not os.path.exists(args.catalogue):
         sys.exit(f"{args.catalogue} missing - build it with: cargo run --bin dcs-signal -- catalogue")
 
-    mode = "live, panels driven" if args.live else "dry run"
-    print(f"dcs-signal run ({mode}), {args.aircraft}, {args.seconds:g}s per scenario\n")
+    print(f"dcs-signal run (dry run), {args.aircraft}, {args.seconds:g}s per scenario\n")
     print(f"{'scenario':<9} {'frames/s':>8} {'CPU avg':>8} {'CPU peak':>9} "
           f"{'WS avg':>8} {'WS peak':>8} {'private':>8}")
     names = list(SCENARIOS) if args.scenario == "all" else [args.scenario]

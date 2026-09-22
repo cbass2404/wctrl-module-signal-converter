@@ -242,9 +242,10 @@ At `FLAG` 0 those seven lamps are invisible while CAUTION, JETT, CTR, LI, LO, RO
 and RI stay lit; raising `FLAG` brings all seven back with no rewrite of the
 lamps, the same latch-beneath-the-governor behaviour `SL` shows.
 
-Index 1 carries the vendor's name `Landing_gear_lights`, but setting it to 0 with
-every indicator lit changed nothing visible. It is verified as a dimmer taking
-0-255, but what it drives is still unidentified, so the name is not evidence.
+Index 1, `Landing_gear_lights`, is the brightness of the landing gear handle's
+own light, identified by Cory 2026-09-22. Setting it to 0 with every indicator
+lit changed nothing visible because the handle was not lit at the time. It is
+verified as a dimmer taking 0-255.
 
 This cost a full debugging session. The engine resolved the A-10C flap lamps
 correctly, every write acked, and the lamps were invisible because `FLAG` sat

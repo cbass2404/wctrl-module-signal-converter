@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-21. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-22. Enough context to resume cold.
 
 ## Resume here
 
@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 375 passing
+cargo test --workspace            # expect 422 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -21,6 +21,19 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
+
+**Built 2026-09-22: the panels stay lit through a quiet stream while DCS runs.**
+Opening the options or controls menu pauses DCS-BIOS, and after 20 seconds of
+that the daemon used to clear every lamp and screen and rebuild them on the way
+back. A quiet stream alone now clears nothing; the panels keep the last cockpit
+until a new aircraft loads, and clear only once `DCS.exe` has gone. Not yet
+watched in DCS; see [TODO.md](TODO.md).
+
+**Flown 2026-09-22, on the panels with DCS feeding them:** the F-16's MCDU
+flight page (fuel from the totalizer drums through round down and wrap, the
+CMDS mode as coloured aliases, trim as magnitude with a direction band), the
+A-10C's MCDU radio rows and the countermeasures page on the DED with its
+inverse blocks, and a per-seat copy of a display field.
 
 **Validated on the panel 2026-09-21: the Hornet's IFEI rebuilt on the MCDU.**
 The Hornet has no CDU of its own, so the MCDU is free glass, and the IFEI is
@@ -46,10 +59,7 @@ site page shows a video of it running instead). What it proved:
 - **Small and large text, and colour per piece**, on one row: white labels in
   the small font, amber readings, green column labels.
 
-The profile edits are the working-tree changes to `data/defaults/fa-18.json`,
-which put these fields on `MCDU_Captain` only. Whether they ship as the
-Hornet's default MCDU page is a separate decision, and waits for release like
-any changed default.
+It shipped as the Hornet's MCDU Captain page in 1.0.0-alpha.004.
 
 **Built 2026-09-22: the UFC and the DED are previewed too.** The editor drew a field before it was flown only on the MCDU,
 where a cell is a character of an uploaded font. The other two screens are
@@ -135,9 +145,10 @@ so every existing profile reads the same. See "Matching another lamp" in
   once, and matching is not offered on a lamp something else already follows,
   so the window cannot build the loop the check would refuse.
 
-Cory is moving the shipped defaults onto it in the editor, testing the flow
-along the way, so those rows change with it. The one-knob test follows `same_as`
-across devices now, so it keeps holding them.
+Every shipped default moved onto it 2026-09-21. On 2026-09-22 the one row
+they all follow became a fixed 175 rather than a cockpit knob, and the test
+that held every backlight to one source was deleted with every other test that
+read the shipped defaults; see "Profiles ship from `data/defaults`".
 
 **Built and flown 2026-09-20: the editor's display fields, put right.** Six
 things, found by using the window rather than by reading it, and one of them
@@ -299,7 +310,8 @@ default, made so the first upgrade has a real correction to carry rather than
 shipping the mechanism untried. It is one field on three MCDU names, still
 exactly as alpha.002 shipped it, so anybody who has not touched row 13 of the
 AH-64D gets `KEYBOARD UNIT` on it and anybody who has keeps what they have.
-That upgrade is the thing to watch. Which also means the free MCDU rows, A-10C 1 to 3,
+That upgrade was the thing to watch, and Cory has since seen the reconcile do
+its work on real upgrades. Which also means the free MCDU rows, A-10C 1 to 3,
 AH-64D twelve, F-14BU six, are now shippable: putting labels there reaches
 people who already have those profiles instead of only new installs.
 
@@ -372,8 +384,8 @@ its row, one spanning two, and two sharing one without a special case. An area
 in use can take a second field beside the first, which lands on the widest free
 run inside it.
 
-Not flown. 310 tests pass, 33 of them new, but nothing here has been on a
-panel: see the flying note in [TODO.md](TODO.md) for what to watch.
+310 tests passed when it landed, 33 of them new. Flown the same day; see the
+2026-09-20 entry above.
 
 **Built and flown 2026-09-20: the session log.** The daemon writes what it
 is doing to `Saved Games\DCS\Logs\dcs-signal.log`, beside DCS's own log. It
@@ -408,6 +420,10 @@ it. See [Development mode](#development-mode-and-three-faults-it-uncovered).
 12:41:07  DCS is no longer running. Exiting.
 12:41:07  stopped  cleanly
 ```
+
+The `stream quiet for 20s. Panels cleared` line and the one after it are from
+before 2026-09-22: a quiet stream no longer clears the panels while DCS is
+running, so neither is logged any more.
 
 Four idle minutes before the mission each left their status line, which is the
 point of writing one on a minute where nothing happened: the gap between
@@ -592,10 +608,9 @@ affiliated. The repository and folder keep their names.
 the whole flow (first-run catalogue build, rebuild on a DCS-BIOS update, the
 nightly-only list) has been tested as a user meets it. Written as the plan
 below; what is left of it is the release-notes list of changed default rows.
-**Next is text output fields**, the editor ticket at the end of "Next steps".
 When that work started there was no release process: `VERSION.md` held
 `1.0.0-alpha.001` and there were no workflows.
-The release process must run `tools/nightly_only.py`. Worth knowing for the
+The release pipeline runs `tools/nightly_only.py`. Worth knowing for the
 installer: the editor finds `data` beside the executable once installed, and
 it writes the catalogue and profiles there, which Program Files does not allow.
 Leaning: read-only data stays with the program, and what is written (profiles,
@@ -748,8 +763,9 @@ Still to do: the release-notes list of changed default rows.
    its window. The flap lamps looked dead and were not; see the `FLAG` dimmer in
    the verified facts.
 
-2. **Fly it.** Edit a profile in `data/profiles` (the active folder, seeded
-   from `data/defaults` on startup), then, with a mission loaded:
+2. ~~**Fly it.**~~ **Flown 2026-09-16.** Edit a profile (in a checkout with
+   `env=dev`, that is `data/defaults`; see "Development mode" below), then,
+   with a mission loaded:
 
    ```powershell
    cargo run --bin dcs-signal -- run --dry-run    # prints writes, opens no device
@@ -829,7 +845,8 @@ Still to do: the release-notes list of changed default rows.
    inventory entries. `Backlight` 0 joins every default's one knob.
    `Marker_Light` 2 is the gate for the nine indicators at 8 to 16, held like
    the PTO2's FLAG with a daylight floor of 255. The indicators are unbound in
-   every default. `Screen_Backlight` 1 follows the screen rule, as the
+   every default, and stay that way: what they show is the user's call
+   (Cory, 2026-09-22). `Screen_Backlight` 1 follows the screen rule, as the
    ICP's does. Captures run through `tools/tail_wwthid.py` now, because the log
    wraps within a minute.
 
@@ -859,10 +876,12 @@ Still to do: the release-notes list of changed default rows.
    * AH-64D: only the seated crew member's KU scratchpad, on row 14 one
      column in (2026-09-18). Flown 2026-09-20.
 
-   Font selection for aircraft without a CDU comes with the field
-   customisation ticket.
+   Font selection for aircraft without a CDU came with text output fields,
+   2026-09-20.
 
-   **Dividers, 2026-09-19.** A readout with `divider` draws a rule across its
+   **Dividers, 2026-09-19.** Superseded in part 2026-09-20: the rule now
+   fills its run corner to corner, can carry a label, and has no minimum width;
+   see the entries at the top of this file. As first built, a readout with `divider` draws a rule across its
    cells and reads nothing: a blank at each end and an unbroken run of dashes
    between them. Spaced dashes, ` - - - - `, were what it drew first, and
    seeing it on the glass settled it: it read as a dotted line rather than a
@@ -1003,9 +1022,10 @@ needs no restart of anything.
 
 The daemon can be started by a DCS hook (`tools/hook`). The hook only starts it;
 stopping is the daemon's own business, because a hook cannot run when DCS is
-killed or crashes and the panels latch. With `--exit-when-idle`, a quiet export
-stream clears the panels and a dead `DCS.exe` is what ends the process, so
-sitting in the menu between missions is survived rather than treated as a crash.
+killed or crashes and the panels latch. With `--exit-when-idle`, the daemon
+clears the panels and exits once the stream is quiet and `DCS.exe` has gone.
+Since 2026-09-22 a quiet stream alone clears nothing, so the options menu,
+which pauses DCS-BIOS, no longer blanks the pit.
 Only one daemon runs at a time; a second backs off.
 
 **Learn mode**, added 2026-09-17, is the one place in the editor that does I/O.
@@ -1078,7 +1098,8 @@ place.
 * **Hot reload.** A profile saved in the editor reached the running daemon and
   changed the panel without stopping anything.
 * **A quiet stream clears the panels**, and the daemon stays up through it while
-  DCS is still running.
+  DCS is still running. Changed 2026-09-22: it no longer clears them while DCS
+  runs.
 * **The same aircraft loaded twice** sweeps the second time. This is the one
   that fails silently if the engine does not forget the cockpit on a quiet
   stream, and a different aircraft would have passed either way.
@@ -1442,20 +1463,18 @@ Changed 2026-09-16. `data/defaults` holds the profiles we ship, tracked in git.
 **A new device lands in every default at once**, 2026-09-18. The ICP had gone
 into `devices.json` and into only the F-16's default, and the startup merge
 hid it by adding blank rows, so nothing failed and the lamp simply never lit
-anywhere else. `tests/shipped_defaults.rs` now fails when any default lacks a
-row for a profile lamp, and when the startup merge would add or reorder
-anything, so a shipped file is already what a user's copy becomes.
+anywhere else. `tests/shipped_defaults.rs` enforced this until 2026-09-22, when
+every test reading the shipped defaults was deleted: the defaults change as
+each aircraft is reworked, and tests use frozen fixtures instead. Check it by
+hand when a device is added.
 
-**Every backlight in a default follows one knob**, by decision the same day,
+**Every backlight in a default takes one source**, by decision the same day,
 so the whole pit dims together until a user splits it. `devices.json` marks
 panel backlights with `backlight: true` (not the PTO2's gates, nor its
-unidentified `Landing_gear_lights`), and the same test file fails when a
-default's backlights resolve to different bindings, following `same_as`
-across panels. The
-Hornet and Super Hornet moved their UFC, MFDs and ICP from `INST_PNL_DIMMER`
-to `CONSOLES_DIMMER` for it. **The Mi-24P is exempt, by name and with its
-reason, until the Hind's backlight knob is found with learn mode**; remove
-the exemption then. A new panel's backlight goes on that knob too.
+`Landing_gear_lights`, which dims the gear handle's own light). The source is the MFD C's
+`INST_PNL_Backlight` and every other backlight is `same_as` it. Since
+2026-09-22 that row is `always` at 175 in every default, the Mi-24P included,
+rather than following a cockpit knob. A new panel's backlight goes on it too.
 `data/profiles` is the active folder the daemon reads and the editor writes; it
 is gitignored and seeded from `data/defaults` on every start for any name not
 already there. Seeding adds and never replaces. Reset is the only overwrite.
@@ -1674,21 +1693,22 @@ Protocol and hardware detail is in `PROTOCOL.md`; the config model is in
 ## Where the code is
 
 ```text
-crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0      (10 tests)
-crates/dsc-bios       export-stream decoder + address space       (10 tests)
-crates/dsc-config     catalogue, inventory, profiles, displays    (83 tests)
-crates/dsc-engine     aircraft detection, sweep, writes, learn    (48 tests)
-crates/dsc-cli        the dcs-signal binary                       (8 tests)
+crates/wctrl-hid      frames, part discovery, SET_LEDX, 0xf0
+crates/dsc-bios       export-stream decoder + address space
+crates/dsc-config     catalogue, inventory, profiles, displays
+crates/dsc-engine     aircraft detection, sweep, writes, learn
+crates/dsc-cli        the dcs-signal binary
 crates/dsc-cli/src/panels  Protocol/Panel traits, one module per brand
-editor/src-tauri      editor backend, learn listener, claims      (7 tests)
+editor/src-tauri      editor backend, learn listener, claims
 data/defaults         shipped profiles, tracked in git
 data/profiles         active profiles, gitignored, seeded from data/defaults
 editor/               Tauri 2 editor: vanilla TS + Vite, src-tauri in the workspace
 crates/dsc-cli        `dcs-signal`  devices/parts/led/blink/sweep/listen/learn/run
-data/catalogue        50 modules, generated, version-stamped
+data/catalogue        51 modules, generated, version-stamped
 data/devices.json     every connected panel verified; each names its protocol
-tools/                catalogue builder, HID probe, WWTHID log parser,
-                      daemon benchmark (results in docs/PERFORMANCE.md)
+tools/                HID probe, WWTHID log parser and tail, release,
+                      version and snapshot scripts, the pinned DCS-BIOS
+                      fetch, daemon benchmark (docs/PERFORMANCE.md)
 ```
 
 Rust 1.98 MSVC. `hidapi` uses its `windows-native` backend, so no C toolchain
@@ -1722,7 +1742,7 @@ Tauri renders through WebView2, which ships with Windows.
    any default whose file name was missing, so renaming a shipped profile left
    existing installs with two profiles claiming one aircraft. A default whose
    aircraft are all claimed is now skipped.
-5. ~~**Text output fields.**~~ **Built 2026-09-20, not yet flown.** A field is
+5. ~~**Text output fields.**~~ **Built and flown 2026-09-20.** A field is
    a chain of pieces, each characters the user typed, a signal, or a gap, and
    each with its own colour and size. Font selection came with it, for aircraft
    without a native CDU only. The editor lists every area of every screen in
@@ -1730,8 +1750,6 @@ Tauri renders through WebView2, which ships with Windows.
    as they were added. See the entry at the top of this file for the decisions
    and what they cost, and "Content: what fills a field" in `CONFIG.md` for the
    model.
-
-   Left to do: fly it.
 
 ## Method note
 

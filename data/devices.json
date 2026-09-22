@@ -189,7 +189,7 @@
       "_notes": [
         "Index 3 is the FLAG dimmer, exposed in SimAppPro as the 'flag' slider. It was missing from the vendor table we transcribed, which cost a debugging session: the engine drove the flap lamps correctly and they were invisible because FLAG was parked near 0.",
         "THREE INDEPENDENT BRIGHTNESS GROUPS, not one. Measured 2026-09-16 with every indicator held at 1: SL (2) gates all of 4-17 hard. FLAG (3) governs NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK beneath it; at FLAG=0 those seven are invisible while CAUTION, JETT, CTR, LI, LO, RO and RI stay lit. Backlight (0) drives the panel labels and governs neither indicator group.",
-        "Index 1 carries the vendor's name Landing_gear_lights, but setting it to 0 with all 14 indicators lit changed nothing visible. What it drives is unidentified, so the name is not evidence.",
+        "Index 1, Landing_gear_lights, is the brightness of the landing gear handle's light when it lights (Cory, 2026-09-22). Setting it to 0 with all 14 indicators lit changed nothing visible because the handle was not lit.",
         "Indicators take 0 or 1. Writing 255 acks and does nothing - it is out of range, not truthy.",
         "The 14 indicators match SimAppPro's UI list read top to bottom, which is how the index order was corroborated.",
         "SL (index 2) is a MASTER GATE for indices 4-17: with SL at 0 no indicator lights at all, whatever value it is sent. Isolated 2026-09-16: SL=0 then CAUTION=1 acked and stayed dark. Stronger than the Orion II, where Backlight only dims.",

@@ -13,47 +13,9 @@
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "any_of": [
-        {
-          "conditions": [
-            {
-              "source": "PLT_TRANSFROM_1_R",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            },
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 0
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "SEAT_POSITION",
-              "on_when": {
-                "equals": 1
-              }
-            },
-            {
-              "source": "OP_TRANSFROM_2_L",
-              "on_when": {
-                "scale": [
-                  0,
-                  10
-                ]
-              }
-            }
-          ]
-        }
-      ],
-      "note": "Every backlight follows the red-lights transformer of whoever is seated: the pilot's Transformer 1 Right, the operator's Transformer 2 Left. The door gunner seat has neither, so the panels are dark there."
+      "always": true,
+      "on": 175,
+      "note": "Every backlight is held at 175 rather than following a cockpit knob, so the panels stay readable whatever the cockpit lighting is set to. Point this row at a knob to have them dim with the cockpit again."
     },
     {
       "device": "CarrierAce_MFD_L",
@@ -113,7 +75,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Captain",
@@ -182,7 +144,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_CoPilot",
@@ -251,7 +213,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Observer",

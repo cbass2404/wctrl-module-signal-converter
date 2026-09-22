@@ -12,17 +12,9 @@
     {
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
-      "conditions": [
-        {
-          "source": "LCP_CONSOLE",
-          "on_when": {
-            "scale": [
-              0,
-              65535
-            ]
-          }
-        }
-      ]
+      "conditions": [],
+      "always": true,
+      "on": 175
     },
     {
       "device": "CarrierAce_MFD_L",
@@ -83,7 +75,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Captain",
@@ -152,7 +144,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_CoPilot",
@@ -221,7 +213,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG, so it follows the backlight at night and goes full bright when the cockpit lighting is off, which is daylight."
+      "note": "Gates all nine MCDU indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
     },
     {
       "device": "MCDU_Observer",
@@ -295,7 +287,7 @@
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
-      "note": "Throttle backlight follows the CONSOLE knob. Unlike the PTO2 SL, this only dims A/A and A/G, it does not gate them."
+      "note": "Throttle backlight takes the panel backlight's level. Unlike the PTO2 SL, this only dims A/A and A/G, it does not gate them."
     },
     {
       "device": "Orion_Throttle_Base_II",
@@ -329,7 +321,7 @@
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
-      "note": "Panel backlight follows the CONSOLE knob on the light control panel."
+      "note": "Panel backlight takes the same level as every other backlight."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -361,7 +353,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Follows the console dimmer at night, and goes full bright when the console is off, because console off means daylight and a dim flag lamp is unreadable then. The daylight case is the off value: a scale of a zero source resolves to zero, and a binding that resolves to zero takes its off value."
+      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Takes the backlight's level, and goes full bright if the backlight is ever at 0, because a dim flag lamp is unreadable in daylight. That case is the off value: a binding that resolves to zero takes its off value."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -558,14 +550,14 @@
       "source": "CDU_LINE0",
       "colour": "green",
       "replace": {
-        "«": "←",
-        "¡": "☐",
         "?": "%",
-        "¶": "⬡",
+        "¡": "☐",
         "®": "Δ",
-        "±": "_",
+        "»": "→",
         "©": "^",
-        "»": "→"
+        "±": "_",
+        "¶": "⬡",
+        "«": "←"
       },
       "note": "CDU line 1. The ten CDU lines sit on rows 5 to 14, so the CDU's line select keys, beside its lines 3, 5, 7 and 9, land beside MCDU rows 7, 9, 11 and 13, and the scratchpad on line 10 lands on the MCDU's scratchpad row."
     },
@@ -576,13 +568,13 @@
       "source": "CDU_LINE1",
       "colour": "green",
       "replace": {
-        "«": "←",
-        "¡": "☐",
-        "±": "_",
-        "®": "Δ",
-        "©": "^",
-        "?": "%",
         "¶": "⬡",
+        "®": "Δ",
+        "¡": "☐",
+        "?": "%",
+        "©": "^",
+        "«": "←",
+        "±": "_",
         "»": "→"
       },
       "note": "DCS-BIOS sends the CDU's symbols as single bytes above ASCII (A-10C.lua, cdu_replace_map). replace turns each into the character whose glyph the A-10C font draws for it: the arrows, the box, the up-down arrow (Delta), the cursor block (hexagon), and ? whose glyph is the % slot. Taken from WCtrlDcsBiosBridge's A-10C listener."
@@ -594,14 +586,14 @@
       "source": "CDU_LINE2",
       "colour": "green",
       "replace": {
-        "©": "^",
         "¡": "☐",
         "»": "→",
+        "±": "_",
         "?": "%",
-        "®": "Δ",
-        "¶": "⬡",
         "«": "←",
-        "±": "_"
+        "®": "Δ",
+        "©": "^",
+        "¶": "⬡"
       }
     },
     {
@@ -611,14 +603,14 @@
       "source": "CDU_LINE3",
       "colour": "green",
       "replace": {
-        "®": "Δ",
-        "±": "_",
         "¡": "☐",
-        "?": "%",
         "¶": "⬡",
+        "?": "%",
+        "®": "Δ",
+        "©": "^",
+        "±": "_",
         "»": "→",
-        "«": "←",
-        "©": "^"
+        "«": "←"
       }
     },
     {
@@ -628,14 +620,14 @@
       "source": "CDU_LINE4",
       "colour": "green",
       "replace": {
-        "¶": "⬡",
         "±": "_",
-        "?": "%",
-        "¡": "☐",
         "©": "^",
-        "®": "Δ",
         "»": "→",
-        "«": "←"
+        "®": "Δ",
+        "¡": "☐",
+        "?": "%",
+        "«": "←",
+        "¶": "⬡"
       }
     },
     {
@@ -645,14 +637,14 @@
       "source": "CDU_LINE5",
       "colour": "green",
       "replace": {
+        "?": "%",
+        "»": "→",
+        "«": "←",
         "±": "_",
         "©": "^",
-        "¶": "⬡",
-        "¡": "☐",
         "®": "Δ",
-        "»": "→",
-        "?": "%",
-        "«": "←"
+        "¶": "⬡",
+        "¡": "☐"
       }
     },
     {
@@ -663,13 +655,13 @@
       "colour": "green",
       "replace": {
         "®": "Δ",
-        "«": "←",
-        "©": "^",
         "±": "_",
+        "¡": "☐",
+        "«": "←",
         "¶": "⬡",
-        "?": "%",
         "»": "→",
-        "¡": "☐"
+        "©": "^",
+        "?": "%"
       }
     },
     {
@@ -679,14 +671,14 @@
       "source": "CDU_LINE7",
       "colour": "green",
       "replace": {
-        "©": "^",
-        "±": "_",
+        "«": "←",
         "»": "→",
+        "¡": "☐",
         "?": "%",
         "®": "Δ",
-        "«": "←",
-        "¡": "☐",
-        "¶": "⬡"
+        "±": "_",
+        "¶": "⬡",
+        "©": "^"
       }
     },
     {
@@ -696,14 +688,14 @@
       "source": "CDU_LINE8",
       "colour": "green",
       "replace": {
-        "?": "%",
-        "»": "→",
-        "®": "Δ",
-        "©": "^",
-        "±": "_",
         "¶": "⬡",
+        "±": "_",
+        "?": "%",
+        "«": "←",
+        "®": "Δ",
         "¡": "☐",
-        "«": "←"
+        "»": "→",
+        "©": "^"
       }
     },
     {
@@ -713,14 +705,14 @@
       "source": "CDU_LINE9",
       "colour": "green",
       "replace": {
-        "?": "%",
-        "«": "←",
-        "©": "^",
-        "®": "Δ",
-        "¡": "☐",
         "»": "→",
-        "¶": "⬡",
-        "±": "_"
+        "®": "Δ",
+        "«": "←",
+        "¡": "☐",
+        "±": "_",
+        "?": "%",
+        "©": "^",
+        "¶": "⬡"
       },
       "note": "CDU line 10, the scratchpad."
     },
@@ -740,13 +732,13 @@
       "colour": "green",
       "replace": {
         "?": "%",
-        "«": "←",
         "¶": "⬡",
-        "±": "_",
-        "»": "→",
         "®": "Δ",
         "©": "^",
-        "¡": "☐"
+        "¡": "☐",
+        "«": "←",
+        "±": "_",
+        "»": "→"
       }
     },
     {
@@ -757,13 +749,13 @@
       "colour": "green",
       "replace": {
         "©": "^",
-        "«": "←",
-        "»": "→",
-        "?": "%",
         "¡": "☐",
         "±": "_",
+        "?": "%",
+        "«": "←",
+        "¶": "⬡",
         "®": "Δ",
-        "¶": "⬡"
+        "»": "→"
       }
     },
     {
@@ -773,13 +765,13 @@
       "source": "CDU_LINE2",
       "colour": "green",
       "replace": {
-        "®": "Δ",
         "»": "→",
         "©": "^",
-        "?": "%",
         "¡": "☐",
-        "±": "_",
+        "?": "%",
         "«": "←",
+        "±": "_",
+        "®": "Δ",
         "¶": "⬡"
       }
     },
@@ -790,13 +782,13 @@
       "source": "CDU_LINE3",
       "colour": "green",
       "replace": {
+        "©": "^",
+        "¡": "☐",
+        "¶": "⬡",
         "±": "_",
         "?": "%",
-        "©": "^",
         "»": "→",
         "«": "←",
-        "¶": "⬡",
-        "¡": "☐",
         "®": "Δ"
       }
     },
@@ -807,14 +799,14 @@
       "source": "CDU_LINE4",
       "colour": "green",
       "replace": {
-        "±": "_",
-        "»": "→",
-        "?": "%",
-        "®": "Δ",
-        "«": "←",
-        "¡": "☐",
         "¶": "⬡",
-        "©": "^"
+        "«": "←",
+        "±": "_",
+        "®": "Δ",
+        "?": "%",
+        "¡": "☐",
+        "©": "^",
+        "»": "→"
       }
     },
     {
@@ -824,14 +816,14 @@
       "source": "CDU_LINE5",
       "colour": "green",
       "replace": {
-        "±": "_",
-        "?": "%",
-        "»": "→",
-        "®": "Δ",
-        "¡": "☐",
-        "©": "^",
         "¶": "⬡",
-        "«": "←"
+        "«": "←",
+        "©": "^",
+        "¡": "☐",
+        "»": "→",
+        "?": "%",
+        "®": "Δ",
+        "±": "_"
       }
     },
     {
@@ -841,14 +833,14 @@
       "source": "CDU_LINE6",
       "colour": "green",
       "replace": {
+        "±": "_",
+        "?": "%",
+        "«": "←",
+        "¡": "☐",
         "©": "^",
         "®": "Δ",
-        "?": "%",
-        "¡": "☐",
         "¶": "⬡",
-        "»": "→",
-        "«": "←",
-        "±": "_"
+        "»": "→"
       }
     },
     {
@@ -858,14 +850,14 @@
       "source": "CDU_LINE7",
       "colour": "green",
       "replace": {
-        "®": "Δ",
         "»": "→",
         "¡": "☐",
+        "¶": "⬡",
         "«": "←",
-        "±": "_",
-        "?": "%",
         "©": "^",
-        "¶": "⬡"
+        "®": "Δ",
+        "?": "%",
+        "±": "_"
       }
     },
     {
@@ -875,13 +867,13 @@
       "source": "CDU_LINE8",
       "colour": "green",
       "replace": {
-        "©": "^",
-        "±": "_",
+        "«": "←",
+        "¡": "☐",
+        "¶": "⬡",
         "?": "%",
         "®": "Δ",
-        "¶": "⬡",
-        "¡": "☐",
-        "«": "←",
+        "±": "_",
+        "©": "^",
         "»": "→"
       }
     },
@@ -892,14 +884,14 @@
       "source": "CDU_LINE9",
       "colour": "green",
       "replace": {
-        "?": "%",
-        "»": "→",
-        "±": "_",
-        "¶": "⬡",
-        "«": "←",
         "®": "Δ",
+        "«": "←",
+        "¶": "⬡",
+        "»": "→",
+        "¡": "☐",
         "©": "^",
-        "¡": "☐"
+        "±": "_",
+        "?": "%"
       }
     },
     {
@@ -917,14 +909,14 @@
       "source": "CDU_LINE0",
       "colour": "green",
       "replace": {
-        "¶": "⬡",
-        "»": "→",
-        "?": "%",
         "¡": "☐",
         "©": "^",
+        "±": "_",
+        "?": "%",
+        "»": "→",
         "«": "←",
         "®": "Δ",
-        "±": "_"
+        "¶": "⬡"
       }
     },
     {
@@ -934,14 +926,14 @@
       "source": "CDU_LINE1",
       "colour": "green",
       "replace": {
-        "©": "^",
-        "«": "←",
-        "?": "%",
-        "±": "_",
-        "»": "→",
         "®": "Δ",
+        "¡": "☐",
+        "©": "^",
+        "±": "_",
         "¶": "⬡",
-        "¡": "☐"
+        "»": "→",
+        "?": "%",
+        "«": "←"
       }
     },
     {
@@ -952,13 +944,13 @@
       "colour": "green",
       "replace": {
         "¶": "⬡",
-        "»": "→",
-        "®": "Δ",
+        "±": "_",
         "?": "%",
         "©": "^",
+        "®": "Δ",
         "¡": "☐",
         "«": "←",
-        "±": "_"
+        "»": "→"
       }
     },
     {
@@ -968,14 +960,14 @@
       "source": "CDU_LINE3",
       "colour": "green",
       "replace": {
-        "±": "_",
-        "©": "^",
         "«": "←",
-        "»": "→",
         "?": "%",
-        "¡": "☐",
         "¶": "⬡",
-        "®": "Δ"
+        "©": "^",
+        "¡": "☐",
+        "®": "Δ",
+        "±": "_",
+        "»": "→"
       }
     },
     {
@@ -985,14 +977,14 @@
       "source": "CDU_LINE4",
       "colour": "green",
       "replace": {
-        "¶": "⬡",
-        "©": "^",
         "¡": "☐",
-        "»": "→",
-        "?": "%",
         "®": "Δ",
+        "?": "%",
+        "©": "^",
+        "«": "←",
         "±": "_",
-        "«": "←"
+        "»": "→",
+        "¶": "⬡"
       }
     },
     {
@@ -1002,13 +994,13 @@
       "source": "CDU_LINE5",
       "colour": "green",
       "replace": {
-        "®": "Δ",
-        "¡": "☐",
         "±": "_",
+        "¡": "☐",
         "¶": "⬡",
-        "?": "%",
         "»": "→",
+        "®": "Δ",
         "«": "←",
+        "?": "%",
         "©": "^"
       }
     },
@@ -1019,14 +1011,14 @@
       "source": "CDU_LINE6",
       "colour": "green",
       "replace": {
-        "»": "→",
-        "?": "%",
-        "©": "^",
         "¡": "☐",
-        "±": "_",
         "«": "←",
+        "±": "_",
+        "¶": "⬡",
+        "©": "^",
         "®": "Δ",
-        "¶": "⬡"
+        "»": "→",
+        "?": "%"
       }
     },
     {
@@ -1036,14 +1028,14 @@
       "source": "CDU_LINE7",
       "colour": "green",
       "replace": {
-        "®": "Δ",
-        "»": "→",
-        "©": "^",
-        "±": "_",
+        "¡": "☐",
+        "¶": "⬡",
         "«": "←",
         "?": "%",
-        "¡": "☐",
-        "¶": "⬡"
+        "»": "→",
+        "®": "Δ",
+        "©": "^",
+        "±": "_"
       }
     },
     {
@@ -1053,13 +1045,13 @@
       "source": "CDU_LINE8",
       "colour": "green",
       "replace": {
-        "®": "Δ",
-        "¡": "☐",
-        "±": "_",
-        "¶": "⬡",
         "»": "→",
-        "«": "←",
         "?": "%",
+        "±": "_",
+        "¡": "☐",
+        "«": "←",
+        "®": "Δ",
+        "¶": "⬡",
         "©": "^"
       }
     },
@@ -1070,15 +1062,233 @@
       "source": "CDU_LINE9",
       "colour": "green",
       "replace": {
-        "±": "_",
         "¶": "⬡",
-        "?": "%",
-        "©": "^",
-        "«": "←",
-        "®": "Δ",
+        "¡": "☐",
         "»": "→",
-        "¡": "☐"
+        "©": "^",
+        "?": "%",
+        "±": "_",
+        "®": "Δ",
+        "«": "←"
       }
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "0-23",
+      "content": [
+        {
+          "text": "JMR",
+          "width": 6
+        },
+        {
+          "gap": true,
+          "width": 3
+        },
+        {
+          "text": "CHF  FLR"
+        },
+        {
+          "gap": true,
+          "width": 1
+        },
+        {
+          "text": "MWS"
+        }
+      ]
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "24-47",
+      "content": [
+        {
+          "source": "CMSC_TXT_JMR",
+          "width": 8
+        },
+        {
+          "gap": true,
+          "width": 1
+        },
+        {
+          "source": "CMSC_TXT_CHAFF_FLARE",
+          "width": 8
+        },
+        {
+          "gap": true,
+          "width": 1
+        },
+        {
+          "source": "CMSC_TXT_MWS",
+          "width": 6
+        }
+      ]
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "72-95",
+      "content": [
+        {
+          "gap": true,
+          "width": 3
+        },
+        {
+          "source": "CMSC_LAUNCH",
+          "width": 1,
+          "value_aliases": {
+            "0": "",
+            "1": {
+              "text": " ",
+              "inverse": true
+            }
+          }
+        },
+        {
+          "gap": true,
+          "width": 9
+        },
+        {
+          "source": "CMSC_PRIO",
+          "width": 1,
+          "value_aliases": {
+            "0": "",
+            "1": {
+              "text": " ",
+              "inverse": true
+            }
+          }
+        },
+        {
+          "text": "-RWR-"
+        },
+        {
+          "source": "CMSC_UNKN",
+          "width": 1,
+          "reads": [
+            0.0,
+            1.0
+          ],
+          "value_aliases": {
+            "0": "",
+            "1": {
+              "text": " ",
+              "inverse": true
+            }
+          }
+        },
+        {
+          "gap": true
+        }
+      ]
+    },
+    {
+      "device": "ViperAce_ICP",
+      "display": "DED",
+      "cells": "96-119",
+      "content": [
+        {
+          "gap": true,
+          "width": 2
+        },
+        {
+          "text": "ML"
+        },
+        {
+          "gap": true,
+          "width": 8
+        },
+        {
+          "text": "PRI"
+        },
+        {
+          "gap": true,
+          "width": 3
+        },
+        {
+          "text": "UNK"
+        },
+        {
+          "gap": true
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "0-23",
+      "content": [
+        {
+          "text": "ARC-210"
+        },
+        {
+          "gap": true
+        },
+        {
+          "text": "ARC-164"
+        },
+        {
+          "gap": true
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "24-47",
+      "content": [
+        {
+          "source": "ARC210_FREQUENCY",
+          "colour": "amber"
+        },
+        {
+          "source": "ARC210_MODULATION",
+          "width": 3,
+          "align": "right",
+          "colour": "amber"
+        },
+        {
+          "gap": true,
+          "width": 2
+        },
+        {
+          "source": "UHF_FREQUENCY",
+          "colour": "amber"
+        },
+        {
+          "text": "AM",
+          "width": 3,
+          "align": "right",
+          "colour": "amber"
+        }
+      ]
+    },
+    {
+      "device": "MCDU_Captain",
+      "display": "MCDU",
+      "cells": "48-71",
+      "content": [
+        {
+          "text": "PRESET: ",
+          "small": true
+        },
+        {
+          "source": "ARC210_ACTIVE_CHANNEL",
+          "colour": "amber"
+        },
+        {
+          "gap": true,
+          "width": 2
+        },
+        {
+          "text": "PRESET: ",
+          "small": true
+        },
+        {
+          "source": "UHF_PRESET",
+          "colour": "amber"
+        }
+      ]
     }
   ],
   "follows": {

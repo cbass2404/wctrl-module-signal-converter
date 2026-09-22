@@ -70,6 +70,31 @@ do not.
 - [ ] **Name a display from a device spec**, so a part can carry one.
       [STATUS.md:825](STATUS.md#L825)
 
+## Blocked on hardware
+
+- [ ] **VIRPIL backlights.** Blocked until the gear arrives, expected around
+      January 2027. The seam it plugs into is already in: every device names a
+      protocol, and `crates/dsc-cli/src/panels/` holds the `Protocol` and
+      `Panel` traits with `wctrl` as the only implementation. Adding a brand is
+      a module there and a name in `panels::all()`; nothing above it changes.
+
+      Do not start writing a backend before there is a capture. In order:
+
+      1. **Answer the one question that decides feasibility.** USBPcap and
+         Wireshark on the VPC Configuration Tool: does moving the LED
+         brightness slider produce traffic immediately, or only on save to
+         device? Persistent-only means flash writes at signal rate and this
+         cannot be built on it.
+      2. **Read the ids and the descriptors off the real hardware** rather than
+         trusting a remembered vendor id. `declares_output` in `wctrl-hid`
+         already says whether an interface declares host-to-device writes.
+      3. **Then** the backend, backlights only, fixed colour per lamp so the
+         engine keeps sending one byte of brightness.
+
+      Colour as a bindable signal is a separate, much larger feature and is not
+      part of this. See "What VIRPIL will need decided" in STATUS.md for why
+      each of those is in that order.
+
 ## Deferred, not scheduled
 
 - [ ] **Profile inheritance.** Leaning no for v1.

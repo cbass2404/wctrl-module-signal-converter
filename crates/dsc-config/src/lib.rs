@@ -493,12 +493,30 @@ pub struct Part {
     pub display: Option<String>,
 }
 
+/// The protocol every device spoke before there was more than one, and what a
+/// device file that does not name one is taken to mean.
+pub const DEFAULT_PROTOCOL: &str = "wctrl";
+
+fn default_protocol() -> String {
+    DEFAULT_PROTOCOL.to_string()
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DeviceSpec {
     pub key: String,
     pub display_name: String,
     #[serde(default)]
     pub product_name: String,
+    /// Which wire protocol drives this device, naming a backend the converter
+    /// knows how to build.
+    ///
+    /// Declared per device rather than read off the USB vendor id, because a
+    /// vendor can ship more than one protocol and a protocol can outlive the
+    /// ids it started on. A device naming a protocol this build cannot drive
+    /// is skipped with a warning rather than failing the run, so an inventory
+    /// from a newer release still drives the panels it can.
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
     pub usb_pid: u16,
     pub parts: Vec<Part>,
 }
@@ -3453,6 +3471,24 @@ mod tests {
     #[test]
     fn scale_with_a_degenerate_range_is_off_not_a_panic() {
         assert_eq!(OnWhen::Scale([10, 10]).resolve(10, 255, 0, 255), 0);
+    }
+
+    /// The field was added once there was more than one protocol to name, so
+    /// anything written before it exists has to keep loading. A device file
+    /// from an older release, or one a user wrote by hand, says nothing about
+    /// a protocol and means the only one there was.
+    #[test]
+    fn a_device_that_names_no_protocol_is_the_original_one() {
+        let spec: DeviceSpec = serde_json::from_str(
+            r#"{
+              "key": "OLD_PANEL",
+              "display_name": "Old panel",
+              "usb_pid": 48901,
+              "parts": []
+            }"#,
+        )
+        .expect("a device without a protocol still parses");
+        assert_eq!(spec.protocol, DEFAULT_PROTOCOL);
     }
 
     /// Parses the real inventory, so a change to `data/devices.json` that the

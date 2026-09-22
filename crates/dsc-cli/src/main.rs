@@ -23,6 +23,9 @@ use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, Displa
 use dsc_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
+mod panels;
+use panels::Panel;
+
 /// Say it on the console, as this has always done, and put it in the session
 /// log with a timestamp in front.
 ///
@@ -409,16 +412,25 @@ fn main() -> Result<()> {
             }
         }
         Command::Devices => {
-            let api = hidapi::HidApi::new()?;
-            let found = wctrl_hid::enumerate(&api);
-            if found.is_empty() {
-                println!("No WinCtrl devices (vendor 0x{:04x}) found.", wctrl_hid::VENDOR_ID);
-            }
-            for d in found {
-                println!("PID=0x{:04x}  {}", d.product_id, d.product);
-                if !d.serial.is_empty() {
-                    println!("    serial {}", d.serial);
+            // Asks every protocol this build knows, so a panel of a brand the
+            // user has just plugged in shows up here even before anything can
+            // drive it. The diagnostics below it stay single-protocol.
+            let protocols = panels::all()?;
+            let mut any = false;
+            for protocol in &protocols {
+                for d in protocol.present()? {
+                    any = true;
+                    println!("{}  {}  {}", protocol.name(), d.ident, d.product);
+                    if !d.serial.is_empty() {
+                        println!("    serial {}", d.serial);
+                    }
                 }
+            }
+            if !any {
+                println!(
+                    "No devices found. Protocols this build can drive: {}.",
+                    protocols.iter().map(|p| p.name()).collect::<Vec<_>>().join(", ")
+                );
             }
         }
 
@@ -2294,28 +2306,39 @@ fn run(
 
     // Only drive hardware that is actually plugged in. A shared profile may
     // name panels this user does not own, which is not an error.
-    let api = hidapi::HidApi::new().context("opening HID API")?;
-    let found = wctrl_hid::enumerate(&api);
-    // Everything of the vendor's that is plugged in, known to this build or
-    // not. A panel missing from the inventory and a panel nobody plugged in
+    let protocols = panels::all()?;
+    // Everything of every known brand that is plugged in, known to this build
+    // or not. A panel missing from the inventory and a panel nobody plugged in
     // look identical from the profile's side, and only this separates them.
-    for d in &found {
-        dlog::header(&format!(
-            "usb      pid 0x{:04x}  {}{}",
-            d.product_id,
-            d.product,
-            if d.serial.is_empty() {
-                String::new()
-            } else {
-                format!("  serial {}", d.serial)
-            }
-        ));
+    for protocol in &protocols {
+        for d in protocol.present()? {
+            dlog::header(&format!(
+                "{:<8} {}  {}{}",
+                protocol.name(),
+                d.ident,
+                d.product,
+                if d.serial.is_empty() {
+                    String::new()
+                } else {
+                    format!("  serial {}", d.serial)
+                }
+            ));
+        }
     }
-    let present: Vec<u16> = found.iter().map(|d| d.product_id).collect();
     let mut connected = Vec::new();
-    let mut handles: HashMap<String, Device> = HashMap::new();
+    let mut handles: HashMap<String, Box<dyn Panel>> = HashMap::new();
     for spec in &inventory.devices {
-        if !present.contains(&spec.usb_pid) {
+        // A device naming a protocol this build cannot drive is a newer
+        // inventory, not a broken one. Say so once and carry on with the rest,
+        // rather than failing the run over a panel the user may not even own.
+        let Some(protocol) = protocols.iter().find(|p| p.name() == spec.protocol) else {
+            warn!(
+                "{} asks for the {} protocol, which this build cannot drive. Skipped.",
+                spec.display_name, spec.protocol
+            );
+            continue;
+        };
+        if !protocol.is_connected(spec)? {
             continue;
         }
         let glass: Vec<&str> = spec.displays().map(|(_, k)| k).collect();
@@ -2345,9 +2368,7 @@ fn run(
         );
         connected.push(spec.key.clone());
         if !dry_run {
-            let dev = Device::open(&api, spec.usb_pid)
-                .with_context(|| format!("opening {}", spec.display_name))?;
-            handles.insert(spec.key.clone(), dev);
+            handles.insert(spec.key.clone(), protocol.open(spec, &displays)?);
         }
     }
     if connected.is_empty() {
@@ -2361,7 +2382,7 @@ fn run(
         ..Trace::default()
     };
 
-    let mut panels = Panels { handles, displays: displays.clone(), fonts: HashMap::new() };
+    let mut panels = Panels { handles, displays: displays.clone() };
     let mut engine = Engine::new(inventory, cat, profiles).with_displays(displays.clone());
     engine.set_connected(connected);
 
@@ -2636,55 +2657,14 @@ fn run(
     Ok(())
 }
 
-/// The open panels, and what each text grid has been sent this run.
-struct Panels {
-    handles: HashMap<String, Device>,
-    displays: DisplayCatalogue,
-    /// Per device, the font its text grid holds: absent until the grid has
-    /// been declared this run, `None` once declared with no font sent. The
-    /// panel keeps no font across a power cycle and we cannot ask it which it
-    /// has, so a run starts by assuming nothing.
-    fonts: HashMap<String, Option<String>>,
-}
-
-/// Get a text grid ready for `w`: declared, and holding the font it needs.
+/// The open panels.
 ///
-/// The font upload is the panel's whole glyph set, about 600 reports, so it
-/// goes out only when the font changes, not per paint. It resets the grid to
-/// the size SimAppPro uses, so the grid is declared again after it, exactly as
-/// WwDevicesDotnet does.
-fn prepare_text_grid(dev: &Device, w: &dsc_engine::LcdWrite, panels: &mut Panels) -> Result<()> {
-    use dsc_config::mcdu_font::{font_upload, McduFont, PacketMap, UploadStep};
-    let grid = panels
-        .displays
-        .get(&w.display)
-        .and_then(|d| d.text.as_ref())
-        .with_context(|| format!("display {} has no text grid", w.display))?;
-    let origin = (grid.origin[0], grid.origin[1]);
-    let (rows, columns) = (grid.rows as u16, grid.columns as u16);
-    let have = panels.fonts.get(&w.device);
-    let upload = match (&w.font, have) {
-        (Some(want), Some(Some(held))) if want == held => None,
-        (Some(want), _) => Some(want.clone()),
-        (None, Some(_)) => return Ok(()),
-        (None, None) => None,
-    };
-    dev.declare_grid(w.part_id, origin, rows, columns)?;
-    if let Some(file) = &upload {
-        dev.paint_grid(&vec![wctrl_hid::GridCell::BLANK; grid.rows * grid.columns])?;
-        let map = PacketMap::load(&grid.path(&grid.upload))?;
-        let font = McduFont::load(&grid.path(file))?;
-        let at = (grid.font_origin[0], grid.font_origin[1]);
-        for step in font_upload(&map, &font, w.part_id, at, 255)? {
-            match step {
-                UploadStep::Report(r) => dev.send_screen_reports(std::slice::from_ref(&r))?,
-                UploadStep::SetLed { index, value } => dev.set_led(w.part_id, index, value)?,
-            }
-        }
-        dev.declare_grid(w.part_id, origin, rows, columns)?;
-    }
-    panels.fonts.insert(w.device.clone(), upload.or_else(|| have.cloned().flatten()));
-    Ok(())
+/// The displays are kept for the trace, which reads a text screen back as the
+/// lines it shows. Everything about how a panel is actually driven, including
+/// which font its grid is holding, belongs to the backend behind [`Panel`].
+struct Panels {
+    handles: HashMap<String, Box<dyn Panel>>,
+    displays: DisplayCatalogue,
 }
 
 /// A text grid's buffer as the lines it shows, for the trace.
@@ -2734,9 +2714,8 @@ fn apply(
         if dry_run {
             continue;
         }
-        if let Some(dev) = panels.handles.get(&w.id.device) {
-            dev.set_led(w.id.part_id, w.id.index, w.value)
-                .with_context(|| format!("writing {} index {}", w.id.device, w.id.index))?;
+        if let Some(panel) = panels.handles.get_mut(&w.id.device) {
+            panel.set_lamp(w)?;
         }
     }
 
@@ -2794,47 +2773,23 @@ fn apply(
         if dry_run {
             continue;
         }
-        let Some(dev) = panels.handles.get(&w.device) else { continue };
-        match w.transport {
-            Transport::Segment => dev
-                .set_lcd(w.part_id, w.group, &w.bytes)
-                .with_context(|| format!("writing {} display group {}", w.device, w.group))?,
-            Transport::Pixel => dev
-                .write_pixels(w.part_id, w.offset, &w.bytes)
-                .with_context(|| format!("writing {} screen from row {}", w.device, w.group))?,
-            Transport::Text => {
-                // Taken out and put back so the handle and the font record
-                // can both be used; nothing else touches `handles` meanwhile.
-                let dev = panels.handles.remove(&w.device).expect("present above");
-                let result = prepare_text_grid(&dev, w, panels).and_then(|()| {
-                    let cells: Vec<wctrl_hid::GridCell> = dsc_config::text_cells(&w.bytes)
-                        .into_iter()
-                        .map(|c| wctrl_hid::GridCell { ch: c.ch, fg: c.fg, bg: c.bg, small: c.small })
-                        .collect();
-                    dev.paint_grid(&cells)?;
-                    Ok(())
-                });
-                panels.handles.insert(w.device.clone(), dev);
-                result.with_context(|| format!("writing {} text screen", w.device))?;
-                // Screens sent back to back can garble; WwDevicesDotnet
-                // pauses this long after each one for the same reason.
-                std::thread::sleep(Duration::from_millis(40));
-            }
+        if let Some(panel) = panels.handles.get_mut(&w.device) {
+            panel.write_display(w)?;
         }
     }
 
-    // A pixel screen shows nothing written until it is committed, so each one
-    // written to in this batch is committed once, after all its writes.
+    // Some screens show nothing until the batch is finished, so every panel
+    // written to in it is flushed once. What that costs, or whether it costs
+    // anything at all, is the protocol's business.
     if !dry_run {
-        let mut committed: Vec<(&str, u32)> = Vec::new();
-        for w in batch.lcd.iter().filter(|w| w.transport == Transport::Pixel) {
-            if committed.contains(&(w.device.as_str(), w.part_id)) {
+        let mut flushed: Vec<&str> = Vec::new();
+        for w in &batch.lcd {
+            if flushed.contains(&w.device.as_str()) {
                 continue;
             }
-            committed.push((w.device.as_str(), w.part_id));
-            if let Some(dev) = panels.handles.get(&w.device) {
-                dev.commit_pixels(w.part_id)
-                    .with_context(|| format!("committing {} screen", w.device))?;
+            flushed.push(w.device.as_str());
+            if let Some(panel) = panels.handles.get_mut(&w.device) {
+                panel.flush()?;
             }
         }
     }

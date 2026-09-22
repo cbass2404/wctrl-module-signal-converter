@@ -36,8 +36,19 @@ fn bytes_at(address: u16, b: &[u8]) -> Vec<BiosWrite> {
         .collect()
 }
 
+/// A real profile to hang a test field on: one A-10C CDU page, frozen.
+///
+/// Not a shipped default. These tests put their field on MCDU row 1, and a
+/// shipped profile is a living document whose author is free to fill that row,
+/// which would fail every test here over cells rather than over anything the
+/// test is about. The fixture holds the page's shape, with rows 1 to 3 left
+/// free on purpose.
 fn profile() -> Profile {
-    Profile::load(&r("data/defaults/a-10c.json")).expect("A-10C default")
+    Profile::load(&fixture("a-10c-cdu-page.json")).expect("the CDU page fixture")
+}
+
+fn fixture(name: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)
 }
 
 fn engine(p: Profile) -> Engine {

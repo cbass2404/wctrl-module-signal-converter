@@ -70,6 +70,35 @@ export interface Binding {
 }
 
 /**
+ * What one alias band draws: the characters, and a colour of its own where it
+ * wants one.
+ *
+ * Bare characters when there is no colour, which is the shape every alias
+ * written before colours had. It has to go back that way too: the update merge
+ * compares rows as JSON, so an alias that changed shape would read as one the
+ * user had edited and stop being brought up to a new release.
+ */
+export type AliasDraw = string | { text: string; colour?: string };
+
+/** The characters an alias draws, whichever shape it is written in. */
+export function aliasText(drawn: AliasDraw): string {
+  return typeof drawn === "string" ? drawn : drawn.text;
+}
+
+/** The colour an alias asks for, if any. */
+export function aliasColour(drawn: AliasDraw): string | undefined {
+  return typeof drawn === "string" ? undefined : drawn.colour;
+}
+
+/**
+ * An alias in the shape it is stored in: bare characters unless it has a
+ * colour, so a row with no colour is byte for byte what it was.
+ */
+export function aliasOf(text: string, colour?: string): AliasDraw {
+  return colour ? { text, colour } : text;
+}
+
+/**
  * One piece of a field's content: characters the user typed, or a signal.
  *
  * A field is a chain of these drawn end to end, because a reading on its own
@@ -111,10 +140,20 @@ export interface Span {
    */
   wrap?: number;
   /**
-   * What to draw for each value of a number, in place of the number: `SEMI`
-   * for a knob at 3. A value with no entry draws as the number. Numbers only.
+   * Draw a converted reading without its sign, so a face running each way from
+   * zero reads as a magnitude with a band beside it naming the direction.
    */
-  value_aliases?: Record<string, string>;
+  abs?: boolean;
+  /**
+   * What to draw for each reading of a number, in place of the number: `SEMI`
+   * for a knob at 3, or `ND` for a trim needle anywhere below centre.
+   *
+   * The key is one reading (`3`), a list of them (`0,1,2`) or a closed band
+   * (`-1.5..-0.1`), matched against what the face reads once `reads`,
+   * `decimals` and `wrap` have had their turn. A reading no key claims draws
+   * as the number. Numbers only.
+   */
+  value_aliases?: Record<string, AliasDraw>;
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
   /** A second text signal whose `i` marks the characters to draw inverse. */
@@ -242,8 +281,10 @@ export interface Readout {
   decimals?: number;
   round?: "down";
   wrap?: number;
-  /** What to draw for each value of a number, in place of the number. */
-  value_aliases?: Record<string, string>;
+  /** Draw a converted reading without its sign. */
+  abs?: boolean;
+  /** What to draw for each reading of a number, in place of the number. */
+  value_aliases?: Record<string, AliasDraw>;
   align?: "left" | "right" | "centre";
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;

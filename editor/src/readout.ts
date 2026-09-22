@@ -23,7 +23,9 @@ import type { SpanKind } from "./content";
 import { cautionSlot, flagSlot } from "./flags";
 import { noteEditor } from "./note";
 import { signalPicker } from "./typeahead";
+import { aliasColour, aliasOf, aliasText } from "./types";
 import type {
+  AliasDraw,
   Device,
   DisplayInfo,
   FontChoice,
@@ -158,13 +160,18 @@ function maxOf(signals: SignalView[], id: string): number {
   return signals.find((x) => x.id === id)?.max_value ?? 65535;
 }
 
-/** How a reading draws a number: as DCS-BIOS sends it, converted, or named. */
-type ReadingKind = "sent" | "converted" | "aliased";
+/** How a reading draws a number: as DCS-BIOS sends it, or converted.
+ *
+ * Aliases are not a third way of drawing a number, they sit on top of either.
+ * A band is matched against what the face reads, so naming one needs the
+ * conversion as well, and a knob's positions are named with no conversion at
+ * all.
+ */
+type ReadingKind = "sent" | "converted";
 
 const READING_LABELS: Record<ReadingKind, string> = {
   sent: "as sent",
   converted: "converted to",
-  aliased: "as aliases",
 };
 
 /**
@@ -194,19 +201,32 @@ function namedPositions(signal: SignalView | undefined): Record<string, string> 
  */
 function startReading(span: Span, signal: SignalView | undefined): void {
   clearReading(span);
+  // A different signal, so the old one's bands mean nothing: they named
+  // readings of a face this piece no longer reads. `clearReading` leaves them
+  // alone on purpose, because switching between as sent and converted must
+  // not throw away typed words, and changing the signal is the other case.
+  delete span.value_aliases;
   if (!signal || signal.text) return;
   const named = namedPositions(signal);
   if (Object.keys(named).length > 0) span.value_aliases = named;
   else if (signal.max_value >= 65535) span.reads = [0, 100];
 }
 
-/** Forget how a number was drawn, ahead of drawing it some other way. */
+/**
+ * Forget how a number was shaped, ahead of shaping it some other way.
+ *
+ * Aliases are deliberately left alone. They are matched against the reading
+ * whichever way it is drawn, so switching between as sent and converted is a
+ * change to the arithmetic and not a reason to throw away the words the user
+ * has typed. Clearing them here would lose a page of bands to one stray click
+ * on the menu.
+ */
 function clearReading(span: Span): void {
   delete span.reads;
   delete span.decimals;
   delete span.round;
   delete span.wrap;
-  delete span.value_aliases;
+  delete span.abs;
 }
 
 /**
@@ -222,6 +242,7 @@ function conversionRow(
   span: Span,
   signal: SignalView | undefined,
   set: string | null,
+  colours: string[],
   edited: () => void,
   rebuild: () => void,
 ): HTMLElement {
@@ -230,33 +251,15 @@ function conversionRow(
   for (const kind of Object.keys(READING_LABELS) as ReadingKind[]) {
     select.append(el("option", { value: kind }, READING_LABELS[kind]));
   }
-  select.value = span.value_aliases ? "aliased" : span.reads ? "converted" : "sent";
+  select.value = span.reads ? "converted" : "sent";
   select.addEventListener("change", () => {
     // Converting starts from the signal's own range, which draws exactly what
     // as sent did, so the choice changes nothing until a number is changed.
-    // Aliasing starts from the catalogue's position names, where it has any.
     // Decimals mean nothing on a whole number sent as it is.
     clearReading(span);
     if (select.value === "converted") span.reads = [0, max];
-    if (select.value === "aliased") span.value_aliases = namedPositions(signal);
     rebuild();
   });
-
-  if (span.value_aliases) {
-    return el(
-      "div",
-      {},
-      el("div", { class: "test-row" }, select),
-      valueAliasEditor(span, set, edited),
-      el(
-        "span",
-        { class: "meta block" },
-        `What to draw for each value DCS-BIOS sends, 0 to ${max}. Shorten ` +
-          "them to fit the cells you have. A value with no alias is drawn as " +
-          "the number.",
-      ),
-    );
-  }
 
   const values = el("span", { class: "values-row" });
   const after = el("span", { class: "values-row" });
@@ -281,6 +284,12 @@ function conversionRow(
       el("option", { value: "down" }, "down"),
     );
     round.value = span.round ?? "nearest";
+    // Only offered on a face that runs below zero, because that is the only
+    // face it does anything to and an offer that changes nothing is a question
+    // the user has to answer for no reason.
+    const signed = span.reads[0] < 0 || span.reads[1] < 0;
+    const abs = el("input", { type: "checkbox" });
+    abs.checked = span.abs === true;
     const sync = (): void => {
       span.reads = [Number(low.value) || 0, Number(high.value) || 0];
       const places = Number(dp.value) || 0;
@@ -291,10 +300,13 @@ function conversionRow(
       else delete span.wrap;
       if (round.value === "down") span.round = "down";
       else delete span.round;
+      if (abs.checked) span.abs = true;
+      else delete span.abs;
       edited();
     };
     for (const box of [low, high, dp, wrap]) box.addEventListener("input", sync);
     round.addEventListener("change", sync);
+    abs.addEventListener("change", sync);
     values.append(
       low,
       el("span", { class: "sep" }, "to"),
@@ -310,6 +322,9 @@ function conversionRow(
       el("span", { class: "sep" }, "and wrapping at"),
       wrap,
     );
+    if (signed) {
+      after.append(el("label", { class: "meta" }, abs, " without its sign"));
+    }
   }
 
   return el(
@@ -317,6 +332,7 @@ function conversionRow(
     {},
     el("div", { class: "test-row" }, select, values),
     span.reads ? el("div", { class: "test-row" }, after) : "",
+    valueAliasEditor(span, signal, set, colours, edited),
     el(
       "span",
       { class: "meta block" },
@@ -611,89 +627,183 @@ function aliasEditor(span: Span, onChange: () => void): HTMLElement {
   return wrap;
 }
 
+/** One row of the alias editor while it is being typed in. */
+interface AliasRow {
+  /** The readings this row claims: `3`, `0,1,2` or `-1.5..-0.1`. */
+  band: string;
+  text: string;
+  colour: string;
+}
+
 /**
- * What a number draws at each value, one row a value.
+ * Whether a band is one the backend will accept, said the same way it says it.
+ *
+ * Checked here as well as there because the answer has to arrive as the user
+ * types. The grammar is small enough to keep in step, and the backend still
+ * has the last word.
+ */
+function bandTrouble(band: string): string {
+  const s = band.trim();
+  if (s === "") return "";
+  const number = (part: string): boolean => {
+    const v = Number(part.trim());
+    return part.trim() !== "" && Number.isFinite(v);
+  };
+  const split = s.includes("..") ? ".." : s.includes(" to ") ? " to " : "";
+  if (split) {
+    const at = s.indexOf(split);
+    const lo = s.slice(0, at);
+    const hi = s.slice(at + split.length);
+    if (!number(lo) || !number(hi)) {
+      return 'A band is two readings, as in "-1.5..-0.1".';
+    }
+    if (Number(hi) < Number(lo)) return "This band ends before it starts.";
+    return "";
+  }
+  if (s.includes(",")) {
+    return s.split(",").every(number) ? "" : 'A list is readings separated by commas, as in "0,1,2".';
+  }
+  return number(s) ? "" : 'A reading, a list like "0,1,2" or a band like "-1.5..-0.1".';
+}
+
+/**
+ * What a number draws at each reading, one row a reading or a band of them.
  *
  * Laid out like the substitutions, which are the same shape of thing. Arrives
  * filled with the catalogue's position names where there are any, which are
  * often longer than the cells a user has to spare, so every one is theirs to
- * shorten, clear or remove. A character the font lacks is said beside the
- * row as it is typed, the way it is for typed text.
+ * shorten, clear or remove. A character the font lacks is said beside the row
+ * as it is typed, the way it is for typed text.
+ *
+ * A key is a reading, a list of them or a closed band, matched against what
+ * the face reads rather than the raw count. A blank drawing is allowed and
+ * means exactly that: the centre of a trim indicator is worth a row of its own
+ * that draws nothing, rather than a zero nobody needs to read.
  */
-function valueAliasEditor(span: Span, set: string | null, onChange: () => void): HTMLElement {
+function valueAliasEditor(
+  span: Span,
+  signal: SignalView | undefined,
+  set: string | null,
+  colours: string[],
+  onChange: () => void,
+): HTMLElement {
   const wrap = el("div", { class: "aliases" });
   const rows = el("div", { class: "alias-rows" });
-  // Pairs rather than the object, for the same reason as the substitutions:
-  // changing a value half way through typing it would collide with another.
-  const pairs: [string, string][] = Object.entries(span.value_aliases ?? {});
+  // Rows rather than the object, for the same reason as the substitutions:
+  // changing a key half way through typing it would collide with another.
+  const held: AliasRow[] = Object.entries(span.value_aliases ?? {}).map(([band, drawn]) => ({
+    band,
+    text: aliasText(drawn),
+    colour: aliasColour(drawn) ?? "",
+  }));
 
   const store = (): void => {
-    const out: Record<string, string> = {};
-    for (const [value, alias] of pairs) {
-      if (value !== "" && alias !== "") out[value] = alias;
+    const out: Record<string, AliasDraw> = {};
+    for (const row of held) {
+      // A row with no band yet is one half typed, not one that draws nothing.
+      // The drawing itself may be blank on purpose.
+      if (row.band.trim() === "" || bandTrouble(row.band)) continue;
+      out[row.band.trim()] = aliasOf(row.text, row.colour || undefined);
     }
-    // Kept even when empty: the reading is still set to aliases, and dropping
-    // the key would flip the menu back to as sent under the user's hands.
-    span.value_aliases = out;
+    if (Object.keys(out).length > 0) span.value_aliases = out;
+    else delete span.value_aliases;
     onChange();
   };
 
   const draw = (): void => {
     rows.textContent = "";
-    pairs.forEach((pair, i) => {
-      const value = el("input", {
-        type: "number",
+    held.forEach((row, i) => {
+      const band = el("input", {
+        type: "text",
         class: "alias",
-        min: "0",
-        value: pair[0],
-        placeholder: "sends",
+        value: row.band,
+        placeholder: "reads",
       });
       const alias = el("input", {
         type: "text",
         class: "alias",
-        value: pair[1],
-        placeholder: "draw",
+        value: row.text,
+        placeholder: "blank",
       });
       const trouble = el("span", { class: "meta bad" });
       const check = (): void => {
-        const missing = set
-          ? [...new Set([...pair[1]].filter((c) => !set.includes(c)))]
-          : [];
+        const missing = set ? [...new Set([...row.text].filter((c) => !set.includes(c)))] : [];
+        const bad = bandTrouble(row.band);
+        band.classList.toggle("bad", bad !== "");
         alias.classList.toggle("bad", missing.length > 0);
-        trouble.textContent = missing.length
-          ? `The font does not draw ${missing.map((c) => JSON.stringify(c)).join(", ")}.`
-          : "";
+        trouble.textContent =
+          bad ||
+          (missing.length
+            ? `The font does not draw ${missing.map((c) => JSON.stringify(c)).join(", ")}.`
+            : "");
       };
-      value.addEventListener("input", () => {
-        pair[0] = value.value;
+      band.addEventListener("input", () => {
+        row.band = band.value;
+        check();
         store();
       });
       alias.addEventListener("input", () => {
-        pair[1] = alias.value;
+        row.text = alias.value;
         check();
         store();
       });
       const drop = el("button", { class: "icon danger", title: "Remove this alias" }, "\u{1F5D1}");
       drop.addEventListener("click", () => {
-        pairs.splice(i, 1);
+        held.splice(i, 1);
         draw();
         store();
       });
+      const cell = el("div", { class: "alias-row" }, band, el("span", { class: "meta" }, "shows as"), alias);
+      // Only where the glass has colours to draw. A band's colour is the point
+      // of banding a caution, but on segments there is nothing to pick from.
+      if (colours.length > 0) {
+        const pick = el("select", { class: "colour" });
+        pick.append(el("option", { value: "" }, "same as the piece"));
+        for (const name of colours) pick.append(el("option", { value: name }, name));
+        pick.value = row.colour;
+        pick.addEventListener("change", () => {
+          row.colour = pick.value;
+          store();
+        });
+        cell.append(el("span", { class: "meta" }, "in"), pick);
+      }
+      cell.append(drop, trouble);
       check();
-      rows.append(
-        el("div", { class: "alias-row" }, value, el("span", { class: "meta" }, "shows as"), alias, drop, trouble),
-      );
+      rows.append(cell);
     });
   };
 
   const add = el("button", { class: "add small" }, "Add an alias");
   add.addEventListener("click", () => {
-    pairs.push(["", ""]);
+    held.push({ band: "", text: "", colour: "" });
     draw();
+  });
+
+  // The catalogue's position names, offered once and only where the reading
+  // has none of its own yet, so picking a knob is usually the only step.
+  const named = namedPositions(signal);
+  const fill = el("button", { class: "add small" }, "Name its positions");
+  fill.addEventListener("click", () => {
+    for (const [value, name] of Object.entries(named)) {
+      held.push({ band: value, text: name, colour: "" });
+    }
+    draw();
+    store();
   });
 
   draw();
   wrap.append(el("label", { class: "meta" }, "aliases"), rows, add);
+  if (held.length === 0 && Object.keys(named).length > 0) wrap.append(fill);
+  wrap.append(
+    el(
+      "span",
+      { class: "meta block" },
+      "What to draw instead of the number. A row claims one reading (3), a " +
+        'list of them (0,1,2) or a band ("-1.5..-0.1"), in what the face ' +
+        "reads rather than the number DCS-BIOS sends. A reading no row claims " +
+        "is drawn as the number, and two rows claiming one reading is refused.",
+    ),
+  );
   return wrap;
 }
 
@@ -1055,16 +1165,13 @@ function spanWidth(span: Span, signals: SignalView[]): number {
   if (isText(signals, span.source)) return textLength(signals, span.source);
   // As sent is a conversion onto the signal's own range, so both measure the
   // same way, as the daemon does. Aliases count as what they draw, and only
-  // leave the number to measure when some value has none.
+  // leave the number to measure when some reading has no band.
   const max = maxOf(signals, span.source);
   const aliases = span.value_aliases ?? {};
-  const longest = Math.max(0, ...Object.values(aliases).map((a) => [...a].length));
-  const everyValue =
-    Object.keys(aliases).length > max &&
-    Array.from({ length: max + 1 }, (_, v) => String(v) in aliases).every(Boolean);
-  if (everyValue) return longest;
+  const longest = Math.max(0, ...Object.values(aliases).map((a) => [...aliasText(a)].length));
   const [low, high] = span.reads ?? [0, max];
   const dp = span.decimals ?? 0;
+  if (bandsCover(Object.keys(aliases), low, high, dp)) return longest;
   const every = span.wrap && span.wrap > 0 ? span.wrap : 0;
   // Settled the way the daemon settles them: rounded, wrapped, and never -0.
   const settle = (end: number): number => {
@@ -1079,7 +1186,51 @@ function spanWidth(span: Span, signals: SignalView[]): number {
   if (every && (b - a >= every || Math.floor(a / every) !== Math.floor(b / every))) {
     ends.push(Math.max(0, every - 10 ** -dp));
   }
-  return Math.max(longest, ...ends.map((end) => end.toFixed(dp).length));
+  // The sign goes before the width is taken, or a face running below zero is
+  // measured a cell wider than it ever draws.
+  const shown = (end: number): number => (span.abs ? Math.abs(end) : end);
+  return Math.max(longest, ...ends.map((end) => shown(end).toFixed(dp).length));
+}
+
+/**
+ * Whether the bands between them claim every reading a face can show.
+ *
+ * The same sum `Span::bands_cover` does, kept here because the preview needs
+ * it per keystroke. Walked as intervals so a list is its own values and not
+ * the run between them, and neighbours are allowed one step of daylight,
+ * because a reading between two bands a step apart is one the face cannot show
+ * once it has been rounded.
+ */
+function bandsCover(keys: string[], low: number, high: number, dp: number): boolean {
+  if (keys.length === 0) return false;
+  const step = 10 ** -dp;
+  const tol = step / 2;
+  const spans: [number, number][] = [];
+  for (const key of keys) {
+    const at = key.includes("..") ? key.indexOf("..") : -1;
+    if (at >= 0) {
+      const lo = Number(key.slice(0, at));
+      const hi = Number(key.slice(at + 2));
+      if (!Number.isFinite(lo) || !Number.isFinite(hi)) return false;
+      spans.push([lo, hi]);
+      continue;
+    }
+    for (const part of key.split(",")) {
+      const v = Number(part);
+      if (!Number.isFinite(v)) return false;
+      spans.push([v, v]);
+    }
+  }
+  spans.sort((a, b) => a[0] - b[0]);
+  const [lo, hi] = [Math.min(low, high), Math.max(low, high)];
+  // Everything below the face counts as behind us already, so the first band
+  // is held to the same test as every other one.
+  let reach = lo - step;
+  for (const [start, end] of spans) {
+    if (start > reach + step + tol) return false;
+    reach = Math.max(reach, end);
+  }
+  return reach >= hi - tol;
 }
 
 /**
@@ -1555,7 +1706,7 @@ function spanEditor(
         const signal = signals.find((s) => s.id === span.source);
         const set = alphabet(display, profile, span.small ?? false);
         body.append(
-          conversionRow(span, signal, set, edited, () => {
+          conversionRow(span, signal, set, display.text_grid ? display.colours : [], edited, () => {
             setContent(readout, spans);
             redraw();
             onChange();
@@ -2035,13 +2186,16 @@ function describeField(readout: Readout, display: DisplayInfo): string {
       // How it draws the number, so a reset that only changes that says so
       // rather than showing the same line twice.
       const aliases = Object.entries(s.value_aliases ?? {});
-      const drawn = aliases.length
-        ? ` as ${aliases.map(([v, a]) => `${v}=${a}`).join(" ")}`
-        : s.reads
-          ? ` converted to ${s.reads[0]} to ${s.reads[1]}` +
-            (s.round === "down" ? ", rounded down" : "") +
-            (s.wrap ? `, wrapping at ${s.wrap}` : "")
-          : "";
+      const converted = s.reads
+        ? ` converted to ${s.reads[0]} to ${s.reads[1]}` +
+          (s.round === "down" ? ", rounded down" : "") +
+          (s.wrap ? `, wrapping at ${s.wrap}` : "") +
+          (s.abs ? ", without its sign" : "")
+        : "";
+      const named = aliases.length
+        ? ` drawn as ${aliases.map(([v, a]) => `${v}=${aliasText(a)}`).join(" ")}`
+        : "";
+      const drawn = `${converted}${named}`;
       return `${s.source ? s.source : "a reading nobody has chosen yet"}${drawn}${held}`;
     }
     return `${s.text ? JSON.stringify(s.text) : "an empty piece of text"}${held}`;

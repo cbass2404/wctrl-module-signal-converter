@@ -13,7 +13,7 @@
 
 use std::path::{Path, PathBuf};
 
-use dsc_config::{DeviceInventory, Profile, Profiles};
+use dsc_config::{DeviceInventory, Profile, Profiles, ValueBand};
 
 struct Scratch(PathBuf);
 
@@ -173,6 +173,68 @@ fn a_field_the_user_changed_is_left_alone() {
 }
 
 #[test]
+fn a_row_the_user_owns_takes_the_sensible_default_for_a_setting_added_later() {
+    // What a row edited before a setting existed should do with it: nothing,
+    // and go on working. Every key on a field is optional and absent means its
+    // default, so the row reads as the setting turned off, which is the only
+    // sensible value for a row that was built without it and looked right.
+    //
+    // Written the long way, through a merge and a reload, because the promise
+    // is about what survives an update and not about what serde does.
+    let dir = scratch("settings-added-later");
+    let old = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT" }"#;
+    // The new default uses this release's settings on its own row.
+    let new = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT", "reads": [-1.5, 1.5], "decimals": 1, "abs": true,
+                   "value_aliases": { "-1.5..-0.1": "ND" } }"#;
+    // Theirs, edited back when a reading was a number and nothing else.
+    let theirs = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                      "source": "CDU_BRT", "colour": "green" }"#;
+    lay(&dir, Some(old), new, theirs);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let after = mine(&dir);
+    let span = &after.readouts[0].content[0];
+    assert_eq!(span.colour.map(|c| format!("{c:?}")), Some("Green".into()), "theirs");
+    assert!(!span.abs, "the setting is off, which is what their row meant");
+    assert!(span.value_aliases.is_empty(), "and no bands arrived");
+    assert_eq!(span.reads, None);
+    assert!(!touched_a_field(&notes), "nothing was claimed: {notes:?}");
+}
+
+#[test]
+fn an_aliased_row_nobody_touched_is_still_brought_up_to_the_new_default() {
+    // The other half of the promise, and the one that fails silently. Whether
+    // a row is still as it shipped is decided by comparing rows as JSON, so an
+    // alias that came back in a different shape than it went in would make
+    // every aliased row in every profile read as one the user had edited, and
+    // it would never be updated again.
+    //
+    // The row here is byte for byte the last release's, so the new default's
+    // wording has to reach it.
+    let dir = scratch("aliases-untouched");
+    let shipped_before = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                              "source": "CDU_BRT", "value_aliases": { "0": "OFF", "1": "ON" } }"#;
+    let shipped_now = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                           "source": "CDU_BRT", "value_aliases": { "0": "OFF", "1": "BRT" } }"#;
+    lay(&dir, Some(shipped_before), shipped_now, shipped_before);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let after = mine(&dir);
+    let span = &after.readouts[0].content[0];
+    let drawn = |v: f64| {
+        span.value_aliases
+            .get(&ValueBand::One(v))
+            .map(|a| a.text.as_str())
+    };
+    assert_eq!(drawn(1.0), Some("BRT"), "the new wording landed: {notes:?}");
+    assert!(touched_a_field(&notes), "and it was reported: {notes:?}");
+}
+
+#[test]
 fn a_field_the_user_gave_aliases_is_left_alone() {
     // Aliases are the user shortening names to fit their cells, which is as
     // much an edit as a colour. An update that changed the field must not
@@ -190,8 +252,13 @@ fn a_field_the_user_gave_aliases_is_left_alone() {
 
     let after = mine(&dir);
     let span = &after.readouts[0].content[0];
-    assert_eq!(span.value_aliases.get(&0).map(String::as_str), Some("OFF"));
-    assert_eq!(span.value_aliases.get(&1).map(String::as_str), Some("ON"));
+    let drawn = |v: f64| {
+        span.value_aliases
+            .get(&ValueBand::One(v))
+            .map(|a| a.text.as_str())
+    };
+    assert_eq!(drawn(0.0), Some("OFF"));
+    assert_eq!(drawn(1.0), Some("ON"));
     assert_eq!(span.colour, None, "the shipped change did not land on their field");
     assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
 }

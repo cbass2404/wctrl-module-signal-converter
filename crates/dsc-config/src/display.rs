@@ -888,6 +888,272 @@ impl<'de> Deserialize<'de> for CellRange {
     }
 }
 
+/// Which readings one alias claims: a value, a list of them, or a closed band.
+///
+/// Written `"3"`, `"0,1,2"` or `"-1.5..-0.1"`, and matched against what the
+/// face reads rather than the raw count DCS-BIOS sends. The numbers here are
+/// the ones on the dial, so a trim indicator converted to -1.5 to 1.5 is
+/// banded in those units and stays banded if the range is retuned. A needle
+/// sitting between two bands lands in one of them, because the reading is
+/// rounded to `decimals` before it is matched.
+///
+/// `-` is not the separator, unlike a cell run: a cell is never negative and
+/// `"-1.5--1.0"` has no unambiguous reading. `..` is what gets written, and
+/// `to` is accepted in its place so a band can be typed the way it is said.
+///
+/// The spelling it arrived as is kept rather than normalised into one form.
+/// Expanding `"0,1,2"` into three entries would rewrite the user's file.
+#[derive(Debug, Clone)]
+pub enum ValueBand {
+    One(f64),
+    List(Vec<f64>),
+    Range { lo: f64, hi: f64 },
+}
+
+impl ValueBand {
+    /// Whether this band claims `reading`, within `tol` of its edges.
+    ///
+    /// The tolerance is half of the last decimal place the reading is shown
+    /// to. Both sides are decimal numbers, one parsed from the profile and one
+    /// arrived at by converting and rounding a raw count, and they can differ
+    /// in the last bit without differing in anything the user can see.
+    pub fn matches(&self, reading: f64, tol: f64) -> bool {
+        match self {
+            ValueBand::One(v) => (v - reading).abs() <= tol,
+            ValueBand::List(vs) => vs.iter().any(|v| (v - reading).abs() <= tol),
+            ValueBand::Range { lo, hi } => reading >= lo - tol && reading <= hi + tol,
+        }
+    }
+
+    /// The lowest reading this band claims.
+    pub fn lowest(&self) -> f64 {
+        match self {
+            ValueBand::One(v) => *v,
+            ValueBand::List(vs) => vs.iter().copied().fold(f64::INFINITY, f64::min),
+            ValueBand::Range { lo, .. } => *lo,
+        }
+    }
+
+    /// The highest reading this band claims.
+    pub fn highest(&self) -> f64 {
+        match self {
+            ValueBand::One(v) => *v,
+            ValueBand::List(vs) => vs.iter().copied().fold(f64::NEG_INFINITY, f64::max),
+            ValueBand::Range { hi, .. } => *hi,
+        }
+    }
+
+    /// Whether this band and `other` both claim some reading.
+    pub fn overlaps(&self, other: &ValueBand, tol: f64) -> bool {
+        // Two ranges meet when neither ends before the other starts, which is
+        // the same sum `CellRange::overlaps` does. A value or a list has to be
+        // asked value by value: 0 and 2 do not overlap 1 even though they
+        // straddle it.
+        match (self, other) {
+            (ValueBand::Range { .. }, ValueBand::Range { .. }) => {
+                self.lowest() <= other.highest() + tol && other.lowest() <= self.highest() + tol
+            }
+            (ValueBand::Range { .. }, one) | (one, ValueBand::Range { .. }) => {
+                one.values().iter().any(|v| self.matches(*v, tol) && other.matches(*v, tol))
+            }
+            (a, b) => a.values().iter().any(|v| b.matches(*v, tol)),
+        }
+    }
+
+    /// The values a band names one by one, empty for a range.
+    fn values(&self) -> Vec<f64> {
+        match self {
+            ValueBand::One(v) => vec![*v],
+            ValueBand::List(vs) => vs.clone(),
+            ValueBand::Range { .. } => Vec::new(),
+        }
+    }
+
+    /// Everything that tells one band from another, in the order they sort by:
+    /// where it starts, where it ends, which spelling it is, and then the
+    /// values themselves, so two lists that start and end together are still
+    /// two keys rather than one that quietly replaced the other.
+    fn ordering(&self) -> (f64, f64, u8, Vec<f64>) {
+        let rank = match self {
+            ValueBand::One(_) => 0,
+            ValueBand::List(_) => 1,
+            ValueBand::Range { .. } => 2,
+        };
+        let parts = match self {
+            ValueBand::Range { lo, hi } => vec![*lo, *hi],
+            other => other.values(),
+        };
+        (self.lowest(), self.highest(), rank, parts)
+    }
+}
+
+impl Ord for ValueBand {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        let (al, ah, ar, av) = self.ordering();
+        let (bl, bh, br, bv) = other.ordering();
+        al.total_cmp(&bl)
+            .then(ah.total_cmp(&bh))
+            .then(ar.cmp(&br))
+            .then(av.len().cmp(&bv.len()))
+            .then_with(|| {
+                av.iter()
+                    .zip(&bv)
+                    .map(|(x, y)| x.total_cmp(y))
+                    .find(|o| o.is_ne())
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+    }
+}
+
+impl PartialOrd for ValueBand {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for ValueBand {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other) == std::cmp::Ordering::Equal
+    }
+}
+
+impl Eq for ValueBand {}
+
+impl std::fmt::Display for ValueBand {
+    /// The canonical spelling, which is what gets written back.
+    ///
+    /// Rust draws a whole f64 without a fractional part, so `One(3.0)` writes
+    /// `"3"` and not `"3.0"`. That is load-bearing rather than tidy: the
+    /// update merge decides whether a row is still as it shipped by comparing
+    /// rows as JSON, so a key that changed spelling here would make every
+    /// aliased row in every profile read as one the user had edited.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ValueBand::One(v) => write!(f, "{v}"),
+            ValueBand::List(vs) => {
+                let written: Vec<String> = vs.iter().map(|v| v.to_string()).collect();
+                write!(f, "{}", written.join(","))
+            }
+            ValueBand::Range { lo, hi } => write!(f, "{lo}..{hi}"),
+        }
+    }
+}
+
+impl std::str::FromStr for ValueBand {
+    type Err = String;
+
+    fn from_str(s: &str) -> std::result::Result<Self, String> {
+        let bad = || {
+            format!(
+                "expected a reading like \"3\", a list like \"0,1,2\" or a band like \"-1.5..-0.1\", got {s:?}"
+            )
+        };
+        let one = |part: &str| -> std::result::Result<f64, String> {
+            match part.trim().parse::<f64>() {
+                Ok(v) if v.is_finite() => Ok(v),
+                _ => Err(bad()),
+            }
+        };
+        let s = s.trim();
+        if let Some((a, b)) = s.split_once("..").or_else(|| s.split_once(" to ")) {
+            let (lo, hi) = (one(a)?, one(b)?);
+            if hi < lo {
+                return Err(format!("band {s:?} ends before it starts"));
+            }
+            return Ok(ValueBand::Range { lo, hi });
+        }
+        if s.contains(',') {
+            let values = s.split(',').map(one).collect::<std::result::Result<Vec<_>, _>>()?;
+            return Ok(ValueBand::List(values));
+        }
+        Ok(ValueBand::One(one(s)?))
+    }
+}
+
+impl Serialize for ValueBand {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> std::result::Result<S::Ok, S::Error> {
+        s.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for ValueBand {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> std::result::Result<Self, D::Error> {
+        let s = String::deserialize(d)?;
+        s.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+/// What an alias draws: the characters, and a colour of its own where it wants
+/// one.
+///
+/// A band is often a warning about where the needle is, and a warning that
+/// reads in the same colour as the row around it is one nobody catches. The
+/// colour belongs to the band rather than the piece because that is the whole
+/// point: the same reading draws amber in one band and red in the next.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(from = "AliasRepr", into = "AliasRepr")]
+pub struct AliasDraw {
+    pub text: String,
+    pub colour: Option<Colour>,
+}
+
+/// An alias as it is written on disk: bare characters, or an object once it
+/// has a colour to carry.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+enum AliasRepr {
+    Text(String),
+    Styled {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        colour: Option<Colour>,
+    },
+}
+
+impl From<AliasRepr> for AliasDraw {
+    fn from(r: AliasRepr) -> Self {
+        match r {
+            AliasRepr::Text(text) => AliasDraw { text, colour: None },
+            AliasRepr::Styled { text, colour } => AliasDraw { text, colour },
+        }
+    }
+}
+
+impl From<AliasDraw> for AliasRepr {
+    /// A colour is the only reason for the object shape, so an alias without
+    /// one goes back as the bare string it arrived as.
+    ///
+    /// Not a tidiness: the update merge compares rows as JSON to decide
+    /// whether one is still as the last release shipped it. An alias that came
+    /// back in a different shape would make every aliased row in every profile
+    /// read as one the user had edited, and those rows are never updated
+    /// again.
+    fn from(a: AliasDraw) -> Self {
+        match a.colour {
+            Some(colour) => AliasRepr::Styled {
+                text: a.text,
+                colour: Some(colour),
+            },
+            None => AliasRepr::Text(a.text),
+        }
+    }
+}
+
+impl From<&str> for AliasDraw {
+    fn from(text: &str) -> Self {
+        AliasDraw {
+            text: text.to_string(),
+            colour: None,
+        }
+    }
+}
+
+impl From<String> for AliasDraw {
+    fn from(text: String) -> Self {
+        AliasDraw { text, colour: None }
+    }
+}
+
 /// How a converted number lands on its last decimal place.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -1132,20 +1398,38 @@ pub struct Span {
     /// reading that never starts over; anything not above zero counts as none.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub wrap: Option<f64>,
-    /// What to draw for each value of a numeric source, in place of the
+    /// What to draw for each reading of a numeric source, in place of the
     /// number.
     ///
     /// A knob reports its position, and `3` on a screen says less than `SEMI`
     /// does. The editor fills this from the position names the catalogue has,
     /// and the user shortens them to fit. Looked up on the whole value, before
     /// it is split into cells, so an alias is drawn as the characters it is. A
-    /// value with no entry draws as the number, converted by `reads` if there
-    /// is one.
+    /// reading no band claims draws as the number.
+    ///
+    /// The key is matched against **what the face reads**: converted by
+    /// `reads`, rounded to `decimals` and wrapped by `wrap` first. That is the
+    /// number the user is looking at, and it is what lets a band be written in
+    /// the units the dial is marked with instead of in raw counts. A signal
+    /// with no `reads` converts through its own range, which is the identity,
+    /// so a key naming a position still matches the position.
     ///
     /// Not `aliases`, which rewrites characters a module sends as text. This
     /// one names numbers.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub value_aliases: BTreeMap<u16, String>,
+    pub value_aliases: BTreeMap<ValueBand, AliasDraw>,
+    /// Draw a converted reading without its sign.
+    ///
+    /// A face that runs each way from zero is read as a magnitude and a
+    /// direction, not as a negative number: the F-16's trim indicators are
+    /// marked in units nose up and units nose down, and a needle below zero
+    /// reading `-1.0 ND` says the same thing twice. With the sign dropped the
+    /// number is the magnitude and a band beside it names the direction.
+    ///
+    /// Applied last, after a band has had its turn, so a band written for
+    /// negative readings still matches on a piece that draws magnitudes.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub abs: bool,
     /// Values this module words differently from the glyph table.
     ///
     /// DCS-BIOS does not always report what DCS's own indication does: the
@@ -1206,9 +1490,19 @@ impl Span {
     }
 
     /// Whether anything here says how to draw a number: a range, decimal
-    /// places, rounding or a wrap.
+    /// places, rounding, a wrap or a dropped sign.
     pub fn shapes_a_number(&self) -> bool {
-        self.reads.is_some() || self.decimals != 0 || self.round != Round::Nearest || self.wrap.is_some()
+        self.reads.is_some()
+            || self.decimals != 0
+            || self.round != Round::Nearest
+            || self.wrap.is_some()
+            || self.abs
+    }
+
+    /// Half of the last decimal place a reading is shown to, which is how
+    /// close a reading has to be to a band's edge to count as inside it.
+    pub(crate) fn tolerance(&self) -> f64 {
+        10f64.powi(-i32::from(self.decimals)) / 2.0
     }
 
     /// Whether the user has finished saying what this part draws.
@@ -1232,14 +1526,28 @@ impl Span {
 
     /// Turn a raw signal value into the characters this part should show.
     ///
+    /// The text half of [`format_reading`](Self::format_reading), for the
+    /// callers that only draw characters: the `listen` log, and every test
+    /// that measures what a face reads.
+    pub fn format_number(&self, value: u16, max: u16) -> String {
+        self.format_reading(value, max).0
+    }
+
+    /// Turn a raw signal value into the characters this part should show, and
+    /// the colour the band it landed in asks for.
+    ///
     /// `max` is the source's own declared maximum, so a needle at 0..65535 and
     /// a selector at 0..10 go through the same arithmetic. With no `reads` the
     /// range is the signal's own, which makes the conversion an identity: the
-    /// number as sent. A value with a word draws the word instead.
-    pub fn format_number(&self, value: u16, max: u16) -> String {
-        if let Some(alias) = self.value_aliases.get(&value) {
-            return alias.clone();
-        }
+    /// number as sent.
+    ///
+    /// The order is the whole of the design. Convert, round and wrap first, so
+    /// a band is matched against the number on the dial rather than the raw
+    /// count. Then a band claims the reading and draws its own characters.
+    /// Only if none does is the number drawn, and only then is the sign
+    /// dropped for `abs`, so a band written for negative readings still
+    /// matches on a piece that draws magnitudes.
+    pub fn format_reading(&self, value: u16, max: u16) -> (String, Option<Colour>) {
         let [low, high] = self.reads.unwrap_or([0.0, max as f64]);
         let travel = if max == 0 { 0.0 } else { value as f64 / max as f64 };
         // Half of one raw step, in what the face reads. DCS-BIOS sends the
@@ -1247,7 +1555,67 @@ impl Span {
         // 7 can arrive a hair short of it, and rounding down must not make
         // that a 6.
         let half_step = if max == 0 { 0.0 } else { (high - low).abs() / max as f64 / 2.0 };
-        self.format_number_at(self.settle(low + travel * (high - low), half_step))
+        let reading = self.settle(low + travel * (high - low), half_step);
+        if let Some(drawn) = self.band_for(reading) {
+            return (drawn.text.clone(), drawn.colour);
+        }
+        let shown = if self.abs { reading.abs() } else { reading };
+        (self.format_number_at(shown), None)
+    }
+
+    /// Whether the bands between them claim every reading this face can show.
+    ///
+    /// A reading no band claims draws as a number, so this is what decides
+    /// whether the number's width has to be allowed for at all. Exact rather
+    /// than cautious, because the editor's answer is how many characters will
+    /// be dropped and a maybe would make that a guess.
+    ///
+    /// Walked as intervals rather than by each band's ends, so a list is its
+    /// own values and not the run between them: `"0,2"` leaves 1 to the
+    /// number. Neighbours are allowed one step of daylight between them,
+    /// because a reading between two bands a step apart is one the face cannot
+    /// show once it has been rounded.
+    fn bands_cover(&self, low: f64, high: f64) -> bool {
+        if self.value_aliases.is_empty() {
+            return false;
+        }
+        let (lo, hi) = (low.min(high), low.max(high));
+        let step = 10f64.powi(-i32::from(self.decimals));
+        let tol = self.tolerance();
+        let mut spans: Vec<(f64, f64)> = self
+            .value_aliases
+            .keys()
+            .flat_map(|band| match band {
+                ValueBand::Range { lo, hi } => vec![(*lo, *hi)],
+                other => other.values().into_iter().map(|v| (v, v)).collect(),
+            })
+            .collect();
+        spans.sort_by(|a, b| a.0.total_cmp(&b.0));
+        // Everything below the face counts as behind us already, so the first
+        // band is held to the same test as every other one.
+        let mut reach = lo - step;
+        for (start, end) in spans {
+            if start > reach + step + tol {
+                return false;
+            }
+            reach = reach.max(end);
+        }
+        reach >= hi - tol
+    }
+
+    /// The band claiming a settled reading, where one does.
+    ///
+    /// Two bands claiming one reading is a caution rather than a refusal, so
+    /// this has to settle it, and the first match is what it settles on. Bands
+    /// are held in order of where they start, so that is the lower of the two,
+    /// every time and on every machine. The order they were written in never
+    /// decides anything.
+    fn band_for(&self, reading: f64) -> Option<&AliasDraw> {
+        let tol = self.tolerance();
+        self.value_aliases
+            .iter()
+            .find(|(band, _)| band.matches(reading, tol))
+            .map(|(_, drawn)| drawn)
     }
 
     /// Round a converted reading the way this part says, then wrap it.
@@ -1329,13 +1697,18 @@ impl Span {
         let Some(max) = number_max else {
             return max_length;
         };
-        let longest_alias = self.value_aliases.values().map(|a| a.chars().count()).max().unwrap_or(0);
-        // Every value aliased means no number is ever drawn, so only the
-        // aliases count. Aliases that stop short leave the rest as numbers.
-        if (0..=max).all(|v| self.value_aliases.contains_key(&v)) {
+        let longest_alias = self
+            .value_aliases
+            .values()
+            .map(|a| a.text.chars().count())
+            .max()
+            .unwrap_or(0);
+        let [low, high] = self.reads.unwrap_or([0.0, f64::from(max)]);
+        // Bands covering the whole face mean no number is ever drawn, so only
+        // the bands count. Bands that stop short leave the rest as numbers.
+        if self.bands_cover(low, high) {
             return Some(longest_alias);
         }
-        let [low, high] = self.reads.unwrap_or([0.0, f64::from(max)]);
         let mut ends = vec![self.settle(low, 0.0), self.settle(high, 0.0)];
         // A reading that starts over somewhere between its ends can draw
         // anything up to the last value before it does, whatever the ends
@@ -1348,7 +1721,12 @@ impl Span {
         }
         let number = ends
             .into_iter()
-            .map(|end| self.format_number_at(end).chars().count())
+            // The sign goes before the width is taken, or a face running below
+            // zero is measured a cell wider than it ever draws.
+            .map(|end| {
+                let shown = if self.abs { end.abs() } else { end };
+                self.format_number_at(shown).chars().count()
+            })
             .max()
             .unwrap_or(0);
         Some(number.max(longest_alias))
@@ -1557,8 +1935,10 @@ struct ReadoutRepr {
     round: Round,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     wrap: Option<f64>,
+    #[serde(default, skip_serializing_if = "is_false")]
+    abs: bool,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    value_aliases: BTreeMap<u16, String>,
+    value_aliases: BTreeMap<ValueBand, AliasDraw>,
     #[serde(default, skip_serializing_if = "is_left")]
     align: Align,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1602,6 +1982,7 @@ impl From<ReadoutRepr> for Readout {
                 decimals: r.decimals,
                 round: r.round,
                 wrap: r.wrap,
+                abs: r.abs,
                 value_aliases: r.value_aliases,
                 aliases: r.aliases,
                 format: r.format,
@@ -1672,6 +2053,7 @@ impl From<Readout> for ReadoutRepr {
             decimals: span.decimals,
             round: span.round,
             wrap: span.wrap,
+            abs: span.abs,
             value_aliases: span.value_aliases,
             align: r.align,
             format: span.format,
@@ -1828,10 +2210,20 @@ impl Readout {
                 continue;
             }
             let mut glyphs: Vec<Glyph> = Vec::new();
+            // The colour the band this reading landed in asked for, if any. It
+            // sits between the two that already exist: a `colours` signal is
+            // the module speaking about one exact cell and stays the most
+            // specific, this is the user speaking about this reading, and the
+            // piece's own colour is the user speaking about the whole piece.
+            let mut banded: Option<Colour> = None;
             let value = if span.is_signal() {
                 match read(&span.source) {
                     Some(Reading::Text(t)) => t,
-                    Some(Reading::Number { value, max }) => span.format_number(value, max),
+                    Some(Reading::Number { value, max }) => {
+                        let (text, colour) = span.format_reading(value, max);
+                        banded = colour;
+                        text
+                    }
                     None => {
                         // Room held rather than content: a boxed piece keeps
                         // its cells from the first frame, so what sits beside
@@ -1881,7 +2273,7 @@ impl Readout {
             if width == 1 {
                 glyphs.push(Glyph {
                     text: span.alias(&value).to_string(),
-                    colour: colours.first().copied().flatten().or(span.colour),
+                    colour: colours.first().copied().flatten().or(banded).or(span.colour),
                     small: span.small,
                     inverse: span.inverse || inverse.first().copied().unwrap_or(false),
                 });
@@ -1893,7 +2285,7 @@ impl Readout {
                 let one = ch.to_string();
                 glyphs.push(Glyph {
                     text: span.alias(&one).to_string(),
-                    colour: colours.get(i).copied().flatten().or(span.colour),
+                    colour: colours.get(i).copied().flatten().or(banded).or(span.colour),
                     small: span.small,
                     inverse: span.inverse || inverse.get(i).copied().unwrap_or(false),
                 });

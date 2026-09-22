@@ -38,9 +38,9 @@ pub fn build_label() -> &'static str {
 }
 
 pub use display::{
-    divider_rule, divider_text, min_divider_cells, text_cells, Align, Cell, CellRange, Colour,
-    ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, Round,
-    RuleCell, Screen, Span, TextCell, TextGrid, Transport, SEAT_SIGNAL,
+    divider_rule, divider_text, min_divider_cells, text_cells, AliasDraw, Align, Cell, CellRange,
+    Colour, ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, Round,
+    RuleCell, Screen, Span, TextCell, TextGrid, Transport, ValueBand, SEAT_SIGNAL,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -132,6 +132,10 @@ pub enum Error {
     RangeOnText(String),
     #[error("{0:?} already reports characters, so aliases for its values would mean nothing")]
     AliasesOnText(String),
+    #[error("aliases {0} and {1} on {2:?} both claim the same reading; the lower one draws it")]
+    AliasBandsOverlap(String, String, String),
+    #[error("alias {0} on {1:?} is outside everything the face reads, {2} to {3}, so nothing would ever draw it")]
+    AliasBandUnreachable(String, String, String, String),
     #[error("profile disables device {0:?}, which is not a device we know")]
     DisablesUnknownDevice(String),
     #[error("{0:?} is set to follow {1:?}, and {2:?} is not a device we know")]
@@ -167,10 +171,27 @@ impl Error {
     /// A character the font lacks is not one of these. The font is ours, it is
     /// what the panel is sent, and a character missing from it is a blank cell
     /// for certain.
+    /// Both band faults are these. A band nothing can reach is dead
+    /// configuration, and the likeliest way to write one is to band a
+    /// converted face in the raw counts DCS-BIOS sends.
+    ///
+    /// Two bands claiming one reading is a caution rather than a refusal even
+    /// though it is ambiguous, because it is not undefined: bands are held in
+    /// order of where they start, so the lower one draws, every time. Unlike
+    /// two fields claiming a cell, nothing here is unresolvable, and the cost
+    /// of being strict is the wrong way round. A profile is refused whole, so
+    /// refusing this one would take every lamp and every screen dark over one
+    /// row drawing the first of two words the user wrote. A row the user owns
+    /// is never rewritten by an update, so a profile that started loading
+    /// could not be repaired for them either.
     pub fn is_advisory(&self) -> bool {
         matches!(
             self,
-            Error::RangeOnText(_) | Error::AliasesOnText(_) | Error::FormatNotText(_)
+            Error::RangeOnText(_)
+                | Error::AliasesOnText(_)
+                | Error::FormatNotText(_)
+                | Error::AliasBandUnreachable(..)
+                | Error::AliasBandsOverlap(..)
         )
     }
 }
@@ -1952,12 +1973,18 @@ impl Profile {
                 // screen, but the editor says so where the choice is made,
                 // and it draws exactly what it says it will.
                 if output.r#type == "string" {
-                    if span.reads.is_some() || span.wrap.is_some() || span.round != Round::Nearest {
+                    if span.reads.is_some()
+                        || span.wrap.is_some()
+                        || span.round != Round::Nearest
+                        || span.abs
+                    {
                         out.push(Error::RangeOnText(span.source.clone()));
                     }
                     if !span.value_aliases.is_empty() {
                         out.push(Error::AliasesOnText(span.source.clone()));
                     }
+                } else {
+                    band_problems(span, output.number_max(), out);
                 }
 
                 if let Some(format) = &span.format {
@@ -2029,12 +2056,16 @@ impl Profile {
     /// nothing to say why.
     fn text_problems(&self, r: &Readout, display: &Display, out: &mut Vec<Error>) {
         let Some(text) = &display.text else {
-            let styled = r
-                .content
-                .iter()
-                .any(|s| {
-                    s.colour.is_some() || s.colours.is_some() || s.small || s.label_colour.is_some()
-                });
+            let styled = r.content.iter().any(|s| {
+                s.colour.is_some()
+                    || s.colours.is_some()
+                    || s.small
+                    || s.label_colour.is_some()
+                    // A band's colour is styling like any other, and a band
+                    // that asks for one on glass with no colours is a setting
+                    // nothing draws.
+                    || s.value_aliases.values().any(|a| a.colour.is_some())
+            });
             let ruled = r.divider && (r.colour.is_some() || r.label_colour.is_some());
             if styled || ruled {
                 out.push(Error::StyleNotDrawn(r.display.clone(), r.cells.to_string()));
@@ -2097,7 +2128,7 @@ impl Profile {
                 let written = span
                     .text
                     .chars()
-                    .chain(span.value_aliases.values().flat_map(|a| a.chars()))
+                    .chain(span.value_aliases.values().flat_map(|a| a.text.chars()))
                     .chain(span.replace.values().filter_map(|to| to.chars().next()));
                 for c in written {
                     if !set.contains(&c) {
@@ -2105,6 +2136,47 @@ impl Profile {
                     }
                 }
             }
+        }
+    }
+}
+
+/// What a reading's alias bands can be wrong about.
+///
+/// Overlaps are refused. Two bands claiming one reading would make what gets
+/// drawn depend on the order they happen to be held in, and a reading draws
+/// one thing, the way a cell has one field.
+///
+/// A band outside everything the face reads is only a caution: it draws
+/// nothing rather than drawing something wrong. It is worth saying because the
+/// likeliest way to write one is to band a converted face in the raw counts
+/// DCS-BIOS sends, and that mistake is otherwise silent.
+fn band_problems(span: &Span, max: u16, out: &mut Vec<Error>) {
+    if span.value_aliases.is_empty() {
+        return;
+    }
+    let tol = span.tolerance();
+    let bands: Vec<&ValueBand> = span.value_aliases.keys().collect();
+    for (i, a) in bands.iter().enumerate() {
+        for b in &bands[i + 1..] {
+            if a.overlaps(b, tol) {
+                out.push(Error::AliasBandsOverlap(
+                    a.to_string(),
+                    b.to_string(),
+                    span.source.clone(),
+                ));
+            }
+        }
+    }
+    let [low, high] = span.reads.unwrap_or([0.0, f64::from(max)]);
+    let (lo, hi) = (low.min(high), low.max(high));
+    for band in bands {
+        if band.highest() < lo - tol || band.lowest() > hi + tol {
+            out.push(Error::AliasBandUnreachable(
+                band.to_string(),
+                span.source.clone(),
+                low.to_string(),
+                high.to_string(),
+            ));
         }
     }
 }
@@ -2262,6 +2334,18 @@ fn reconcile_fields(profile: &mut Profile, shipped: &[Readout], was: &[Readout])
             continue;
         };
         if !same_field(&r, before) {
+            // Theirs, and it stays theirs, whole. A setting introduced after
+            // they edited it needs nothing written here: every key on a field
+            // is optional and absent means its default, so a row from before
+            // a setting existed already reads as that setting turned off.
+            // That is the only sensible value for it, because the row was
+            // built without it and looked right.
+            //
+            // Filling the key in instead would mean deciding, from the JSON
+            // alone, which keys are new to a field and which ones the default
+            // has merely started setting. Those look identical, so a colour or
+            // a rounding the new default chose would land on a row the user
+            // owns, which is the one thing this promises not to do.
             kept.push(r);
             continue;
         }

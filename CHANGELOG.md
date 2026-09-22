@@ -57,6 +57,31 @@ unless this says what moved.
   names starts with those names filled in. Shorten them to fit your cells. A
   value with no alias draws as the number.
 
+- **Name a band of a dial, not just one value.** An alias now claims one
+  reading, a list of them, or a range: `-1.5..-0.1` draws `ND` anywhere below
+  centre. The range is in what the dial is marked with, not the 0 to 65535
+  DCS-BIOS sends, so you write the numbers you can read off the gauge and they
+  keep meaning the same thing if you retune the range. A needle sitting
+  between two bands lands in one of them. A reading no band claims still draws
+  as the number, so a face can be part named and part read.
+
+- **An alias can have its own colour.** A band is often a warning about where
+  the needle is, and a warning in the same colour as the row around it is one
+  nobody catches. Aliases without a colour are drawn in the piece's colour as
+  before.
+
+- **Draw a reading without its sign.** A face that runs each way from zero is
+  read as a magnitude and a direction: the F-16's trim indicators are marked
+  in units nose up and units nose down, so `-1.0 ND` says the same thing
+  twice. Tick "without its sign" and the number is the magnitude, with a band
+  beside it naming the direction. Offered only on a range that goes below
+  zero, since it does nothing to any other.
+
+- **Aliases and a converted range work together.** Naming values used to mean
+  giving up the conversion, and the two were a choice of one. The menu now
+  picks "as sent" or "converted to", and aliases sit on top of whichever it
+  is. Nothing you have already set up changes.
+
 - **Drums, counters and dials that go all the way round.** A converted
   reading can now round down instead of to the nearest, and start again from
   0 at a value you choose. One odometer drum digit is 0 to 10, rounded down,

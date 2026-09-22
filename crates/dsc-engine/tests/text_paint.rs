@@ -30,8 +30,19 @@ fn bytes_at(address: u16, b: &[u8]) -> Vec<BiosWrite> {
         .collect()
 }
 
+/// The A-10C profile these tests paint: one CDU page, frozen.
+///
+/// Not a shipped default. What is asserted below is where the engine puts the
+/// CDU's ten lines and which rows it leaves alone, and a shipped profile is a
+/// living document whose author is free to put fields on those rows. Pinning
+/// one here would turn an ordinary edit to a default into a failing build, the
+/// same reason the rule's label is deliberately not pinned.
 fn profile() -> Profile {
-    Profile::load(&r("data/defaults/a-10c.json")).expect("A-10C default")
+    Profile::load(&fixture("a-10c-cdu-page.json")).expect("the CDU page fixture")
+}
+
+fn fixture(name: &str) -> std::path::PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(name)
 }
 
 fn engine(p: Profile) -> Engine {

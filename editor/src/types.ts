@@ -99,6 +99,11 @@ export interface Span {
   /** What the gauge reads at each end of its travel. Numbers only. */
   reads?: [number, number];
   decimals?: number;
+  /**
+   * What to draw for each value of a number, in place of the number: `SEMI`
+   * for a knob at 3. A value with no entry draws as the number. Numbers only.
+   */
+  value_aliases?: Record<string, string>;
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
   /** A second text signal whose `i` marks the characters to draw inverse. */
@@ -216,13 +221,16 @@ export interface Readout {
   /**
    * What the gauge reads in the cockpit at each end of its travel.
    *
-   * Required for a number, meaningless for a signal that already reports
-   * characters. DCS-BIOS gives a needle as a position, not a quantity, and
-   * nothing says what the dial face is marked with, so this is the user's to
-   * supply. Handles faces that start below zero, and ones that run backwards.
+   * For a number, and meaningless for a signal that already reports
+   * characters. Absent draws the number as sent. DCS-BIOS gives a needle as a
+   * position, not a quantity, and nothing says what the dial face is marked
+   * with, so this is the user's to supply. Handles faces that start below
+   * zero, and ones that run backwards.
    */
   reads?: [number, number];
   decimals?: number;
+  /** What to draw for each value of a number, in place of the number. */
+  value_aliases?: Record<string, string>;
   align?: "left" | "right" | "centre";
   /** Values this module words differently from the glyph table. */
   aliases?: Record<string, string>;
@@ -258,13 +266,22 @@ export type FlagView = { text: string } & (
   | { at: "field"; readout: number }
 );
 
+/** A caution about one display field, by its index in `readouts`. */
+export interface FieldCaution {
+  readout: number;
+  text: string;
+}
+
 /**
  * What a check found. Problems stop the profile loading; cautions and flags
  * do not.
  */
 export interface Findings {
   problems: string[];
+  /** About the profile as a whole, listed at the top of the page. */
   cautions: string[];
+  /** About what one display field will draw, shown on that field. */
+  field_cautions: FieldCaution[];
   flags: FlagView[];
   /** One line for the page, only when a flagged row needs the DCS-BIOS nightly. */
   notice: string | null;

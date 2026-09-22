@@ -289,6 +289,8 @@ fn learn_stop(learn: tauri::State<learn::State>) -> Reply<()> {
 struct Findings {
     problems: Vec<String>,
     cautions: Vec<String>,
+    /// Cautions about what one display field will draw, shown on that field.
+    field_cautions: Vec<check::FieldCaution>,
     flags: Vec<check::FlagView>,
     /// One line for the top of the page, only when a flagged row reads
     /// something the DCS-BIOS nightly has.
@@ -308,6 +310,7 @@ fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<F
     Ok(Findings {
         problems: cache.problems(&paths, &profile),
         cautions: cache.cautions(&paths, &profile),
+        field_cautions: cache.field_cautions(&paths, &profile),
         flags,
         notice,
     })

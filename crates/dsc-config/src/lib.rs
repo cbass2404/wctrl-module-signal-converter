@@ -128,10 +128,10 @@ pub enum Error {
     CellsOutOfRange(String, usize, String),
     #[error("cell runs {0} and {1} on display {2:?} overlap; a field has one source")]
     CellsOverlap(String, String, String),
-    #[error("{0:?} is a number, so it needs a range: what the gauge reads in the cockpit at each end of its travel")]
-    RangeMissing(String),
     #[error("{0:?} already reports characters, so a range would mean nothing")]
     RangeOnText(String),
+    #[error("{0:?} already reports characters, so aliases for its values would mean nothing")]
+    AliasesOnText(String),
     #[error("profile disables device {0:?}, which is not a device we know")]
     DisablesUnknownDevice(String),
     #[error("{0:?} is set to follow {1:?}, and {2:?} is not a device we know")]
@@ -154,6 +154,25 @@ pub enum Error {
     NoBios(PathBuf),
     #[error("another DCS Signal Converter process is building the catalogue and has not finished; if none is running, delete {0}")]
     CatalogueBusy(PathBuf),
+}
+
+impl Error {
+    /// Whether this is a caution rather than a reason to refuse a profile.
+    ///
+    /// These hang on DCS-BIOS saying a signal is text or a number. It is right
+    /// nearly always and wrong sometimes, and when it is wrong only the user,
+    /// looking at the panel, can tell. The worst a wrong one does is a setting
+    /// that changes nothing.
+    ///
+    /// A character the font lacks is not one of these. The font is ours, it is
+    /// what the panel is sent, and a character missing from it is a blank cell
+    /// for certain.
+    pub fn is_advisory(&self) -> bool {
+        matches!(
+            self,
+            Error::RangeOnText(_) | Error::AliasesOnText(_) | Error::FormatNotText(_)
+        )
+    }
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -1419,8 +1438,42 @@ impl Profile {
                 }
             }
         }
-        self.readout_problems(module, devices, displays, &mut out);
+        self.readout_problems(module, devices, displays, &mut out, &mut Vec::new());
+        out.retain(|e| !e.is_advisory());
         out
+    }
+
+    /// Display fields that lean on what DCS-BIOS says a signal is, which only
+    /// the user can check.
+    ///
+    /// Never a refusal. DCS-BIOS metadata is not right for every module, so it
+    /// can be wrong about a field that works. The profile loads and draws what
+    /// it can, and the user is told rather than stopped from trying.
+    ///
+    /// Each comes with the index of the field it is about. Every field records
+    /// where its findings start in the list, which places them without the
+    /// checks themselves having to say.
+    pub fn text_cautions(
+        &self,
+        module: &Module,
+        devices: &DeviceInventory,
+        displays: &DisplayCatalogue,
+    ) -> Vec<(usize, String)> {
+        let mut all = Vec::new();
+        let mut starts = Vec::new();
+        self.readout_problems(module, devices, displays, &mut all, &mut starts);
+        let owner = |at: usize| -> Option<usize> {
+            starts.iter().rev().find(|(_, from)| *from <= at).map(|(i, _)| *i)
+        };
+        all.into_iter()
+            .enumerate()
+            .filter(|(_, e)| e.is_advisory())
+            .filter_map(|(at, e)| {
+                owner(at).map(|i| {
+                    (i, format!("{e}. It will load anyway, in case DCS-BIOS is wrong about it."))
+                })
+            })
+            .collect()
     }
 
     /// Every condition and display field that reads what this DCS-BIOS does
@@ -1570,13 +1623,47 @@ impl Profile {
     /// gets the shorter warning, since the widest it can draw depends on what
     /// the module sends rather than on anything written down.
     pub fn width_cautions(&self, module: &Module) -> Vec<String> {
+        self.width_findings(module)
+            .into_iter()
+            .map(|(i, text)| {
+                let r = &self.readouts[i];
+                format!("{} cells {} {text}", r.display, r.cells)
+            })
+            .collect()
+    }
+
+    /// Every caution about what a display field will draw, each with the index
+    /// of the field it is about, worded to sit beside that field.
+    ///
+    /// Two kinds, both about text output and neither a refusal: content that
+    /// may not fit its cells, and settings that lean on what DCS-BIOS says a
+    /// signal is. Kept apart from the profile's own cautions because a line
+    /// naming cells in a list at the top of the page makes the user go and
+    /// find the field, where one on the field is already there.
+    pub fn field_cautions(
+        &self,
+        module: &Module,
+        devices: &DeviceInventory,
+        displays: &DisplayCatalogue,
+    ) -> Vec<(usize, String)> {
+        let mut out: Vec<(usize, String)> = self
+            .width_findings(module)
+            .into_iter()
+            .map(|(i, text)| (i, format!("This field {text}")))
+            .collect();
+        out.extend(self.text_cautions(module, devices, displays));
+        out.sort_by_key(|(i, _)| *i);
+        out
+    }
+
+    /// What `width_cautions` says, without saying where.
+    fn width_findings(&self, module: &Module) -> Vec<(usize, String)> {
         let mut out = Vec::new();
-        for r in &self.readouts {
+        for (i, r) in self.readouts.iter().enumerate() {
             if r.divider {
                 continue;
             }
             let width = r.width(module);
-            let where_ = format!("{} cells {}", r.display, r.cells);
             if width.overflows() {
                 let n = width.dropped();
                 let end = match r.align {
@@ -1586,17 +1673,17 @@ impl Profile {
                     // coming off the front, the way its padding is added.
                     Align::Centre => "outermost",
                 };
-                out.push(format!(
-                    "{where_} needs up to {} cells and has {}, so the {end} {n} character{} would be dropped with nothing shown on the panel to say so.",
+                out.push((i, format!(
+                    "needs up to {} cells and has {}, so the {end} {n} character{} would be dropped with nothing shown on the panel to say so.",
                     width.widest,
                     width.cells,
                     if n == 1 { "" } else { "s" }
-                ));
+                )));
             } else if width.unbounded {
-                out.push(format!(
-                    "{where_} reads text DCS-BIOS gives no length for, so how wide it draws is not known ahead of time and it may run past its {} cells.",
+                out.push((i, format!(
+                    "reads text DCS-BIOS gives no length for, so how wide it draws is not known ahead of time and it may run past its {} cells.",
                     width.cells
-                ));
+                )));
             }
         }
         out
@@ -1607,12 +1694,16 @@ impl Profile {
     ///
     /// Appends rather than returning, for the reason given on
     /// [`problems`](Self::problems): one fault must not hide another.
+    ///
+    /// `starts` gets each field's index and where its findings begin in `out`,
+    /// for a caller that shows them on the field rather than in a list.
     fn readout_problems(
         &self,
         module: &Module,
         devices: &DeviceInventory,
         displays: &DisplayCatalogue,
         out: &mut Vec<Error>,
+        starts: &mut Vec<(usize, usize)>,
     ) {
         for name in &self.disabled_devices {
             if devices.device(name).is_none() {
@@ -1641,6 +1732,7 @@ impl Profile {
             }
         }
         for (i, r) in self.readouts.iter().enumerate() {
+            starts.push((i, out.len()));
             let Some(device) = devices.device(&r.device) else {
                 out.push(Error::NoDisplayOnDevice(r.device.clone(), r.display.clone()));
                 continue;
@@ -1846,22 +1938,26 @@ impl Profile {
                     if span.reads.is_some() || span.decimals != 0 {
                         out.push(Error::RangeOnText(span.text.clone()));
                     }
+                    if !span.value_aliases.is_empty() {
+                        out.push(Error::AliasesOnText(span.text.clone()));
+                    }
                     continue;
                 }
                 // Flagged rather than refused, as for a lamp condition.
                 let Some(output) = module.signal(&span.source).and_then(|s| s.primary()) else {
                     continue;
                 };
-                // A needle reports a position, not a quantity, and nothing in
-                // the catalogue says what its face is marked with. So the
-                // range is the user's to give, and asking for it beats
-                // printing 0 to 65535 and letting them wonder what broke.
+                // A number shown as sent, converted or as words is the user's
+                // choice. Raw 0 to 65535 is a strange thing to put on a
+                // screen, but the editor says so where the choice is made,
+                // and it draws exactly what it says it will.
                 if output.r#type == "string" {
                     if span.reads.is_some() {
                         out.push(Error::RangeOnText(span.source.clone()));
                     }
-                } else if span.reads.is_none() {
-                    out.push(Error::RangeMissing(span.source.clone()));
+                    if !span.value_aliases.is_empty() {
+                        out.push(Error::AliasesOnText(span.source.clone()));
+                    }
                 }
 
                 if let Some(format) = &span.format {
@@ -2001,6 +2097,7 @@ impl Profile {
                 let written = span
                     .text
                     .chars()
+                    .chain(span.value_aliases.values().flat_map(|a| a.chars()))
                     .chain(span.replace.values().filter_map(|to| to.chars().next()));
                 for c in written {
                     if !set.contains(&c) {

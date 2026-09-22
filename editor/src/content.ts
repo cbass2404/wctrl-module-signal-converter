@@ -22,6 +22,7 @@ const FLAT = [
   "gap",
   "reads",
   "decimals",
+  "value_aliases",
   "aliases",
   "format",
   "colour",
@@ -45,6 +46,7 @@ export function contentOf(readout: Readout): Span[] {
   if (readout.gap) one.gap = readout.gap;
   if (readout.reads) one.reads = readout.reads;
   if (readout.decimals) one.decimals = readout.decimals;
+  if (readout.value_aliases) one.value_aliases = readout.value_aliases;
   if (readout.aliases) one.aliases = readout.aliases;
   if (readout.format !== undefined) one.format = readout.format;
   if (readout.colour) one.colour = readout.colour;

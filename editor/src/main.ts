@@ -30,7 +30,7 @@ import {
 import { bindingEditor, iconButton } from "./binding";
 import { confirmAction } from "./confirm";
 import { manageConverter } from "./converter";
-import { showFlags } from "./flags";
+import { showFieldCautions, showFlags } from "./flags";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
 import type {
@@ -1101,6 +1101,7 @@ async function showProfile(file: string): Promise<void> {
             cautions = found.cautions;
             drawProblems();
             showFlags(session.profile, found.flags);
+            showFieldCautions(session.profile, found.field_cautions);
             drawNotice(found.notice);
             refreshSave();
           })
@@ -1111,6 +1112,7 @@ async function showProfile(file: string): Promise<void> {
             cautions = [];
             drawProblems();
             showFlags(session.profile, []);
+            showFieldCautions(session.profile, []);
             drawNotice(null);
             refreshSave();
           });

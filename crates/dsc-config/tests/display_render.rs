@@ -975,3 +975,40 @@ fn a_rule_and_its_label_keep_their_own_colours() {
         assert_eq!(g.colour, want, "cell {n} draws {:?}", g.text);
     }
 }
+
+#[test]
+fn a_knob_draws_the_alias_for_its_position() {
+    let mut r = readout("2-5", "CMDS_MODE_KNB");
+    span(&mut r).value_aliases = [(0, "OFF"), (3, "SEMI")]
+        .into_iter()
+        .map(|(v, a)| (v, a.to_string()))
+        .collect();
+    let at = |value: u16| -> String {
+        r.compose(|_| Some(Reading::Number { value, max: 5 }))
+            .expect("the signal has arrived")
+            .into_iter()
+            .map(|g| g.text)
+            .collect()
+    };
+    assert_eq!(at(3), "SEMI");
+    assert_eq!(at(0), "OFF ");
+    // A position with no alias still draws, as the number it is.
+    assert_eq!(at(4), "4   ");
+}
+
+#[test]
+fn a_knob_is_as_wide_as_its_longest_alias() {
+    let mut r = readout("2-5", "CMDS_MODE_KNB");
+    let names = ["OFF", "STBY", "MAN", "SEMI", "AUTO", "BYP"];
+    span(&mut r).value_aliases =
+        names.iter().enumerate().map(|(v, a)| (v as u16, a.to_string())).collect();
+    assert_eq!(span(&mut r).widest(None, Some(5)), Some(4));
+    // With one position left as a number, that number still counts.
+    span(&mut r).value_aliases.remove(&5);
+    span(&mut r).value_aliases.insert(0, "O".into());
+    span(&mut r).value_aliases.insert(1, "S".into());
+    span(&mut r).value_aliases.insert(2, "M".into());
+    span(&mut r).value_aliases.insert(3, "S".into());
+    span(&mut r).value_aliases.insert(4, "A".into());
+    assert_eq!(span(&mut r).widest(None, Some(500)), Some(3));
+}

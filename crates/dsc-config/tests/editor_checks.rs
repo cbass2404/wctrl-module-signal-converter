@@ -31,6 +31,11 @@ fn module() -> Module {
               "id": "CHAN",
               "control_type": "display",
               "outputs": [{"address": 200, "mask": null, "max_value": null, "max_length": 2, "type": "string"}]
+            },
+            {
+              "id": "KNOB",
+              "control_type": "selector",
+              "outputs": [{"address": 300, "mask": 224, "shift": 5, "max_value": 5, "max_length": null}]
             }
           ]
         }"#,
@@ -261,4 +266,68 @@ fn a_lamp_cannot_reach_itself_through_a_panel_that_follows() {
     let problems = found(&p);
     assert_eq!(problems.len(), 1, "{problems:?}");
     assert!(problems[0].contains("mirrors something itself"), "{:?}", problems[0]);
+}
+
+#[test]
+fn a_number_shown_as_sent_needs_no_range() {
+    // A six position knob drawn as the digit DCS-BIOS sends. The editor
+    // offers that, so the check has to let it through.
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "KNOB"}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+}
+
+#[test]
+fn a_number_can_be_shown_by_its_aliases() {
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-33", "source": "KNOB",
+             "value_aliases": {"0": "OFF", "3": "SEMI"}}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+}
+
+#[test]
+fn what_dcs_bios_says_a_signal_is_cautions_rather_than_refuses() {
+    // DCS-BIOS marks CHAN as text, so aliases for its values should mean
+    // nothing. Its metadata is not right for every module, so the user is
+    // told and the profile still loads.
+    // A clean field comes first, so the caution has to find its way to the
+    // second one rather than landing on whatever is at the top.
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "20-23", "source": "KNOB"},
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-31", "source": "CHAN",
+             "value_aliases": {"0": "OFF"}}
+        ]"#,
+    );
+    assert!(found(&p).is_empty(), "{:?}", found(&p));
+    let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
+    let cautions = p.field_cautions(&module(), &devices, &displays);
+    assert_eq!(cautions.len(), 1, "{cautions:?}");
+    assert_eq!(cautions[0].0, 1, "on the field it is about");
+    assert!(cautions[0].1.contains("aliases for its values"), "{:?}", cautions[0]);
+}
+
+#[test]
+fn a_field_too_narrow_for_its_text_is_cautioned_on_that_field() {
+    let p = profile(
+        r#""readouts": [
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "20-23", "source": "KNOB"},
+            {"device": "CarrierAce_UFC", "display": "UFC1", "cells": "30-31", "text": "ABCDE"}
+        ]"#,
+    );
+    let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
+    let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
+    let cautions = p.field_cautions(&module(), &devices, &displays);
+    assert_eq!(cautions.len(), 1, "{cautions:?}");
+    assert_eq!(cautions[0].0, 1, "on the field it is about");
+    assert!(cautions[0].1.starts_with("This field needs up to 5 cells"), "{:?}", cautions[0]);
+    // And not in the profile's own list, which is for the profile as a whole.
+    assert!(p.cautions(&devices).is_empty());
 }

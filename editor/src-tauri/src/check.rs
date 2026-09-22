@@ -119,22 +119,55 @@ impl Cache {
     /// withholding Save, because the profile runs and may be exactly what the
     /// user wants.
     ///
+    /// Only what is about the profile as a whole. What a display field will
+    /// draw is said on the field, by `field_cautions`.
+    ///
     /// Empty when the inventory cannot be read. `problems` already says so, and
     /// saying it twice would only lengthen the list.
     pub fn cautions(&self, paths: &Paths, profile: &Profile) -> Vec<String> {
-        let mut out = DeviceInventory::load(&paths.devices)
+        DeviceInventory::load(&paths.devices)
             .map(|devices| profile.cautions(&devices))
-            .unwrap_or_default();
-        // Content that will not fit its cells is the other kind: it loads, it
-        // runs, and the only sign of it is a reading with its end missing.
-        // Needs the module rather than the inventory, for how wide a signal
-        // can draw, so it is asked for separately.
-        if let Ok(widths) = self.with_module(paths, &profile.module, |m| profile.width_cautions(m))
-        {
-            out.extend(widths);
-        }
+            .unwrap_or_default()
+    }
+
+    /// Cautions about what each display field will draw: content that may not
+    /// fit its cells, and settings that lean on what DCS-BIOS says a signal
+    /// is. Shown on the field they are about.
+    ///
+    /// Empty when the inventory, the displays or the module cannot be read.
+    /// `problems` already says so.
+    pub fn field_cautions(&self, paths: &Paths, profile: &Profile) -> Vec<FieldCaution> {
+        let (Ok(devices), Ok(displays)) = (
+            DeviceInventory::load(&paths.devices),
+            DisplayCatalogue::load_dir(&paths.displays),
+        ) else {
+            return Vec::new();
+        };
+        self.with_module(paths, &profile.module, |m| profile.field_cautions(m, &devices, &displays))
+            .unwrap_or_default()
+            .into_iter()
+            .map(|(readout, text)| FieldCaution { readout, text })
+            .collect()
+    }
+
+    /// Every caution as one list, for a profile that is not open: an import
+    /// has no fields on screen to put them beside, so each says where it is.
+    pub fn all_cautions(&self, paths: &Paths, profile: &Profile) -> Vec<String> {
+        let mut out = self.cautions(paths, profile);
+        out.extend(self.field_cautions(paths, profile).into_iter().map(|c| {
+            let r = &profile.readouts[c.readout];
+            format!("{} cells {}: {}", r.display, r.cells, c.text)
+        }));
         out
     }
+}
+
+/// One caution about a display field, for the window to show on it.
+#[derive(Debug, serde::Serialize)]
+pub struct FieldCaution {
+    /// The field's index in `readouts`.
+    pub readout: usize,
+    pub text: String,
 }
 
 /// One flagged condition or field, for the window to mark where it sits.

@@ -10,7 +10,7 @@
 // turns these rows off; the file keeps them so they work again once DCS-BIOS
 // is updated.
 
-import type { FlagView, Profile } from "./types";
+import type { FieldCaution, FlagView, Profile } from "./types";
 
 const reasons = new WeakMap<object, string>();
 const slots = new WeakMap<object, HTMLElement>();
@@ -43,6 +43,59 @@ export function flagSlot(row: object): HTMLElement {
   slots.set(row, slot);
   fill(slot, reasons.get(row));
   return slot;
+}
+
+// Cautions about what a field will draw, kept the same way and for the same
+// reason as the flags, beside them on the field. A field can have several: too
+// wide for its cells, and a setting DCS-BIOS says means nothing, at once.
+
+const notes = new WeakMap<object, string[]>();
+const noteSlots = new WeakMap<object, HTMLElement>();
+let noted: object[] = [];
+
+function fillNotes(slot: HTMLElement, texts: string[] | undefined): void {
+  slot.hidden = !texts || texts.length === 0;
+  slot.replaceChildren(
+    ...(texts ?? []).map((t) => {
+      const line = document.createElement("div");
+      line.textContent = `⚠ ${t}`;
+      return line;
+    }),
+  );
+}
+
+/** Where a field shows its cautions. Filled at once if it already has some. */
+export function cautionSlot(field: object): HTMLElement {
+  const slot = document.createElement("div");
+  slot.className = "flag";
+  noteSlots.set(field, slot);
+  fillNotes(slot, notes.get(field));
+  return slot;
+}
+
+/**
+ * Replace every field caution with what the latest check found. `profile`
+ * must be the one that was checked, as for `showFlags`.
+ */
+export function showFieldCautions(profile: Profile, found: FieldCaution[]): void {
+  for (const field of noted) {
+    notes.delete(field);
+    const slot = noteSlots.get(field);
+    if (slot) fillNotes(slot, undefined);
+  }
+  noted = [];
+  for (const c of found) {
+    const field = profile.readouts?.[c.readout];
+    if (!field) continue;
+    const list = notes.get(field) ?? [];
+    if (list.length === 0) noted.push(field);
+    if (!list.includes(c.text)) list.push(c.text);
+    notes.set(field, list);
+  }
+  for (const field of noted) {
+    const slot = noteSlots.get(field);
+    if (slot) fillNotes(slot, notes.get(field));
+  }
 }
 
 /**

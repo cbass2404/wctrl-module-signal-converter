@@ -20,7 +20,7 @@
 //!   and the cell reads as a different, wrong letter in between. Diffing whole
 //!   groups from a settled buffer is what keeps that off the glass.
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
@@ -1102,6 +1102,20 @@ pub struct Span {
     /// Decimal places for a numeric source.
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     pub decimals: u8,
+    /// What to draw for each value of a numeric source, in place of the
+    /// number.
+    ///
+    /// A knob reports its position, and `3` on a screen says less than `SEMI`
+    /// does. The editor fills this from the position names the catalogue has,
+    /// and the user shortens them to fit. Looked up on the whole value, before
+    /// it is split into cells, so an alias is drawn as the characters it is. A
+    /// value with no entry draws as the number, converted by `reads` if there
+    /// is one.
+    ///
+    /// Not `aliases`, which rewrites characters a module sends as text. This
+    /// one names numbers.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub value_aliases: BTreeMap<u16, String>,
     /// Values this module words differently from the glyph table.
     ///
     /// DCS-BIOS does not always report what DCS's own indication does: the
@@ -1183,10 +1197,13 @@ impl Span {
     /// Turn a raw signal value into the characters this part should show.
     ///
     /// `max` is the source's own declared maximum, so a needle at 0..65535 and
-    /// a selector at 0..10 go through the same arithmetic. A selector whose
-    /// value already is the number needs `reads` set to its own range, which
-    /// makes the conversion an identity rather than a special case.
+    /// a selector at 0..10 go through the same arithmetic. With no `reads` the
+    /// range is the signal's own, which makes the conversion an identity: the
+    /// number as sent. A value with a word draws the word instead.
     pub fn format_number(&self, value: u16, max: u16) -> String {
+        if let Some(alias) = self.value_aliases.get(&value) {
+            return alias.clone();
+        }
         let [low, high] = self.reads.unwrap_or([0.0, max as f64]);
         let travel = if max == 0 { 0.0 } else { value as f64 / max as f64 };
         format!("{:.*}", self.decimals as usize, low + travel * (high - low))
@@ -1241,12 +1258,19 @@ impl Span {
         let Some(max) = number_max else {
             return max_length;
         };
+        let longest_alias = self.value_aliases.values().map(|a| a.chars().count()).max().unwrap_or(0);
+        // Every value aliased means no number is ever drawn, so only the
+        // aliases count. Aliases that stop short leave the rest as numbers.
+        if (0..=max).all(|v| self.value_aliases.contains_key(&v)) {
+            return Some(longest_alias);
+        }
         let [low, high] = self.reads.unwrap_or([0.0, f64::from(max)]);
         let ends = [
             self.format_number_at(low),
             self.format_number_at(high),
         ];
-        Some(ends.iter().map(|s| s.chars().count()).max().unwrap_or(0))
+        let number = ends.iter().map(|s| s.chars().count()).max().unwrap_or(0);
+        Some(number.max(longest_alias))
     }
 
     /// The characters this part would draw for one real reading, used to
@@ -1448,6 +1472,8 @@ struct ReadoutRepr {
     reads: Option<[f64; 2]>,
     #[serde(default, skip_serializing_if = "is_zero_u8")]
     decimals: u8,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    value_aliases: BTreeMap<u16, String>,
     #[serde(default, skip_serializing_if = "is_left")]
     align: Align,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1489,6 +1515,7 @@ impl From<ReadoutRepr> for Readout {
                 gap: r.gap,
                 reads: r.reads,
                 decimals: r.decimals,
+                value_aliases: r.value_aliases,
                 aliases: r.aliases,
                 format: r.format,
                 colour: r.colour,
@@ -1556,6 +1583,7 @@ impl From<Readout> for ReadoutRepr {
             seat: r.seat,
             reads: span.reads,
             decimals: span.decimals,
+            value_aliases: span.value_aliases,
             align: r.align,
             format: span.format,
             colour: if r.divider { r.colour } else { span.colour },

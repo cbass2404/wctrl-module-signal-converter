@@ -172,6 +172,30 @@ fn a_field_the_user_changed_is_left_alone() {
     assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
 }
 
+#[test]
+fn a_field_the_user_gave_aliases_is_left_alone() {
+    // Aliases are the user shortening names to fit their cells, which is as
+    // much an edit as a colour. An update that changed the field must not
+    // take them back to the numbers.
+    let dir = scratch("aliased");
+    let old = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT" }"#;
+    let new = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                   "source": "CDU_BRT", "colour": "amber" }"#;
+    let theirs = r#"{ "device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
+                      "source": "CDU_BRT", "value_aliases": { "0": "OFF", "1": "ON" } }"#;
+    lay(&dir, Some(old), new, theirs);
+
+    let notes = merge(&dir, "alpha.004");
+
+    let after = mine(&dir);
+    let span = &after.readouts[0].content[0];
+    assert_eq!(span.value_aliases.get(&0).map(String::as_str), Some("OFF"));
+    assert_eq!(span.value_aliases.get(&1).map(String::as_str), Some("ON"));
+    assert_eq!(span.colour, None, "the shipped change did not land on their field");
+    assert!(!touched_a_field(&notes), "and nothing was claimed: {notes:?}");
+}
+
 // ---------------------------------------------------------------------------
 // removal, the branch worth distrusting
 // ---------------------------------------------------------------------------

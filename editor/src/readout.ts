@@ -20,7 +20,7 @@ import { iconButton } from "./binding";
 import { confirmAction } from "./confirm";
 import { contentOf, isLiteral, kindOf, newSpan, setContent } from "./content";
 import type { SpanKind } from "./content";
-import { flagSlot } from "./flags";
+import { cautionSlot, flagSlot } from "./flags";
 import { noteEditor } from "./note";
 import { signalPicker } from "./typeahead";
 import type {
@@ -158,26 +158,48 @@ function maxOf(signals: SignalView[], id: string): number {
   return signals.find((x) => x.id === id)?.max_value ?? 65535;
 }
 
-/** How a reading draws a number: as DCS-BIOS sends it, or converted. */
-type ReadingKind = "sent" | "converted";
+/** How a reading draws a number: as DCS-BIOS sends it, converted, or named. */
+type ReadingKind = "sent" | "converted" | "aliased";
 
 const READING_LABELS: Record<ReadingKind, string> = {
   sent: "as sent",
   converted: "converted to",
+  aliased: "as aliases",
 };
+
+/**
+ * The catalogue's name for each position of a switch, as a starting set of
+ * aliases. Empty for a signal whose positions have no names, which is most
+ * counts: their labels are only the numbers again.
+ */
+function namedPositions(signal: SignalView | undefined): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (!signal || signal.text) return out;
+  if (!signal.values.some((v) => v.label !== String(v.value))) return out;
+  for (const v of signal.values) out[String(v.value)] = v.label;
+  return out;
+}
 
 /**
  * A sensible way to show a number the user has just chosen, so that picking
  * the signal is usually the only step, the way a lamp's test is filled in.
+ * It is only where the choice starts: every signal can be switched to any of
+ * the three.
  *
- * A full word is a needle's position rather than a quantity, and 0 to 65535
- * means nothing on a screen, so it arrives converted, to a range the user then
- * sets from the dial. Anything narrower is a count or a selector whose value
- * already is the number, and is shown as sent.
+ * A switch whose positions have names arrives aliased to them, ready to be
+ * shortened. A full word is a needle's position rather than a quantity, and 0
+ * to 65535 means nothing on a screen, so it arrives converted, to a range the
+ * user then sets from the dial. Anything else is a count or a selector whose
+ * value already is the number, and is shown as sent.
  */
-function defaultReads(signal: SignalView | undefined): [number, number] | undefined {
-  if (!signal || signal.text || signal.max_value < 65535) return undefined;
-  return [0, 100];
+function startReading(span: Span, signal: SignalView | undefined): void {
+  delete span.reads;
+  delete span.decimals;
+  delete span.value_aliases;
+  if (!signal || signal.text) return;
+  const named = namedPositions(signal);
+  if (Object.keys(named).length > 0) span.value_aliases = named;
+  else if (signal.max_value >= 65535) span.reads = [0, 100];
 }
 
 /**
@@ -191,26 +213,45 @@ function defaultReads(signal: SignalView | undefined): [number, number] | undefi
  */
 function conversionRow(
   span: Span,
-  max: number,
+  signal: SignalView | undefined,
+  set: string | null,
   edited: () => void,
   rebuild: () => void,
 ): HTMLElement {
+  const max = signal?.max_value ?? 65535;
   const select = el("select", { class: "test" });
   for (const kind of Object.keys(READING_LABELS) as ReadingKind[]) {
     select.append(el("option", { value: kind }, READING_LABELS[kind]));
   }
-  select.value = span.reads ? "converted" : "sent";
+  select.value = span.value_aliases ? "aliased" : span.reads ? "converted" : "sent";
   select.addEventListener("change", () => {
     // Converting starts from the signal's own range, which draws exactly what
     // as sent did, so the choice changes nothing until a number is changed.
+    // Aliasing starts from the catalogue's position names, where it has any.
     // Decimals mean nothing on a whole number sent as it is.
+    delete span.reads;
+    delete span.decimals;
+    delete span.value_aliases;
     if (select.value === "converted") span.reads = [0, max];
-    else {
-      delete span.reads;
-      delete span.decimals;
-    }
+    if (select.value === "aliased") span.value_aliases = namedPositions(signal);
     rebuild();
   });
+
+  if (span.value_aliases) {
+    return el(
+      "div",
+      {},
+      el("div", { class: "test-row" }, select),
+      valueAliasEditor(span, set, edited),
+      el(
+        "span",
+        { class: "meta block" },
+        `What to draw for each value DCS-BIOS sends, 0 to ${max}. Shorten ` +
+          "them to fit the cells you have. A value with no alias is drawn as " +
+          "the number.",
+      ),
+    );
+  }
 
   const values = el("span", { class: "values-row" });
   if (span.reads) {
@@ -529,6 +570,92 @@ function aliasEditor(span: Span, onChange: () => void): HTMLElement {
         "glyph, so without a substitution the cell goes dark.",
     ),
   );
+  return wrap;
+}
+
+/**
+ * What a number draws at each value, one row a value.
+ *
+ * Laid out like the substitutions, which are the same shape of thing. Arrives
+ * filled with the catalogue's position names where there are any, which are
+ * often longer than the cells a user has to spare, so every one is theirs to
+ * shorten, clear or remove. A character the font lacks is said beside the
+ * row as it is typed, the way it is for typed text.
+ */
+function valueAliasEditor(span: Span, set: string | null, onChange: () => void): HTMLElement {
+  const wrap = el("div", { class: "aliases" });
+  const rows = el("div", { class: "alias-rows" });
+  // Pairs rather than the object, for the same reason as the substitutions:
+  // changing a value half way through typing it would collide with another.
+  const pairs: [string, string][] = Object.entries(span.value_aliases ?? {});
+
+  const store = (): void => {
+    const out: Record<string, string> = {};
+    for (const [value, alias] of pairs) {
+      if (value !== "" && alias !== "") out[value] = alias;
+    }
+    // Kept even when empty: the reading is still set to aliases, and dropping
+    // the key would flip the menu back to as sent under the user's hands.
+    span.value_aliases = out;
+    onChange();
+  };
+
+  const draw = (): void => {
+    rows.textContent = "";
+    pairs.forEach((pair, i) => {
+      const value = el("input", {
+        type: "number",
+        class: "alias",
+        min: "0",
+        value: pair[0],
+        placeholder: "sends",
+      });
+      const alias = el("input", {
+        type: "text",
+        class: "alias",
+        value: pair[1],
+        placeholder: "draw",
+      });
+      const trouble = el("span", { class: "meta bad" });
+      const check = (): void => {
+        const missing = set
+          ? [...new Set([...pair[1]].filter((c) => !set.includes(c)))]
+          : [];
+        alias.classList.toggle("bad", missing.length > 0);
+        trouble.textContent = missing.length
+          ? `The font does not draw ${missing.map((c) => JSON.stringify(c)).join(", ")}.`
+          : "";
+      };
+      value.addEventListener("input", () => {
+        pair[0] = value.value;
+        store();
+      });
+      alias.addEventListener("input", () => {
+        pair[1] = alias.value;
+        check();
+        store();
+      });
+      const drop = el("button", { class: "icon danger", title: "Remove this alias" }, "\u{1F5D1}");
+      drop.addEventListener("click", () => {
+        pairs.splice(i, 1);
+        draw();
+        store();
+      });
+      check();
+      rows.append(
+        el("div", { class: "alias-row" }, value, el("span", { class: "meta" }, "shows as"), alias, drop, trouble),
+      );
+    });
+  };
+
+  const add = el("button", { class: "add small" }, "Add an alias");
+  add.addEventListener("click", () => {
+    pairs.push(["", ""]);
+    draw();
+  });
+
+  draw();
+  wrap.append(el("label", { class: "meta" }, "aliases"), rows, add);
   return wrap;
 }
 
@@ -889,10 +1016,18 @@ function spanWidth(span: Span, signals: SignalView[]): number {
   if (!span.source) return 0;
   if (isText(signals, span.source)) return textLength(signals, span.source);
   // As sent is a conversion onto the signal's own range, so both measure the
-  // same way, as the daemon does.
-  const ends = span.reads ?? [0, maxOf(signals, span.source)];
+  // same way, as the daemon does. Aliases count as what they draw, and only
+  // leave the number to measure when some value has none.
+  const max = maxOf(signals, span.source);
+  const aliases = span.value_aliases ?? {};
+  const longest = Math.max(0, ...Object.values(aliases).map((a) => [...a].length));
+  const everyValue =
+    Object.keys(aliases).length > max &&
+    Array.from({ length: max + 1 }, (_, v) => String(v) in aliases).every(Boolean);
+  if (everyValue) return longest;
+  const ends = span.reads ?? [0, max];
   const dp = span.decimals ?? 0;
-  return Math.max(...ends.map((end) => end.toFixed(dp).length));
+  return Math.max(longest, ...ends.map((end) => end.toFixed(dp).length));
 }
 
 /**
@@ -1343,10 +1478,7 @@ function spanEditor(
         // swapping the signal under a tuned range does not discard it, the
         // same bargain a lamp's test makes.
         if (!was || isText(signals, was)) {
-          const reads = defaultReads(signals.find((s) => s.id === id));
-          if (reads) span.reads = reads;
-          else delete span.reads;
-          delete span.decimals;
+          startReading(span, signals.find((s) => s.id === id));
         }
         // A different signal brings a different set of controls with it: a
         // range where the old one was a number, none where it reports
@@ -1359,16 +1491,19 @@ function spanEditor(
     body.append(picker);
 
     if (span.source) {
-      if (isText(signals, span.source)) {
-        // A signal that already reports characters needs no range, and
-        // offering one would invite a conversion that means nothing.
-        delete span.reads;
-        delete span.decimals;
-      } else {
-        // Choosing between as sent and converted changes which boxes there
-        // are, so that rebuilds. Typing in them does not.
+      // A signal the catalogue says reports characters is offered no range,
+      // since one would usually mean nothing. One written anyway is kept and
+      // shown: DCS-BIOS is not always right about what a signal is, the check
+      // cautions rather than refuses, and quietly dropping it here would undo
+      // the user's choice the moment the field was drawn.
+      const textual = isText(signals, span.source);
+      if (!textual || span.reads || span.value_aliases) {
+        // Choosing between as sent, converted and aliases changes which boxes
+        // there are, so that rebuilds. Typing in them does not.
+        const signal = signals.find((s) => s.id === span.source);
+        const set = alphabet(display, profile, span.small ?? false);
         body.append(
-          conversionRow(span, maxOf(signals, span.source), edited, () => {
+          conversionRow(span, signal, set, edited, () => {
             setContent(readout, spans);
             redraw();
             onChange();
@@ -1819,7 +1954,7 @@ function row(opts: RowOptions): HTMLTableRowElement {
   const shows = el("td");
   const draw = (): void => {
     shows.textContent = "";
-    shows.append(flagSlot(readout), chainEditor(opts, () => {}));
+    shows.append(flagSlot(readout), cautionSlot(readout), chainEditor(opts, () => {}));
   };
   rebuild = draw;
   draw();
@@ -1845,7 +1980,15 @@ function describeField(readout: Readout, display: DisplayInfo): string {
     if (s.rule) return s.label ? `a rule labelled ${s.label}${held}` : `a rule${held}`;
     if (s.gap) return `a gap${held}`;
     if (kindOf(s) === "signal") {
-      return `${s.source ? s.source : "a reading nobody has chosen yet"}${held}`;
+      // How it draws the number, so a reset that only changes that says so
+      // rather than showing the same line twice.
+      const aliases = Object.entries(s.value_aliases ?? {});
+      const drawn = aliases.length
+        ? ` as ${aliases.map(([v, a]) => `${v}=${a}`).join(" ")}`
+        : s.reads
+          ? ` converted to ${s.reads[0]} to ${s.reads[1]}`
+          : "";
+      return `${s.source ? s.source : "a reading nobody has chosen yet"}${drawn}${held}`;
     }
     return `${s.text ? JSON.stringify(s.text) : "an empty piece of text"}${held}`;
   });

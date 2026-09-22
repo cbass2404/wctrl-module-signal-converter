@@ -332,3 +332,42 @@ fn a_saved_profile_is_written_with_windows_line_endings() {
     // last row of a file is not a change every time it is saved.
     assert_ne!(bytes.last(), Some(&b'\n'));
 }
+
+#[test]
+fn a_piece_with_aliases_is_still_written_flat() {
+    // Aliases belong to the one reading, not the field, so they have a flat
+    // spelling beside the source. Growing a chain for them would make every
+    // aliased row read as a changed one on the next update.
+    let path = r("data/defaults/a-10c.json");
+    let mut profile = Profile::load(&path).expect("the A-10C default loads");
+    let field = profile
+        .readouts
+        .iter_mut()
+        .find(|r| !r.divider)
+        .expect("a field to alias");
+    field.content[0].value_aliases = [(0, "OFF"), (3, "SEMI")]
+        .into_iter()
+        .map(|(v, a)| (v, a.to_string()))
+        .collect();
+    let written = serde_json::to_string_pretty(&profile).expect("it serializes");
+    assert!(!written.contains("\"content\""), "one piece stays flat");
+    assert!(written.contains("\"value_aliases\""), "and carries its aliases");
+    let back: Profile = serde_json::from_str(&written).expect("it reads back");
+    let field = back
+        .readouts
+        .iter()
+        .find(|r| !r.content[0].value_aliases.is_empty())
+        .expect("the aliases came back");
+    assert_eq!(field.content[0].value_aliases.get(&3).map(String::as_str), Some("SEMI"));
+}
+
+#[test]
+fn a_piece_with_no_aliases_writes_no_aliases_key() {
+    // The other half: every shipped field has none, and a key written for
+    // nothing would change every row in every default at once.
+    for path in defaults() {
+        let profile = Profile::load(&path).expect("a shipped default loads");
+        let written = serde_json::to_string_pretty(&profile).expect("it serializes");
+        assert!(!written.contains("value_aliases"), "{}", path.display());
+    }
+}

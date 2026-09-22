@@ -1,8 +1,9 @@
 # Changelog
 
-What changed in each release, for the people running it. The release pipeline
-puts the matching section at the top of the release notes, so anything written
-here reaches users; development detail belongs in
+What changed in the release being prepared, for the people running it. Only
+the current version is kept here: the release pipeline puts this section at
+the top of that release's notes, and each earlier release already carries its
+own. Anything written here reaches users; development detail belongs in
 [docs/STATUS.md](docs/STATUS.md) instead.
 
 **When a shipped profile changes**, say so here and name the rows. An update
@@ -22,6 +23,10 @@ unless this says what moved.
   panels.** The menu pauses DCS-BIOS, and after 20 seconds of that every
   lamp and screen was cleared and rebuilt on the way back. The panels now
   keep the last cockpit until a new aircraft loads or DCS closes.
+
+- **Importing a profile over one with the same name works.** Taking every
+  aircraft from the old profile deletes it, so its name is free, but the
+  import still refused the name as taken.
 
 ### New Features
 

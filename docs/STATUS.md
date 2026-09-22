@@ -1066,12 +1066,14 @@ AH-64D.
 `CHANGELOG.md` is the user-facing record, and the release pipeline puts the
 section matching the version at the top of the release notes, above the
 provenance it already wrote. A version with no section still releases; the awk
-simply finds nothing.
+simply finds nothing. It holds the current version only: once a release ships,
+its notes on GitHub are the record, and the next bump replaces the section
+rather than adding one above it.
 
 **A release that changes a shipped profile has to say which rows**, because an
 update never rewrites a row the user has changed: a fix reaches them only if
 they reset that lamp, and they cannot choose to unless the notes name it. The
-alpha.002 entry does that for the two MCDU dividers.
+alpha.002 release notes do that for the two MCDU dividers.
 
 ## Development mode, and three faults it uncovered
 

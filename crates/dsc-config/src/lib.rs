@@ -2410,13 +2410,19 @@ impl Profiles {
     /// is a guess. Compared without case or surrounding space, because that is
     /// how a user reads two names as the same.
     pub fn name_taken(&self, file: &str, name: &str) -> Option<String> {
+        self.name_taken_except(&[file], name)
+    }
+
+    /// [`name_taken`](Self::name_taken), leaving out every file in `skip`: the
+    /// ones about to be deleted, whose names are free to reuse.
+    pub fn name_taken_except(&self, skip: &[&str], name: &str) -> Option<String> {
         let wanted = name.trim().to_lowercase();
         let entries = std::fs::read_dir(&self.active).ok()?;
         let mut paths: Vec<PathBuf> = entries
             .flatten()
             .map(|e| e.path())
             .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
-            .filter(|p| p.file_name().and_then(|n| n.to_str()) != Some(file))
+            .filter(|p| p.file_name().and_then(|n| n.to_str()).is_none_or(|n| !skip.contains(&n)))
             .collect();
         paths.sort();
         paths.into_iter().find_map(|path| {

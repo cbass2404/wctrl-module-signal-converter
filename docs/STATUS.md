@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 461 passing
+cargo test --workspace            # expect 474 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -22,15 +22,42 @@ wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
 
-**Designed 2026-09-23: page swapping, on
+**Built 2026-09-23: page swapping and the Settings dialog, on
 `feature/mcdu-page-selection-inputs`.** The design is "Swapping" under "MCDU
-pages" in [CONFIG.md](CONFIG.md), settled with Cory and resting on live
-captures. Nothing is built yet except the capture command, `dcs-signal
-buttons`, whose readers the daemon can reuse: `buttons.rs` for a panel's
-buttons and `keyboard.rs` for the keyboard's modifiers, in `crates/dsc-cli/src`.
-Inputs belong to their device (Cory, 2026-09-23): a panel lists its own
-buttons in `devices.json`, and the keyboard owns Ctrl, Shift and Alt. Start
-the build from the TODO entry.
+pages" in [CONFIG.md](CONFIG.md). Tested with fixtures and a dry run, which
+opened the Captain's key reader; not yet pressed on the panel with DCS
+running. That is next: see the TODO entry.
+
+- **Inputs belong to their device** (Cory, 2026-09-23). The three MCDU
+  entries in `devices.json` list `buttons` (LSK 1L to 6L as 1 to 6, LSK 1R as
+  7) and `page_keys` (LSK 1L to 6L). `DeviceInventory::load` refuses a page
+  key naming no button, and a name or number listed twice.
+- **Slots come from the device.** `SLOTS = 6` is gone, in Rust and in
+  `pages.ts`: `DeviceSpec::slot_count` is the number of page keys, or 1, and
+  the editor labels each slot with its key's `label`, sent in `DeviceView`.
+- **Every slot is resolved up front.** `with_pages` fills
+  `Profile::page_runs` (never written) with each slot as `SlotRun::Off`,
+  `Blank` or `Page`, and `with_followers` gives a follower the leader's under
+  its own name. `Profile::show_slot` swaps a device's page fields (the
+  readouts with `page` set) for another slot's; `reset_pages` goes back to
+  `start`. The engine's `show_slot` calls it and paints, `Cause::PageSwap`;
+  `select_profile` resets, and `set_profiles` keeps the slot each screen
+  showed. Tests: `dsc-engine/tests/page_swap.rs`,
+  `dsc-config/tests/page_keys.rs`.
+- **The daemon reads keys.** `page_keys.rs` in `dsc-cli` starts one thread
+  per connected device with page keys, on the collection that declares
+  buttons, and sends each key going down with `keyboard::held_now()`. The
+  loop maps number to slot, checks `Modifier::alone_in`, and applies the
+  engine's batch. The modifier is read from `settings.json` at start and on
+  the profile poll.
+- **Settings.** `dsc_config::settings` holds `page_modifier` and `theme` in
+  `settings.json` beside the profiles (`Paths::settings`; in development
+  `data/settings.json`, gitignored). The editor's Profiles header is now New
+  profile and a gear; the gear's dialog (`editor/src/settings.ts`, built as
+  `dialog.picker confirm` like Manage Converter) holds the theme, the
+  modifier, and Import and Manage Converter, which it hands on to once it
+  closes. The theme sets `data-theme` on `<html>`, read before the first
+  screen; `styles.css` has the forced-dark block beside the OS one.
 
 **Built 2026-09-23: MCDU pages, on `feature/mcdu-page-profiles`.** The design
 is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.

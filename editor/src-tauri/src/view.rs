@@ -69,6 +69,9 @@ pub struct DeviceView {
     /// can point it at. Worked out here by `same_hardware` so the window does
     /// not keep a second idea of what counts.
     pub variants: Vec<String>,
+    /// What each page key is called, in slot order: one slot per key. Empty
+    /// for a device with none, which has one slot that never swaps.
+    pub page_keys: Vec<String>,
 }
 
 /// A segment display, described only as far as the window needs it.
@@ -261,6 +264,11 @@ impl DeviceView {
             leds: spec.leds().map(|(part, led)| LedView::of(part.part_id, led)).collect(),
             displays: Vec::new(),
             variants: Vec::new(),
+            page_keys: spec
+                .page_keys
+                .iter()
+                .map(|k| spec.button(k).map_or(k.clone(), |b| if b.label.is_empty() { b.name.clone() } else { b.label.clone() }))
+                .collect(),
         }
     }
 

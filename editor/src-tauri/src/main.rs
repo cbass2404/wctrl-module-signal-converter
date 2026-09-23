@@ -12,6 +12,7 @@ mod claims;
 mod converter;
 mod learn;
 mod pages;
+mod settings;
 mod share;
 mod update;
 mod view;
@@ -542,6 +543,8 @@ fn main() {
             converter::converter_state,
             converter::converter_restart,
             converter::converter_kill,
+            settings::settings_read,
+            settings::settings_save,
             open_profile,
             default_profile,
             create_profile,

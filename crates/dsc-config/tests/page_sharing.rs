@@ -29,7 +29,7 @@ fn profile(slots: &[Option<&str>], start: usize) -> Profile {
         r#"{"schema_version": 2, "name": "T", "aircraft": ["TEST"], "module": "TEST"}"#,
     )
     .unwrap();
-    let mut s = PageSlots::default();
+    let mut s = PageSlots::empty(6);
     for (i, id) in slots.iter().enumerate() {
         s.slots[i] = id.map(Slot::new);
     }

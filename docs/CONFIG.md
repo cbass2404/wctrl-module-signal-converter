@@ -1335,10 +1335,10 @@ Built 2026-09-23. Profile schema version 2, which every shipped profile
 uses.
 
 A page is a named screen's worth of MCDU fields, kept in a library of its own
-rather than in a profile. A profile gives each MCDU six slots that point into
-the library, and says which one shows when a mission starts. Pages exist so
-the screen can be swapped whole: for now by changing the start slot, later
-by holding a keyboard modifier and pressing a line select key.
+rather than in a profile. A profile gives each MCDU a slot per page key
+that points into the library, and says which one shows when a mission
+starts. Pages exist so the screen can be swapped whole, by holding a keyboard
+modifier and pressing a line select key; see "Swapping".
 
 **Text grids only, for good.** Pages belong to CDU style screens: the MCDU
 under each of its names, and any other WinWing CDU with the same kind of
@@ -1423,10 +1423,10 @@ editor shows it on the slot.
 },
 ```
 
-- **Six slots per MCDU, one for each left line select key.** `slots` always
-  holds six entries, so slot 3 is the same slot whatever is filled around it,
-  and slot n is LSK nL. The editor labels each slot with its key. Swapping
-  takes the count from the device instead, below.
+- **One slot per page key.** `slots` holds one entry for each key in the
+  device's `page_keys` in `devices.json`, so slot 3 is the same slot whatever
+  is filled around it, and slot n is the nth key: on the MCDU, six slots and
+  LSK nL. The editor labels each slot with its key. See "Swapping".
 - **A slot shows a page, shows a blank screen, or is disabled.** A page is
   `{ "page": id }`. Blank is `{ "page": null }`: the screen dark on purpose.
   Disabled is `null`. The difference is for swapping, below: the key of a
@@ -1444,8 +1444,9 @@ editor shows it on the slot.
   has two owners.
 - **Resolved when the engine takes the profile**, the way `follows` is: the
   start page's fields become ordinary display fields on the device, so
-  painting, sweeping and resolving never learn about pages. Swapping will be
-  resolving again with another slot and repainting one screen.
+  painting, sweeping and resolving never learn about pages. Every other
+  slot is resolved alongside and kept for the run, so swapping puts another
+  slot's fields in place of the page's and repaints one screen.
 
 **Per device, as everything else is.** An MCDU that follows the Captain has
 the Captain's slots and starts on the Captain's start page. Which page each
@@ -1470,7 +1471,7 @@ hand, since saving would write over it.
   are the tracked folder, as for profiles.
 - **Shipped ids are for good.** An id is never reused for a different page. A
   page that changes what it is for ships under a new id.
-- **The screen's section lists the six slots and nothing else** until asked:
+- **The screen's section lists its slots and nothing else** until asked:
   each slot's menu reads Disabled, Blank, then the module's pages by name,
   and a tick marks the start slot. **Edit page** opens the page picked beside
   it in the MCDU field editor that already existed, and **New page** opens an
@@ -1571,8 +1572,8 @@ pairs of folders:
 
 ### Swapping
 
-Designed 2026-09-23, not built. Everything the design rests on was captured
-with `dcs-signal buttons`, which prints each button a panel reports by the
+Built 2026-09-23, not yet pressed on the panel with DCS running. Everything
+the design rests on was captured with `dcs-signal buttons`, which prints each button a panel reports by the
 number Windows gives it, with the raw report and which of Ctrl, Shift and Alt
 the keyboard held at that moment. It only reads.
 
@@ -1593,6 +1594,16 @@ the keyboard held at that moment. It only reads.
   setting says so where it is chosen.
 - **The modifier is an app-wide setting**, not part of a profile, since which
   one is free depends on how DCS is bound on that PC, not on the aircraft.
+  It is `page_modifier` in `settings.json`, beside the `profiles` and
+  `pages` folders (in development, `data/settings.json`, untracked), chosen
+  under the gear on the Profiles page. The window's theme is kept there too.
+  A missing file is every default; one that will not read is named in the
+  log and the defaults apply. A running converter reads a change within half
+  a second, as it does a saved profile.
+
+  ```jsonc
+  { "page_modifier": "ctrl", "theme": "system" } // ctrl | shift | alt; system | light | dark
+  ```
 - **Every input belongs to the device it comes from**, as every lamp does.
   The keyboard is one source and owns Ctrl, Shift and Alt, and the modifier
   setting names one of those. The MCDU's line select keys are the MCDU's, and
@@ -1624,14 +1635,15 @@ the keyboard held at that moment. It only reads.
 
   Slot n is the nth key listed, and a device has as many slots as it lists
   keys, so a CDU with five line select keys or seven has five or seven slots
-  and nothing assumes six. That replaces the fixed six under "Slots in a
-  profile", and the editor labels each slot with its button's `label`. A
+  and nothing assumes six. The editor labels each slot with its button's
+  `label`. A
   device that takes pages and lists no keys has one slot, its start page,
   which nothing swaps. A page key naming no button of its device is refused
   when `devices.json` loads, and `validate` refuses a profile whose slots do
   not number the device's keys. `key` in a slot stays reserved and null.
 - **The MCDU's page keys are buttons 1 to 6**, LSK 1L to 6L, the numbers
-  SimAppPro lights. The same list goes in all three MCDU entries. Captured on the Captain 2026-09-23: one game controller
+  SimAppPro lights. The same list goes in all three MCDU entries. Captured
+  on the Captain 2026-09-23: one game controller
   collection (usage page 0x01, usage 0x04), report id 1, 64 bytes, 128
   buttons. LSK 1L to 6L are bits 0 to 5 of byte 1 and LSK 1R is bit 6, button
   7. Bytes 17 to 24 hold two 16 bit values, each sent twice, that change with
@@ -1647,7 +1659,12 @@ the keyboard held at that moment. It only reads.
   work while DCS has focus, which the capture also checked. The two readers
   are kept apart as their inputs are: `crates/dsc-cli/src/buttons.rs` reads a
   panel's buttons and `crates/dsc-cli/src/keyboard.rs` the keyboard's
-  modifiers, and the daemon can take both as they are.
+  modifiers. `crates/dsc-cli/src/page_keys.rs` gives each connected panel
+  with page keys a thread on the collection that declares buttons, and hands
+  each key going down to the daemon's loop with the modifiers held. The loop
+  turns the number into a slot through the device's own `page_keys`, checks
+  the modifier, and asks the engine for the slot. The engine knows slots and
+  never keys. Keys are read on a dry run too, since reading sends nothing.
 - **Each MCDU swaps on its own.** Its keys change its own screen. A follower
   shares the leader's slots and start page, so both start alike, but its keys
   swap only its own screen, and two seats can look at different pages from
@@ -1658,9 +1675,16 @@ the keyboard held at that moment. It only reads.
   nothing.
 - **One swap per press**, when the key goes down, however long it is held.
 - **The page in use is not saved.** Every aircraft load starts on `start`.
-- **A swap is a resolve and one repaint.** The new slot's fields become the
-  device's display fields, as the start page's do, and only that screen is
-  painted.
+  Saving a profile in the editor mid-flight keeps each screen on the slot it
+  shows, while that slot is still in use, and otherwise goes back to `start`.
+- **A slot whose page has gone** does what a disabled one does: its key is
+  ignored.
+- **A swap is one repaint.** Every slot is resolved when the profile is
+  taken, so the new slot's fields take the place of the page's on that
+  device, and the paint that follows sends only the screen that changed.
+- **The log says each swap**, as `page     MCDU_Captain LSK_2L  ->  slot 2,
+  "Radios"`, and at startup which panels' keys are read and which modifier
+  counts. A press that changes nothing goes in the log only.
 
 ## Open questions
 

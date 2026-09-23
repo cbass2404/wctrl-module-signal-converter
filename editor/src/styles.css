@@ -1,5 +1,8 @@
 /* Deliberately plain. This is a config editor that sits beside a flight sim, so
-   it follows the OS light/dark setting and otherwise stays out of the way. */
+   it follows the OS light/dark setting unless Settings picks one, and
+   otherwise stays out of the way. The dark colours are written twice: once
+   for Windows in dark mode, unless Light was picked, and once for Dark
+   picked whatever Windows says. */
 
 :root {
   --bg: #ffffff;
@@ -15,7 +18,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #16181c;
     --panel: #1e2126;
     --line: #2e333b;
@@ -26,6 +29,23 @@
     --caution: #d29922;
     --and: #fb923c;
   }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --bg: #16181c;
+  --panel: #1e2126;
+  --line: #2e333b;
+  --text: #e6e8eb;
+  --muted: #949daa;
+  --accent: #58a6ff;
+  --danger: #f0716f;
+  --caution: #d29922;
+  --and: #fb923c;
+  color-scheme: dark;
 }
 
 * {
@@ -256,6 +276,24 @@ dialog.converter ul.reasons {
 
 dialog.converter ul.reasons li {
   margin-bottom: 6px;
+}
+
+/* Settings. Its hand-offs sit left and Close right, as Kill and Restart do
+   in Manage Converter. */
+dialog.settings .actions .primary {
+  margin-left: auto;
+}
+
+/* The gear in the Profiles header, as tall as the buttons beside it. */
+header button.icon.gear {
+  width: auto;
+  padding: 5px 10px;
+  font-size: 16px;
+  line-height: 1.3;
+}
+
+header button.icon.gear:hover {
+  color: var(--text);
 }
 
 /* ------------------------------------------------------------- profile list */

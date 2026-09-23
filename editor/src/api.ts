@@ -25,6 +25,8 @@ import type {
   Profile,
   ProfileSummary,
   RuleCell,
+  Settings,
+  SettingsView,
   SignalView,
   Update,
 } from "./types";
@@ -74,6 +76,10 @@ export const converterState = () => invoke<ConverterState>("converter_state");
 export const converterRestart = () => invoke<string>("converter_restart");
 /** Ends it without asking, for one that will not answer. Clears no panels. */
 export const converterKill = () => invoke<string>("converter_kill");
+
+// The PC's own settings. A running converter picks up a saved change itself.
+export const settingsRead = () => invoke<SettingsView>("settings_read");
+export const settingsSave = (settings: Settings) => invoke<void>("settings_save", { settings });
 
 export const openProfile = (file: string) => invoke<Profile>("open_profile", { file });
 export const defaultProfile = (file: string) => invoke<Profile | null>("default_profile", { file });

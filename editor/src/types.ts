@@ -407,6 +407,21 @@ export interface Findings {
 }
 
 /** Whether the converter daemon is running, and whether there is one to start. */
+/** The key held with a page key to swap an MCDU's page. */
+export type PageModifier = "ctrl" | "shift" | "alt";
+export type Theme = "system" | "light" | "dark";
+
+/** The PC's own settings, from settings.json beside the profiles. */
+export interface Settings {
+  page_modifier: PageModifier;
+  theme: Theme;
+}
+
+export interface SettingsView extends Settings {
+  /** Why the file could not be read; the defaults are shown instead. */
+  problem: string | null;
+}
+
 export interface ConverterState {
   running: boolean;
   /** The process holding the panels, when one does. */
@@ -596,6 +611,11 @@ export interface Device {
    * them rather than setting it up again.
    */
   variants: string[];
+  /**
+   * What each page key is called, in slot order, from devices.json. A screen
+   * has one slot per key, or one that never swaps when there are none.
+   */
+  page_keys: string[];
 }
 
 /** A profile picked for import, before anything is written. */

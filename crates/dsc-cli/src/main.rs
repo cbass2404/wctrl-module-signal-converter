@@ -27,6 +27,7 @@ use wctrl_hid::Device;
 mod buttons;
 #[cfg(windows)]
 mod keyboard;
+mod page_keys;
 mod panels;
 use panels::Panel;
 
@@ -404,11 +405,7 @@ fn buttons_capture(pid: u16, raw: bool, seconds: Option<u64>) -> Result<()> {
                 let new: Vec<&u16> = down.iter().filter(|b| !last_down.contains(b)).collect();
                 if !new.is_empty() {
                     // Read once per report, as close to the press as this gets.
-                    let held: Vec<&str> = keyboard::Modifier::ALL
-                        .into_iter()
-                        .filter(|m| m.held())
-                        .map(|m| m.name())
-                        .collect();
+                    let held: Vec<&str> = keyboard::held_now().into_iter().map(|m| m.name()).collect();
                     let held = if held.is_empty() { "none".to_string() } else { held.join("+") };
                     for b in new {
                         lines.push(format!("{t:8.3}s  collection {n}  down {b:>3}  held {held:<14}  [{hex}]"));
@@ -778,6 +775,7 @@ fn main() -> Result<()> {
                 &default_pages.unwrap_or(paths.pages.defaults),
                 &displays.unwrap_or(paths.displays),
                 &nightly_only.unwrap_or(paths.nightly_only),
+                &paths.settings,
                 bios,
                 dry_run,
                 verbose,
@@ -2464,6 +2462,26 @@ fn profiles_fingerprint(dir: &PathBuf) -> Vec<(String, u64, u64)> {
     out
 }
 
+/// The PC's settings, or every default with a warning when the file will
+/// not read: a broken file should cost the choice, not the panels.
+fn load_settings(path: &Path) -> dsc_config::settings::Settings {
+    dsc_config::settings::Settings::load(path).unwrap_or_else(|e| {
+        warn!("could not read {}, so the settings are the defaults: {e}", path.display());
+        dsc_config::settings::Settings::default()
+    })
+}
+
+/// A file's size and modification time, or None when it is not there.
+fn file_stamp(path: &Path) -> Option<(u64, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    let stamp = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64);
+    Some((meta.len(), stamp))
+}
+
 /// Run the converter.
 ///
 /// The loop is deliberately boring: decode, feed the engine, write whatever it
@@ -2478,6 +2496,7 @@ fn run(
     default_pages_dir: &PathBuf,
     displays_dir: &PathBuf,
     nightly_path: &Path,
+    settings_path: &Path,
     bios: Option<&Path>,
     dry_run: bool,
     verbose: bool,
@@ -2501,6 +2520,7 @@ fn run(
         ("shipped pages", default_pages_dir.as_path()),
         ("displays ", displays_dir.as_path()),
         ("nightly  ", nightly_path),
+        ("settings ", settings_path),
     ] {
         dlog::header(&format!("paths    {what} {}", path.display()));
     }
@@ -2661,6 +2681,15 @@ fn run(
         ..Trace::default()
     };
 
+    // The page keys, read even on a dry run: reading a panel sends it nothing.
+    let (keys, lines) = page_keys::start(&inventory, &connected);
+    for line in lines {
+        kept!("{line}");
+    }
+    let mut settings = load_settings(settings_path);
+    let mut settings_seen = file_stamp(settings_path);
+    kept!("keys     page modifier {}", settings.page_modifier.name());
+
     let mut panels = Panels { handles, displays: displays.clone() };
     let mut engine = Engine::new(inventory, cat, profiles).with_displays(displays.clone());
     engine.set_connected(connected);
@@ -2766,6 +2795,14 @@ fn run(
 
         if now >= next_check {
             next_check = now + PROFILE_POLL;
+            // The settings file is small and written in one step, so a change
+            // is read at once rather than settled like a profile.
+            let stamp = file_stamp(settings_path);
+            if stamp != settings_seen {
+                settings_seen = stamp;
+                settings = load_settings(settings_path);
+                say!("settings reloaded: page modifier {}", settings.page_modifier.name());
+            }
             let current = [profiles_fingerprint(profiles_dir), profiles_fingerprint(pages_dir)].concat();
             if current != fingerprint {
                 // Seen changed once; act on it when it looks the same twice
@@ -2807,6 +2844,41 @@ fn run(
                 }
             } else {
                 settling = None;
+            }
+        }
+
+        // Page keys pressed since the last pass. Before the stream's own
+        // batch, so a swap goes out as soon as the loop wakes.
+        while let Ok(event) = keys.try_recv() {
+            match event {
+                page_keys::KeyEvent::Down { device, number, held } => {
+                    let Some(spec) = engine.devices().device(&device) else { continue };
+                    let Some(slot) = spec.slot_of_button(number) else { continue };
+                    let key = spec.page_keys[slot].clone();
+                    // The chosen modifier alone, or the press is DCS's.
+                    if !settings.page_modifier.alone_in(&held) {
+                        continue;
+                    }
+                    match engine.show_slot(&device, slot) {
+                        Some(batch) => {
+                            let what = engine
+                                .active_profile()
+                                .and_then(|p| p.page_runs.get(&device))
+                                .and_then(|r| r.slots.get(slot))
+                                .map_or(String::new(), |s| match s {
+                                    dsc_config::SlotRun::Page { name, .. } => format!(", {name:?}"),
+                                    dsc_config::SlotRun::Blank => ", blank".to_string(),
+                                    dsc_config::SlotRun::Off => String::new(),
+                                });
+                            kept!("page     {device} {key}  ->  slot {}{what}", slot + 1);
+                            apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
+                        }
+                        None => note!("page     {device} {key}  ->  slot {} changes nothing", slot + 1),
+                    }
+                }
+                page_keys::KeyEvent::Lost { device, why } => {
+                    warn!("keys     {device}: stopped reading its keys ({why}); page keys do nothing until the converter restarts");
+                }
             }
         }
 
@@ -2974,6 +3046,7 @@ fn apply(
         Cause::SignalChange => "write",
         Cause::Shutdown => "clear",
         Cause::ProfileReload => "reload",
+        Cause::PageSwap => "page",
     };
     for w in &batch.writes {
         let lamp = trace.lamp(&w.id);

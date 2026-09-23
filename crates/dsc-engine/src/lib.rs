@@ -126,6 +126,8 @@ pub enum Cause {
     Shutdown,
     /// A full sweep after the profiles were edited while running.
     ProfileReload,
+    /// One screen repainted with another of its page slots.
+    PageSwap,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -245,6 +247,12 @@ impl Engine {
     /// that just became unbound has to be driven off. Nothing else would
     /// notice either case.
     pub fn set_profiles(&mut self, profiles: Vec<Profile>) -> Batch {
+        // Which page each screen shows is kept across a save in the editor,
+        // where the slot is still in use, so saving does not throw the pilot
+        // back to the start page. A new aircraft starts on `start` regardless.
+        let shown: Option<(String, Vec<(String, usize)>)> = self.active_profile().map(|p| {
+            (p.name.clone(), p.page_runs.iter().map(|(d, r)| (d.clone(), r.shown)).collect())
+        });
         self.profiles = running(profiles);
 
         let Some(aircraft) = self.aircraft.clone() else {
@@ -255,6 +263,13 @@ impl Engine {
             return Batch::empty(Cause::ProfileReload);
         };
         self.select_profile(&aircraft);
+        if let (Some(i), Some((name, shown))) = (self.active, shown) {
+            if self.profiles[i].name == name {
+                for (device, slot) in shown {
+                    self.profiles[i].show_slot(&device, slot);
+                }
+            }
+        }
 
         // Still waiting for the post-load flood to settle. That sweep is coming
         // anyway and will use the profiles we just installed.
@@ -270,6 +285,26 @@ impl Engine {
             writes,
             lcd,
         }
+    }
+
+    /// Show another of a device's page slots (from 0), as its page key asks.
+    ///
+    /// The slot's fields take the place of the page's on that device, and the
+    /// paint that follows sends only what changed, which is that one screen.
+    /// `None` when nothing changes: no profile, no such slot, a disabled
+    /// one, or the one already showing. Which key means which slot is the
+    /// caller's business; the engine knows only slots.
+    pub fn show_slot(&mut self, device: &str, slot: usize) -> Option<Batch> {
+        let i = self.active?;
+        if !self.profiles[i].show_slot(device, slot) {
+            return None;
+        }
+        // The settle sweep still to come paints the new page with the rest.
+        if self.pending.is_some() {
+            return Some(Batch::empty(Cause::PageSwap));
+        }
+        let (writes, lcd) = self.paint();
+        Some(Batch { cause: Cause::PageSwap, writes, lcd })
     }
 
     /// Swap in a rebuilt catalogue, with the profiles checked against it.
@@ -671,6 +706,9 @@ impl Engine {
         self.by_address.clear();
 
         let Some(i) = self.active else { return };
+        // Every screen starts on its start page. The profile kept whichever
+        // page it showed when this aircraft last flew, which is not saved.
+        self.profiles[i].reset_pages();
         let profile = &self.profiles[i];
         let Some(module) = self.catalogue.module(&profile.module) else {
             return;

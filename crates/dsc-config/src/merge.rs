@@ -25,7 +25,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{CellRange, DeviceInventory, DisplayCatalogue, PageSlots, Profile, Readout, SLOTS};
+use crate::{CellRange, DeviceInventory, DisplayCatalogue, PageSlots, Profile, Readout};
 
 /// Where a field sits when no region of its display holds its first cell.
 pub const OTHER_CELLS: &str = "Other cells";
@@ -381,7 +381,8 @@ pub fn merge(
         let i = pick.slot.saturating_sub(1);
         let incoming = source.screens.get(&pick.device).and_then(|s| s.slots.get(i)).cloned().flatten();
         let mut slots = profile.screens.get(&pick.device).cloned().unwrap_or_default();
-        slots.slots.resize(SLOTS.max(slots.slots.len()), None);
+        let count = devices.device(&pick.device).map_or(1, |d| d.slot_count());
+        slots.slots.resize(count.max(slots.slots.len()).max(i + 1), None);
         let mut change = Change {
             label: format!("{} slot {}", device_label(devices, &pick.device), pick.slot),
             added: 0,

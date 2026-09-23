@@ -75,7 +75,7 @@ fn library() -> PageLibrary {
 }
 
 fn slots(start: Option<usize>, pages: &[Option<&str>]) -> PageSlots {
-    let mut s = PageSlots::default();
+    let mut s = PageSlots::empty(6);
     for (i, p) in pages.iter().enumerate() {
         s.slots[i] = p.map(Slot::new);
     }
@@ -216,7 +216,7 @@ fn the_shape_of_the_slots_is_checked() {
 
     let mut five = slots(Some(1), &[Some("aaaaaa")]);
     five.slots.pop();
-    assert!(check(five).iter().any(|e| matches!(e, Error::SlotCount(_, 5))));
+    assert!(check(five).iter().any(|e| matches!(e, Error::SlotCount(_, 5, 6))), "one slot per page key");
 
     assert!(check(slots(Some(2), &[Some("aaaaaa")])).iter().any(|e| matches!(e, Error::StartNotFilled(_, 2))));
     assert!(check(slots(Some(7), &[Some("aaaaaa")])).iter().any(|e| matches!(e, Error::StartNotFilled(_, 7))));

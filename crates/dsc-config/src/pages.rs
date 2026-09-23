@@ -13,10 +13,6 @@ use serde::{Deserialize, Serialize};
 
 use crate::{DeviceInventory, DisplayCatalogue, Error, Module, Profile, Readout, Result};
 
-/// How many slots each screen that takes pages has. Always this many, so slot
-/// 3 is the same slot whatever is filled around it.
-pub const SLOTS: usize = 6;
-
 /// One slot in use: the page it shows, or a blank screen.
 ///
 /// A slot that is not in use is `null` in `slots` rather than one of these.
@@ -45,8 +41,12 @@ impl Slot {
     }
 }
 
-/// A screen's six slots and the one shown when a mission starts.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// A screen's slots and the one shown when a mission starts.
+///
+/// There is one slot per page key the device lists in `devices.json`, so slot
+/// n is the nth key whatever is filled around it; see
+/// [`DeviceSpec::slot_count`](crate::DeviceSpec::slot_count).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct PageSlots {
     /// The slot shown at mission start, counting from 1. Left out when every
     /// slot is empty.
@@ -56,13 +56,12 @@ pub struct PageSlots {
     pub slots: Vec<Option<Slot>>,
 }
 
-impl Default for PageSlots {
-    fn default() -> Self {
-        PageSlots { start: None, slots: vec![None; SLOTS] }
-    }
-}
-
 impl PageSlots {
+    /// `n` slots, none in use.
+    pub fn empty(n: usize) -> Self {
+        PageSlots { start: None, slots: vec![None; n] }
+    }
+
     /// Every slot in use, blank ones included, counting from 0.
     pub fn filled(&self) -> impl Iterator<Item = (usize, &Slot)> {
         self.slots.iter().enumerate().filter_map(|(i, s)| s.as_ref().map(|s| (i, s)))
@@ -114,6 +113,31 @@ impl PageSlots {
         }
         self.start = (0..self.slots.len()).find(|&i| filled(i)).map(|i| i + 1);
     }
+}
+
+/// What one slot shows once a profile runs, its page already resolved.
+#[derive(Debug, Clone)]
+pub enum SlotRun {
+    /// Disabled, or its page could not be found: its key does nothing.
+    Off,
+    /// The screen dark on purpose.
+    Blank,
+    /// A page, as the fields it puts on the device.
+    Page { name: String, fields: Vec<Readout> },
+}
+
+/// A device's slots as a profile runs, and the one on its screen now.
+///
+/// Built by [`Profile::with_pages`] and never written. Which slot shows is
+/// state of the run, not of the profile: every aircraft load starts on
+/// `start`, see [`Profile::reset_pages`].
+#[derive(Debug, Clone)]
+pub struct PageRun {
+    /// The slot shown when the profile is taken, counting from 0.
+    pub start: usize,
+    /// The slot showing now, counting from 0.
+    pub shown: usize,
+    pub slots: Vec<SlotRun>,
 }
 
 /// A named screen's worth of text grid fields.
@@ -602,7 +626,8 @@ impl Profile {
     }
 
     /// This profile as it runs: each screen's start page put on it as ordinary
-    /// display fields, and the slots set aside.
+    /// display fields, and every slot resolved into [`page_runs`](Self::page_runs)
+    /// so a page key can swap another in without the library.
     ///
     /// Done before [`with_followers`](Self::with_followers), so a follower
     /// copies the page along with everything else on the device it follows,
@@ -621,6 +646,19 @@ impl Profile {
             let Some(i) = slots.start_slot(loads) else {
                 continue;
             };
+            let runs = slots
+                .slots
+                .iter()
+                .map(|s| match s {
+                    None => SlotRun::Off,
+                    Some(Slot { page: None, .. }) => SlotRun::Blank,
+                    Some(Slot { page: Some(id), .. }) => match lib.page_on(&self.module, id) {
+                        Some(page) => SlotRun::Page { name: page.name.clone(), fields: page_fields(device, page).collect() },
+                        None => SlotRun::Off,
+                    },
+                })
+                .collect();
+            p.page_runs.insert(device.clone(), PageRun { start: i, shown: i, slots: runs });
             let Some(page) = slots.slots[i]
                 .as_ref()
                 .and_then(|s| s.page.as_deref())
@@ -631,6 +669,35 @@ impl Profile {
             p.readouts.extend(page_fields(device, page));
         }
         p
+    }
+
+    /// Put slot `slot` (from 0) of `device` on its screen in place of the page
+    /// there, as its page key asks. False when that changes nothing: no such
+    /// slot, a disabled one, or the one already showing.
+    ///
+    /// Only fields a page put on the device are taken off, so nothing a
+    /// profile holds of its own is touched.
+    pub fn show_slot(&mut self, device: &str, slot: usize) -> bool {
+        let Some(run) = self.page_runs.get_mut(device) else {
+            return false;
+        };
+        if slot == run.shown || matches!(run.slots.get(slot), None | Some(SlotRun::Off)) {
+            return false;
+        }
+        run.shown = slot;
+        self.readouts.retain(|r| !(r.device == device && r.page.is_some()));
+        if let SlotRun::Page { fields, .. } = &run.slots[slot] {
+            self.readouts.extend(fields.iter().cloned());
+        }
+        true
+    }
+
+    /// Every screen back on its start slot, as an aircraft load begins.
+    pub fn reset_pages(&mut self) {
+        let starts: Vec<(String, usize)> = self.page_runs.iter().map(|(d, r)| (d.clone(), r.start)).collect();
+        for (device, start) in starts {
+            self.show_slot(&device, start);
+        }
     }
 
     /// One page shown on one device of this profile, and nothing else of the
@@ -686,8 +753,8 @@ impl Profile {
                 out.push(Error::SlotsWithoutTextGrid(device.clone()));
                 continue;
             }
-            if slots.slots.len() != SLOTS {
-                out.push(Error::SlotCount(device.clone(), slots.slots.len()));
+            if slots.slots.len() != spec.slot_count() {
+                out.push(Error::SlotCount(device.clone(), slots.slots.len(), spec.slot_count()));
             }
             let any = slots.filled().next().is_some();
             match slots.start {

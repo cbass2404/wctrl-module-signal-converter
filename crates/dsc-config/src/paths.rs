@@ -66,6 +66,9 @@ pub struct Paths {
     pub profiles: Profiles,
     /// Shipped MCDU pages and the library in use, laid out as the profiles.
     pub pages: Pages,
+    /// The PC's own settings, beside the folders the user writes. Never
+    /// shipped, so a missing file is every default.
+    pub settings: PathBuf,
 }
 
 impl Paths {
@@ -131,6 +134,7 @@ impl Paths {
             catalogue: root.join("catalogue"),
             profiles: Profiles::new(root.join("defaults"), root.join("defaults")),
             pages: Pages::new(root.join("default-pages"), root.join("default-pages")),
+            settings: root.join(crate::settings::FILE),
         }
     }
 
@@ -143,6 +147,7 @@ impl Paths {
             catalogue: root.join("catalogue"),
             profiles: Profiles::new(root.join("defaults"), root.join("profiles")),
             pages: Pages::new(root.join("default-pages"), root.join("pages")),
+            settings: root.join(crate::settings::FILE),
         }
     }
 
@@ -156,6 +161,7 @@ impl Paths {
             catalogue: writable.join("catalogue"),
             profiles: Profiles::new(shipped.join("defaults"), writable.join("profiles")),
             pages: Pages::new(shipped.join("default-pages"), writable.join("pages")),
+            settings: writable.join(crate::settings::FILE),
         }
     }
 }

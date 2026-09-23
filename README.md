@@ -195,7 +195,7 @@ A few more things the editor does:
 - **Rename** a profile with the pencil beside its name. Two profiles cannot
   share a name, since the name is all the list shows.
 - **Export...** saves a copy of a profile anywhere you choose, to share it.
-  **Import...** brings one in. It is checked first, and refused if it would not
+  **Import profile...**, under the gear, brings one in. It is checked first, and refused if it would not
   load here. If it is for an aircraft another profile flies, you are asked
   before the aircraft moves, and asked again before a profile left with no
   aircraft is deleted. Saying no to the delete cancels the import. Or merge it
@@ -218,8 +218,16 @@ A few more things the editor does:
   glass, and can carry a label in the middle naming what it divides. The rule
   and the label each take their own colour. The A-10C and AH-64D profiles ship
   with one.
-- **Manage Converter** is for the rare times the converter needs restarting.
-  Saving a profile is not one of them. See below.
+- **MCDU pages.** Each MCDU has a slot per left line select key, each showing
+  a page, a blank screen, or nothing. In flight, hold Ctrl and press LSK 1L
+  to 6L to swap the screen to that slot's page. DCS still sees the press, so
+  keep Ctrl with a line select key unbound there, or pick Shift or Alt in
+  Settings.
+- **Settings**, the gear at the top of the Profiles page, picks the window's
+  theme and the key held to swap MCDU pages, and holds Import profile... and
+  Manage Converter.
+- **Manage Converter**, under the gear, is for the rare times the converter
+  needs restarting. Saving a profile is not one of them. See below.
 - **Reset** puts a profile back to the shipped one. **Reset this lamp** and
   **Reset this field** do the same for a single one, and show you what they
   will reset to before they do. An area whose shipped field you deleted offers
@@ -285,7 +293,7 @@ meant. If a shipped profile is wrong, please report it.
 **The panels went dark while DCS kept running.**
 The converter stopped. The DCS hook starts it when a mission begins and does not
 notice that it has gone, so it will not come back until DCS is restarted. Open
-the editor and press **Manage Converter**, then **Restart**. The same dialog is
+the editor, press the gear, then **Manage Converter...** and **Restart**. The same dialog is
 where to restart it after plugging a panel in, since panels are found once at
 startup. **Kill** in that dialog is only for a converter that will not answer;
 it cannot clear the panels, because a killed program runs none of its shutdown.

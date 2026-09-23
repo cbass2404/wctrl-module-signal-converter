@@ -19,6 +19,24 @@ do not.
       dry run and the tests, not yet seen on the panel.
       [STATUS.md](STATUS.md), "Built 2026-09-23: MCDU pages"
 
+- [x] ~~**Build page swapping.**~~ Built 2026-09-23 on
+      `feature/mcdu-page-selection-inputs`, with the Settings dialog behind
+      the gear. [STATUS.md](STATUS.md), "Built 2026-09-23: page swapping"
+
+- [x] ~~**Swap pages on the panel.**~~ Flown 2026-09-23 in the A-10C: odd
+      slots a page, even slots blank, the last disabled. Every combination of
+      Ctrl, Shift and Alt, left and right, with the modifier changed in
+      Settings mid-flight and run through again. Pages swapped, blanks went
+      dark and the disabled key did nothing, each only when intended.
+      [CONFIG.md](CONFIG.md), "Swapping"
+
+- [x] ~~**Settings and import with pages.**~~ Proven 2026-09-23: the
+      modifier, the three themes (the first look at the light theme) and the
+      theme surviving a restart, Import profile... and Manage Converter...
+      from the gear, a version 1 profile refused on import, a whole import
+      offering its pages, and a partial merge from an F-14BU export bringing
+      its page slot into the F-14.
+
 - [ ] **See the pages on the panel.** Fly one aircraft per page file and check
       the MCDU looks as it did before the move: A-10C CDU, AH-64D KU, CH-47F
       CDU, F-14BU CDNU, F-16 Flight, F/A-18 IFEI.

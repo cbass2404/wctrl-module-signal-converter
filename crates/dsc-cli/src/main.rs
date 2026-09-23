@@ -23,6 +23,11 @@ use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, Displa
 use dsc_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
+#[cfg(windows)]
+mod buttons;
+#[cfg(windows)]
+mod keyboard;
+mod page_keys;
 mod panels;
 use panels::Panel;
 
@@ -172,6 +177,24 @@ enum Command {
         #[arg(long)]
         no_font: bool,
     },
+    /// Show the buttons a panel reports as its keys are pressed.
+    ///
+    /// Opens every collection under the PID and prints each press and release
+    /// by the number Windows gives the button, which is the number SimAppPro
+    /// lights and DCS binds, with the raw report beside it. Each press also
+    /// says which of Ctrl, Shift and Alt the keyboard held at that moment. Only
+    /// reads: nothing is sent to the panel.
+    Buttons {
+        /// CAPTAIN 0xbb36, CO-PILOT 0xbb3e, OBSERVER 0xbb3a.
+        #[arg(long, value_parser = parse_hex16, default_value = "0xbb36")]
+        pid: u16,
+        /// Print every report that changes, not only those that move a button.
+        #[arg(long)]
+        raw: bool,
+        /// Stop after this many seconds. Runs until Ctrl-C when omitted.
+        #[arg(long)]
+        seconds: Option<u64>,
+    },
     /// Listen to the DCS-BIOS export stream and report what arrives.
     Listen {
         #[arg(long, default_value_t = 15)]
@@ -316,6 +339,133 @@ fn parse_hex32(s: &str) -> Result<u32, std::num::ParseIntError> {
 fn open(pid: u16) -> Result<Device> {
     let api = hidapi::HidApi::new().context("opening HID API")?;
     Device::open(&api, pid).with_context(|| format!("opening device 0x{pid:04x}"))
+}
+
+/// Print each button a panel reports as it goes down and comes up.
+#[cfg(windows)]
+fn buttons_capture(pid: u16, raw: bool, seconds: Option<u64>) -> Result<()> {
+    use std::sync::mpsc;
+
+    let api = hidapi::HidApi::new().context("opening HID API")?;
+    let paths: Vec<String> = wctrl_hid::enumerate(&api)
+        .into_iter()
+        .filter(|d| d.product_id == pid)
+        .map(|d| d.path)
+        .collect();
+    if paths.is_empty() {
+        anyhow::bail!("no device 0x{pid:04x} is connected");
+    }
+
+    // One thread per collection, as each read blocks until its collection
+    // sends something, and the lines meet on one channel in arrival order.
+    let (tx, rx) = mpsc::channel::<String>();
+    let start = Instant::now();
+    let mut readers = 0;
+    for (n, path) in paths.iter().enumerate() {
+        let collection = match buttons::Collection::open(path) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("collection {n}: could not open: {e}");
+                continue;
+            }
+        };
+        let ranges: Vec<String> = collection
+            .buttons
+            .iter()
+            .map(|(id, first, last)| format!("report {id} buttons {first}-{last}"))
+            .collect();
+        println!(
+            "collection {n}: usage page 0x{:04x} usage 0x{:04x}, input report {} bytes, {}",
+            collection.usage_page,
+            collection.usage,
+            collection.report_len,
+            if ranges.is_empty() { "no buttons".to_string() } else { ranges.join(", ") }
+        );
+        if collection.buttons.is_empty() && !raw {
+            continue;
+        }
+        readers += 1;
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let mut last_report: Vec<u8> = Vec::new();
+            let mut last_down: Vec<u16> = Vec::new();
+            loop {
+                if let Err(e) = collection.read(&mut buf) {
+                    let _ = tx.send(format!("collection {n}: read failed: {e}"));
+                    return;
+                }
+                if buf == last_report {
+                    continue;
+                }
+                let t = start.elapsed().as_secs_f64();
+                let hex = hex_trimmed(&buf);
+                let down = collection.pressed(&buf).unwrap_or_else(|| last_down.clone());
+                let mut lines = Vec::new();
+                let new: Vec<&u16> = down.iter().filter(|b| !last_down.contains(b)).collect();
+                if !new.is_empty() {
+                    // Read once per report, as close to the press as this gets.
+                    let held: Vec<&str> = keyboard::held_now().into_iter().map(|m| m.name()).collect();
+                    let held = if held.is_empty() { "none".to_string() } else { held.join("+") };
+                    for b in new {
+                        lines.push(format!("{t:8.3}s  collection {n}  down {b:>3}  held {held:<14}  [{hex}]"));
+                    }
+                }
+                for b in last_down.iter().filter(|b| !down.contains(b)) {
+                    lines.push(format!("{t:8.3}s  collection {n}  up   {b:>3}  {:<20}  [{hex}]", ""));
+                }
+                if lines.is_empty() && raw {
+                    lines.push(format!("{t:8.3}s  collection {n}  report    {:<20}  [{hex}]", ""));
+                }
+                for line in lines {
+                    if tx.send(line).is_err() {
+                        return;
+                    }
+                }
+                last_report = buf.clone();
+                last_down = down;
+            }
+        });
+    }
+    drop(tx);
+    if readers == 0 {
+        anyhow::bail!("no collection of 0x{pid:04x} declares buttons; --raw reads them anyway");
+    }
+
+    let running = Arc::new(AtomicBool::new(true));
+    {
+        let flag = Arc::clone(&running);
+        ctrlc::set_handler(move || flag.store(false, Ordering::SeqCst))
+            .context("installing the Ctrl-C handler")?;
+    }
+    let deadline = seconds.map(|s| start + Duration::from_secs(s));
+    println!("Press the keys one at a time. Ctrl-C to stop.");
+    // The readers stay blocked in their reads when this returns, and go with
+    // the process.
+    while running.load(Ordering::SeqCst) && deadline.map_or(true, |d| Instant::now() < d) {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(line) => println!("{line}"),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn buttons_capture(_pid: u16, _raw: bool, _seconds: Option<u64>) -> Result<()> {
+    anyhow::bail!("reading buttons is only built for Windows")
+}
+
+/// A report as hex, without the run of zeros a padded report ends in.
+#[cfg(windows)]
+fn hex_trimmed(report: &[u8]) -> String {
+    let end = report.iter().rposition(|&b| b != 0).map_or(1, |i| i + 1);
+    let mut s = report[..end].iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
+    if end < report.len() {
+        s.push_str(&format!(" (+{} zero)", report.len() - end));
+    }
+    s
 }
 
 fn mcdu_test(
@@ -534,6 +684,8 @@ fn main() -> Result<()> {
             hold,
         } => probe_brightness(pid, part, master, lamp, countdown, hold)?,
 
+        Command::Buttons { pid, raw, seconds } => buttons_capture(pid, raw, seconds)?,
+
         Command::Listen {
             seconds,
             verbose,
@@ -623,6 +775,7 @@ fn main() -> Result<()> {
                 &default_pages.unwrap_or(paths.pages.defaults),
                 &displays.unwrap_or(paths.displays),
                 &nightly_only.unwrap_or(paths.nightly_only),
+                &paths.settings,
                 bios,
                 dry_run,
                 verbose,
@@ -2309,6 +2462,26 @@ fn profiles_fingerprint(dir: &PathBuf) -> Vec<(String, u64, u64)> {
     out
 }
 
+/// The PC's settings, or every default with a warning when the file will
+/// not read: a broken file should cost the choice, not the panels.
+fn load_settings(path: &Path) -> dsc_config::settings::Settings {
+    dsc_config::settings::Settings::load(path).unwrap_or_else(|e| {
+        warn!("could not read {}, so the settings are the defaults: {e}", path.display());
+        dsc_config::settings::Settings::default()
+    })
+}
+
+/// A file's size and modification time, or None when it is not there.
+fn file_stamp(path: &Path) -> Option<(u64, u64)> {
+    let meta = std::fs::metadata(path).ok()?;
+    let stamp = meta
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |d| d.as_millis() as u64);
+    Some((meta.len(), stamp))
+}
+
 /// Run the converter.
 ///
 /// The loop is deliberately boring: decode, feed the engine, write whatever it
@@ -2323,6 +2496,7 @@ fn run(
     default_pages_dir: &PathBuf,
     displays_dir: &PathBuf,
     nightly_path: &Path,
+    settings_path: &Path,
     bios: Option<&Path>,
     dry_run: bool,
     verbose: bool,
@@ -2346,6 +2520,7 @@ fn run(
         ("shipped pages", default_pages_dir.as_path()),
         ("displays ", displays_dir.as_path()),
         ("nightly  ", nightly_path),
+        ("settings ", settings_path),
     ] {
         dlog::header(&format!("paths    {what} {}", path.display()));
     }
@@ -2506,6 +2681,15 @@ fn run(
         ..Trace::default()
     };
 
+    // The page keys, read even on a dry run: reading a panel sends it nothing.
+    let (keys, lines) = page_keys::start(&inventory, &connected);
+    for line in lines {
+        kept!("{line}");
+    }
+    let mut settings = load_settings(settings_path);
+    let mut settings_seen = file_stamp(settings_path);
+    kept!("keys     page modifier {}", settings.page_modifier.name());
+
     let mut panels = Panels { handles, displays: displays.clone() };
     let mut engine = Engine::new(inventory, cat, profiles).with_displays(displays.clone());
     engine.set_connected(connected);
@@ -2611,6 +2795,14 @@ fn run(
 
         if now >= next_check {
             next_check = now + PROFILE_POLL;
+            // The settings file is small and written in one step, so a change
+            // is read at once rather than settled like a profile.
+            let stamp = file_stamp(settings_path);
+            if stamp != settings_seen {
+                settings_seen = stamp;
+                settings = load_settings(settings_path);
+                say!("settings reloaded: page modifier {}", settings.page_modifier.name());
+            }
             let current = [profiles_fingerprint(profiles_dir), profiles_fingerprint(pages_dir)].concat();
             if current != fingerprint {
                 // Seen changed once; act on it when it looks the same twice
@@ -2652,6 +2844,41 @@ fn run(
                 }
             } else {
                 settling = None;
+            }
+        }
+
+        // Page keys pressed since the last pass. Before the stream's own
+        // batch, so a swap goes out as soon as the loop wakes.
+        while let Ok(event) = keys.try_recv() {
+            match event {
+                page_keys::KeyEvent::Down { device, number, held } => {
+                    let Some(spec) = engine.devices().device(&device) else { continue };
+                    let Some(slot) = spec.slot_of_button(number) else { continue };
+                    let key = spec.page_keys[slot].clone();
+                    // The chosen modifier alone, or the press is DCS's.
+                    if !settings.page_modifier.alone_in(&held) {
+                        continue;
+                    }
+                    match engine.show_slot(&device, slot) {
+                        Some(batch) => {
+                            let what = engine
+                                .active_profile()
+                                .and_then(|p| p.page_runs.get(&device))
+                                .and_then(|r| r.slots.get(slot))
+                                .map_or(String::new(), |s| match s {
+                                    dsc_config::SlotRun::Page { name, .. } => format!(", {name:?}"),
+                                    dsc_config::SlotRun::Blank => ", blank".to_string(),
+                                    dsc_config::SlotRun::Off => String::new(),
+                                });
+                            kept!("page     {device} {key}  ->  slot {}{what}", slot + 1);
+                            apply(&batch, &mut panels, dry_run, &mut trace, elapsed)?;
+                        }
+                        None => note!("page     {device} {key}  ->  slot {} changes nothing", slot + 1),
+                    }
+                }
+                page_keys::KeyEvent::Lost { device, why } => {
+                    warn!("keys     {device}: stopped reading its keys ({why}); page keys do nothing until the converter restarts");
+                }
             }
         }
 
@@ -2819,6 +3046,7 @@ fn apply(
         Cause::SignalChange => "write",
         Cause::Shutdown => "clear",
         Cause::ProfileReload => "reload",
+        Cause::PageSwap => "page",
     };
     for w in &batch.writes {
         let lamp = trace.lamp(&w.id);

@@ -31,6 +31,10 @@
 # thing being shipped.
 /data/profiles/
 
+# The PC's own settings (page modifier, theme). One person's choice, written
+# beside the profiles, and never something that ships.
+/data/settings.json
+
 # One developer's choice of layout, never something that ships. `.env.example`
 # is the tracked copy. env=dev points the editor and the daemon at
 # data/defaults, so development never touches the profiles you fly.

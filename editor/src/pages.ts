@@ -1,4 +1,4 @@
-// MCDU pages: which page each of a screen's six slots shows, and the page
+// MCDU pages: which page each of a screen's slots shows, and the page
 // editor.
 //
 // A text grid takes every field from a page, and a page belongs to the library
@@ -13,8 +13,10 @@ import { confirmAction } from "./confirm";
 import { fieldTable, fontPicker } from "./readout";
 import type { Device, DisplayInfo, Page, PageSlots, PageUse, PagesView, Profile, SignalView } from "./types";
 
-/** How many slots a screen has. Always this many; see docs/CONFIG.md. */
-export const SLOTS = 6;
+/** How many slots a screen has: one per page key the device lists. */
+export function slotCount(device: Device): number {
+  return Math.max(device.page_keys.length, 1);
+}
 
 // A slot's choice in its menu, besides a page's id. Page ids are letters and
 // digits, so neither can be taken for one.
@@ -135,9 +137,9 @@ function freeName(book: PageBook, name: string, except?: string): string {
   }
 }
 
-/** This device's slots, as the profile holds them, or six empty ones. */
-function slotsOf(profile: Profile, device: string): PageSlots {
-  return profile.screens?.[device] ?? { slots: Array<null>(SLOTS).fill(null) };
+/** This device's slots, as the profile holds them, or every one empty. */
+function slotsOf(profile: Profile, device: Device): PageSlots {
+  return profile.screens?.[device.key] ?? { slots: Array<null>(slotCount(device)).fill(null) };
 }
 
 /**
@@ -175,7 +177,7 @@ function shownAt(ctx: PageContext, id: string): string[] {
 }
 
 /**
- * One text grid's pages: the six slots and which one starts, and the page
+ * One text grid's pages: its slots and which one starts, and the page
  * editor when a page has been opened on this screen.
  */
 export function pageSection(device: Device, display: DisplayInfo, ctx: PageContext): HTMLElement {
@@ -183,7 +185,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
   const book = ctx.book;
 
   const draw = (): void => {
-    const s = slotsOf(ctx.profile, device.key);
+    const s = slotsOf(ctx.profile, device);
     const editingHere = book.editing?.device === device.key ? book.editing : null;
     const busy = book.editing !== null;
 
@@ -217,12 +219,13 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
       return;
     }
 
-    // The six slots. A page picked here is shown on this screen by this
-    // profile; which page starts is the one ticked. Disabled and blank differ
-    // in what the slot's line select key will do once pages can be swapped
-    // from the panel: nothing, or take the screen dark.
+    // One slot per page key. A page picked here is shown on this screen by
+    // this profile; which page starts is the one ticked. Disabled and blank
+    // differ in what the slot's key does on the panel: nothing, or take the
+    // screen dark.
     const body = el("tbody");
-    for (let i = 0; i < SLOTS; i += 1) {
+    const count = slotCount(device);
+    for (let i = 0; i < count; i += 1) {
       const slot = s.slots[i] ?? null;
       const choose = el("select", { class: "test" }) as HTMLSelectElement;
       choose.append(el("option", { value: DISABLED }, "Disabled"), el("option", { value: BLANK }, "Blank"));
@@ -234,9 +237,9 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
       }
       choose.value = slot === null ? DISABLED : (slot.page ?? BLANK);
       choose.addEventListener("change", () => {
-        const next = slotsOf(ctx.profile, device.key);
+        const next = slotsOf(ctx.profile, device);
         const slots = [...next.slots];
-        while (slots.length < SLOTS) slots.push(null);
+        while (slots.length < count) slots.push(null);
         slots[i] =
           choose.value === DISABLED
             ? null
@@ -251,7 +254,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
       tick.disabled = slot === null;
       tick.title = "Show this slot when a mission starts";
       tick.addEventListener("change", () => {
-        storeSlots(ctx.profile, device.key, { start: i + 1, slots: slotsOf(ctx.profile, device.key).slots });
+        storeSlots(ctx.profile, device.key, { start: i + 1, slots: slotsOf(ctx.profile, device).slots });
         ctx.profileChanged();
         redrawAll(book);
       });
@@ -260,13 +263,13 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
         el(
           "tr",
           {},
-          // Named with the line select key that will bring it up once pages
-          // can be swapped from the panel, so the numbering means something now.
+          // Named with the key that brings it up on the panel, from the
+          // device's own list; a device with none has one slot and no key.
           el(
             "td",
             {},
             el("span", { class: "region-name" }, `Slot ${i + 1}`),
-            el("div", { class: "meta" }, `LSK ${i + 1}L`),
+            el("div", { class: "meta" }, device.page_keys[i] ?? "no key"),
           ),
           el("td", {}, choose),
           el("td", { class: "num" }, el("label", { class: "meta" }, tick, " start")),

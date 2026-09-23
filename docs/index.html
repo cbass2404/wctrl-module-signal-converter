@@ -728,10 +728,11 @@
           <div class="feat">
             <h3>Screens</h3>
             <p>
-              The Hornet UFC on the UFC, the Viper's DED on the ICP, and the
-              A-10C, CH-47F, F-14B (Upgrade) or AH-64D CDU on your MCDU. On any
-              other aircraft the screens are yours to fill: write a label, put a
-              reading beside it, and pick the colour and size of each.
+              The Hornet UFC on the UFC, the Viper's DED on the ICP, and on your
+              MCDU the A-10C, CH-47F and F-14B (Upgrade) CDU, the AH-64D KU, the
+              Hornet's IFEI or a Viper flight page. Any screen is yours to fill:
+              write a label, put a reading beside it, and pick the colour and
+              size of each.
             </p>
           </div>
         </div>
@@ -786,7 +787,7 @@
               </li>
               <li>
                 <span class="gi-name">AH-64D</span
-                ><span class="gi-pct">CDU</span>
+                ><span class="gi-pct">KU</span>
               </li>
               <li>
                 <span class="gi-name">CH-47F</span
@@ -795,10 +796,16 @@
               <li><span class="gi-name">F-14A / F-14B</span></li>
               <li>
                 <span class="gi-name">F-14B (Upgrade)</span
-                ><span class="gi-pct">CDU</span>
+                ><span class="gi-pct">CDNU</span>
               </li>
-              <li><span class="gi-name">F-16C / D / I</span></li>
-              <li><span class="gi-name">F/A-18C + mods</span></li>
+              <li>
+                <span class="gi-name">F-16C / D / I</span
+                ><span class="gi-pct">Flight</span>
+              </li>
+              <li>
+                <span class="gi-name">F/A-18C + mods</span
+                ><span class="gi-pct">IFEI</span>
+              </li>
               <li><span class="gi-name">Mi-24P</span></li>
               <li><span class="gi-name">Flaming Cliffs</span></li>
               <li><span class="gi-name">Spectator</span></li>
@@ -806,9 +813,10 @@
           </div>
         </div>
         <p class="foot-note">
-          <span class="mono" style="color: var(--accent)">CDU</span> marks the
-          aircraft that also put their own CDU on the MCDU screen. Open a
-          profile in the editor to see exactly what it drives.
+          The tag names the page each aircraft ships on the MCDU: its own
+          CDU, CDNU or KU where it has one, and a page built from its readings
+          where it does not. Open a profile in the editor to see exactly what
+          it drives.
         </p>
       </div>
     </section>
@@ -875,16 +883,17 @@
               <div class="crop">
                 <img
                   src="img/profile-selection.png"
-                  alt="The profile list: one row per aircraft with Edit, Copy to and Reset buttons"
-                  width="1096"
-                  height="829"
+                  alt="The profile list: one row per aircraft with Edit, Copy to, Export, Merge from and Reset, and the settings gear beside New profile"
+                  width="1101"
+                  height="787"
                   loading="lazy"
                 />
               </div>
             </div>
             <figcaption>
               <b>One profile per aircraft.</b> Filter by name or module, copy a
-              profile to related aircraft, or reset it to the shipped one.
+              profile to related aircraft, export it, merge from a sibling, or
+              reset it to the shipped one.
             </figcaption>
           </figure>
           <figure>
@@ -892,17 +901,18 @@
               <div class="crop">
                 <img
                   src="img/profile-editor-device-expanded.png"
-                  alt="The PTO2 panel expanded, each lamp beside the cockpit signal that drives it"
-                  width="1104"
-                  height="846"
+                  alt="The PTO2 panel expanded, each lamp beside what drives it, with a note on why"
+                  width="1096"
+                  height="791"
                   loading="lazy"
                 />
               </div>
             </div>
             <figcaption>
               <b>Every lamp on every panel</b>, beside the cockpit signal that
-              drives it. Untick <b>drive this panel</b> and the profile leaves
-              that panel alone for another program.
+              drives it, with room for a note on why. Untick <b>drive this
+              panel</b> and the profile leaves that panel alone for another
+              program.
             </figcaption>
           </figure>
           <figure>
@@ -911,8 +921,8 @@
                 <img
                   src="img/profile-edit-signal-create-typeahead-filtering.png"
                   alt="Typing into a signal box lists matching cockpit signals"
-                  width="1103"
-                  height="831"
+                  width="1101"
+                  height="790"
                   loading="lazy"
                 />
               </div>
@@ -930,8 +940,8 @@
                 <img
                   src="img/profile-edit-multicrew-flow.png"
                   alt="A backlight driven by the pilot's knob or the gunner's, depending on the seat"
-                  width="1099"
-                  height="832"
+                  width="1100"
+                  height="796"
                   loading="lazy"
                 />
               </div>
@@ -939,6 +949,24 @@
             <figcaption>
               <b>Two seats, one panel.</b> Conditions and alternatives let a
               lamp follow whichever seat you are in.
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="frame">
+              <div class="crop">
+                <img
+                  src="img/profile-edit-mcdu-page-selection.png"
+                  alt="The A-10C's MCDU pages: six slots, one per left line select key, each a page, blank or disabled, with the start slot ticked"
+                  width="1100"
+                  height="791"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <b>Six pages per MCDU.</b> Each slot is a line select key: pick a
+              page, a blank screen, or nothing, and tick the one a mission
+              starts on. In flight, hold Ctrl and press the key to swap.
             </figcaption>
           </figure>
           <figure>
@@ -957,6 +985,24 @@
               <b>It tells you what will not work, and why.</b> Signals your
               DCS-BIOS does not have yet are named, and everything else still
               runs.
+            </figcaption>
+          </figure>
+          <figure>
+            <div class="frame">
+              <div class="crop">
+                <img
+                  src="img/dark-light-mode.png"
+                  alt="The Settings dialog over the profile list in the light theme: appearance, the MCDU page key, Import profile and Manage Converter"
+                  width="1099"
+                  height="791"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+            <figcaption>
+              <b>Light or dark, and your choice of key.</b> Follow Windows or
+              pick a theme, and choose whether Ctrl, Shift or Alt swaps the
+              MCDU pages, to suit how DCS is bound on your PC.
             </figcaption>
           </figure>
         </div>
@@ -994,7 +1040,7 @@
               engine's RPM, temperature, fuel flow, nozzle and oil either side
               of the labels, with fuel, bingo and the clock beside them. The
               nozzle needles are converted to 0 to 100, the way the real gauges
-              are marked.
+              are marked. It now ships as the Hornet's MCDU page.
             </figcaption>
           </figure>
         </div>
@@ -1019,6 +1065,13 @@
             </p>
           </div>
           <div class="feat">
+            <h3>Swap MCDU pages</h3>
+            <p>
+              Give each MCDU up to six pages. Hold Ctrl and press a left line
+              select key to put that page on the screen, mid-flight.
+            </p>
+          </div>
+          <div class="feat">
             <h3>Edit in flight</h3>
             <p>
               Save in the editor and the running converter picks it up within
@@ -1029,8 +1082,9 @@
             <h3>Share it with a friend</h3>
             <p>
               <b>Export</b> a profile to a file, send it over, and they
-              <b>import</b> it. It is checked before it lands, and refused if it
-              would not load on their machine.
+              <b>import</b> it, its MCDU pages with it. It is checked before it
+              lands, and refused if it would not load on their machine. Or merge
+              in only the lamps, lines and pages you want.
             </p>
           </div>
           <div class="feat">
@@ -1050,10 +1104,10 @@
           <div class="feat">
             <h3>Your changes are kept</h3>
             <p>
-              Updates add new profiles and panels but never rewrite a lamp you
-              have changed. A screen field still exactly as it shipped is
-              corrected for you; one you have touched is yours and is left
-              alone. Release notes say which shipped rows moved.
+              Updates add new profiles, panels and pages but never rewrite a
+              lamp you have changed. A screen field or MCDU page still exactly as
+              it shipped is corrected for you; one you have touched is yours and
+              is left alone. Release notes say which shipped rows moved.
             </p>
           </div>
         </div>

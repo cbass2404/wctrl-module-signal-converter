@@ -34,6 +34,7 @@ import {
 import { bindingEditor, iconButton } from "./binding";
 import { confirmAction } from "./confirm";
 import { manageConverter } from "./converter";
+import { loadTheme, showSettings } from "./settings";
 import { showFieldCautions, showFlags } from "./flags";
 import { pageBook, pagesChecked, pageSection, pageUnsaved, showPageProblems } from "./pages";
 import type { PageBook } from "./pages";
@@ -399,9 +400,8 @@ async function showLibrary(): Promise<void> {
     el("div", { class: "spacer" }),
     filter,
     el("div", { class: "spacer" }),
-    el("button", { id: "converter" }, "Manage Converter"),
-    el("button", { id: "import" }, "Import..."),
     el("button", { class: "primary", id: "new" }, "New profile"),
+    el("button", { class: "icon gear", id: "settings", type: "button", title: "Settings", "aria-label": "Settings" }, "\u2699"),
   );
   app.append(header);
 
@@ -424,13 +424,19 @@ async function showLibrary(): Promise<void> {
     return;
   }
 
-  header.querySelector("#converter")?.addEventListener("click", () => {
-    void manageConverter().then((said) => {
-      if (said) showBanner(said);
+  // Import and Manage Converter live in Settings, which hands on to them
+  // once it has closed, so two dialogs are never open at once.
+  header.querySelector("#settings")?.addEventListener("click", () => {
+    void showSettings().then((next) => {
+      if (next === "import") void showImport();
+      if (next === "converter") {
+        void manageConverter().then((said) => {
+          if (said) showBanner(said);
+        });
+      }
     });
   });
   header.querySelector("#new")?.addEventListener("click", () => void showNewProfile());
-  header.querySelector("#import")?.addEventListener("click", () => void showImport());
 
   if (rows.length === 0) {
     app.append(
@@ -661,7 +667,7 @@ async function showImport(): Promise<void> {
   const mode = el("select", {});
   mode.append(el("option", { value: "" }, "Whole profile, as a profile of its own"));
   for (const t of targets) {
-    mode.append(el("option", { value: t.file }, `Merged into ${t.name}: only the lights and screen lines ticked`));
+    mode.append(el("option", { value: t.file }, `Merged into ${t.name}: only the lights, screen lines and page slots ticked`));
   }
   const into = (): ProfileSummary | undefined => targets.find((t) => t.file === mode.value);
 
@@ -2271,6 +2277,8 @@ function guardClose(): void {
 }
 
 async function start(): Promise<void> {
+  // Before anything is drawn, so a chosen theme does not flash the other one.
+  await loadTheme();
   guardClose();
   void showUpdate();
   try {

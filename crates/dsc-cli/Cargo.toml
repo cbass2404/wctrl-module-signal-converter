@@ -20,3 +20,6 @@ clap = { version = "4", features = ["derive"] }
 ctrlc = "3"
 hidapi = { version = "2.6", default-features = false, features = ["windows-native"] }
 serde_json.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Devices_HumanInterfaceDevice", "Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_UI_Input_KeyboardAndMouse"] }

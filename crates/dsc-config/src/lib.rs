@@ -19,8 +19,9 @@ pub mod merge;
 pub mod nightly_only;
 pub mod pages;
 pub mod paths;
+pub mod settings;
 
-pub use pages::{Page, PageFile, PageLibrary, PageSlots, Pages, Slot, SlotNote, SLOTS};
+pub use pages::{Page, PageFile, PageLibrary, PageRun, PageSlots, Pages, Slot, SlotNote, SlotRun};
 
 /// The profile format this version reads and writes. Version 2 is the first
 /// with MCDU pages, and version 1 files are refused rather than migrated.
@@ -178,8 +179,12 @@ pub enum Error {
     SlotsOnUnknownDevice(String),
     #[error("{0:?} has page slots, but no screen that takes pages; only a text grid does")]
     SlotsWithoutTextGrid(String),
-    #[error("{0:?} has {1} page slots; there are always six, with an empty one written as null")]
-    SlotCount(String, usize),
+    #[error("{0:?} has {1} page slots, but {2} page keys; a disabled slot is written as null")]
+    SlotCount(String, usize, usize),
+    #[error("devices.json lists {1} twice on {0:?}")]
+    ButtonTwice(String, String),
+    #[error("devices.json gives {0:?} the page key {1:?}, which is none of its buttons")]
+    UnknownPageKey(String, String),
     #[error("{0:?} starts on slot {1}, which holds no page")]
     StartNotFilled(String, usize),
     #[error("{0:?} has pages in its slots but does not say which one to start on")]
@@ -561,6 +566,30 @@ pub struct DeviceSpec {
     pub protocol: String,
     pub usb_pid: u16,
     pub parts: Vec<Part>,
+    /// The panel's own keys, by the number Windows gives them. Nothing outside
+    /// this entry knows a number: a page key, or anything else that reads a
+    /// key, names a button of this device. Only captured keys are listed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub buttons: Vec<Button>,
+    /// The buttons that swap pages, by name. Slot n is the nth key listed, so
+    /// a device has as many slots as it lists keys.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub page_keys: Vec<String>,
+}
+
+/// One key on a panel.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Button {
+    /// The number Windows' HID parser gives it: the one SimAppPro lights and
+    /// DCS binds, counting from 1.
+    pub number: u16,
+    /// What everything else calls it, unique within the device.
+    pub name: String,
+    /// What people are shown.
+    #[serde(default)]
+    pub label: String,
+    #[serde(default)]
+    pub verified: bool,
 }
 
 impl DeviceSpec {
@@ -587,6 +616,24 @@ impl DeviceSpec {
         self.parts
             .iter()
             .flat_map(|p| p.leds.iter().filter(|l| l.lights_display).map(move |l| (p, l)))
+    }
+
+    /// A button by name.
+    pub fn button(&self, name: &str) -> Option<&Button> {
+        self.buttons.iter().find(|b| b.name == name)
+    }
+
+    /// How many page slots this device has, when it takes pages: one per
+    /// page key, or one for a device with none, which shows its start page
+    /// and never swaps.
+    pub fn slot_count(&self) -> usize {
+        self.page_keys.len().max(1)
+    }
+
+    /// The slot a button brings up, counting from 0, if it is a page key.
+    pub fn slot_of_button(&self, number: u16) -> Option<usize> {
+        let name = &self.buttons.iter().find(|b| b.number == number)?.name;
+        self.page_keys.iter().position(|k| k == name)
     }
 
     /// The part carrying a named display.
@@ -633,8 +680,38 @@ pub struct DeviceInventory {
 }
 
 impl DeviceInventory {
+    /// Read the inventory, refusing one whose buttons contradict themselves:
+    /// two keys under one name or one number, or a page key naming no button
+    /// of its own device.
     pub fn load(path: &Path) -> Result<Self> {
-        read_json(path)
+        let inv: DeviceInventory = read_json(path)?;
+        inv.check_buttons()?;
+        Ok(inv)
+    }
+
+    fn check_buttons(&self) -> Result<()> {
+        for d in &self.devices {
+            let mut names = BTreeSet::new();
+            let mut numbers = BTreeSet::new();
+            for b in &d.buttons {
+                if !names.insert(b.name.as_str()) {
+                    return Err(Error::ButtonTwice(d.key.clone(), b.name.clone()));
+                }
+                if !numbers.insert(b.number) {
+                    return Err(Error::ButtonTwice(d.key.clone(), format!("number {}", b.number)));
+                }
+            }
+            let mut keys = BTreeSet::new();
+            for k in &d.page_keys {
+                if !names.contains(k.as_str()) {
+                    return Err(Error::UnknownPageKey(d.key.clone(), k.clone()));
+                }
+                if !keys.insert(k.as_str()) {
+                    return Err(Error::ButtonTwice(d.key.clone(), format!("page key {k}")));
+                }
+            }
+        }
+        Ok(())
     }
 
     pub fn device(&self, key: &str) -> Option<&DeviceSpec> {
@@ -1233,6 +1310,10 @@ pub struct Profile {
     /// profile. See docs/CONFIG.md "MCDU pages".
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub screens: BTreeMap<String, PageSlots>,
+    /// Every device's slots resolved, and which one shows, once the profile
+    /// runs. Filled by [`with_pages`](Self::with_pages), never written.
+    #[serde(skip)]
+    pub page_runs: BTreeMap<String, PageRun>,
 }
 
 /// A file that does not say is from before the version was written down,
@@ -1269,6 +1350,7 @@ impl Profile {
         }
         p.bindings.retain(|b| !self.follows.contains_key(&b.device));
         p.readouts.retain(|r| !self.follows.contains_key(&r.device));
+        p.page_runs.retain(|d, _| !self.follows.contains_key(d));
         for (follower, source) in &self.follows {
             // A chain is refused by `problems`. Should one be loaded anyway,
             // copying from a follower would copy the rows just set aside.
@@ -1285,6 +1367,19 @@ impl Profile {
                 r.device = follower.clone();
                 r
             }));
+            // The leader's slots, under the follower's name. Which one shows
+            // is the follower's own from here: its keys swap only its screen.
+            if let Some(run) = self.page_runs.get(source) {
+                let mut run = run.clone();
+                for slot in &mut run.slots {
+                    if let SlotRun::Page { fields, .. } = slot {
+                        for f in fields {
+                            f.device = follower.clone();
+                        }
+                    }
+                }
+                p.page_runs.insert(follower.clone(), run);
+            }
         }
         p
     }
@@ -1322,9 +1417,10 @@ impl Profile {
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
             follows: BTreeMap::new(),
-            // Every slot empty, which needs no entry: the editor offers six
-            // slots on every text grid regardless.
+            // Every slot empty, which needs no entry: the editor offers every
+            // slot on every text grid regardless.
             screens: BTreeMap::new(),
+            page_runs: BTreeMap::new(),
         }
     }
 
@@ -1689,6 +1785,13 @@ impl Profile {
             }
         }
         p.readouts.retain(|r| missing_in_field(module, r).is_empty());
+        for run in p.page_runs.values_mut() {
+            for slot in &mut run.slots {
+                if let SlotRun::Page { fields, .. } = slot {
+                    fields.retain(|r| missing_in_field(module, r).is_empty());
+                }
+            }
+        }
         p
     }
 
@@ -2620,7 +2723,10 @@ fn reconcile_settings(profile: &mut Profile, shipped: &Profile, was: &Profile) -
 /// The field rule again: a slot as `was` had it is ours to replace, and one
 /// that differs is the user's. Deleting a page empties its slots, which is a
 /// change, so a slot the user emptied that way is never put back. A device the
-/// profile has no entry for reads as six empty slots, which is what it shows.
+/// profile has no entry for reads as empty slots, which is what it shows.
+///
+/// The count is whatever the shipped profile has, which `validate` holds to
+/// the device's page keys, so the device map is not needed here.
 fn reconcile_slots(profile: &mut Profile, shipped: &Profile, was: &Profile) -> usize {
     let mut changed = 0;
     let devices: BTreeSet<String> = was.screens.keys().chain(shipped.screens.keys()).cloned().collect();
@@ -2629,8 +2735,14 @@ fn reconcile_slots(profile: &mut Profile, shipped: &Profile, was: &Profile) -> u
         let before = was.screens.get(&device).unwrap_or(&empty);
         let after = shipped.screens.get(&device).unwrap_or(&empty);
         let mut mine = profile.screens.get(&device).cloned().unwrap_or_default();
+        // The shipped count wins; a device the release dropped keeps the
+        // user's, then the last release's.
+        let len = [after.slots.len(), mine.slots.len(), before.slots.len()]
+            .into_iter()
+            .find(|&l| l > 0)
+            .unwrap_or(0);
         let mut touched = false;
-        let n = SLOTS.max(before.slots.len()).max(after.slots.len());
+        let n = before.slots.len().max(after.slots.len());
         mine.slots.resize(n.max(mine.slots.len()), None);
         for i in 0..n {
             let (b, a) = (before.slots.get(i).cloned().flatten(), after.slots.get(i).cloned().flatten());
@@ -2648,7 +2760,7 @@ fn reconcile_slots(profile: &mut Profile, shipped: &Profile, was: &Profile) -> u
         if !touched {
             continue;
         }
-        mine.slots.truncate(SLOTS.max(after.slots.len()));
+        mine.slots.resize(len, None);
         mine.settle_start();
         if mine.filled().next().is_none() {
             profile.screens.remove(&device);
@@ -3492,6 +3604,7 @@ mod tests {
             disabled_devices: Vec::new(),
             follows: BTreeMap::new(),
             screens: BTreeMap::new(),
+            page_runs: BTreeMap::new(),
         }
     }
 

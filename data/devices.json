@@ -622,11 +622,22 @@
           "display": "MCDU"
         }
       ],
+      "buttons": [
+        { "number": 1, "name": "LSK_1L", "label": "LSK 1L", "verified": true },
+        { "number": 2, "name": "LSK_2L", "label": "LSK 2L", "verified": true },
+        { "number": 3, "name": "LSK_3L", "label": "LSK 3L", "verified": true },
+        { "number": 4, "name": "LSK_4L", "label": "LSK 4L", "verified": true },
+        { "number": 5, "name": "LSK_5L", "label": "LSK 5L", "verified": true },
+        { "number": 6, "name": "LSK_6L", "label": "LSK 6L", "verified": true },
+        { "number": 7, "name": "LSK_1R", "label": "LSK 1R", "verified": true }
+      ],
+      "page_keys": ["LSK_1L", "LSK_2L", "LSK_3L", "LSK_4L", "LSK_5L", "LSK_6L"],
       "_notes": [
         "One physical MCDU, three possible identities. SimAppPro renames it CAPTAIN, CO-PILOT or OBSERVER, and each name is its own USB PID: CAPTAIN 0xbb36, CO-PILOT 0xbb3e, OBSERVER 0xbb3a, all measured 2026-09-18. Same part 0xbb32 and same serial under every name, so this entry, MCDU_CoPilot and MCDU_Observer differ only in PID and name. It declares 64-byte reports and the 0xf0 screen channel, like the ICP.",
         "The name lives in config offset 0xcc, byte 1: CAPTAIN 0, OBSERVER 1, CO-PILOT 2, all captured 2026-09-18 (byte 0 is 01 each time). Before the first rename it read ff and the panel was CAPTAIN. Writing it drops the device off USB and it re-enumerates about three seconds later under the new PID. We never write it; WRITE_CFG_DATA is forbidden.",
         "Every index captured from SimAppPro 2026-09-18. The nine indicators were switched on and off in index order and only ever took 1 or 0. Indices 3 to 7 were never written.",
-        "The screen is a 24x14 text grid on report 0xf2, drawn from a font the panel is sent (data/displays/mcdu.json). SimAppPro's own screen buttons send only self-tests, cmd 0x104 with values 13 to 20 (white, black, red, green, blue, lime, purple, the WinWing logo). See docs/PROTOCOL.md."
+        "The screen is a 24x14 text grid on report 0xf2, drawn from a font the panel is sent (data/displays/mcdu.json). SimAppPro's own screen buttons send only self-tests, cmd 0x104 with values 13 to 20 (white, black, red, green, blue, lime, purple, the WinWing logo). See docs/PROTOCOL.md.",
+        "The keys arrive on a game controller collection (usage page 0x01, usage 0x04), report id 1, 64 bytes, 128 buttons, captured on the Captain 2026-09-23 with dcs-signal buttons. LSK 1L to 6L are bits 0 to 5 of byte 1, buttons 1 to 6, and LSK 1R is bit 6, button 7: the numbers SimAppPro lights and DCS binds. Bytes 17 to 24 change with no key pressed, so keys are read by what goes down, never by the report changing. Only captured keys are listed. The page keys are LSK 1L to 6L, one per slot."
       ]
     },
     {
@@ -755,6 +766,16 @@
           "display": "MCDU"
         }
       ],
+      "buttons": [
+        { "number": 1, "name": "LSK_1L", "label": "LSK 1L", "verified": true },
+        { "number": 2, "name": "LSK_2L", "label": "LSK 2L", "verified": true },
+        { "number": 3, "name": "LSK_3L", "label": "LSK 3L", "verified": true },
+        { "number": 4, "name": "LSK_4L", "label": "LSK 4L", "verified": true },
+        { "number": 5, "name": "LSK_5L", "label": "LSK 5L", "verified": true },
+        { "number": 6, "name": "LSK_6L", "label": "LSK 6L", "verified": true },
+        { "number": 7, "name": "LSK_1R", "label": "LSK 1R", "verified": true }
+      ],
+      "page_keys": ["LSK_1L", "LSK_2L", "LSK_3L", "LSK_4L", "LSK_5L", "LSK_6L"],
       "_notes": [
         "The same hardware as MCDU_Captain under its CO-PILOT name, PID 0xbb3e. See that entry's notes for the rename, the lamps and the screen."
       ]
@@ -885,6 +906,16 @@
           "display": "MCDU"
         }
       ],
+      "buttons": [
+        { "number": 1, "name": "LSK_1L", "label": "LSK 1L", "verified": true },
+        { "number": 2, "name": "LSK_2L", "label": "LSK 2L", "verified": true },
+        { "number": 3, "name": "LSK_3L", "label": "LSK 3L", "verified": true },
+        { "number": 4, "name": "LSK_4L", "label": "LSK 4L", "verified": true },
+        { "number": 5, "name": "LSK_5L", "label": "LSK 5L", "verified": true },
+        { "number": 6, "name": "LSK_6L", "label": "LSK 6L", "verified": true },
+        { "number": 7, "name": "LSK_1R", "label": "LSK 1R", "verified": true }
+      ],
+      "page_keys": ["LSK_1L", "LSK_2L", "LSK_3L", "LSK_4L", "LSK_5L", "LSK_6L"],
       "_notes": [
         "The same hardware as MCDU_Captain under its OBSERVER name, PID 0xbb3a. See that entry's notes for the rename, the lamps and the screen."
       ]

@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "A-10C",
   "author": "coryb",
   "profile_version": "0.1.0",
@@ -536,543 +536,6 @@
   ],
   "readouts": [
     {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "72-95",
-      "divider": true,
-      "colour": "amber",
-      "note": "A rule on row 4, where the page starts. The A-10C's CDU is ten lines and the MCDU is fourteen, so rows 1 to 3 stay dark and the content below needs a top edge to read as a page."
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "96-119",
-      "source": "CDU_LINE0",
-      "colour": "green",
-      "replace": {
-        "?": "%",
-        "¡": "☐",
-        "®": "Δ",
-        "»": "→",
-        "©": "^",
-        "±": "_",
-        "¶": "⬡",
-        "«": "←"
-      },
-      "note": "CDU line 1. The ten CDU lines sit on rows 5 to 14, so the CDU's line select keys, beside its lines 3, 5, 7 and 9, land beside MCDU rows 7, 9, 11 and 13, and the scratchpad on line 10 lands on the MCDU's scratchpad row."
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "120-143",
-      "source": "CDU_LINE1",
-      "colour": "green",
-      "replace": {
-        "¶": "⬡",
-        "®": "Δ",
-        "¡": "☐",
-        "?": "%",
-        "©": "^",
-        "«": "←",
-        "±": "_",
-        "»": "→"
-      },
-      "note": "DCS-BIOS sends the CDU's symbols as single bytes above ASCII (A-10C.lua, cdu_replace_map). replace turns each into the character whose glyph the A-10C font draws for it: the arrows, the box, the up-down arrow (Delta), the cursor block (hexagon), and ? whose glyph is the % slot. Taken from WCtrlDcsBiosBridge's A-10C listener."
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "144-167",
-      "source": "CDU_LINE2",
-      "colour": "green",
-      "replace": {
-        "¡": "☐",
-        "»": "→",
-        "±": "_",
-        "?": "%",
-        "«": "←",
-        "®": "Δ",
-        "©": "^",
-        "¶": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "168-191",
-      "source": "CDU_LINE3",
-      "colour": "green",
-      "replace": {
-        "¡": "☐",
-        "¶": "⬡",
-        "?": "%",
-        "®": "Δ",
-        "©": "^",
-        "±": "_",
-        "»": "→",
-        "«": "←"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "192-215",
-      "source": "CDU_LINE4",
-      "colour": "green",
-      "replace": {
-        "±": "_",
-        "©": "^",
-        "»": "→",
-        "®": "Δ",
-        "¡": "☐",
-        "?": "%",
-        "«": "←",
-        "¶": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "216-239",
-      "source": "CDU_LINE5",
-      "colour": "green",
-      "replace": {
-        "?": "%",
-        "»": "→",
-        "«": "←",
-        "±": "_",
-        "©": "^",
-        "®": "Δ",
-        "¶": "⬡",
-        "¡": "☐"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "240-263",
-      "source": "CDU_LINE6",
-      "colour": "green",
-      "replace": {
-        "®": "Δ",
-        "±": "_",
-        "¡": "☐",
-        "«": "←",
-        "¶": "⬡",
-        "»": "→",
-        "©": "^",
-        "?": "%"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "264-287",
-      "source": "CDU_LINE7",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "»": "→",
-        "¡": "☐",
-        "?": "%",
-        "®": "Δ",
-        "±": "_",
-        "¶": "⬡",
-        "©": "^"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "288-311",
-      "source": "CDU_LINE8",
-      "colour": "green",
-      "replace": {
-        "¶": "⬡",
-        "±": "_",
-        "?": "%",
-        "«": "←",
-        "®": "Δ",
-        "¡": "☐",
-        "»": "→",
-        "©": "^"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "312-335",
-      "source": "CDU_LINE9",
-      "colour": "green",
-      "replace": {
-        "»": "→",
-        "®": "Δ",
-        "«": "←",
-        "¡": "☐",
-        "±": "_",
-        "?": "%",
-        "©": "^",
-        "¶": "⬡"
-      },
-      "note": "CDU line 10, the scratchpad."
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "72-95",
-      "divider": true,
-      "colour": "amber",
-      "note": "A rule on row 4, where the page starts. The A-10C's CDU is ten lines and the MCDU is fourteen, so rows 1 to 3 stay dark and the content below needs a top edge to read as a page."
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "96-119",
-      "source": "CDU_LINE0",
-      "colour": "green",
-      "replace": {
-        "?": "%",
-        "¶": "⬡",
-        "®": "Δ",
-        "©": "^",
-        "¡": "☐",
-        "«": "←",
-        "±": "_",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "120-143",
-      "source": "CDU_LINE1",
-      "colour": "green",
-      "replace": {
-        "©": "^",
-        "¡": "☐",
-        "±": "_",
-        "?": "%",
-        "«": "←",
-        "¶": "⬡",
-        "®": "Δ",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "144-167",
-      "source": "CDU_LINE2",
-      "colour": "green",
-      "replace": {
-        "»": "→",
-        "©": "^",
-        "¡": "☐",
-        "?": "%",
-        "«": "←",
-        "±": "_",
-        "®": "Δ",
-        "¶": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "168-191",
-      "source": "CDU_LINE3",
-      "colour": "green",
-      "replace": {
-        "©": "^",
-        "¡": "☐",
-        "¶": "⬡",
-        "±": "_",
-        "?": "%",
-        "»": "→",
-        "«": "←",
-        "®": "Δ"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "192-215",
-      "source": "CDU_LINE4",
-      "colour": "green",
-      "replace": {
-        "¶": "⬡",
-        "«": "←",
-        "±": "_",
-        "®": "Δ",
-        "?": "%",
-        "¡": "☐",
-        "©": "^",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "216-239",
-      "source": "CDU_LINE5",
-      "colour": "green",
-      "replace": {
-        "¶": "⬡",
-        "«": "←",
-        "©": "^",
-        "¡": "☐",
-        "»": "→",
-        "?": "%",
-        "®": "Δ",
-        "±": "_"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "240-263",
-      "source": "CDU_LINE6",
-      "colour": "green",
-      "replace": {
-        "±": "_",
-        "?": "%",
-        "«": "←",
-        "¡": "☐",
-        "©": "^",
-        "®": "Δ",
-        "¶": "⬡",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "264-287",
-      "source": "CDU_LINE7",
-      "colour": "green",
-      "replace": {
-        "»": "→",
-        "¡": "☐",
-        "¶": "⬡",
-        "«": "←",
-        "©": "^",
-        "®": "Δ",
-        "?": "%",
-        "±": "_"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "288-311",
-      "source": "CDU_LINE8",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "¡": "☐",
-        "¶": "⬡",
-        "?": "%",
-        "®": "Δ",
-        "±": "_",
-        "©": "^",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "312-335",
-      "source": "CDU_LINE9",
-      "colour": "green",
-      "replace": {
-        "®": "Δ",
-        "«": "←",
-        "¶": "⬡",
-        "»": "→",
-        "¡": "☐",
-        "©": "^",
-        "±": "_",
-        "?": "%"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "72-95",
-      "divider": true,
-      "colour": "amber",
-      "note": "A rule on row 4, where the page starts. The A-10C's CDU is ten lines and the MCDU is fourteen, so rows 1 to 3 stay dark and the content below needs a top edge to read as a page."
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "96-119",
-      "source": "CDU_LINE0",
-      "colour": "green",
-      "replace": {
-        "¡": "☐",
-        "©": "^",
-        "±": "_",
-        "?": "%",
-        "»": "→",
-        "«": "←",
-        "®": "Δ",
-        "¶": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "120-143",
-      "source": "CDU_LINE1",
-      "colour": "green",
-      "replace": {
-        "®": "Δ",
-        "¡": "☐",
-        "©": "^",
-        "±": "_",
-        "¶": "⬡",
-        "»": "→",
-        "?": "%",
-        "«": "←"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "144-167",
-      "source": "CDU_LINE2",
-      "colour": "green",
-      "replace": {
-        "¶": "⬡",
-        "±": "_",
-        "?": "%",
-        "©": "^",
-        "®": "Δ",
-        "¡": "☐",
-        "«": "←",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "168-191",
-      "source": "CDU_LINE3",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "?": "%",
-        "¶": "⬡",
-        "©": "^",
-        "¡": "☐",
-        "®": "Δ",
-        "±": "_",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "192-215",
-      "source": "CDU_LINE4",
-      "colour": "green",
-      "replace": {
-        "¡": "☐",
-        "®": "Δ",
-        "?": "%",
-        "©": "^",
-        "«": "←",
-        "±": "_",
-        "»": "→",
-        "¶": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "216-239",
-      "source": "CDU_LINE5",
-      "colour": "green",
-      "replace": {
-        "±": "_",
-        "¡": "☐",
-        "¶": "⬡",
-        "»": "→",
-        "®": "Δ",
-        "«": "←",
-        "?": "%",
-        "©": "^"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "240-263",
-      "source": "CDU_LINE6",
-      "colour": "green",
-      "replace": {
-        "¡": "☐",
-        "«": "←",
-        "±": "_",
-        "¶": "⬡",
-        "©": "^",
-        "®": "Δ",
-        "»": "→",
-        "?": "%"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "264-287",
-      "source": "CDU_LINE7",
-      "colour": "green",
-      "replace": {
-        "¡": "☐",
-        "¶": "⬡",
-        "«": "←",
-        "?": "%",
-        "»": "→",
-        "®": "Δ",
-        "©": "^",
-        "±": "_"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "288-311",
-      "source": "CDU_LINE8",
-      "colour": "green",
-      "replace": {
-        "»": "→",
-        "?": "%",
-        "±": "_",
-        "¡": "☐",
-        "«": "←",
-        "®": "Δ",
-        "¶": "⬡",
-        "©": "^"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "312-335",
-      "source": "CDU_LINE9",
-      "colour": "green",
-      "replace": {
-        "¶": "⬡",
-        "¡": "☐",
-        "»": "→",
-        "©": "^",
-        "?": "%",
-        "±": "_",
-        "®": "Δ",
-        "«": "←"
-      }
-    },
-    {
       "device": "ViperAce_ICP",
       "display": "DED",
       "cells": "0-23",
@@ -1212,83 +675,6 @@
           "gap": true
         }
       ]
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "0-23",
-      "content": [
-        {
-          "text": "ARC-210"
-        },
-        {
-          "gap": true
-        },
-        {
-          "text": "ARC-164"
-        },
-        {
-          "gap": true
-        }
-      ]
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "24-47",
-      "content": [
-        {
-          "source": "ARC210_FREQUENCY",
-          "colour": "amber"
-        },
-        {
-          "source": "ARC210_MODULATION",
-          "width": 3,
-          "align": "right",
-          "colour": "amber"
-        },
-        {
-          "gap": true,
-          "width": 2
-        },
-        {
-          "source": "UHF_FREQUENCY",
-          "colour": "amber"
-        },
-        {
-          "text": "AM",
-          "width": 3,
-          "align": "right",
-          "colour": "amber"
-        }
-      ]
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "48-71",
-      "content": [
-        {
-          "text": "PRESET: ",
-          "small": true
-        },
-        {
-          "source": "ARC210_ACTIVE_CHANNEL",
-          "colour": "amber"
-        },
-        {
-          "gap": true,
-          "width": 2
-        },
-        {
-          "text": "PRESET: ",
-          "small": true
-        },
-        {
-          "source": "UHF_PRESET",
-          "colour": "amber"
-        }
-      ]
     }
   ],
   "follows": {
@@ -1296,5 +682,52 @@
     "CarrierAce_MFD_R": "CarrierAce_MFD_C",
     "MCDU_CoPilot": "MCDU_Captain",
     "MCDU_Observer": "MCDU_Captain"
+  },
+  "screens": {
+    "MCDU_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "a10c-cdu",
+          "key": null
+        },
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_CoPilot": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "a10c-cdu",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_Observer": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "a10c-cdu",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
   }
 }

@@ -1436,9 +1436,9 @@ editor shows it on the slot.
   screen dark. With every slot disabled the screen is blank, as an MCDU with
   no fields always was, and `start` is left out.
 - **The same page may sit in two slots.** Pointless, but not wrong.
-- **`key` is reserved for swapping**, below, and must be null until then. It
-  will say which line select key brings the slot up. It is there now so that
-  giving it a meaning changes no profile's shape.
+- **`key` is reserved**, and must be null. Swapping did not need it, since
+  slot n is always the device's nth page key (see "Swapping"). It stays so
+  that giving it a meaning later changes no profile's shape.
 - **No loose MCDU fields.** A field in `readouts` on the MCDU is refused in
   version 2: everything on that screen comes from a page, so nothing on it
   has two owners.
@@ -1572,8 +1572,10 @@ pairs of folders:
 
 ### Swapping
 
-Built 2026-09-23, not yet pressed on the panel with DCS running. Everything
-the design rests on was captured with `dcs-signal buttons`, which prints each button a panel reports by the
+Built and flown 2026-09-23, in the A-10C with every combination of Ctrl,
+Shift and Alt, left and right, pages, blank and disabled slots, and the
+modifier changed mid-flight. Everything the design rests on was captured
+with `dcs-signal buttons`, which prints each button a panel reports by the
 number Windows gives it, with the raw report and which of Ctrl, Shift and Alt
 the keyboard held at that moment. It only reads.
 

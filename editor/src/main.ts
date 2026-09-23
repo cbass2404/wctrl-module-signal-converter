@@ -667,7 +667,7 @@ async function showImport(): Promise<void> {
   const mode = el("select", {});
   mode.append(el("option", { value: "" }, "Whole profile, as a profile of its own"));
   for (const t of targets) {
-    mode.append(el("option", { value: t.file }, `Merged into ${t.name}: only the lights and screen lines ticked`));
+    mode.append(el("option", { value: t.file }, `Merged into ${t.name}: only the lights, screen lines and page slots ticked`));
   }
   const into = (): ProfileSummary | undefined => targets.find((t) => t.file === mode.value);
 

@@ -22,11 +22,17 @@ wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
 
-**Built 2026-09-23: page swapping and the Settings dialog, on
+**Built and flown 2026-09-23: page swapping and the Settings dialog, on
 `feature/mcdu-page-selection-inputs`.** The design is "Swapping" under "MCDU
-pages" in [CONFIG.md](CONFIG.md). Tested with fixtures and a dry run, which
-opened the Captain's key reader; not yet pressed on the panel with DCS
-running. That is next: see the TODO entry.
+pages" in [CONFIG.md](CONFIG.md). Flown in the A-10C with pages in the odd
+slots, blanks in the even ones and the last disabled: every combination of
+Ctrl, Shift and Alt, left and right, swapped only when intended, and
+changing the modifier in Settings mid-flight took effect. The three themes
+redraw the window as picked, which was the first look at the light theme.
+The theme survives a restart, Import profile... and Manage Converter... open
+from the gear, import refuses a version 1 profile, and a partial merge from
+an F-14BU export brought its page slot into the F-14. Nothing on the branch
+is waiting on a check.
 
 - **Inputs belong to their device** (Cory, 2026-09-23). The three MCDU
   entries in `devices.json` list `buttons` (LSK 1L to 6L as 1 to 6, LSK 1R as

@@ -26,7 +26,7 @@ installed program and the profiles folder chosen at install.
 
 | Flag | Default | What it does |
 | --- | --- | --- |
-| `--dry-run` | off | Prints every write and opens no device. Nothing touches the hardware. Worth one pass to confirm the aircraft is detected and the right profile is picked. |
+| `--dry-run` | off | Prints every write and writes to no device. Nothing touches the hardware; it only reads the panels' page keys, which sends them nothing. Worth one pass to confirm the aircraft is detected and the right profile is picked. |
 | `--verbose` | off | Puts every action on the console as it happens. See below. The session log holds it either way, so this is only for watching a run live. |
 | `--seconds <N>` | runs until Ctrl-C | Stops after N seconds. Useful for a quick check without having to interrupt it. |
 | `--exit-when-idle <N>` | off | Clears the panels and exits once there has been no export stream for N seconds and DCS is no longer running, once it has seen the stream at least once. Used by the DCS hook. |
@@ -66,14 +66,23 @@ profile  A-10C                  15 set,  6 unset  for A-10C_2, A-10C
 profile  FA-18                  23 set,  1 unset  for EA-18G, FA-18C_hornet, FA-18E, FA-18F
 device   PTO2                   pid 0xbf05
 device   Orion Throttle Base II pid 0xbd64
+device   MCDU Captain           pid 0xbb36  display MCDU
+keys     MCDU_Captain: reading 6 page key(s) on usage page 0x0001 usage 0x0004
+keys     page modifier Ctrl
 Running. Ctrl-C to stop and clear the panels.
 aircraft A-10C_2  ->  profile A-10C
+page     MCDU_Captain LSK_2L  ->  slot 2, "Radios"
 ```
 
 Nothing happens until a cockpit is loaded. Once one is, whether you enter it
 after startup or were already flying, it names the aircraft and the profile it
 chose, then writes every LED once to match the cockpit. After that it writes
 only lamps whose signals change.
+
+A `keys` line names each panel whose page keys are read and the modifier
+that counts, from `settings.json` (see "Swapping" in [CONFIG.md](CONFIG.md)).
+A `page` line is a page key swapping a screen's page. Changing the modifier in
+the editor's Settings reaches a running converter within half a second.
 
 `n set, n unset` counts configured lamps against ones still to be decided. An
 unset lamp is a normal state, not an error; it is simply driven off.

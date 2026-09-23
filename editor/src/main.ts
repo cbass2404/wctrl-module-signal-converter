@@ -148,11 +148,12 @@ function parentBox(children: HTMLInputElement[]): HTMLInputElement {
 
 /**
  * Head a checklist of aircraft with Select all, when there is more than one to
- * select. It starts ticked when every aircraft does, and part ticked when
- * only some do.
+ * select, with the aircraft set in under it. It starts ticked when every
+ * aircraft does, and part ticked when only some do.
  */
 function selectAll(list: HTMLElement, boxes: HTMLInputElement[]): void {
   if (boxes.length < 2) return;
+  for (const b of boxes) b.parentElement?.classList.add("sub");
   list.prepend(el("label", { class: "group" }, parentBox(boxes), el("span", {}, "Select all")));
 }
 

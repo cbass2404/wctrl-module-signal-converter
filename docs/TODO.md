@@ -19,6 +19,12 @@ do not.
       dry run and the tests, not yet seen on the panel.
       [STATUS.md](STATUS.md), "Built 2026-09-23: MCDU pages"
 
+- [ ] **Build page swapping.** Designed and captured 2026-09-23 on
+      `feature/mcdu-page-selection-inputs`, not built: each panel's
+      `buttons` and `page_keys` in `devices.json`, slot count from the device, the app-wide modifier
+      setting, the daemon's key reader, independent followers.
+      [CONFIG.md](CONFIG.md), "Swapping"
+
 - [ ] **See the pages on the panel.** Fly one aircraft per page file and check
       the MCDU looks as it did before the move: A-10C CDU, AH-64D KU, CH-47F
       CDU, F-14BU CDNU, F-16 Flight, F/A-18 IFEI.

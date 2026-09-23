@@ -23,6 +23,10 @@ use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, Displa
 use dsc_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
+#[cfg(windows)]
+mod buttons;
+#[cfg(windows)]
+mod keyboard;
 mod panels;
 use panels::Panel;
 
@@ -172,6 +176,24 @@ enum Command {
         #[arg(long)]
         no_font: bool,
     },
+    /// Show the buttons a panel reports as its keys are pressed.
+    ///
+    /// Opens every collection under the PID and prints each press and release
+    /// by the number Windows gives the button, which is the number SimAppPro
+    /// lights and DCS binds, with the raw report beside it. Each press also
+    /// says which of Ctrl, Shift and Alt the keyboard held at that moment. Only
+    /// reads: nothing is sent to the panel.
+    Buttons {
+        /// CAPTAIN 0xbb36, CO-PILOT 0xbb3e, OBSERVER 0xbb3a.
+        #[arg(long, value_parser = parse_hex16, default_value = "0xbb36")]
+        pid: u16,
+        /// Print every report that changes, not only those that move a button.
+        #[arg(long)]
+        raw: bool,
+        /// Stop after this many seconds. Runs until Ctrl-C when omitted.
+        #[arg(long)]
+        seconds: Option<u64>,
+    },
     /// Listen to the DCS-BIOS export stream and report what arrives.
     Listen {
         #[arg(long, default_value_t = 15)]
@@ -316,6 +338,137 @@ fn parse_hex32(s: &str) -> Result<u32, std::num::ParseIntError> {
 fn open(pid: u16) -> Result<Device> {
     let api = hidapi::HidApi::new().context("opening HID API")?;
     Device::open(&api, pid).with_context(|| format!("opening device 0x{pid:04x}"))
+}
+
+/// Print each button a panel reports as it goes down and comes up.
+#[cfg(windows)]
+fn buttons_capture(pid: u16, raw: bool, seconds: Option<u64>) -> Result<()> {
+    use std::sync::mpsc;
+
+    let api = hidapi::HidApi::new().context("opening HID API")?;
+    let paths: Vec<String> = wctrl_hid::enumerate(&api)
+        .into_iter()
+        .filter(|d| d.product_id == pid)
+        .map(|d| d.path)
+        .collect();
+    if paths.is_empty() {
+        anyhow::bail!("no device 0x{pid:04x} is connected");
+    }
+
+    // One thread per collection, as each read blocks until its collection
+    // sends something, and the lines meet on one channel in arrival order.
+    let (tx, rx) = mpsc::channel::<String>();
+    let start = Instant::now();
+    let mut readers = 0;
+    for (n, path) in paths.iter().enumerate() {
+        let collection = match buttons::Collection::open(path) {
+            Ok(c) => c,
+            Err(e) => {
+                println!("collection {n}: could not open: {e}");
+                continue;
+            }
+        };
+        let ranges: Vec<String> = collection
+            .buttons
+            .iter()
+            .map(|(id, first, last)| format!("report {id} buttons {first}-{last}"))
+            .collect();
+        println!(
+            "collection {n}: usage page 0x{:04x} usage 0x{:04x}, input report {} bytes, {}",
+            collection.usage_page,
+            collection.usage,
+            collection.report_len,
+            if ranges.is_empty() { "no buttons".to_string() } else { ranges.join(", ") }
+        );
+        if collection.buttons.is_empty() && !raw {
+            continue;
+        }
+        readers += 1;
+        let tx = tx.clone();
+        std::thread::spawn(move || {
+            let mut buf = Vec::new();
+            let mut last_report: Vec<u8> = Vec::new();
+            let mut last_down: Vec<u16> = Vec::new();
+            loop {
+                if let Err(e) = collection.read(&mut buf) {
+                    let _ = tx.send(format!("collection {n}: read failed: {e}"));
+                    return;
+                }
+                if buf == last_report {
+                    continue;
+                }
+                let t = start.elapsed().as_secs_f64();
+                let hex = hex_trimmed(&buf);
+                let down = collection.pressed(&buf).unwrap_or_else(|| last_down.clone());
+                let mut lines = Vec::new();
+                let new: Vec<&u16> = down.iter().filter(|b| !last_down.contains(b)).collect();
+                if !new.is_empty() {
+                    // Read once per report, as close to the press as this gets.
+                    let held: Vec<&str> = keyboard::Modifier::ALL
+                        .into_iter()
+                        .filter(|m| m.held())
+                        .map(|m| m.name())
+                        .collect();
+                    let held = if held.is_empty() { "none".to_string() } else { held.join("+") };
+                    for b in new {
+                        lines.push(format!("{t:8.3}s  collection {n}  down {b:>3}  held {held:<14}  [{hex}]"));
+                    }
+                }
+                for b in last_down.iter().filter(|b| !down.contains(b)) {
+                    lines.push(format!("{t:8.3}s  collection {n}  up   {b:>3}  {:<20}  [{hex}]", ""));
+                }
+                if lines.is_empty() && raw {
+                    lines.push(format!("{t:8.3}s  collection {n}  report    {:<20}  [{hex}]", ""));
+                }
+                for line in lines {
+                    if tx.send(line).is_err() {
+                        return;
+                    }
+                }
+                last_report = buf.clone();
+                last_down = down;
+            }
+        });
+    }
+    drop(tx);
+    if readers == 0 {
+        anyhow::bail!("no collection of 0x{pid:04x} declares buttons; --raw reads them anyway");
+    }
+
+    let running = Arc::new(AtomicBool::new(true));
+    {
+        let flag = Arc::clone(&running);
+        ctrlc::set_handler(move || flag.store(false, Ordering::SeqCst))
+            .context("installing the Ctrl-C handler")?;
+    }
+    let deadline = seconds.map(|s| start + Duration::from_secs(s));
+    println!("Press the keys one at a time. Ctrl-C to stop.");
+    // The readers stay blocked in their reads when this returns, and go with
+    // the process.
+    while running.load(Ordering::SeqCst) && deadline.map_or(true, |d| Instant::now() < d) {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(line) => println!("{line}"),
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn buttons_capture(_pid: u16, _raw: bool, _seconds: Option<u64>) -> Result<()> {
+    anyhow::bail!("reading buttons is only built for Windows")
+}
+
+/// A report as hex, without the run of zeros a padded report ends in.
+#[cfg(windows)]
+fn hex_trimmed(report: &[u8]) -> String {
+    let end = report.iter().rposition(|&b| b != 0).map_or(1, |i| i + 1);
+    let mut s = report[..end].iter().map(|b| format!("{b:02x}")).collect::<Vec<_>>().join(" ");
+    if end < report.len() {
+        s.push_str(&format!(" (+{} zero)", report.len() - end));
+    }
+    s
 }
 
 fn mcdu_test(
@@ -533,6 +686,8 @@ fn main() -> Result<()> {
             countdown,
             hold,
         } => probe_brightness(pid, part, master, lamp, countdown, hold)?,
+
+        Command::Buttons { pid, raw, seconds } => buttons_capture(pid, raw, seconds)?,
 
         Command::Listen {
             seconds,

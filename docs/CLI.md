@@ -319,3 +319,21 @@ moves  signal                             value
 
 Each window starts a fresh sheet, so several controls can be found in one run.
 Ctrl-C stops it.
+
+`buttons` prints each button a panel reports as it goes down and comes up, by
+the number Windows gives it, which is the number SimAppPro lights and DCS
+binds. Each press also says which of Ctrl, Shift and Alt the keyboard held.
+It only reads, so it can run beside DCS and the daemon. The MCDU Captain is
+the default; `--pid` picks another panel.
+
+```powershell
+dcs-signal buttons --seconds 60
+```
+
+```text
+collection 0: usage page 0x0001 usage 0x0004, input report 64 bytes, report 1 buttons 1-128
+   23.607s  collection 0  down   1  held Ctrl            [01 01 00 ... 00 61 00 66 00 61 00 66 (+40 zero)]
+   23.867s  collection 0  up     1                        [01 00 00 ... 00 61 00 66 00 61 00 66 (+40 zero)]
+```
+
+`--raw` also prints reports that change without a button moving.

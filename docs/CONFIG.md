@@ -1425,7 +1425,8 @@ editor shows it on the slot.
 
 - **Six slots per MCDU, one for each left line select key.** `slots` always
   holds six entries, so slot 3 is the same slot whatever is filled around it,
-  and slot n is LSK nL. The editor labels each slot with its key.
+  and slot n is LSK nL. The editor labels each slot with its key. Swapping
+  takes the count from the device instead, below.
 - **A slot shows a page, shows a blank screen, or is disabled.** A page is
   `{ "page": id }`. Blank is `{ "page": null }`: the screen dark on purpose.
   Disabled is `null`. The difference is for swapping, below: the key of a
@@ -1446,8 +1447,9 @@ editor shows it on the slot.
   painting, sweeping and resolving never learn about pages. Swapping will be
   resolving again with another slot and repainting one screen.
 
-**Per device, as everything else is.** An MCDU that follows the Captain shows
-what the Captain shows, the page included. One with slots of its own is
+**Per device, as everything else is.** An MCDU that follows the Captain has
+the Captain's slots and starts on the Captain's start page. Which page each
+shows after that is its own, under "Swapping". One with slots of its own is
 independent. A follower's own `screens` entry is kept and ignored, like its
 other rows.
 
@@ -1567,23 +1569,98 @@ pairs of folders:
   message saying they were made before pages. There is no migration: the
   testers reset their app data for this release.
 
-### Swapping, later
+### Swapping
 
-Not part of this change, and written down so the schema holds still for it.
+Designed 2026-09-23, not built. Everything the design rests on was captured
+with `dcs-signal buttons`, which prints each button a panel reports by the
+number Windows gives it, with the raw report and which of Ctrl, Shift and Alt
+the keyboard held at that moment. It only reads.
 
-- **Hold Alt, Ctrl or Shift and press a left line select key**, LSK 1L to 6L
-  for slots 1 to 6 unless `key` says otherwise. DCS already treats those keys
-  as modifiers, so a modifier and a line select key is a binding DCS has only
-  if the user made one, and needing the keyboard and the panel together makes
-  it hard to do by accident.
+- **Hold the modifier and press a page key.** The modifier is Ctrl, Shift or
+  Alt, and Ctrl unless the user picks another. Left and right are the same
+  key: the capture read left and right Ctrl, Shift and Alt each as one.
+  Needing the keyboard and the panel together makes it hard to do by accident.
+- **The modifier on its own.** A press counts only when the chosen modifier
+  is the only one of the three held. DCS binds 1, Ctrl+1, Shift+1, Alt+1 and
+  Ctrl+Shift+1 as five different buttons, so Ctrl+Shift with a page key is
+  left to whatever the user bound it to, and nothing swaps. It follows that
+  on keyboards with AltGr, where Windows reports right Alt as Ctrl and Alt
+  together, right Alt does not count as Alt. DCS sees it the same way.
+- **The chosen combination should stay unbound in DCS.** DCS still sees the
+  press, since reading a panel takes nothing from anyone else reading it.
+  Ctrl and a line select key is a binding only if the user made one, and if
+  they did, one press both swaps the page and does what they bound. The
+  setting says so where it is chosen.
 - **The modifier is an app-wide setting**, not part of a profile, since which
   one is free depends on how DCS is bound on that PC, not on the aircraft.
-- **Needs first:** a SimAppPro capture of the MCDU's input report for the key
-  bits, and a keyboard reader in the daemon.
-- **A disabled slot's key is ignored**, so the page shown stays; a blank
-  slot's takes the screen dark.
+- **Every input belongs to the device it comes from**, as every lamp does.
+  The keyboard is one source and owns Ctrl, Shift and Alt, and the modifier
+  setting names one of those. The MCDU's line select keys are the MCDU's, and
+  a panel's buttons are listed in its own entry in `devices.json`, by name and
+  by the number Windows gives them:
+
+  ```jsonc
+  "buttons": [
+    { "number": 1, "name": "LSK_1L", "label": "LSK 1L", "verified": true },
+    // ... LSK_2L to LSK_6L, numbers 2 to 6
+    { "number": 7, "name": "LSK_1R", "label": "LSK 1R", "verified": true },
+  ],
+  ```
+
+  Nothing outside the entry knows a button's number: a page key, and any
+  mapping added later, names a button of that device. So a new panel brings
+  its own `buttons` list, nothing about the MCDU carries over to it, and
+  adding a device to map needs no change anywhere else. Only captured buttons
+  are listed; the MCDU's other keys wait for a capture of their own.
+
+  The keyboard is not a panel and has no entry in `devices.json`. Its three
+  inputs are fixed by Windows, one virtual key for both sides of each, and
+  live with the keyboard reader.
+- **The page keys are some of the device's buttons**, by name:
+
+  ```jsonc
+  "page_keys": ["LSK_1L", "LSK_2L", "LSK_3L", "LSK_4L", "LSK_5L", "LSK_6L"]
+  ```
+
+  Slot n is the nth key listed, and a device has as many slots as it lists
+  keys, so a CDU with five line select keys or seven has five or seven slots
+  and nothing assumes six. That replaces the fixed six under "Slots in a
+  profile", and the editor labels each slot with its button's `label`. A
+  device that takes pages and lists no keys has one slot, its start page,
+  which nothing swaps. A page key naming no button of its device is refused
+  when `devices.json` loads, and `validate` refuses a profile whose slots do
+  not number the device's keys. `key` in a slot stays reserved and null.
+- **The MCDU's page keys are buttons 1 to 6**, LSK 1L to 6L, the numbers
+  SimAppPro lights. The same list goes in all three MCDU entries. Captured on the Captain 2026-09-23: one game controller
+  collection (usage page 0x01, usage 0x04), report id 1, 64 bytes, 128
+  buttons. LSK 1L to 6L are bits 0 to 5 of byte 1 and LSK 1R is bit 6, button
+  7. Bytes 17 to 24 hold two 16 bit values, each sent twice, that change with
+  no key pressed, so the reader acts on buttons going down, never on the
+  report changing. The Co-Pilot and Observer are the same panel under another
+  PID and list the same keys.
+- **Read the way Windows reads them.** Button numbers come from Windows' own
+  HID parser (`HidP_GetUsages`) rather than a descriptor walk of ours, so they
+  are the numbers SimAppPro lights and DCS binds. The capture checked that
+  they agree with the raw bits. The modifier is asked of the keyboard
+  (`GetAsyncKeyState`) when a key goes down, since the panel's report says
+  nothing about it: pressing with and without Ctrl sent the same bytes. Both
+  work while DCS has focus, which the capture also checked. The two readers
+  are kept apart as their inputs are: `crates/dsc-cli/src/buttons.rs` reads a
+  panel's buttons and `crates/dsc-cli/src/keyboard.rs` the keyboard's
+  modifiers, and the daemon can take both as they are.
+- **Each MCDU swaps on its own.** Its keys change its own screen. A follower
+  shares the leader's slots and start page, so both start alike, but its keys
+  swap only its own screen, and two seats can look at different pages from
+  one setup. A follower that wants different slots gets a setup of its own,
+  as now.
+- **A disabled slot's key is ignored**, so the page shown stays. A blank
+  slot's takes the screen dark. The key of the slot already showing does
+  nothing.
+- **One swap per press**, when the key goes down, however long it is held.
 - **The page in use is not saved.** Every aircraft load starts on `start`.
-- **One swap per press**, however long it is held.
+- **A swap is a resolve and one repaint.** The new slot's fields become the
+  device's display fields, as the start page's do, and only that screen is
+  painted.
 
 ## Open questions
 

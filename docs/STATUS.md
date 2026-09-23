@@ -22,6 +22,16 @@ wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
 
+**Designed 2026-09-23: page swapping, on
+`feature/mcdu-page-selection-inputs`.** The design is "Swapping" under "MCDU
+pages" in [CONFIG.md](CONFIG.md), settled with Cory and resting on live
+captures. Nothing is built yet except the capture command, `dcs-signal
+buttons`, whose readers the daemon can reuse: `buttons.rs` for a panel's
+buttons and `keyboard.rs` for the keyboard's modifiers, in `crates/dsc-cli/src`.
+Inputs belong to their device (Cory, 2026-09-23): a panel lists its own
+buttons in `devices.json`, and the keyboard owns Ctrl, Shift and Alt. Start
+the build from the TODO entry.
+
 **Built 2026-09-23: MCDU pages, on `feature/mcdu-page-profiles`.** The design
 is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
 

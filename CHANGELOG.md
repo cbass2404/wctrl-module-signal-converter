@@ -19,12 +19,13 @@ unless this says what moved.
 
 - **Import only part of a profile.** Import... can now merge a profile into
   one you already have on the same module instead of bringing it in whole.
-  Tick the panels whose lights you want and the screen lines you want; you are
-  shown exactly what will be added, replaced and removed, and nothing changes
-  until you confirm.
+  Tick the lights you want, a lamp at a time or a whole panel at once, and the
+  screen lines you want; you are shown exactly what will be added, replaced and
+  removed, and nothing changes until you confirm.
 - **Merge from another profile.** Profiles that read the same module, such as
   the F-14 and F-14BU, have a Merge from... button that takes lights and
   screen lines from one into the other the same way, so a change made in one
   no longer has to be made again by hand.
 - **Select all** heads the aircraft list in New profile and Import whenever
-  there is more than one aircraft to choose.
+  there is more than one aircraft to choose. Import starts with every aircraft
+  ticked; taking one from another profile is still asked first.

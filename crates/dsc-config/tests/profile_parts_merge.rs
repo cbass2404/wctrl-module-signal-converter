@@ -1,13 +1,13 @@
 //! `merge::merge` rewrites a profile the user owns, on their say-so, so what it
 //! takes and what it leaves is pinned here.
 //!
-//! The rule: a picked panel takes the source's assigned lamps and nothing
-//! else; a picked line becomes the source's line; everything not picked is
-//! left exactly as it was.
+//! The rule: a picked lamp takes the source's row if it assigns one; a picked
+//! line becomes the source's line; everything not picked is left exactly as it
+//! was.
 
 use std::path::Path;
 
-use dsc_config::merge::{self, LinePick, Pick};
+use dsc_config::merge::{self, LampPick, LinePick, Pick};
 use dsc_config::{DeviceInventory, DisplayCatalogue, Profile};
 
 fn inventory() -> DeviceInventory {
@@ -18,6 +18,10 @@ fn inventory() -> DeviceInventory {
 fn displays() -> DisplayCatalogue {
     DisplayCatalogue::load_dir(&Path::new(env!("CARGO_MANIFEST_DIR")).join("../../data/displays"))
         .expect("the display maps load")
+}
+
+fn lamps(device: &str, leds: &[&str]) -> Vec<LampPick> {
+    leds.iter().map(|l| LampPick { device: device.into(), led: (*l).into() }).collect()
 }
 
 fn profile(json: &str) -> Profile {
@@ -35,7 +39,7 @@ fn source() -> Profile {
         { "device": "TAKEOFF_PLANEL_2", "led": "NOSE",
           "conditions": [{ "source": "NOSE_LIGHT", "on_when": { "gte": 1 } }] },
         { "device": "TAKEOFF_PLANEL_2", "led": "Backlight", "conditions": [] },
-        { "device": "CarrierAce_UFC", "led": "Backlight", "always": true }
+        { "device": "CarrierAce_UFC", "led": "LCDBacklight", "always": true }
       ],
       "readouts": [
         { "device": "MCDU_Captain", "display": "MCDU", "cells": "0-9", "source": "LINE_A" },
@@ -53,7 +57,7 @@ fn target() -> Profile {
         { "device": "TAKEOFF_PLANEL_2", "led": "HOOK",
           "conditions": [{ "source": "OTHER_HOOK", "on_when": { "gte": 1 } }] },
         { "device": "TAKEOFF_PLANEL_2", "led": "Backlight", "always": true, "note": "mine" },
-        { "device": "CarrierAce_UFC", "led": "Backlight", "conditions": [] }
+        { "device": "CarrierAce_UFC", "led": "LCDBacklight", "conditions": [] }
       ],
       "readouts": [
         { "device": "MCDU_Captain", "display": "MCDU", "cells": "12-20", "source": "OLD_A" },
@@ -67,16 +71,20 @@ fn target() -> Profile {
 #[test]
 fn parts_offer_only_what_the_source_sets_up() {
     let parts = merge::parts(&source(), &inventory(), &displays());
-    let lights: Vec<(&str, usize)> = parts.lights.iter().map(|l| (l.device.as_str(), l.lamps)).collect();
-    assert!(lights.contains(&("TAKEOFF_PLANEL_2", 2)), "{lights:?}");
-    assert!(lights.contains(&("CarrierAce_UFC", 1)), "{lights:?}");
+    let lights: Vec<(&str, Vec<&str>)> = parts
+        .lights
+        .iter()
+        .map(|l| (l.device.as_str(), l.lamps.iter().map(|p| p.led.as_str()).collect()))
+        .collect();
+    assert!(lights.contains(&("TAKEOFF_PLANEL_2", vec!["NOSE", "HOOK"])), "{lights:?}");
+    assert!(lights.contains(&("CarrierAce_UFC", vec!["LCDBacklight"])), "{lights:?}");
     let lines: Vec<(&str, usize)> = parts.lines.iter().map(|l| (l.line.as_str(), l.fields)).collect();
     assert_eq!(lines, vec![("Row 1", 1), ("Row 2", 1)], "top to bottom, by region");
 }
 
 #[test]
 fn a_picked_panel_takes_assigned_lamps_and_keeps_the_rest() {
-    let pick = Pick { lights: vec!["TAKEOFF_PLANEL_2".into()], lines: vec![] };
+    let pick = Pick { lights: lamps("TAKEOFF_PLANEL_2", &["HOOK", "NOSE", "Backlight"]), lines: vec![] };
     let merged = merge::merge(&target(), &source(), &pick, &inventory(), &displays()).unwrap();
     let row = |led: &str| {
         merged.profile.bindings.iter().find(|b| b.device == "TAKEOFF_PLANEL_2" && b.led == led).unwrap()
@@ -89,6 +97,21 @@ fn a_picked_panel_takes_assigned_lamps_and_keeps_the_rest() {
     let c = &merged.changes[0];
     assert_eq!((c.added, c.replaced, c.removed, c.unchanged), (1, 1, 0, 0));
     assert_eq!(merged.profile.readouts.len(), 2, "no line picked, no field moved");
+}
+
+#[test]
+fn a_lamp_not_picked_keeps_the_target_row() {
+    let pick = Pick { lights: lamps("TAKEOFF_PLANEL_2", &["NOSE"]), lines: vec![] };
+    let merged = merge::merge(&target(), &source(), &pick, &inventory(), &displays()).unwrap();
+    let hook = merged
+        .profile
+        .bindings
+        .iter()
+        .find(|b| b.device == "TAKEOFF_PLANEL_2" && b.led == "HOOK")
+        .unwrap();
+    assert_eq!(hook.conditions[0].source, "OTHER_HOOK");
+    let c = &merged.changes[0];
+    assert_eq!((c.added, c.replaced, c.removed, c.unchanged), (1, 0, 0, 0));
 }
 
 #[test]

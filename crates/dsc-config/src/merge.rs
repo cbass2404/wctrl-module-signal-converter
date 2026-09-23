@@ -6,8 +6,8 @@
 //! exists. The F-14 and F-14BU read one module and ship apart, so a change
 //! worth having in both was made twice by hand.
 //!
-//! What can be taken is lamps, a panel at a time, and screen fields, a line at
-//! a time. A line is a region of the display map, since that is the unit the
+//! What can be taken is lamps, one at a time or a panel at once, and screen
+//! fields, a line at a time. A line is a region of the display map, since that is the unit the
 //! editor already offers for placing a field, and a field belongs to the
 //! region its first cell is in. Only between profiles on one module, because
 //! signals are named by id and an id means something only in its own
@@ -25,13 +25,21 @@ use crate::{CellRange, DeviceInventory, DisplayCatalogue, Profile, Readout};
 /// Where a field sits when no region of its display holds its first cell.
 pub const OTHER_CELLS: &str = "Other cells";
 
+/// One lamp that can be taken.
+#[derive(Debug, Clone, Serialize)]
+pub struct LampPart {
+    pub led: String,
+    pub label: String,
+}
+
 /// A panel whose lamps can be taken.
 #[derive(Debug, Clone, Serialize)]
 pub struct LightPart {
     pub device: String,
     pub label: String,
-    /// Lamps the source assigns on it. An unassigned lamp is not offered.
-    pub lamps: usize,
+    /// Lamps the source assigns on it, in the panel's order. An unassigned
+    /// lamp is not offered.
+    pub lamps: Vec<LampPart>,
 }
 
 /// One line of a screen whose fields can be taken.
@@ -52,6 +60,13 @@ pub struct Parts {
     pub lines: Vec<LinePart>,
 }
 
+/// A lamp picked for merging.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct LampPick {
+    pub device: String,
+    pub led: String,
+}
+
 /// A line picked for merging.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct LinePick {
@@ -64,7 +79,7 @@ pub struct LinePick {
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Pick {
     #[serde(default)]
-    pub lights: Vec<String>,
+    pub lights: Vec<LampPick>,
     #[serde(default)]
     pub lines: Vec<LinePick>,
 }
@@ -140,8 +155,8 @@ fn same<T: Serialize>(a: &T, b: &T) -> bool {
     serde_json::to_value(a).ok() == serde_json::to_value(b).ok()
 }
 
-/// What `source` could give another profile: every panel with a lamp it
-/// assigns, and every screen line with a field on it.
+/// What `source` could give another profile: every lamp it assigns, by panel,
+/// and every screen line with a field on it.
 ///
 /// A panel the source has following another is left out, since its own rows
 /// are not what flies there.
@@ -151,12 +166,20 @@ pub fn parts(source: &Profile, devices: &DeviceInventory, displays: &DisplayCata
         if source.follows.contains_key(&spec.key) {
             continue;
         }
-        let lamps = source
-            .bindings
-            .iter()
-            .filter(|b| b.device == spec.key && !b.is_placeholder())
-            .count();
-        if lamps > 0 {
+        let lamps: Vec<LampPart> = spec
+            .leds()
+            .filter(|(_, l)| {
+                source
+                    .bindings
+                    .iter()
+                    .any(|b| b.device == spec.key && b.led == l.name && !b.is_placeholder())
+            })
+            .map(|(_, l)| LampPart {
+                led: l.name.clone(),
+                label: if l.label.is_empty() { l.name.clone() } else { l.label.clone() },
+            })
+            .collect();
+        if !lamps.is_empty() {
             out.lights.push(LightPart {
                 device: spec.key.clone(),
                 label: spec.display_name.clone(),
@@ -192,11 +215,13 @@ pub fn parts(source: &Profile, devices: &DeviceInventory, displays: &DisplayCata
 
 /// `target` with the lamps and lines in `pick` taken from `source`.
 ///
-/// A picked panel takes every lamp the source assigns there, in place of the
-/// target's row for that lamp; a lamp the source leaves unassigned keeps the
-/// target's row. A picked line becomes exactly the source's line: its fields
-/// arrive and the target's other fields on it go, since two fields on one
-/// line would fight over its cells.
+/// A picked lamp takes the source's row in place of the target's; a lamp the
+/// source leaves unassigned keeps the target's row, and so does every lamp not
+/// picked. What happened is told a panel at a time.
+///
+/// A picked line becomes exactly the source's line: its fields arrive and the
+/// target's other fields on it go, since two fields on one line would fight
+/// over its cells.
 ///
 /// Refused when the two read different modules. Whether the result would load
 /// is not decided here; the caller checks it the way a save is checked.
@@ -217,7 +242,13 @@ pub fn merge(
     let mut changes = Vec::new();
     let mut touched: Vec<&str> = Vec::new();
 
-    for device in &pick.lights {
+    let mut panels: Vec<&str> = Vec::new();
+    for lamp in &pick.lights {
+        if !panels.contains(&lamp.device.as_str()) {
+            panels.push(&lamp.device);
+        }
+    }
+    for device in panels {
         let mut change = Change {
             label: device_label(devices, device),
             added: 0,
@@ -226,7 +257,12 @@ pub fn merge(
             unchanged: 0,
             fields: false,
         };
-        for b in source.bindings.iter().filter(|b| &b.device == device && !b.is_placeholder()) {
+        let picked = |b: &&crate::Binding| {
+            b.device == device
+                && !b.is_placeholder()
+                && pick.lights.iter().any(|l| l.device == device && l.led == b.led)
+        };
+        for b in source.bindings.iter().filter(picked) {
             match profile.bindings.iter_mut().find(|t| t.device == b.device && t.led == b.led) {
                 Some(t) if same(t, b) => change.unchanged += 1,
                 Some(t) => {

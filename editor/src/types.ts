@@ -558,7 +558,8 @@ export interface ImportPreview {
 export interface LightPart {
   device: string;
   label: string;
-  lamps: number;
+  /** In the panel's order. */
+  lamps: { led: string; label: string }[];
 }
 
 /** One line of a screen whose fields can be merged into another profile. */
@@ -576,9 +577,9 @@ export interface MergeParts {
   lines: LinePart[];
 }
 
-/** What the user ticked to merge: panels by device, lines by name. */
+/** What the user ticked to merge: lamps and lines by name. */
 export interface MergePick {
-  lights: string[];
+  lights: { device: string; led: string }[];
   lines: { device: string; display: string; line: string }[];
 }
 

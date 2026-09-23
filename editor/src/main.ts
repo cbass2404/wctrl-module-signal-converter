@@ -114,22 +114,28 @@ function clear(): void {
  * unticked or part ticked as they are. Nests: going down, what it ticks is
  * told with a change event; coming up, a box that has taken on its boxes'
  * state says so with an input event, so every level of a box over boxes over
- * boxes stays true.
+ * boxes stays true. While it ticks its boxes it does not listen to them, or
+ * the first one ticked would make it part ticked and stop the rest.
  */
 function parentBox(children: HTMLInputElement[]): HTMLInputElement {
   const all = el("input", { type: "checkbox" });
+  let setting = false;
   const reflect = (): void => {
+    if (setting) return;
     const n = children.filter((b) => b.checked).length;
     all.checked = n === children.length;
     all.indeterminate = n > 0 && n < children.length;
     all.dispatchEvent(new Event("input"));
   };
   all.addEventListener("change", () => {
+    const on = all.checked;
+    setting = true;
     for (const b of children) {
-      if (b.checked === all.checked && !b.indeterminate) continue;
-      b.checked = all.checked;
+      if (b.checked === on && !b.indeterminate) continue;
+      b.checked = on;
       b.dispatchEvent(new Event("change"));
     }
+    setting = false;
     reflect();
   });
   for (const b of children) {
@@ -142,9 +148,8 @@ function parentBox(children: HTMLInputElement[]): HTMLInputElement {
 
 /**
  * Head a checklist of aircraft with Select all, when there is more than one to
- * select. It starts ticked when every aircraft does; one another profile
- * flies starts unticked, as it always has, so the box then shows part ticked
- * rather than taking an aircraft nobody asked to move.
+ * select. It starts ticked when every aircraft does, and part ticked when
+ * only some do.
  */
 function selectAll(list: HTMLElement, boxes: HTMLInputElement[]): void {
   if (boxes.length < 2) return;
@@ -157,8 +162,8 @@ function plural(n: number, one: string, many = `${one}s`): string {
 
 /**
  * The lights and screen lines a profile could give another, every one ticked
- * to start with. Lights go a panel at a time; screens a line at a time, under
- * a box per screen, and every group has a box over it.
+ * to start with. Lights go a lamp at a time under a box per panel, screens a
+ * line at a time under a box per screen, and every group has a box over it.
  */
 function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLElement; pick: () => MergePick } {
   const list = el("div", { class: "checklist" });
@@ -168,23 +173,34 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
     b.addEventListener("change", onChange);
     return b;
   };
-  const lights: [HTMLInputElement, string][] = [];
+  const lights: [HTMLInputElement, { device: string; led: string }][] = [];
   const lines: [HTMLInputElement, LinePart][] = [];
 
   if (parts.lights.length > 0) {
-    const rows = parts.lights.map((l) => {
-      const b = tick();
-      lights.push([b, l.device]);
-      return el(
-        "label",
-        { class: "sub" },
-        b,
-        el("span", {}, l.label),
-        el("span", { class: "meta" }, plural(l.lamps, "lamp")),
+    const panelBoxes: HTMLInputElement[] = [];
+    const rows: HTMLElement[] = [];
+    for (const panel of parts.lights) {
+      const boxes = panel.lamps.map((lamp) => {
+        const b = tick();
+        lights.push([b, { device: panel.device, led: lamp.led }]);
+        return b;
+      });
+      const box = parentBox(boxes);
+      panelBoxes.push(box);
+      rows.push(
+        el(
+          "label",
+          { class: "sub" },
+          box,
+          el("span", {}, panel.label),
+          el("span", { class: "meta" }, plural(panel.lamps.length, "lamp")),
+        ),
       );
-    });
-    const all = parentBox(lights.map(([b]) => b));
-    list.append(el("label", { class: "group" }, all, el("span", {}, "Lights")), ...rows);
+      panel.lamps.forEach((lamp, i) => {
+        rows.push(el("label", { class: "sub2" }, boxes[i] as HTMLInputElement, el("span", {}, lamp.label)));
+      });
+    }
+    list.append(el("label", { class: "group" }, parentBox(panelBoxes), el("span", {}, "Lights")), ...rows);
   }
 
   if (parts.lines.length > 0) {
@@ -532,7 +548,9 @@ async function showImport(): Promise<void> {
   for (const a of picked.aircraft) {
     const owner = claimedBy.get(a);
     const box = el("input", { type: "checkbox", value: a });
-    box.checked = owner === undefined;
+    // Every aircraft it was made for starts ticked, even one another profile
+    // flies: taking it is still asked before anything moves.
+    box.checked = true;
     boxes.push(box);
     const row = el("label", {}, box, el("span", {}, a));
     if (owner) row.append(el("span", { class: "meta" }, `in ${owner.name}`));

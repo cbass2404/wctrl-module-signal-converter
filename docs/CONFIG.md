@@ -542,9 +542,10 @@ holds it.
 
 **Merging part of a profile.** An import can instead be merged into a profile
 already here on the same module, and Merge from... does the same between two
-profiles here. Lights are taken a panel at a time: every lamp the source
-assigns on that panel replaces the target's row for it, and a lamp the source
-leaves unassigned keeps the target's row. Screens are taken a line at a time,
+profiles here. Lights are taken a lamp at a time, ticked singly or a panel at
+once: each lamp picked that the source assigns replaces the target's row for
+it, and a lamp the source leaves unassigned, or that is not picked, keeps the
+target's row. Only lamps the source assigns are offered. Screens are taken a line at a time,
 a line being a region of the display map and a field belonging to the region
 holding its first cell: the line becomes exactly the source's, so fields the
 target had there go. A panel the source has following another is not offered,

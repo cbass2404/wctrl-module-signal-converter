@@ -505,6 +505,8 @@ fn main() {
             share::export_profile,
             share::import_pick,
             share::import_profile,
+            share::merge_parts,
+            share::merge_profile,
             learn_start,
             learn_poll,
             learn_again,

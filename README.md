@@ -198,7 +198,10 @@ A few more things the editor does:
   **Import...** brings one in. It is checked first, and refused if it would not
   load here. If it is for an aircraft another profile flies, you are asked
   before the aircraft moves, and asked again before a profile left with no
-  aircraft is deleted. Saying no to the delete cancels the import.
+  aircraft is deleted. Saying no to the delete cancels the import. Or merge it
+  into a profile you already have for the same module, taking only the panels'
+  lights and the screen lines you tick. **Merge from...** does the same between
+  two of your own profiles, such as the F-14 and F-14BU.
 - **Delete** removes a profile. If that leaves an aircraft with no profile, you
   choose which profile takes it, so splitting a profile and deleting a half
   gives its aircraft back.

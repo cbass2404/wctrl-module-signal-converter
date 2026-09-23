@@ -14,6 +14,7 @@ pub mod daemon;
 pub mod display;
 pub mod log;
 pub mod mcdu_font;
+pub mod merge;
 pub mod nightly_only;
 pub mod paths;
 

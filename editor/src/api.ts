@@ -13,6 +13,10 @@ import type {
   FontGlyphs,
   ImportPreview,
   LearnReport,
+  MergeParts,
+  MergePick,
+  MergeReport,
+  MergeSource,
   ModuleChoice,
   Profile,
   ProfileSummary,
@@ -106,6 +110,16 @@ export const importPick = () => invoke<ImportPreview | null>("import_pick");
  */
 export const importProfile = (path: string, name: string, aircraft: string[], remove: string[]) =>
   invoke<string>("import_profile", { path, name, aircraft, delete: remove });
+
+/** What the profile in `file` could give another on its module. */
+export const mergeParts = (file: string) => invoke<MergeParts>("merge_parts", { file });
+/**
+ * Take the picked lamps and lines from `from` into the profile `into`. With
+ * `write` false nothing is saved, and the report says what it would do.
+ * Refused if the result would not load.
+ */
+export const mergeProfile = (from: MergeSource, into: string, pick: MergePick, write: boolean) =>
+  invoke<MergeReport>("merge_profile", { from, into, pick, write });
 
 // Learn mode. The only commands that touch the DCS-BIOS stream, and the only
 // ones that leave anything running in the backend between calls.

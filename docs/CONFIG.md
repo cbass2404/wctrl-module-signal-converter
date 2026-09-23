@@ -540,6 +540,21 @@ and may fly only aircraft it came with. Both file dialogs are run by the
 backend; the window has no permission to open one. `editor/src-tauri/src/share.rs`
 holds it.
 
+**Merging part of a profile.** An import can instead be merged into a profile
+already here on the same module, and Merge from... does the same between two
+profiles here. Lights are taken a panel at a time: every lamp the source
+assigns on that panel replaces the target's row for it, and a lamp the source
+leaves unassigned keeps the target's row. Screens are taken a line at a time,
+a line being a region of the display map and a field belonging to the region
+holding its first cell: the line becomes exactly the source's, so fields the
+target had there go. A panel the source has following another is not offered,
+since its own rows are not what flies. Nothing else moves: name, aircraft,
+font, disabled panels and `follows` stay the target's, and merging onto a
+panel the target follows with, or has turned off, is said in the confirm. The
+merge is worked out first without writing, checked the way a save is, and put
+to the user as what is added, replaced and removed; it is written only on
+confirm. `crates/dsc-config/src/merge.rs` holds it.
+
 ## The source dropdown
 
 This is the hard part of the UI. A module carries hundreds to 1,440 signals, so

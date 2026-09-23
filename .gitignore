@@ -48,6 +48,10 @@
 *.bak
 /captures/
 
+# Python bytecode from running the scripts in tools/.
+__pycache__/
+*.pyc
+
 # Local tool state
 .claude/settings.local.json
 

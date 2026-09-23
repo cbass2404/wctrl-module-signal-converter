@@ -25,6 +25,19 @@ const MODULE: &str = "F-16C_50";
 const PITCH: [f64; 2] = [-1.5, 1.5];
 const ROLL: [f64; 2] = [-3.0, 3.0];
 
+/// The profile as `with_pages` leaves it: every field on the MCDU marked as
+/// its start page's. A text grid takes its fields only from a page, and
+/// these fixtures hold the fields a page would put there.
+fn resolved(p: &Profile) -> Profile {
+    let mut p = p.clone();
+    for r in &mut p.readouts {
+        if r.display == "MCDU" {
+            r.page = Some("fixture".into());
+        }
+    }
+    p
+}
+
 fn r(p: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(p)
 }
@@ -124,8 +137,8 @@ fn the_band_fixture_is_valid() {
     let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
     let module = e.catalogue().module(&p.module).expect("the module");
-    let refusals: Vec<String> = p
-        .problems(module, &devices, &displays)
+    let refusals: Vec<String> = resolved(&p)
+        .problems(module, &devices, &displays, &dsc_config::PageLibrary::default())
         .iter()
         .map(|e| e.to_string())
         .collect();

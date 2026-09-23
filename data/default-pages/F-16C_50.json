@@ -1,0 +1,357 @@
+{
+  "module": "F-16C_50",
+  "pages": [
+    {
+      "id": "f16-flight",
+      "name": "Flight",
+      "display": "MCDU",
+      "fields": [
+        {
+          "cells": "24-47",
+          "content": [
+            {
+              "gap": true,
+              "width": 2
+            },
+            {
+              "text": "FUEL",
+              "small": true
+            },
+            {
+              "gap": true,
+              "width": 5
+            },
+            {
+              "text": "RPM",
+              "small": true
+            },
+            {
+              "gap": true
+            },
+            {
+              "text": "NOZ",
+              "small": true
+            },
+            {
+              "gap": true,
+              "width": 4
+            }
+          ]
+        },
+        {
+          "cells": "48-71",
+          "content": [
+            {
+              "gap": true,
+              "width": 2
+            },
+            {
+              "source": "FUELTOTALIZER_10K",
+              "width": 1,
+              "reads": [
+                0.0,
+                10.0
+              ],
+              "round": "down",
+              "wrap": 10.0,
+              "colour": "amber"
+            },
+            {
+              "source": "FUELTOTALIZER_1K",
+              "width": 1,
+              "reads": [
+                0.0,
+                10.0
+              ],
+              "round": "down",
+              "wrap": 10.0,
+              "colour": "amber"
+            },
+            {
+              "source": "FUELTOTALIZER_100",
+              "width": 1,
+              "reads": [
+                0.0,
+                10.0
+              ],
+              "round": "down",
+              "wrap": 10.0,
+              "colour": "amber"
+            },
+            {
+              "text": "00",
+              "colour": "amber"
+            },
+            {
+              "text": "lbs",
+              "width": 3,
+              "colour": "white"
+            },
+            {
+              "gap": true,
+              "width": 1
+            },
+            {
+              "source": "ENGINE_TACHOMETER",
+              "width": 3,
+              "align": "right",
+              "reads": [
+                0.0,
+                116.0
+              ],
+              "colour": "amber"
+            },
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "source": "ENGINE_NOZZLE_POSITION",
+              "width": 3,
+              "align": "right",
+              "reads": [
+                0.0,
+                110.0
+              ],
+              "colour": "amber"
+            }
+          ]
+        },
+        {
+          "cells": "96-119",
+          "content": [
+            {
+              "gap": true,
+              "width": 2
+            },
+            {
+              "text": "CH",
+              "small": true
+            },
+            {
+              "gap": true,
+              "width": 2
+            },
+            {
+              "text": "FL",
+              "small": true
+            },
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "text": "PRGM",
+              "small": true
+            },
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "text": "MODE",
+              "small": true
+            }
+          ]
+        },
+        {
+          "cells": "120-143",
+          "content": [
+            {
+              "source": "CMDS_CH_AMOUNT",
+              "width": 4,
+              "colour": "amber"
+            },
+            {
+              "source": "CMDS_FL_AMOUNT",
+              "width": 4,
+              "colour": "amber"
+            },
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "source": "CMDS_PROG_KNB",
+              "width": 3,
+              "value_aliases": {
+                "0": {
+                  "text": "BIT",
+                  "colour": "red"
+                },
+                "1": "1",
+                "2": "2",
+                "3": "3",
+                "4": "4"
+              },
+              "colour": "amber"
+            },
+            {
+              "gap": true,
+              "width": 4
+            },
+            {
+              "source": "CMDS_MODE_KNB",
+              "width": 4,
+              "value_aliases": {
+                "0": {
+                  "text": "OFF",
+                  "colour": "red"
+                },
+                "1": {
+                  "text": "STBY",
+                  "colour": "red"
+                },
+                "2": "MAN",
+                "3": {
+                  "text": "SEMI",
+                  "colour": "green"
+                },
+                "4": {
+                  "text": "AUTO",
+                  "colour": "green"
+                },
+                "5": "BYP"
+              },
+              "colour": "amber"
+            }
+          ]
+        },
+        {
+          "cells": "264-287",
+          "content": [
+            {
+              "gap": true,
+              "rule": true,
+              "label": "TRIM",
+              "label_colour": "white",
+              "colour": "amber",
+              "small": true
+            }
+          ]
+        },
+        {
+          "cells": "288-311",
+          "content": [
+            {
+              "gap": true,
+              "width": 1
+            },
+            {
+              "text": "PITCH",
+              "small": true
+            },
+            {
+              "gap": true
+            },
+            {
+              "text": "ROLL",
+              "small": true
+            },
+            {
+              "gap": true
+            },
+            {
+              "text": "YAW"
+            },
+            {
+              "gap": true
+            }
+          ]
+        },
+        {
+          "cells": "312-335",
+          "content": [
+            {
+              "gap": true,
+              "width": 1
+            },
+            {
+              "source": "PITCHTRIMIND",
+              "reads": [
+                -1.5,
+                1.5
+              ],
+              "decimals": 1,
+              "abs": true,
+              "colour": "amber"
+            },
+            {
+              "source": "PITCHTRIMIND",
+              "width": 3,
+              "align": "right",
+              "reads": [
+                -1.5,
+                1.5
+              ],
+              "decimals": 1,
+              "value_aliases": {
+                "-1.5..-0.1": "ND",
+                "0": "",
+                "0.1..1.5": "NU"
+              },
+              "colour": "white"
+            },
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "source": "ROLLTRIMIND",
+              "reads": [
+                -3.0,
+                3.0
+              ],
+              "decimals": 1,
+              "abs": true,
+              "colour": "amber"
+            },
+            {
+              "source": "ROLLTRIMIND",
+              "width": 3,
+              "reads": [
+                -3.0,
+                3.0
+              ],
+              "decimals": 1,
+              "value_aliases": {
+                "-3..-0.1": "RWD",
+                "0": "",
+                "0.1..3": "LWD"
+              }
+            },
+            {
+              "gap": true,
+              "width": 2
+            },
+            {
+              "source": "YAW_TRIM",
+              "reads": [
+                -5.0,
+                5.0
+              ],
+              "decimals": 1,
+              "abs": true,
+              "colour": "amber"
+            },
+            {
+              "source": "YAW_TRIM",
+              "width": 1,
+              "reads": [
+                -5.0,
+                5.0
+              ],
+              "decimals": 1,
+              "value_aliases": {
+                "-5..-0.1": "L",
+                "0": "",
+                "0.1..5": "R"
+              }
+            }
+          ],
+          "note": "pitch is read in 0.5g's with + equaling nose up and - equaling nose down per dot\nroll is read in 1.0 degrees/second increments per dot - equaling right wing down + equaling left wing down per dot\nyaw is read in 0.5 degrees deflection per dot with left yaw equaling - and right yaw equaling + per dot"
+        }
+      ]
+    }
+  ]
+}

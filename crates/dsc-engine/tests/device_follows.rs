@@ -15,6 +15,19 @@ use dsc_engine::{Batch, Engine};
 const CAPTAIN: &str = "MCDU_Captain";
 const COPILOT: &str = "MCDU_CoPilot";
 
+/// The profile as `with_pages` leaves it: every field on the MCDU marked as
+/// its start page's. A text grid takes its fields only from a page, and
+/// these fixtures hold the fields a page would put there.
+fn resolved(p: &Profile) -> Profile {
+    let mut p = p.clone();
+    for r in &mut p.readouts {
+        if r.display == "MCDU" {
+            r.page = Some("fixture".into());
+        }
+    }
+    p
+}
+
 fn r(p: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(p)
 }
@@ -90,7 +103,7 @@ fn problems(p: &Profile) -> Vec<Error> {
     let cat = Catalogue::load_dir(&r("data/catalogue")).expect("catalogue");
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
     let module = cat.module(&p.module).expect("the module");
-    p.problems(module, &devices, &displays)
+    resolved(p).problems(module, &devices, &displays, &dsc_config::PageLibrary::default())
 }
 
 #[test]

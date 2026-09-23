@@ -16,6 +16,19 @@ use dsc_engine::{Batch, Engine, LcdWrite};
 
 const MCDU: &str = "MCDU_Captain";
 
+/// The profile as `with_pages` leaves it: every field on the MCDU marked as
+/// its start page's. A text grid takes its fields only from a page, and
+/// these fixtures hold the fields a page would put there.
+fn resolved(p: &Profile) -> Profile {
+    let mut p = p.clone();
+    for r in &mut p.readouts {
+        if r.display == "MCDU" {
+            r.page = Some("fixture".into());
+        }
+    }
+    p
+}
+
 fn r(p: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(p)
 }
@@ -87,7 +100,7 @@ fn refusals(p: &Profile) -> Vec<String> {
     let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
     let module = e.catalogue().module(&p.module).expect("the module");
-    p.problems(module, &devices, &displays)
+    resolved(p).problems(module, &devices, &displays, &dsc_config::PageLibrary::default())
         .iter()
         .map(|e| e.to_string())
         .collect()
@@ -349,7 +362,7 @@ fn chinook() -> Profile {
         })
     };
     serde_json::from_value(serde_json::json!({
-        "name": "CH-47F", "aircraft": ["CH-47Fbl1"], "module": "CH-47F",
+        "schema_version": 2, "name": "CH-47F", "aircraft": ["CH-47Fbl1"], "module": "CH-47F",
         "readouts": [field(0, "PLT"), field(1, "CPLT")]
     }))
     .expect("profile")
@@ -418,8 +431,8 @@ fn a_colour_line_is_checked_like_any_other_signal() {
     let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
     let module = e.catalogue().module(&p.module).unwrap();
-    let problems: Vec<String> = p
-        .problems(module, &devices, &displays)
+    let problems: Vec<String> = resolved(&p)
+        .problems(module, &devices, &displays, &dsc_config::PageLibrary::default())
         .iter()
         .map(|e| e.to_string())
         .collect();
@@ -428,7 +441,7 @@ fn a_colour_line_is_checked_like_any_other_signal() {
     let flags = p.flags(module);
     assert!(flags.iter().any(|f| f.source == "PLT_CDU_LINE1_COLOUR"), "{flags:?}");
     assert!(problems.iter().any(|e| e.contains("\"gr\"")), "{problems:?}");
-    assert_eq!(chinook().problems(module, &devices, &displays).len(), 0);
+    assert_eq!(resolved(&chinook()).problems(module, &devices, &displays, &dsc_config::PageLibrary::default()).len(), 0);
 }
 
 /// The F-14BU fixture with the Captain's screen bound to the CDNU's own knob.

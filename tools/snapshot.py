@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
-"""Keep data/defaults-previous holding the defaults the last release shipped.
+"""Keep the -previous folders holding what the last release shipped.
 
-  python tools/snapshot.py --check    does it still match the last tag
-  python tools/snapshot.py            refresh it from data/defaults
+  python tools/snapshot.py --check    do they still match the last tag
+  python tools/snapshot.py            refresh them from what ships now
+
+Two pairs, handled alike: data/defaults into data/defaults-previous, and the
+MCDU pages, data/default-pages into data/default-pages-previous. An update
+reconciles the profiles and the pages apart, each against its own snapshot.
 
 A release step, run by tools/release.cmd at both ends. The daemon corrects a
 display field an update changed only while that field is still exactly what the
@@ -22,6 +26,9 @@ nothing.
 Compared as parsed JSON rather than as text, which is what the daemon does
 too: `replace` and `aliases` are hash maps whose key order on disk is
 arbitrary, and line endings are git's business.
+
+Only the .json files are the snapshot. Anything else in a folder, such as the
+README saying what it is for, is left where it is by a refresh.
 """
 import argparse
 import json
@@ -31,8 +38,13 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CURRENT = os.path.join(ROOT, "data", "defaults")
-SNAPSHOT = os.path.join(ROOT, "data", "defaults-previous")
+
+# What ships, and the snapshot of it the next release compares against, as
+# paths under data/.
+PAIRS = [
+    ("defaults", "defaults-previous"),
+    ("default-pages", "default-pages-previous"),
+]
 
 
 def git(*args):
@@ -77,36 +89,40 @@ def load(path):
         return json.loads(f.read().decode("utf-8-sig"))
 
 
-def at_tag(tag, name):
-    """One default as that tag shipped it, or None if it had none."""
-    out = git("show", "%s:data/defaults/%s" % (tag, name))
+def at_tag(tag, current, name):
+    """One file of `current` as that tag shipped it, or None if it had none."""
+    out = git("show", "%s:data/%s/%s" % (tag, current, name))
     if out is None:
         return None
     return json.loads(out.decode("utf-8-sig"))
 
 
-def check():
-    """Whether the snapshot still holds what the last release shipped."""
-    tag = last_release_tag()
-    if tag is None:
-        print("  no released tag yet, so there is nothing to check against.")
-        return 0
-
-    if not os.path.isdir(SNAPSHOT):
-        print("ERROR: data/defaults-previous is missing.")
-        print("  It should hold the defaults as %s shipped them." % tag)
-        return 1
-
-    out = git("ls-tree", "--name-only", "%s:data/defaults" % tag)
+def shipped_at(tag, current):
+    """The .json files `current` held at that tag. Empty for a folder the tag
+    did not have, which is every release before it was added: that release
+    shipped nothing there, so its snapshot is rightly empty."""
+    out = git("ls-tree", "--name-only", "%s:data/%s" % (tag, current))
     if out is None:
-        print("ERROR: could not read data/defaults out of %s." % tag)
-        return 1
-    want = {
+        return set()
+    return {
         n.strip()
         for n in out.decode("utf-8", "replace").splitlines()
         if n.strip().endswith(".json")
     }
-    have = names(SNAPSHOT)
+
+
+def check_pair(tag, current, previous):
+    """Whether data/<previous> still holds what data/<current> was at `tag`."""
+    snapshot = os.path.join(ROOT, "data", previous)
+    want = shipped_at(tag, current)
+    if not os.path.isdir(snapshot):
+        if not want:
+            print("  ok, %s shipped nothing in data/%s, and there is no snapshot of it." % (tag, current))
+            return 0
+        print("ERROR: data/%s is missing." % previous)
+        print("  It should hold data/%s as %s shipped it." % (current, tag))
+        return 1
+    have = names(snapshot)
 
     wrong = []
     for name in sorted(want - have):
@@ -115,13 +131,13 @@ def check():
         wrong.append("in the snapshot but not in %s: %s" % (tag, name))
     for name in sorted(want & have):
         try:
-            if at_tag(tag, name) != load(os.path.join(SNAPSHOT, name)):
+            if at_tag(tag, current, name) != load(os.path.join(snapshot, name)):
                 wrong.append("differs from %s: %s" % (tag, name))
         except (OSError, ValueError) as e:
             wrong.append("could not be read: %s (%s)" % (name, e))
 
     if wrong:
-        print("ERROR: data/defaults-previous does not match %s:" % tag)
+        print("ERROR: data/%s does not match %s:" % (previous, tag))
         print("")
         for line in wrong:
             print("    %s" % line)
@@ -132,21 +148,45 @@ def check():
         print("      python tools\\snapshot.py")
         return 1
 
-    print("  ok, data/defaults-previous matches %s (%d file(s))." % (tag, len(want)))
+    print("  ok, data/%s matches %s (%d file(s))." % (previous, tag, len(want)))
+    return 0
+
+
+def check():
+    """Whether every snapshot still holds what the last release shipped."""
+    tag = last_release_tag()
+    if tag is None:
+        print("  no released tag yet, so there is nothing to check against.")
+        return 0
+    failed = 0
+    for current, previous in PAIRS:
+        failed |= check_pair(tag, current, previous)
+    return failed
+
+
+def refresh_pair(current, previous):
+    """Put the .json files of data/<current> in data/<previous>, and only them."""
+    source = os.path.join(ROOT, "data", current)
+    snapshot = os.path.join(ROOT, "data", previous)
+    if not os.path.isdir(source):
+        print("ERROR: no data/%s to snapshot." % current)
+        return 1
+    os.makedirs(snapshot, exist_ok=True)
+    for name in names(snapshot):
+        os.remove(os.path.join(snapshot, name))
+    for name in names(source):
+        shutil.copy2(os.path.join(source, name), os.path.join(snapshot, name))
+    print("  data/%s refreshed from data/%s (%d file(s))."
+          % (previous, current, len(names(snapshot))))
     return 0
 
 
 def refresh():
-    """Copy the current defaults over the snapshot."""
-    if not os.path.isdir(CURRENT):
-        print("ERROR: no data/defaults to snapshot.")
-        return 1
-    if os.path.isdir(SNAPSHOT):
-        shutil.rmtree(SNAPSHOT)
-    shutil.copytree(CURRENT, SNAPSHOT)
-    print("  data/defaults-previous refreshed from data/defaults (%d file(s))."
-          % len(names(SNAPSHOT)))
-    return 0
+    """Copy what ships now over each snapshot."""
+    failed = 0
+    for current, previous in PAIRS:
+        failed |= refresh_pair(current, previous)
+    return failed
 
 
 def main():
@@ -154,7 +194,7 @@ def main():
     ap.add_argument(
         "--check",
         action="store_true",
-        help="verify the snapshot against the last release tag, and change nothing",
+        help="verify the snapshots against the last release tag, and change nothing",
     )
     args = ap.parse_args()
     return check() if args.check else refresh()

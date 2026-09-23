@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+pub mod bundle;
 pub mod catalogue_build;
 pub mod daemon;
 pub mod display;
@@ -16,7 +17,14 @@ pub mod log;
 pub mod mcdu_font;
 pub mod merge;
 pub mod nightly_only;
+pub mod pages;
 pub mod paths;
+
+pub use pages::{Page, PageFile, PageLibrary, PageSlots, Pages, Slot, SlotNote, SLOTS};
+
+/// The profile format this version reads and writes. Version 2 is the first
+/// with MCDU pages, and version 1 files are refused rather than migrated.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// The release, exactly as `VERSION.md` states it. The manifests hold a semver
 /// form of it (see `tools/version.py`); this is the one to show people.
@@ -160,6 +168,34 @@ pub enum Error {
     NoBios(PathBuf),
     #[error("another DCS Signal Converter process is building the catalogue and has not finished; if none is running, delete {0}")]
     CatalogueBusy(PathBuf),
+    #[error("this profile was made before MCDU pages (schema version {0}) and this version reads only version 2; reset your app data, or make the profile again")]
+    MadeBeforePages(u32),
+    #[error("this profile is schema version {0}, made by a newer DCS Signal Converter than this one")]
+    NewerSchema(u32),
+    #[error("cells {1} of display {0:?} are a field of the profile's own, but a text grid takes every field from a page; put it on a page instead")]
+    LooseTextField(String, String),
+    #[error("the profile gives page slots to {0:?}, which is not a device we know")]
+    SlotsOnUnknownDevice(String),
+    #[error("{0:?} has page slots, but no screen that takes pages; only a text grid does")]
+    SlotsWithoutTextGrid(String),
+    #[error("{0:?} has {1} page slots; there are always six, with an empty one written as null")]
+    SlotCount(String, usize),
+    #[error("{0:?} starts on slot {1}, which holds no page")]
+    StartNotFilled(String, usize),
+    #[error("{0:?} has pages in its slots but does not say which one to start on")]
+    NoStartSlot(String),
+    #[error("slot {1} of {0:?} sets a key, which is kept for swapping pages and must be null for now")]
+    SlotKeySet(String, usize),
+    #[error("slot {1} of {0:?} shows the page {2:?}, which is for {3}; a page reads signals by id, so it works only on its own module")]
+    PageOnOtherModule(String, usize, String, String),
+    #[error("the page {0:?} in slot {1} of {2:?}: {3}")]
+    OnPage(String, usize, String, Box<Error>),
+    #[error("a page needs a name")]
+    PageUnnamed,
+    #[error("a page on {1} is already called {0:?}")]
+    PageNameTaken(String, String),
+    #[error("the page {0:?} is drawn on {1:?}, which is not a text grid; only a text grid takes pages")]
+    PageNotOnTextGrid(String, String),
 }
 
 impl Error {
@@ -194,6 +230,9 @@ impl Error {
     /// is never rewritten by an update, so a profile that started loading
     /// could not be repaired for them either.
     pub fn is_advisory(&self) -> bool {
+        if let Error::OnPage(.., inner) = self {
+            return inner.is_advisory();
+        }
         matches!(
             self,
             Error::RangeOnText(_)
@@ -214,6 +253,7 @@ impl Error {
     /// the user can say the real width of.
     pub fn advisory_note(&self) -> &'static str {
         match self {
+            Error::OnPage(.., inner) => inner.advisory_note(),
             Error::RuleLabelMayNotFit(..) => {
                 "It will load anyway: give the rule a fixed width to hold the label for certain."
             }
@@ -1185,8 +1225,18 @@ pub struct Profile {
     /// a disabled device's are, so stopping gives back what was there.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub follows: BTreeMap<String, String>,
+    /// Page slots for each device with a text grid, keyed by device.
+    ///
+    /// Everything on a text grid comes from a page in the library, and a
+    /// device with no entry here shows nothing on it. Resolved into ordinary
+    /// fields by [`with_pages`](Self::with_pages) when the engine takes the
+    /// profile. See docs/CONFIG.md "MCDU pages".
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub screens: BTreeMap<String, PageSlots>,
 }
 
+/// A file that does not say is from before the version was written down,
+/// which is older than pages.
 fn default_schema() -> u32 {
     1
 }
@@ -1257,7 +1307,7 @@ impl Profile {
             .collect();
 
         Profile {
-            schema_version: default_schema(),
+            schema_version: SCHEMA_VERSION,
             name: name.to_string(),
             author: String::new(),
             profile_version: "0.1.0".to_string(),
@@ -1272,6 +1322,9 @@ impl Profile {
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
             follows: BTreeMap::new(),
+            // Every slot empty, which needs no entry: the editor offers six
+            // slots on every text grid regardless.
+            screens: BTreeMap::new(),
         }
     }
 
@@ -1400,8 +1453,9 @@ impl Profile {
         module: &Module,
         devices: &DeviceInventory,
         displays: &DisplayCatalogue,
+        pages: &PageLibrary,
     ) -> Result<()> {
-        match self.problems(module, devices, displays).into_iter().next() {
+        match self.problems(module, devices, displays, pages).into_iter().next() {
             Some(e) => Err(e),
             None => Ok(()),
         }
@@ -1416,13 +1470,34 @@ impl Profile {
     ///
     /// Each binding and each field is checked independently and a fault in one
     /// does not stop the rest, so the count reported is the real count.
+    ///
+    /// The page library is what the slots point into. Each page in a slot is
+    /// checked as it will draw here, since the font it is drawn in is this
+    /// profile's. A page missing from the library is not a problem, only a
+    /// slot that loads empty; see [`slot_notes`](Self::slot_notes).
     pub fn problems(
         &self,
         module: &Module,
         devices: &DeviceInventory,
         displays: &DisplayCatalogue,
+        pages: &PageLibrary,
     ) -> Vec<Error> {
+        // Nothing else in a file of another version means what it says here.
+        if self.schema_version < SCHEMA_VERSION {
+            return vec![Error::MadeBeforePages(self.schema_version)];
+        }
+        if self.schema_version > SCHEMA_VERSION {
+            return vec![Error::NewerSchema(self.schema_version)];
+        }
         let mut out = Vec::new();
+        // One owner for a text grid, and it is the pages. A field resolved
+        // from a page carries its id, so a profile checked after
+        // `with_pages` is not refused for its own start page.
+        for r in &self.readouts {
+            if r.page.is_none() && Profile::takes_pages(displays, &r.display) {
+                out.push(Error::LooseTextField(r.display.clone(), r.cells.to_string()));
+            }
+        }
         for b in &self.bindings {
             if b.same_as.is_some()
                 && !(b.conditions.is_empty() && b.any_of.is_empty() && !b.always)
@@ -1504,6 +1579,7 @@ impl Profile {
             }
         }
         self.readout_problems(module, devices, displays, &mut out, &mut Vec::new());
+        self.slot_problems(module, devices, displays, pages, &mut out);
         out.retain(|e| !e.is_advisory());
         out
     }
@@ -2309,12 +2385,13 @@ const UPDATED: &str = ".updated";
 
 /// What reconciling one profile against a new release came to.
 #[derive(Default)]
-struct FieldWork {
-    added: usize,
-    updated: usize,
-    removed: usize,
+pub(crate) struct FieldWork {
+    pub(crate) added: usize,
+    pub(crate) updated: usize,
+    pub(crate) removed: usize,
     lamps: usize,
     settings: usize,
+    slots: usize,
 }
 
 impl FieldWork {
@@ -2324,6 +2401,7 @@ impl FieldWork {
             && self.removed == 0
             && self.lamps == 0
             && self.settings == 0
+            && self.slots == 0
     }
 }
 
@@ -2382,10 +2460,15 @@ fn same_field(a: &Readout, b: &Readout) -> bool {
 /// With no snapshot the first, second and last collapse into "add what does
 /// not clash", which is where this started and is still the safe answer.
 fn reconcile_fields(profile: &mut Profile, shipped: &[Readout], was: &[Readout]) -> FieldWork {
+    reconcile_field_list(&mut profile.readouts, shipped, was)
+}
+
+/// [`reconcile_fields`] on any list of fields: a profile's own, or a page's.
+pub(crate) fn reconcile_field_list(fields: &mut Vec<Readout>, shipped: &[Readout], was: &[Readout]) -> FieldWork {
     let mut work = FieldWork::default();
 
-    let mut kept: Vec<Readout> = Vec::with_capacity(profile.readouts.len());
-    for r in std::mem::take(&mut profile.readouts) {
+    let mut kept: Vec<Readout> = Vec::with_capacity(fields.len());
+    for r in std::mem::take(fields) {
         let key = field_key(&r);
         let Some(before) = at(was, &key) else {
             kept.push(r);
@@ -2417,7 +2500,7 @@ fn reconcile_fields(profile: &mut Profile, shipped: &[Readout], was: &[Readout])
             None => work.removed += 1,
         }
     }
-    profile.readouts = kept;
+    *fields = kept;
 
     for r in shipped {
         // Shipped before and not here now is a field the user took out, and
@@ -2428,13 +2511,13 @@ fn reconcile_fields(profile: &mut Profile, shipped: &[Readout], was: &[Readout])
         // Otherwise it is new, and lands only where it cannot collide: the
         // user may have claimed those cells, and a suggestion does not
         // outrank that.
-        let clash = profile.readouts.iter().any(|o| {
+        let clash = fields.iter().any(|o| {
             o.device == r.device && o.display == r.display && o.cells.overlaps(&r.cells)
         });
         if clash {
             continue;
         }
-        profile.readouts.push(r.clone());
+        fields.push(r.clone());
         work.added += 1;
     }
 
@@ -2527,6 +2610,52 @@ fn reconcile_settings(profile: &mut Profile, shipped: &Profile, was: &Profile) -
         changed += 1;
     }
 
+    changed
+}
+
+/// Bring each device's page slots still as the last release shipped them up
+/// to the new one, a slot at a time, keyed on device and slot number, with
+/// `start` as one more.
+///
+/// The field rule again: a slot as `was` had it is ours to replace, and one
+/// that differs is the user's. Deleting a page empties its slots, which is a
+/// change, so a slot the user emptied that way is never put back. A device the
+/// profile has no entry for reads as six empty slots, which is what it shows.
+fn reconcile_slots(profile: &mut Profile, shipped: &Profile, was: &Profile) -> usize {
+    let mut changed = 0;
+    let devices: BTreeSet<String> = was.screens.keys().chain(shipped.screens.keys()).cloned().collect();
+    for device in devices {
+        let empty = PageSlots::default();
+        let before = was.screens.get(&device).unwrap_or(&empty);
+        let after = shipped.screens.get(&device).unwrap_or(&empty);
+        let mut mine = profile.screens.get(&device).cloned().unwrap_or_default();
+        let mut touched = false;
+        let n = SLOTS.max(before.slots.len()).max(after.slots.len());
+        mine.slots.resize(n.max(mine.slots.len()), None);
+        for i in 0..n {
+            let (b, a) = (before.slots.get(i).cloned().flatten(), after.slots.get(i).cloned().flatten());
+            if mine.slots[i] == b && a != b {
+                mine.slots[i] = a;
+                changed += 1;
+                touched = true;
+            }
+        }
+        if mine.start == before.start && after.start != before.start {
+            mine.start = after.start;
+            changed += 1;
+            touched = true;
+        }
+        if !touched {
+            continue;
+        }
+        mine.slots.truncate(SLOTS.max(after.slots.len()));
+        mine.settle_start();
+        if mine.filled().next().is_none() {
+            profile.screens.remove(&device);
+        } else {
+            profile.screens.insert(device, mine);
+        }
+    }
     changed
 }
 
@@ -2853,6 +2982,11 @@ impl Profiles {
             let Ok(mut profile) = Profile::load(&path) else {
                 continue;
             };
+            // Nor is one of another version: the daemon refuses it and says
+            // why, and this would only write rows into a file nothing reads.
+            if profile.schema_version != SCHEMA_VERSION {
+                continue;
+            }
 
             let mut have: std::collections::HashSet<(String, String)> = profile
                 .bindings
@@ -2880,6 +3014,7 @@ impl Profiles {
                     if let Some(was) = &was {
                         work.lamps = reconcile_lamps(&mut profile, &shipped.bindings, &was.bindings);
                         work.settings = reconcile_settings(&mut profile, &shipped, was);
+                        work.slots = reconcile_slots(&mut profile, &shipped, was);
                     }
                 }
             }
@@ -2936,6 +3071,12 @@ impl Profiles {
                 what.push(format!(
                     "updated {} unchanged profile setting(s) to the new default",
                     work.settings
+                ));
+            }
+            if work.slots > 0 {
+                what.push(format!(
+                    "updated {} unchanged MCDU page slot(s) to the new default",
+                    work.slots
                 ));
             }
             match what.is_empty() {
@@ -3350,6 +3491,7 @@ mod tests {
             readouts: Vec::new(),
             disabled_devices: Vec::new(),
             follows: BTreeMap::new(),
+            screens: BTreeMap::new(),
         }
     }
 

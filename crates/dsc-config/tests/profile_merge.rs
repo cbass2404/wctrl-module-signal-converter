@@ -48,7 +48,7 @@ fn inventory() -> DeviceInventory {
 /// A profile from before the UFC existed: PTO2 lamps only, one of them tuned.
 fn old_profile() -> String {
     r#"{
-      "schema_version": 1,
+      "schema_version": 2,
       "name": "Old",
       "aircraft": ["FA-18C_hornet"],
       "module": "FA-18C_hornet",
@@ -73,7 +73,7 @@ fn old_profile() -> String {
 fn a_profile_gains_a_display_field_the_default_has_added() {
     let dir = scratch("field");
     let shipped = r#"{
-      "schema_version": 1,
+      "schema_version": 2,
       "name": "Shipped",
       "aircraft": ["A-10C"],
       "module": "A-10C",
@@ -84,7 +84,7 @@ fn a_profile_gains_a_display_field_the_default_has_added() {
       ]
     }"#;
     let mine = r#"{
-      "schema_version": 1,
+      "schema_version": 2,
       "name": "Shipped",
       "aircraft": ["A-10C"],
       "module": "A-10C",
@@ -124,7 +124,7 @@ fn a_profile_gains_a_display_field_the_default_has_added() {
 fn a_shipped_field_never_displaces_one_the_user_put_there() {
     let dir = scratch("claimed");
     let shipped = r#"{
-      "schema_version": 1,
+      "schema_version": 2,
       "name": "Shipped",
       "aircraft": ["A-10C"],
       "module": "A-10C",
@@ -135,7 +135,7 @@ fn a_shipped_field_never_displaces_one_the_user_put_there() {
       ]
     }"#;
     let mine = r#"{
-      "schema_version": 1,
+      "schema_version": 2,
       "name": "Shipped",
       "aircraft": ["A-10C"],
       "module": "A-10C",
@@ -243,7 +243,7 @@ fn bindings_a_shipped_default_gained_are_carried_across() {
     std::fs::write(
         dir.join("defaults/old.json"),
         r#"{
-          "schema_version": 1, "name": "Old",
+          "schema_version": 2, "name": "Old",
           "aircraft": ["FA-18C_hornet"], "module": "FA-18C_hornet",
           "bindings": [
             { "device": "TAKEOFF_PLANEL_2", "led": "Backlight",
@@ -302,7 +302,7 @@ fn rows_for_an_unplugged_panel_are_kept() {
     std::fs::write(
         &active,
         r#"{
-          "schema_version": 1, "name": "Old",
+          "schema_version": 2, "name": "Old",
           "aircraft": ["FA-18C_hornet"], "module": "FA-18C_hornet",
           "bindings": [
             { "device": "SOME_PANEL_NOT_PLUGGED_IN", "led": "LAMP",

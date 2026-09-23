@@ -1331,7 +1331,8 @@ because it looks correct.
 
 ## MCDU pages
 
-Designed 2026-09-23, not built yet. Profile schema version 2.
+Built 2026-09-23. Profile schema version 2, which every shipped profile
+uses.
 
 A page is a named screen's worth of MCDU fields, kept in a library of its own
 rather than in a profile. A profile gives each MCDU six slots that point into
@@ -1415,16 +1416,24 @@ editor shows it on the slot.
     "slots": [
       { "page": "k3f9x2", "key": null },
       { "page": "p81qzt", "key": null },
-      null, null, null, null,
+      { "page": null, "key": null }, // blank
+      null, null, null,               // disabled
     ],
   },
 },
 ```
 
-- **Six slots per MCDU, any of them empty.** `slots` always holds six
-  entries, so slot 3 is the same slot whatever is filled around it.
-- **`start` names a filled slot.** With every slot empty the screen is blank,
-  as an MCDU with no fields is today, and `start` is left out.
+- **Six slots per MCDU, one for each left line select key.** `slots` always
+  holds six entries, so slot 3 is the same slot whatever is filled around it,
+  and slot n is LSK nL. The editor labels each slot with its key.
+- **A slot shows a page, shows a blank screen, or is disabled.** A page is
+  `{ "page": id }`. Blank is `{ "page": null }`: the screen dark on purpose.
+  Disabled is `null`. The difference is for swapping, below: the key of a
+  disabled slot does nothing and leaves the page shown, and the key of a
+  blank slot takes the screen dark.
+- **`start` names a slot in use**, a blank one included, which starts the
+  screen dark. With every slot disabled the screen is blank, as an MCDU with
+  no fields always was, and `start` is left out.
 - **The same page may sit in two slots.** Pointless, but not wrong.
 - **`key` is reserved for swapping**, below, and must be null until then. It
   will say which line select key brings the slot up. It is there now so that
@@ -1446,23 +1455,38 @@ other rows.
 import) loads as empty with a caution, rather than refusing the profile.
 If it was the start slot, the first filled slot starts instead.
 
+**A page file that will not load** is named in the log and on the screen's
+slots in the editor, and its pages cannot be edited until it is fixed by
+hand, since saving would write over it.
+
 ### The library
 
 - **Where it lives.** Shipped pages are read-only in `data/default-pages`,
-  and the library in use is `data/pages`, one file per module in each.
-  Install copies every file. In development both are the tracked folder, as
-  for profiles.
+  and the library in use is `pages` in the data folder, one file per module in
+  each. Install copies a module's file whole when the library has none, and
+  an update reconciles the rest a page at a time, below. In development both
+  are the tracked folder, as for profiles.
 - **Shipped ids are for good.** An id is never reused for a different page. A
   page that changes what it is for ships under a new id.
-- **Editing uses the MCDU editor that exists.** Picking a slot opens its page
-  in the field editor, and saving writes its module's page file. **Save as new page**
-  copies it under a new id and a name you give. A page on the module but in
-  no slot can be opened from the library list.
+- **The screen's section lists the six slots and nothing else** until asked:
+  each slot's menu reads Disabled, Blank, then the module's pages by name,
+  and a tick marks the start slot. **Edit page** opens the page picked beside
+  it in the MCDU field editor that already existed, and **New page** opens an
+  empty one.
+- **A page is saved on its own.** **Save page** checks it, drawn in the open
+  profile's font, and writes its module's page file, apart from the profile's
+  Save, which writes only the slots. A page is the library's, not the
+  profile's, so one Save for both would tie an edit shared by every profile to
+  the one that happened to be open. **Save as new page** writes a copy under
+  a new id and leaves the page it came from as saved. Closing with changes
+  asks first.
 - **Editing a page changes it everywhere it is used.** That is what a library
-  is for, so the editor says so: each page lists the profiles and slots using
-  it.
-- **Deleting a page** lists what uses it and, once confirmed, empties those
-  slots. A start slot that empties moves to the first filled slot.
+  is for, so the editor says so: the open page lists the profiles and slots
+  showing it.
+- **Deleting a page** lists what uses it and, once confirmed, disables those
+  slots in every profile on the module. Disabled rather than blank, so a page
+  deleted never takes a screen dark that nobody chose to. A start slot that
+  goes moves to the first slot still in use.
 
 ### Updates: pages and profiles apart
 
@@ -1486,6 +1510,8 @@ release shipped them:
   matches the snapshot's.
 - **A new shipped page whose name a user page already has** gets a number
   added, as on import.
+- **A page the release no longer ships** goes only while it is still exactly
+  as the snapshot has it, name and fields both. One the user changed stays.
 
 **Profiles**, against `data/defaults-previous` as now. A device's slots are
 reconciled with the profile's display fields, keyed on device and slot
@@ -1519,17 +1545,21 @@ pairs of folders:
 ### Sharing pages
 
 - **Export writes the profile and its pages as one file**: every page its
-  slots use, and any others on the same module ticked in the dialog.
+  slots use, and any others on the same module ticked in the dialog. The
+  dialog appears only when the module has pages no slot shows.
 
   ```jsonc
   { "schema_version": 2, "profile": { "name": "...", "screens": {} }, "pages": [] }
   ```
 
 - **Import shows the pages beside the lamps and lines**, each ticked on its
-  own. A slot pointing at a page left unticked comes in empty.
-- **A page already here by id** is left alone if it matches, and otherwise
-  comes in under a new id. **A name already taken** gets a number added,
-  which the preview shows and can be changed there.
+  own. A slot pointing at a page left unticked comes in disabled. A profile
+  file on its own, without pages, imports too.
+- **A page already here by id** is left alone if it draws the same fields,
+  whatever it is called here, and otherwise comes in under a new id, with the
+  imported profile's slots following it. So does one whose id a page on
+  another module has. **A name already taken** gets a number added, which the
+  preview shows and can be changed there.
 - **Merge from... offers slots on the MCDU** instead of lines: slot n of the
   source replaces slot n of the target, and brings its page into the library
   if it is not there. The UFC and the DED still merge a line at a time.
@@ -1550,6 +1580,8 @@ Not part of this change, and written down so the schema holds still for it.
   one is free depends on how DCS is bound on that PC, not on the aircraft.
 - **Needs first:** a SimAppPro capture of the MCDU's input report for the key
   bits, and a keyboard reader in the daemon.
+- **A disabled slot's key is ignored**, so the page shown stays; a blank
+  slot's takes the screen dark.
 - **The page in use is not saved.** Every aircraft load starts on `start`.
 - **One swap per press**, however long it is held.
 

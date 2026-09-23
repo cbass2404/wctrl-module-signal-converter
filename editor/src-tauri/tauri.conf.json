@@ -36,6 +36,8 @@
       "../../data/nightly-only.json": "data/nightly-only.json",
       "../../data/defaults/": "data/defaults/",
       "../../data/defaults-previous/": "data/defaults-previous/",
+      "../../data/default-pages/": "data/default-pages/",
+      "../../data/default-pages-previous/": "data/default-pages-previous/",
       "../../data/displays/": "data/displays/",
       "../../data/mcdu/": "data/mcdu/",
       "../../LICENSE": "LICENSE",

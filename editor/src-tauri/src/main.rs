@@ -11,13 +11,14 @@ mod check;
 mod claims;
 mod converter;
 mod learn;
+mod pages;
 mod share;
 mod update;
 mod view;
 
 use dsc_config::paths::Paths;
 use view::{DeviceView, ModuleChoice, ProfileSummary, SignalView};
-use dsc_config::{divider_rule as rule_for, DeviceInventory, Module, Profile, RuleCell};
+use dsc_config::{divider_rule as rule_for, DeviceInventory, Module, Page, Profile, RuleCell};
 
 /// Commands return a message rather than an error type, because the only useful
 /// thing the window can do with a failure is show it to the user.
@@ -88,6 +89,12 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         .profiles
         .merge_new(&inventory(&paths)?, env!("CARGO_PKG_VERSION"))
         .map_err(|e| fail("adding new hardware to the profiles", e))?;
+    // The MCDU pages the same way, apart from the profiles; see `Pages::merge_new`.
+    paths.pages.seed().map_err(|e| fail("copying in the shipped pages", e))?;
+    paths
+        .pages
+        .merge_new(env!("CARGO_PKG_VERSION"))
+        .map_err(|e| fail("updating the pages", e))?;
 
     let dir = &paths.profiles.active;
     let families = paths.profiles.families();
@@ -107,7 +114,7 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         let has_default = paths.profiles.has_default(&file);
         // A profile that will not parse is still listed, carrying its error.
         // Hiding it would leave the user looking for a file they can see on disk.
-        out.push(match Profile::load(&path) {
+        out.push(match Profile::load(&path).and_then(current) {
             Ok(p) => ProfileSummary::of(&p, file, has_default, &families),
             Err(e) => ProfileSummary::broken(file, has_default, e.to_string()),
         });
@@ -157,7 +164,20 @@ fn cell_ink(display: String, cells: Vec<view::CellDraw>) -> Reply<Vec<view::Cell
 fn open_profile(file: String) -> Reply<Profile> {
     let paths = Paths::resolve();
     let path = paths.profiles.active.join(&file);
-    Profile::load(&path).map_err(|e| fail(&format!("reading {file}"), e))
+    Profile::load(&path).and_then(current).map_err(|e| fail(&format!("reading {file}"), e))
+}
+
+/// A profile of the version this editor writes, or why not.
+///
+/// One from before pages is refused rather than opened: the daemon will not
+/// load it, and there is no migration, so nothing edited in it could run.
+fn current(p: Profile) -> dsc_config::Result<Profile> {
+    use dsc_config::{Error, SCHEMA_VERSION};
+    match p.schema_version {
+        v if v < SCHEMA_VERSION => Err(Error::MadeBeforePages(v)),
+        v if v > SCHEMA_VERSION => Err(Error::NewerSchema(v)),
+        _ => Ok(p),
+    }
 }
 
 /// The shipped version of one profile, if it has one.
@@ -313,6 +333,9 @@ struct Findings {
     /// One line for the top of the page, only when a flagged row reads
     /// something the DCS-BIOS nightly has.
     notice: Option<String>,
+    /// Why the page being edited could not be saved. Kept apart from
+    /// `problems`, since the profile saves whatever state the page is in.
+    page_problems: Vec<String>,
 }
 
 /// Every reason the daemon would refuse this profile, for the window to show,
@@ -321,16 +344,38 @@ struct Findings {
 /// Called after each edit rather than on save. A fault found where it was made
 /// costs one click to undo; the same fault found by the daemon costs a flight,
 /// because it skips the whole profile and every lamp in it stays dark.
+///
+/// The profile is checked against the pages as saved, which is what it will
+/// show. `working` is the page open for editing on `device`, if one is: its
+/// fields are flagged and cautioned where they sit, and why it could not be
+/// saved is said apart. A slot's notes, such as a page gone from the
+/// library, are listed with the cautions.
 #[tauri::command]
-fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<Findings> {
+fn check_profile(
+    profile: Profile,
+    working: Option<Page>,
+    device: Option<String>,
+    cache: tauri::State<check::Cache>,
+) -> Reply<Findings> {
     let paths = Paths::resolve();
-    let (flags, notice) = cache.flags(&paths, &profile);
+    let saved = paths.pages.library();
+    let (shown, page_problems) = match (&working, &device) {
+        (Some(page), Some(device)) => (
+            pages::library_with(&paths, &profile.module, page),
+            cache.page_problems(&paths, &saved, &profile, page, device),
+        ),
+        _ => (saved.clone(), Vec::new()),
+    };
+    let (flags, notice) = cache.flags(&paths, &profile, &shown);
+    let mut cautions = cache.cautions(&paths, &profile);
+    cautions.extend(profile.slot_notes(&saved).into_iter().map(|n| n.text));
     Ok(Findings {
-        problems: cache.problems(&paths, &profile),
-        cautions: cache.cautions(&paths, &profile),
-        field_cautions: cache.field_cautions(&paths, &profile),
+        problems: cache.problems(&paths, &profile, &saved),
+        cautions,
+        field_cautions: cache.field_cautions(&paths, &profile, &shown),
         flags,
         notice,
+        page_problems,
     })
 }
 
@@ -340,6 +385,9 @@ fn check_profile(profile: Profile, cache: tauri::State<check::Cache>) -> Reply<F
 /// is outstanding, so this is the guarantee rather than the message: the file
 /// on disk is one that runs. Refusing also protects what is already there,
 /// since the previous save is very likely a profile that flies.
+///
+/// Checked against the pages as saved. A page is saved on its own, so one
+/// still being edited is not what this profile will show.
 #[tauri::command]
 fn save_profile(file: String, profile: Profile, cache: tauri::State<check::Cache>) -> Reply<()> {
     let paths = Paths::resolve();
@@ -355,7 +403,7 @@ fn save_profile(file: String, profile: Profile, cache: tauri::State<check::Cache
             "{file} was not written, because another profile is already called {taken}."
         ));
     }
-    let problems = cache.problems(&paths, &profile);
+    let problems = cache.problems(&paths, &profile, &paths.pages.library());
     if !problems.is_empty() {
         return Err(format!(
             "{file} was not written, because the daemon would refuse it:
@@ -500,9 +548,14 @@ fn main() {
             clone_profile,
             check_profile,
             save_profile,
+            pages::open_pages,
+            pages::new_page_id,
+            pages::save_page,
+            pages::delete_page,
             reset_profile,
             delete_profile,
             share::export_profile,
+            share::export_pages,
             share::import_pick,
             share::import_profile,
             share::merge_parts,

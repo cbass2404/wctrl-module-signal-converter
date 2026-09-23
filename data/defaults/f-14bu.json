@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "F-14BU",
   "author": "",
   "profile_version": "0.1.0",
@@ -508,417 +508,6 @@
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
-  "readouts": [
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "145-166",
-      "source": "RIO_CDNU_LINE1",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "®": "Δ",
-        "»": "→",
-        "©": "◀",
-        "_": "⬡",
-        "}": "↓",
-        "\u0013": "□",
-        "{": "↑"
-      },
-      "note": "CDNU line 1. The eight 22-character CDNU lines sit on the bottom eight rows, 7 to 14, one column in so they are centred across (the WCtrlDcsBiosBridge uses rows 3 to 10). The F-14 reports no seat and only the RIO has a CDNU, so every MCDU shows the RIO's CDNU from either seat. The replace map turns the module's stand-ins into the font's glyphs: the font files a double-headed vertical arrow under Δ, a horizontal one under ◀, the scratchpad diamond under □ (it arrives as control code 0x13) and the cursor block under ⬡, because its underscore slot draws a cross."
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "169-190",
-      "source": "RIO_CDNU_LINE2",
-      "colour": "green",
-      "replace": {
-        "_": "⬡",
-        "\u0013": "□",
-        "®": "Δ",
-        "»": "→",
-        "{": "↑",
-        "«": "←",
-        "}": "↓",
-        "©": "◀"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "193-214",
-      "source": "RIO_CDNU_LINE3",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "{": "↑",
-        "\u0013": "□",
-        "_": "⬡",
-        "»": "→",
-        "}": "↓",
-        "®": "Δ",
-        "©": "◀"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "217-238",
-      "source": "RIO_CDNU_LINE4",
-      "colour": "green",
-      "replace": {
-        "©": "◀",
-        "}": "↓",
-        "»": "→",
-        "®": "Δ",
-        "«": "←",
-        "\u0013": "□",
-        "{": "↑",
-        "_": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "241-262",
-      "source": "RIO_CDNU_LINE5",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "»": "→",
-        "}": "↓",
-        "{": "↑",
-        "®": "Δ",
-        "©": "◀",
-        "_": "⬡",
-        "\u0013": "□"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "265-286",
-      "source": "RIO_CDNU_LINE6",
-      "colour": "green",
-      "replace": {
-        "®": "Δ",
-        "{": "↑",
-        "_": "⬡",
-        "\u0013": "□",
-        "}": "↓",
-        "©": "◀",
-        "»": "→",
-        "«": "←"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "289-310",
-      "source": "RIO_CDNU_LINE7",
-      "colour": "green",
-      "replace": {
-        "{": "↑",
-        "\u0013": "□",
-        "»": "→",
-        "«": "←",
-        "©": "◀",
-        "_": "⬡",
-        "}": "↓",
-        "®": "Δ"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "RIO_CDNU_LINE8",
-      "colour": "green",
-      "replace": {
-        "}": "↓",
-        "«": "←",
-        "\u0013": "□",
-        "»": "→",
-        "®": "Δ",
-        "©": "◀",
-        "{": "↑",
-        "_": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "145-166",
-      "source": "RIO_CDNU_LINE1",
-      "colour": "green",
-      "replace": {
-        "_": "⬡",
-        "»": "→",
-        "\u0013": "□",
-        "«": "←",
-        "®": "Δ",
-        "{": "↑",
-        "}": "↓",
-        "©": "◀"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "169-190",
-      "source": "RIO_CDNU_LINE2",
-      "colour": "green",
-      "replace": {
-        "_": "⬡",
-        "{": "↑",
-        "}": "↓",
-        "»": "→",
-        "«": "←",
-        "®": "Δ",
-        "©": "◀",
-        "\u0013": "□"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "193-214",
-      "source": "RIO_CDNU_LINE3",
-      "colour": "green",
-      "replace": {
-        "\u0013": "□",
-        "®": "Δ",
-        "_": "⬡",
-        "{": "↑",
-        "}": "↓",
-        "«": "←",
-        "»": "→",
-        "©": "◀"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "217-238",
-      "source": "RIO_CDNU_LINE4",
-      "colour": "green",
-      "replace": {
-        "{": "↑",
-        "_": "⬡",
-        "»": "→",
-        "®": "Δ",
-        "\u0013": "□",
-        "}": "↓",
-        "©": "◀",
-        "«": "←"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "241-262",
-      "source": "RIO_CDNU_LINE5",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "®": "Δ",
-        "_": "⬡",
-        "{": "↑",
-        "}": "↓",
-        "©": "◀",
-        "\u0013": "□",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "265-286",
-      "source": "RIO_CDNU_LINE6",
-      "colour": "green",
-      "replace": {
-        "\u0013": "□",
-        "»": "→",
-        "}": "↓",
-        "®": "Δ",
-        "_": "⬡",
-        "©": "◀",
-        "{": "↑",
-        "«": "←"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "289-310",
-      "source": "RIO_CDNU_LINE7",
-      "colour": "green",
-      "replace": {
-        "©": "◀",
-        "}": "↓",
-        "{": "↑",
-        "«": "←",
-        "®": "Δ",
-        "»": "→",
-        "\u0013": "□",
-        "_": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "RIO_CDNU_LINE8",
-      "colour": "green",
-      "replace": {
-        "\u0013": "□",
-        "}": "↓",
-        "»": "→",
-        "_": "⬡",
-        "©": "◀",
-        "®": "Δ",
-        "{": "↑",
-        "«": "←"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "145-166",
-      "source": "RIO_CDNU_LINE1",
-      "colour": "green",
-      "replace": {
-        "»": "→",
-        "{": "↑",
-        "}": "↓",
-        "\u0013": "□",
-        "©": "◀",
-        "«": "←",
-        "_": "⬡",
-        "®": "Δ"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "169-190",
-      "source": "RIO_CDNU_LINE2",
-      "colour": "green",
-      "replace": {
-        "«": "←",
-        "\u0013": "□",
-        "}": "↓",
-        "®": "Δ",
-        "_": "⬡",
-        "{": "↑",
-        "©": "◀",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "193-214",
-      "source": "RIO_CDNU_LINE3",
-      "colour": "green",
-      "replace": {
-        "®": "Δ",
-        "_": "⬡",
-        "}": "↓",
-        "«": "←",
-        "»": "→",
-        "©": "◀",
-        "\u0013": "□",
-        "{": "↑"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "217-238",
-      "source": "RIO_CDNU_LINE4",
-      "colour": "green",
-      "replace": {
-        "»": "→",
-        "«": "←",
-        "\u0013": "□",
-        "_": "⬡",
-        "{": "↑",
-        "}": "↓",
-        "©": "◀",
-        "®": "Δ"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "241-262",
-      "source": "RIO_CDNU_LINE5",
-      "colour": "green",
-      "replace": {
-        "©": "◀",
-        "«": "←",
-        "_": "⬡",
-        "{": "↑",
-        "»": "→",
-        "}": "↓",
-        "\u0013": "□",
-        "®": "Δ"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "265-286",
-      "source": "RIO_CDNU_LINE6",
-      "colour": "green",
-      "replace": {
-        "_": "⬡",
-        "©": "◀",
-        "®": "Δ",
-        "}": "↓",
-        "\u0013": "□",
-        "{": "↑",
-        "«": "←",
-        "»": "→"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "289-310",
-      "source": "RIO_CDNU_LINE7",
-      "colour": "green",
-      "replace": {
-        "\u0013": "□",
-        "}": "↓",
-        "«": "←",
-        "®": "Δ",
-        "{": "↑",
-        "»": "→",
-        "©": "◀",
-        "_": "⬡"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "RIO_CDNU_LINE8",
-      "colour": "green",
-      "replace": {
-        "\u0013": "□",
-        "®": "Δ",
-        "_": "⬡",
-        "»": "→",
-        "}": "↓",
-        "©": "◀",
-        "{": "↑",
-        "«": "←"
-      }
-    }
-  ],
   "disabled_devices": [
     "ViperAce_ICP"
   ],
@@ -927,5 +516,49 @@
     "CarrierAce_MFD_R": "CarrierAce_MFD_C",
     "MCDU_CoPilot": "MCDU_Captain",
     "MCDU_Observer": "MCDU_Captain"
+  },
+  "screens": {
+    "MCDU_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "f14-cdnu",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_CoPilot": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "f14-cdnu",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_Observer": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "f14-cdnu",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
   }
 }

@@ -2602,7 +2602,11 @@ function regionOf(readout: Readout, display: DisplayInfo): RegionInfo | undefine
 }
 
 /**
- * The display section for one device, or null if it has no glass.
+ * The display section for one device, or null if it has no glass but text
+ * grids.
+ *
+ * A text grid is left out: everything on one comes from a page, and pages are
+ * edited in `pages.ts`, which uses the same field table.
  *
  * `shipped` is every field of the shipped default, which is what the reset
  * buttons put back and what says a deleted field can be brought back at all.
@@ -2615,185 +2619,201 @@ export function displaySection(
   onChange: () => void,
   shipped: Readout[],
 ): HTMLElement | null {
-  if (device.displays.length === 0) return null;
+  const glass = device.displays.filter((d) => !d.text_grid);
+  if (glass.length === 0) return null;
   if (!profile.readouts) profile.readouts = [];
-  const readouts = profile.readouts;
   const wrap = el("div", { class: "displays" });
-
-  for (const display of device.displays) {
-    chooseFont(display, profile);
-    const mine = (): Readout[] =>
-      readouts.filter((r) => r.device === device.key && r.display === display.key);
-
-    const body = el("tbody");
-    const count = el("span", { class: "meta" });
-    let redraw = (): void => {};
-
-    const fieldRow = (r: Readout): HTMLTableRowElement =>
-      row({
-        readout: r,
-        display,
-        profile,
-        all: readouts,
-        signals,
-        shipped: shippedFor(r, shipped),
-        onChange,
-        onRemove: () => {
-          readouts.splice(readouts.indexOf(r), 1);
-          redraw();
-          onChange();
-        },
-        onReplace: (next) => {
-          const at = readouts.indexOf(r);
-          if (at < 0) return;
-          readouts[at] = next;
-          redraw();
-          onChange();
-        },
-        onAdd: (next) => {
-          readouts.splice(readouts.indexOf(r) + 1, 0, next);
-          redraw();
-          onChange();
-        },
-      });
-
-    /** An empty region: what could go here, and the ways to put it there. */
-    const emptyRow = (region: RegionInfo): HTMLTableRowElement => {
-      const tr = el("tr", { class: "region-empty" });
-      tr.append(
-        el(
-          "td",
-          {},
-          el("span", { class: "region-name" }, region.name),
-          el("div", { class: "meta" }, extent(region.cells)),
-        ),
-      );
-      const add = (kind: SpanKind, label: string): HTMLElement => {
-        const button = el("button", { class: "add" }, label);
-        button.addEventListener("click", () => {
-          const fresh: Readout = {
-            device: device.key,
-            display: display.key,
-            cells: region.cells,
-            source: "",
-          };
-          // Every first piece starts a chain, a rule included. A rule made
-          // here used to be a whole-field divider, which holds no pieces, so
-          // nothing could be added beside it and its kind could not be
-          // changed. A divider already in a profile still loads and edits.
-          const first = newSpan(kind);
-          if (kind === "rule") first.colour = agreedColour(mine());
-          setContent(fresh, [first]);
-          readouts.push(fresh);
-          redraw();
-          onChange();
-        });
-        return button;
-      };
-      const buttons = el(
-        "div",
-        { class: "chain-add" },
-        add("signal", "+ a reading"),
-        add("text", "+ text"),
-        add("gap", "+ a gap"),
-      );
-      // Only a text grid draws a rule. A segment display draws from a glyph
-      // table with no dash in it, and the daemon refuses one there.
-      if (display.text_grid) buttons.append(add("rule", "+ a rule"));
-      // A field the default put here and the user threw away. Without this
-      // there is nothing on the screen to say one was ever here, and the way
-      // back is resetting the whole profile.
-      for (const was of shipped) {
-        if (was.device !== device.key || was.display !== display.key) continue;
-        if (regionOf(was, display) !== region) continue;
-        const back = el("button", { class: "add revert" }, "+ the field that shipped here");
-        back.title = "Put back the field this area shipped with. Nothing else is touched.";
-        back.addEventListener("click", () => {
-          readouts.push(structuredClone(was));
-          redraw();
-          onChange();
-        });
-        buttons.append(back);
-      }
-      tr.append(el("td", {}, el("span", { class: "meta" }, region.note || "Nothing here yet."), buttons));
-      tr.append(el("td", { class: "num" }));
-      return tr;
-    };
-
-    redraw = (): void => {
-      body.textContent = "";
-      const list = mine();
-      const placed = new Set<Readout>();
-      let used = 0;
-
-      for (const region of display.regions) {
-        const here = list
-          .filter((r) => regionOf(r, display) === region)
-          .sort((a, b) => (bounds(a.cells)?.[0] ?? 0) - (bounds(b.cells)?.[0] ?? 0));
-        if (here.length === 0) {
-          body.append(emptyRow(region));
-          continue;
-        }
-        used += 1;
-        // Nothing offers to add a second field beside the first any more. Two
-        // readings on one line is what a chain of pieces is for, and it can
-        // count the cells; a second field could not, and every one it added
-        // landed on cells the row already held.
-        for (const r of here) {
-          placed.add(r);
-          body.append(fieldRow(r));
-        }
-      }
-
-      // A field whose cells sit outside every named region still has to be
-      // shown, or it would be invisible here and alive on the panel.
-      const loose = list.filter((r) => !placed.has(r));
-      if (loose.length > 0) {
-        const head = el("tr", { class: "region-head" });
-        head.append(
-          el("td", { colspan: "3", class: "meta" }, "Outside the named areas of this screen"),
-        );
-        body.append(head);
-        for (const r of loose) body.append(fieldRow(r));
-      }
-
-      const total = display.regions.length;
-      count.textContent = `${used} of ${total} area${total === 1 ? "" : "s"} in use`;
-    };
-    redraw();
-
-    const head = el(
-      "div",
-      { class: "display-head" },
-      el("span", { class: "name" }, `${display.key} display`),
-      el("span", { class: "meta" }, `${display.cells} cells`),
-      count,
-    );
-    const picker = fontPicker(display, profile, () => {
-      redraw();
-      onChange();
-    });
-    if (picker) head.append(picker);
-
-    wrap.append(
-      el(
-        "div",
-        { class: "display" },
-        head,
-        el(
-          "table",
-          { class: "readouts" },
-          el(
-            "thead",
-            {},
-            el("tr", {}, el("th", {}, "Where"), el("th", {}, "Shows"), el("th", { class: "num" }, "")),
-          ),
-          body,
-        ),
-      ),
-    );
+  for (const display of glass) {
+    const { head, table } = fieldTable(device, display, profile, profile.readouts, true, signals, onChange, shipped);
+    wrap.append(el("div", { class: "display" }, head, table));
   }
   return wrap;
+}
+
+/**
+ * One screen's fields, a row per area, and the head that names the screen.
+ *
+ * `readouts` is the list the rows edit in place: the profile's own fields, or
+ * a page's. `owned` says the list holds other devices' fields too, so only
+ * this device's are shown; a page's fields belong to no device.
+ */
+export function fieldTable(
+  device: Device,
+  display: DisplayInfo,
+  profile: Profile,
+  readouts: Readout[],
+  owned: boolean,
+  signals: SignalView[],
+  onChange: () => void,
+  shipped: Readout[],
+): { head: HTMLElement; table: HTMLElement } {
+  chooseFont(display, profile);
+  const mine = (): Readout[] =>
+    readouts.filter((r) => (!owned || r.device === device.key) && r.display === display.key);
+
+  const body = el("tbody");
+  const count = el("span", { class: "meta" });
+  let redraw = (): void => {};
+
+  const fieldRow = (r: Readout): HTMLTableRowElement =>
+    row({
+      readout: r,
+      display,
+      profile,
+      all: readouts,
+      signals,
+      shipped: shippedFor(r, shipped),
+      onChange,
+      onRemove: () => {
+        readouts.splice(readouts.indexOf(r), 1);
+        redraw();
+        onChange();
+      },
+      onReplace: (next) => {
+        const at = readouts.indexOf(r);
+        if (at < 0) return;
+        readouts[at] = next;
+        redraw();
+        onChange();
+      },
+      onAdd: (next) => {
+        readouts.splice(readouts.indexOf(r) + 1, 0, next);
+        redraw();
+        onChange();
+      },
+    });
+
+  /** An empty region: what could go here, and the ways to put it there. */
+  const emptyRow = (region: RegionInfo): HTMLTableRowElement => {
+    const tr = el("tr", { class: "region-empty" });
+    tr.append(
+      el(
+        "td",
+        {},
+        el("span", { class: "region-name" }, region.name),
+        el("div", { class: "meta" }, extent(region.cells)),
+      ),
+    );
+    const add = (kind: SpanKind, label: string): HTMLElement => {
+      const button = el("button", { class: "add" }, label);
+      button.addEventListener("click", () => {
+        const fresh: Readout = {
+          device: device.key,
+          display: display.key,
+          cells: region.cells,
+          source: "",
+        };
+        // Every first piece starts a chain, a rule included. A rule made
+        // here used to be a whole-field divider, which holds no pieces, so
+        // nothing could be added beside it and its kind could not be
+        // changed. A divider already in a profile still loads and edits.
+        const first = newSpan(kind);
+        if (kind === "rule") first.colour = agreedColour(mine());
+        setContent(fresh, [first]);
+        readouts.push(fresh);
+        redraw();
+        onChange();
+      });
+      return button;
+    };
+    const buttons = el(
+      "div",
+      { class: "chain-add" },
+      add("signal", "+ a reading"),
+      add("text", "+ text"),
+      add("gap", "+ a gap"),
+    );
+    // Only a text grid draws a rule. A segment display draws from a glyph
+    // table with no dash in it, and the daemon refuses one there.
+    if (display.text_grid) buttons.append(add("rule", "+ a rule"));
+    // A field the default put here and the user threw away. Without this
+    // there is nothing on the screen to say one was ever here, and the way
+    // back is resetting the whole profile.
+    for (const was of shipped) {
+      if (was.device !== device.key || was.display !== display.key) continue;
+      if (regionOf(was, display) !== region) continue;
+      const back = el("button", { class: "add revert" }, "+ the field that shipped here");
+      back.title = "Put back the field this area shipped with. Nothing else is touched.";
+      back.addEventListener("click", () => {
+        readouts.push(structuredClone(was));
+        redraw();
+        onChange();
+      });
+      buttons.append(back);
+    }
+    tr.append(el("td", {}, el("span", { class: "meta" }, region.note || "Nothing here yet."), buttons));
+    tr.append(el("td", { class: "num" }));
+    return tr;
+  };
+
+  redraw = (): void => {
+    body.textContent = "";
+    const list = mine();
+    const placed = new Set<Readout>();
+    let used = 0;
+
+    for (const region of display.regions) {
+      const here = list
+        .filter((r) => regionOf(r, display) === region)
+        .sort((a, b) => (bounds(a.cells)?.[0] ?? 0) - (bounds(b.cells)?.[0] ?? 0));
+      if (here.length === 0) {
+        body.append(emptyRow(region));
+        continue;
+      }
+      used += 1;
+      // Nothing offers to add a second field beside the first any more. Two
+      // readings on one line is what a chain of pieces is for, and it can
+      // count the cells; a second field could not, and every one it added
+      // landed on cells the row already held.
+      for (const r of here) {
+        placed.add(r);
+        body.append(fieldRow(r));
+      }
+    }
+
+    // A field whose cells sit outside every named region still has to be
+    // shown, or it would be invisible here and alive on the panel.
+    const loose = list.filter((r) => !placed.has(r));
+    if (loose.length > 0) {
+      const head = el("tr", { class: "region-head" });
+      head.append(
+        el("td", { colspan: "3", class: "meta" }, "Outside the named areas of this screen"),
+      );
+      body.append(head);
+      for (const r of loose) body.append(fieldRow(r));
+    }
+
+    const total = display.regions.length;
+    count.textContent = `${used} of ${total} area${total === 1 ? "" : "s"} in use`;
+  };
+  redraw();
+
+  const head = el(
+    "div",
+    { class: "display-head" },
+    el("span", { class: "name" }, `${display.key} display`),
+    el("span", { class: "meta" }, `${display.cells} cells`),
+    count,
+  );
+  const picker = fontPicker(display, profile, () => {
+    redraw();
+    onChange();
+  });
+  if (picker) head.append(picker);
+
+  return {
+    head,
+    table: el(
+      "table",
+      { class: "readouts" },
+      el(
+        "thead",
+        {},
+        el("tr", {}, el("th", {}, "Where"), el("th", {}, "Shows"), el("th", { class: "num" }, "")),
+      ),
+      body,
+    ),
+  };
 }
 
 /**
@@ -2807,7 +2827,7 @@ export function displaySection(
  * Which font it starts on, and why there is no empty choice, is in
  * `chooseFont`, which has settled it by the time this runs.
  */
-function fontPicker(
+export function fontPicker(
   display: DisplayInfo,
   profile: Profile,
   onChange: () => void,

@@ -1,0 +1,133 @@
+{
+  "module": "F-14",
+  "pages": [
+    {
+      "id": "f14-cdnu",
+      "name": "CDNU",
+      "display": "MCDU",
+      "fields": [
+        {
+          "cells": "145-166",
+          "source": "RIO_CDNU_LINE1",
+          "colour": "green",
+          "replace": {
+            "«": "←",
+            "®": "Δ",
+            "»": "→",
+            "©": "◀",
+            "_": "⬡",
+            "}": "↓",
+            "\u0013": "□",
+            "{": "↑"
+          },
+          "note": "CDNU line 1. The eight 22-character CDNU lines sit on the bottom eight rows, 7 to 14, one column in so they are centred across (the WCtrlDcsBiosBridge uses rows 3 to 10). The F-14 reports no seat and only the RIO has a CDNU, so every MCDU shows the RIO's CDNU from either seat. The replace map turns the module's stand-ins into the font's glyphs: the font files a double-headed vertical arrow under Δ, a horizontal one under ◀, the scratchpad diamond under □ (it arrives as control code 0x13) and the cursor block under ⬡, because its underscore slot draws a cross."
+        },
+        {
+          "cells": "169-190",
+          "source": "RIO_CDNU_LINE2",
+          "colour": "green",
+          "replace": {
+            "_": "⬡",
+            "\u0013": "□",
+            "®": "Δ",
+            "»": "→",
+            "{": "↑",
+            "«": "←",
+            "}": "↓",
+            "©": "◀"
+          }
+        },
+        {
+          "cells": "193-214",
+          "source": "RIO_CDNU_LINE3",
+          "colour": "green",
+          "replace": {
+            "«": "←",
+            "{": "↑",
+            "\u0013": "□",
+            "_": "⬡",
+            "»": "→",
+            "}": "↓",
+            "®": "Δ",
+            "©": "◀"
+          }
+        },
+        {
+          "cells": "217-238",
+          "source": "RIO_CDNU_LINE4",
+          "colour": "green",
+          "replace": {
+            "©": "◀",
+            "}": "↓",
+            "»": "→",
+            "®": "Δ",
+            "«": "←",
+            "\u0013": "□",
+            "{": "↑",
+            "_": "⬡"
+          }
+        },
+        {
+          "cells": "241-262",
+          "source": "RIO_CDNU_LINE5",
+          "colour": "green",
+          "replace": {
+            "«": "←",
+            "»": "→",
+            "}": "↓",
+            "{": "↑",
+            "®": "Δ",
+            "©": "◀",
+            "_": "⬡",
+            "\u0013": "□"
+          }
+        },
+        {
+          "cells": "265-286",
+          "source": "RIO_CDNU_LINE6",
+          "colour": "green",
+          "replace": {
+            "®": "Δ",
+            "{": "↑",
+            "_": "⬡",
+            "\u0013": "□",
+            "}": "↓",
+            "©": "◀",
+            "»": "→",
+            "«": "←"
+          }
+        },
+        {
+          "cells": "289-310",
+          "source": "RIO_CDNU_LINE7",
+          "colour": "green",
+          "replace": {
+            "{": "↑",
+            "\u0013": "□",
+            "»": "→",
+            "«": "←",
+            "©": "◀",
+            "_": "⬡",
+            "}": "↓",
+            "®": "Δ"
+          }
+        },
+        {
+          "cells": "313-334",
+          "source": "RIO_CDNU_LINE8",
+          "colour": "green",
+          "replace": {
+            "}": "↓",
+            "«": "←",
+            "\u0013": "□",
+            "»": "→",
+            "®": "Δ",
+            "©": "◀",
+            "{": "↑",
+            "_": "⬡"
+          }
+        }
+      ]
+    }
+  ]
+}

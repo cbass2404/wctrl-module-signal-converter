@@ -25,10 +25,24 @@ reads the catalogue builds it first if it is missing or out of date (see below).
 **Built 2026-09-23: MCDU pages, on `feature/mcdu-page-profiles`.** The design
 is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
 
-- **The shipped defaults have not moved yet**, on purpose: the page names are
-  to be agreed with Cory first. Until they move, every shipped profile is
-  version 1 and the daemon skips it, so nothing lights from a default on this
-  branch. That is the next step; see [TODO.md](TODO.md).
+- **The shipped defaults are on pages** (names agreed with Cory,
+  2026-09-23). Every default is version 2. One page per module in
+  `data/default-pages`, each in slot 1 and the start slot on all three MCDU
+  names, slots 2 to 6 disabled: A-10C "CDU" (the radio rows included),
+  AH-64D "KU", CH-47F "CDU", F-14 "CDNU" (used by `f-14bu.json` only; the
+  F-14's own profile has no slots, since the CDNU needs the nightly),
+  F-16C_50 "Flight" and FA-18C_hornet "IFEI". Profiles with no MCDU content
+  have no `screens`.
+- **Shipped ids are readable**: `a10c-cdu`, `ah64d-ku`, `ch47f-cdu`,
+  `f14-cdnu`, `f16-flight`, `fa18-ifei`. Ids made in the editor are six
+  letters and digits with no hyphen, so the two can never clash.
+- **The pages came from the Captain's rows.** The followers' own MCDU rows
+  were dropped rather than kept as pages: two of them were stale copies (the
+  A-10C's without the radio rows, the AH-64D's with the old KEYBOARD UNIT
+  rule), and the rest matched the Captain. A page holds both seats' fields
+  itself, as the AH-64D and CH-47F do, so no seat needed a page of its own.
+- **Checked with a dry run and the tests**, not yet on the panel: every
+  default loads and validates against the pages with no caution.
 - **Where it lives.** `dsc-config`: `pages.rs` (library, slots, resolving the
   start page, seeding and update), `bundle.rs` (export and import), slots in
   `merge.rs`. The editor: `editor/src/pages.ts` for the screen section,

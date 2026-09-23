@@ -13,21 +13,21 @@ do not.
 
 ## Next
 
-- [ ] **Name the pages, then move the shipped defaults onto them.** MCDU
-      pages are built (2026-09-23, branch `feature/mcdu-page-profiles`), but
-      every shipped profile is still version 1, so none loads until this is
-      done. Agree the page names with Cory first. Then, per aircraft: the
-      MCDU fields in `data/defaults` become pages in
-      `data/default-pages/<module>.json`, the profile gets `screens` slots and
-      `schema_version: 2`, and loose MCDU fields leave `readouts`. Leave
-      `data/default-pages-previous` alone: the last release shipped no pages.
+- [x] ~~**Name the pages, then move the shipped defaults onto them.**~~
+      Done 2026-09-23: every shipped profile is version 2, and the six
+      aircraft with MCDU content each have one page in slot 1. Checked with a
+      dry run and the tests, not yet seen on the panel.
       [STATUS.md](STATUS.md), "Built 2026-09-23: MCDU pages"
+
+- [ ] **See the pages on the panel.** Fly one aircraft per page file and check
+      the MCDU looks as it did before the move: A-10C CDU, AH-64D KU, CH-47F
+      CDU, F-14BU CDNU, F-16 Flight, F/A-18 IFEI.
 
 - [ ] **Open the page editor in the window.** Built and type-checked, not yet
       clicked through: the six slots (Disabled, Blank, pages), Edit page and
       New page, Save page, Save as new page, Delete page, and export, import
-      and merge with pages. Needs a version 2 profile, so after the defaults
-      move, or with one made by New profile.
+      and merge with pages. The shipped defaults are version 2 now, so any
+      of the six aircraft with a page will do.
 
 - [x] ~~**Text output fields.**~~ Built and flown 2026-09-20, on the panel
       with DCS feeding it: a chain on the A-10C's free rows from the A-10C II

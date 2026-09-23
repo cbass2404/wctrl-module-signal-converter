@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "name": "AH-64D",
   "author": "",
   "profile_version": "0.1.0",
@@ -710,138 +710,54 @@
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
-  "readouts": [
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "PLT_KU_DISPLAY",
-      "seat": 0,
-      "colour": "green",
-      "replace": {
-        "~": "█",
-        "<": "◀",
-        "#": "█",
-        "=": "■",
-        ">": "▶"
-      },
-      "note": "KU scratchpad. The seat's own keyboard unit line, 22 characters, sits on the bottom row, 14, the MCDU's scratchpad row, one column in so it is centred across. SEAT_POSITION picks the pilot's KU (0) or the CPG's (1). The replace map follows the WCtrlDcsBiosBridge's AH-64D listener: ~ and # draw the block cursor, < and > the arrows, = a square."
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        "<": "◀",
-        "~": "█",
-        "#": "█",
-        "=": "■",
-        ">": "▶"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "289-310",
-      "divider": true,
-      "colour": "amber",
-      "label": "KEYBOARD UNIT",
-      "label_colour": "white",
-      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "PLT_KU_DISPLAY",
-      "seat": 0,
-      "colour": "green",
-      "replace": {
-        "=": "■",
-        "<": "◀",
-        "#": "█",
-        ">": "▶",
-        "~": "█"
-      }
-    },
-    {
-      "device": "MCDU_CoPilot",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        "~": "█",
-        ">": "▶",
-        "=": "■",
-        "#": "█",
-        "<": "◀"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "289-310",
-      "divider": true,
-      "colour": "amber",
-      "label": "KEYBOARD UNIT",
-      "label_colour": "white",
-      "note": "A rule on row 13, directly above the keyboard unit. The Apache exports only the KU, so everything above is dark and the line is what says the page ends here. No seat: it draws the same for either crew station, and one that waited for the seat would leave the glass blank until it arrived."
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "PLT_KU_DISPLAY",
-      "seat": 0,
-      "colour": "green",
-      "replace": {
-        "~": "█",
-        "=": "■",
-        ">": "▶",
-        "<": "◀",
-        "#": "█"
-      }
-    },
-    {
-      "device": "MCDU_Observer",
-      "display": "MCDU",
-      "cells": "313-334",
-      "source": "CPG_KU_DISPLAY",
-      "seat": 1,
-      "colour": "green",
-      "replace": {
-        ">": "▶",
-        "<": "◀",
-        "=": "■",
-        "#": "█",
-        "~": "█"
-      }
-    },
-    {
-      "device": "MCDU_Captain",
-      "display": "MCDU",
-      "cells": "288-311",
-      "content": [
-        {
-          "gap": true,
-          "rule": true,
-          "label": "KEYBOARD UNIT",
-          "label_colour": "white",
-          "colour": "amber",
-          "small": true
-        }
-      ]
-    }
-  ],
   "follows": {
     "CarrierAce_MFD_L": "CarrierAce_MFD_C",
     "CarrierAce_MFD_R": "CarrierAce_MFD_C",
     "MCDU_CoPilot": "MCDU_Captain",
     "MCDU_Observer": "MCDU_Captain"
+  },
+  "screens": {
+    "MCDU_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "ah64d-ku",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_CoPilot": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "ah64d-ku",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_Observer": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "ah64d-ku",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
   }
 }

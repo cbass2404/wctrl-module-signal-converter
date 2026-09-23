@@ -38,6 +38,9 @@ unless this says what moved.
   page; Save page writes the page to the library, where every profile on that
   module showing it picks up the change. Save as new page copies it, and
   Delete page empties every slot showing it, after listing them.
+- **The shipped MCDU screens are pages now**, each in slot 1 and shown at
+  mission start, so they look as before: CDU on the A-10C and CH-47F, KU on
+  the AH-64D, CDNU on the F-14BU, Flight on the F-16 and IFEI on the F/A-18.
 - **Pages travel with a profile.** Export writes the profile with every page
   its slots show, and any other pages on the module you tick. Import lists
   the pages it brings, each ticked on its own and renamed there if a page here

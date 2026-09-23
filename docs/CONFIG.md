@@ -1331,9 +1331,8 @@ because it looks correct.
 
 ## MCDU pages
 
-Built 2026-09-23. Profile schema version 2. The shipped defaults have not
-moved onto pages yet, so until they do every shipped profile is version 1 and
-refused.
+Built 2026-09-23. Profile schema version 2, which every shipped profile
+uses.
 
 A page is a named screen's worth of MCDU fields, kept in a library of its own
 rather than in a profile. A profile gives each MCDU six slots that point into

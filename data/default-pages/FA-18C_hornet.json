@@ -1,0 +1,337 @@
+{
+  "module": "FA-18C_hornet",
+  "pages": [
+    {
+      "id": "fa18-ifei",
+      "name": "IFEI",
+      "display": "MCDU",
+      "fields": [
+        {
+          "cells": "24-47",
+          "content": [
+            {
+              "text": " L ENGINE R ",
+              "colour": "white"
+            },
+            {
+              "gap": true
+            },
+            {
+              "text": "FUEL"
+            },
+            {
+              "gap": true,
+              "width": 5
+            }
+          ]
+        },
+        {
+          "cells": "48-71",
+          "content": [
+            {
+              "gap": true
+            },
+            {
+              "text": "MD",
+              "width": 3,
+              "align": "right",
+              "colour": "green"
+            }
+          ]
+        },
+        {
+          "cells": "72-95",
+          "content": [
+            {
+              "source": "IFEI_RPM_L",
+              "width": 4,
+              "colour": "amber"
+            },
+            {
+              "text": "RPM",
+              "width": 3,
+              "small": true
+            },
+            {
+              "source": "IFEI_RPM_R",
+              "width": 4,
+              "align": "right",
+              "colour": "amber"
+            },
+            {
+              "gap": true
+            },
+            {
+              "source": "IFEI_FUEL_UP",
+              "colour": "amber"
+            },
+            {
+              "gap": true,
+              "width": 3
+            }
+          ]
+        },
+        {
+          "cells": "288-311",
+          "content": [
+            {
+              "source": "IFEI_OIL_PRESS_L",
+              "width": 3,
+              "align": "right",
+              "colour": "amber"
+            },
+            {
+              "text": "OIL",
+              "width": 4,
+              "align": "right",
+              "colour": "white",
+              "small": true
+            },
+            {
+              "source": "IFEI_OIL_PRESS_R",
+              "width": 4,
+              "align": "right",
+              "colour": "amber"
+            },
+            {
+              "gap": true
+            },
+            {
+              "source": "IFEI_CLOCK_H",
+              "colour": "amber"
+            },
+            {
+              "text": ":",
+              "colour": "amber"
+            },
+            {
+              "source": "IFEI_CLOCK_M",
+              "colour": "amber"
+            },
+            {
+              "text": ":",
+              "colour": "amber"
+            },
+            {
+              "source": "IFEI_CLOCK_S",
+              "colour": "amber"
+            },
+            {
+              "text": "ET",
+              "width": 3,
+              "align": "right",
+              "colour": "green"
+            }
+          ]
+        },
+        {
+          "cells": "264-287",
+          "content": [
+            {
+              "gap": true
+            },
+            {
+              "text": "TIME",
+              "width": 4
+            },
+            {
+              "gap": true,
+              "width": 5
+            }
+          ]
+        },
+        {
+          "cells": "240-263",
+          "content": [
+            {
+              "source": "EXT_NOZZLE_POS_L",
+              "width": 3,
+              "align": "right",
+              "reads": [
+                0.0,
+                100.0
+              ],
+              "colour": "amber"
+            },
+            {
+              "text": "NOZ",
+              "width": 4,
+              "align": "right",
+              "small": true
+            },
+            {
+              "source": "EXT_NOZZLE_POS_R",
+              "width": 4,
+              "align": "right",
+              "reads": [
+                0.0,
+                100.0
+              ],
+              "colour": "amber"
+            },
+            {
+              "gap": true
+            },
+            {
+              "text": "ZN",
+              "width": 3,
+              "align": "right",
+              "colour": "green"
+            }
+          ]
+        },
+        {
+          "cells": "192-215",
+          "content": [
+            {
+              "text": "X100",
+              "width": 8,
+              "align": "right",
+              "small": true
+            },
+            {
+              "gap": true
+            },
+            {
+              "source": "IFEI_BINGO",
+              "colour": "amber"
+            },
+            {
+              "text": "DN",
+              "width": 3,
+              "align": "right",
+              "colour": "green"
+            }
+          ]
+        },
+        {
+          "cells": "144-167",
+          "content": [
+            {
+              "gap": true
+            },
+            {
+              "text": "UP",
+              "width": 3,
+              "align": "right",
+              "colour": "green"
+            }
+          ]
+        },
+        {
+          "cells": "96-119",
+          "content": [
+            {
+              "gap": true
+            },
+            {
+              "text": "QT",
+              "width": 3,
+              "align": "right",
+              "colour": "green"
+            }
+          ]
+        },
+        {
+          "cells": "120-143",
+          "content": [
+            {
+              "source": "IFEI_TEMP_L",
+              "colour": "amber"
+            },
+            {
+              "text": "TEM",
+              "width": 4,
+              "align": "right",
+              "small": true
+            },
+            {
+              "source": "IFEI_TEMP_R",
+              "width": 4,
+              "align": "centre",
+              "colour": "amber"
+            },
+            {
+              "gap": true
+            },
+            {
+              "source": "IFEI_FUEL_DOWN",
+              "colour": "amber"
+            },
+            {
+              "gap": true,
+              "width": 3
+            }
+          ]
+        },
+        {
+          "cells": "168-191",
+          "content": [
+            {
+              "source": "IFEI_FF_L",
+              "width": 3,
+              "align": "right",
+              "colour": "amber"
+            },
+            {
+              "text": "FF",
+              "width": 4,
+              "align": "right",
+              "small": true
+            },
+            {
+              "source": "IFEI_FF_R",
+              "width": 4,
+              "align": "right",
+              "colour": "amber"
+            },
+            {
+              "gap": true
+            },
+            {
+              "text": "BINGO",
+              "colour": "white",
+              "small": true
+            },
+            {
+              "gap": true,
+              "width": 4
+            }
+          ]
+        },
+        {
+          "cells": "312-335",
+          "content": [
+            {
+              "gap": true
+            },
+            {
+              "source": "IFEI_TIMER_H",
+              "colour": "amber"
+            },
+            {
+              "text": ":",
+              "colour": "amber"
+            },
+            {
+              "source": "IFEI_TIMER_M",
+              "colour": "amber"
+            },
+            {
+              "text": ":",
+              "colour": "amber"
+            },
+            {
+              "source": "IFEI_TIMER_S",
+              "colour": "amber"
+            },
+            {
+              "gap": true,
+              "width": 3
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

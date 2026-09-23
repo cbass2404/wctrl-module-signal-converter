@@ -1329,6 +1329,230 @@ Until the seat is known, a field bound to one stays dark. Guessing would put
 the other station's reading on the glass, which is worse than a blank cell
 because it looks correct.
 
+## MCDU pages
+
+Designed 2026-09-23, not built yet. Profile schema version 2.
+
+A page is a named screen's worth of MCDU fields, kept in a library of its own
+rather than in a profile. A profile gives each MCDU six slots that point into
+the library, and says which one shows when a mission starts. Pages exist so
+the screen can be swapped whole: for now by changing the start slot, later
+by holding a keyboard modifier and pressing a line select key.
+
+**Text grids only, for good.** Pages belong to CDU style screens: the MCDU
+under each of its names, and any other WinWing CDU with the same kind of
+glass, such as a PFP, once it is in `devices.json`. The UFC and the DED keep
+their fields in `readouts`, set up once and not swapped, because a fixed panel
+readout is what they are. The line is drawn by the display map rather than by
+name: a display with `"transport": "text"` takes slots and no other does, so
+the engine never learns the word MCDU and a new CDU qualifies with nothing
+else said.
+
+### A page file
+
+One file per module, named by its catalogue key, holding every page on that
+module:
+
+```jsonc
+// data/pages/FA-18C_hornet.json
+{
+  "module": "FA-18C_hornet", // the only aircraft limit, see below
+  "pages": [
+    {
+      "id": "k3f9x2", // fixed when the page is made
+      "name": "IFEI", // what the editor shows, and can change
+      "display": "MCDU",
+      "fields": [
+        // exactly a display field, without "device"
+        { "cells": "0-23", "source": "IFEI_RPM_L", "colour": "amber" },
+      ],
+    },
+  ],
+}
+```
+
+**Named by module, not by profile.** Profiles are named by hand and can
+share a module: `f-14.json` and `f-14bu.json` both fly `F-14`, and
+`fc3.json` and `no-aircraft.json` both ride on `FC3`. A page works in every
+profile on its module, so a file per profile would hold it twice or send one
+profile to another's file. The module key needs no table to find and cannot
+drift from what the pages read.
+
+**The id is not the name.** Profiles point at the id, so renaming a page
+reaches every profile using it with nothing rewritten. Ids are unique across
+the whole library. The name is for people, and is unique within its module,
+ignoring case and surrounding space, as a profile name is: the editor only
+ever shows one module's pages, so "Flight" on the F-16 and "Flight" on the
+A-10C cannot be mistaken for each other.
+
+**A file that will not parse** takes that module's pages out, and only
+those: the file is named in the log and the editor, and every slot on the
+module loads empty with a caution. Pages are written through a temporary file
+and a rename, as profiles are, so only a hand edit can do it.
+
+**Compatible means the same module.** A field names its signal by id, and an
+id means something only in the catalogue of one module. The F/A-18C and the
+F/A-18E both fly `FA-18C_hornet`, so a page made in one works in the other; an
+F-14 page reads nothing in a Hornet. A slot is offered only pages on the
+profile's module, and `validate` refuses any other. The editor names the
+aircraft a page suits from its module, and nothing more is stored.
+
+**A page is checked where it is used, as well as when it is saved.** Cells,
+overlaps, seats and colours do not depend on where the page goes, and are
+checked on save. The font does: an aircraft with a CDU of its own draws with
+its native font and one without draws with the profile's `font`, so one page
+can be fine in one profile and leave a blank cell in another. That check runs
+for each profile that points at the page, when the profile is loaded, and the
+editor shows it on the slot.
+
+### Slots in a profile
+
+```jsonc
+"schema_version": 2,
+"screens": {
+  "MCDU_Captain": {
+    "start": 1, // the slot shown when a mission starts, counting from 1
+    "slots": [
+      { "page": "k3f9x2", "key": null },
+      { "page": "p81qzt", "key": null },
+      null, null, null, null,
+    ],
+  },
+},
+```
+
+- **Six slots per MCDU, any of them empty.** `slots` always holds six
+  entries, so slot 3 is the same slot whatever is filled around it.
+- **`start` names a filled slot.** With every slot empty the screen is blank,
+  as an MCDU with no fields is today, and `start` is left out.
+- **The same page may sit in two slots.** Pointless, but not wrong.
+- **`key` is reserved for swapping**, below, and must be null until then. It
+  will say which line select key brings the slot up. It is there now so that
+  giving it a meaning changes no profile's shape.
+- **No loose MCDU fields.** A field in `readouts` on the MCDU is refused in
+  version 2: everything on that screen comes from a page, so nothing on it
+  has two owners.
+- **Resolved when the engine takes the profile**, the way `follows` is: the
+  start page's fields become ordinary display fields on the device, so
+  painting, sweeping and resolving never learn about pages. Swapping will be
+  resolving again with another slot and repainting one screen.
+
+**Per device, as everything else is.** An MCDU that follows the Captain shows
+what the Captain shows, the page included. One with slots of its own is
+independent. A follower's own `screens` entry is kept and ignored, like its
+other rows.
+
+**A slot whose page has gone** (removed by hand, or not brought in by an
+import) loads as empty with a caution, rather than refusing the profile.
+If it was the start slot, the first filled slot starts instead.
+
+### The library
+
+- **Where it lives.** Shipped pages are read-only in `data/default-pages`,
+  and the library in use is `data/pages`, one file per module in each.
+  Install copies every file. In development both are the tracked folder, as
+  for profiles.
+- **Shipped ids are for good.** An id is never reused for a different page. A
+  page that changes what it is for ships under a new id.
+- **Editing uses the MCDU editor that exists.** Picking a slot opens its page
+  in the field editor, and saving writes its module's page file. **Save as new page**
+  copies it under a new id and a name you give. A page on the module but in
+  no slot can be opened from the library list.
+- **Editing a page changes it everywhere it is used.** That is what a library
+  is for, so the editor says so: each page lists the profiles and slots using
+  it.
+- **Deleting a page** lists what uses it and, once confirmed, empties those
+  slots. A start slot that empties moves to the first filled slot.
+
+### Updates: pages and profiles apart
+
+An update reconciles pages and profiles as two separate checks. Neither reads
+the other's files, and each leaves the other valid whatever it decides, since
+a slot only names an id and a page knows nothing of the slots using it. So
+they need no order and no knowledge of each other. Both follow "Correcting a
+display field an update changed", each against a snapshot of its own.
+
+**Pages**, against `data/default-pages-previous`, the pages as the last
+release shipped them:
+
+- **New and deleted.** A shipped page the snapshot lacks is new in this
+  release and is copied in. One the snapshot has but the library does not
+  was deleted by the user, and stays deleted. This is the same pair of rows
+  that tells a new field from a deleted one, and it is why pages are not
+  seeded by "copy every id not already there", which would put a deleted page
+  back on every update.
+- **A field at a time**, keyed on cells, with the five cases in the table.
+  The name is one more field: it follows the shipped name only while it still
+  matches the snapshot's.
+- **A new shipped page whose name a user page already has** gets a number
+  added, as on import.
+
+**Profiles**, against `data/defaults-previous` as now. A device's slots are
+reconciled with the profile's display fields, keyed on device and slot
+number, with `start` as one more field. A slot still as shipped takes the new
+one, and a slot the user changed is theirs. Deleting a page empties its slots,
+which is a change, so an update never puts back a slot the user emptied that
+way.
+
+**What that leaves.** A release that adds a page and points a slot at it
+arrives in halves when the user owns one half: the page is copied in but not
+slotted, because they changed that slot, or slotted where they edited the
+page. Each half is valid alone, and the page is in the library to pick.
+
+Each check keeps its own `.updated`, in its own folder, so each runs once per
+version.
+
+**In a release**, `tools/release.cmd` treats the pages exactly as it treats
+the defaults, at the same three points, with `tools/snapshot.py` doing both
+pairs of folders:
+
+- **Step 0** lists the shipped pages that moved since the last tag beside the
+  profiles, since a fix to a page reaches somebody who edited it only if
+  CHANGELOG.md names it.
+- **Step 3**, before the tag, checks that `data/default-pages-previous` still
+  holds the pages the last release shipped, and refuses to tag if not.
+- **Step 7**, once the tag is pushed, refreshes `data/default-pages-previous`
+  from `data/default-pages` for the next release, left unstaged with the
+  defaults' snapshot, so one snapshot branch and pull request carries both.
+  Either refresh failing warns without undoing the release, as now.
+
+### Sharing pages
+
+- **Export writes the profile and its pages as one file**: every page its
+  slots use, and any others on the same module ticked in the dialog.
+
+  ```jsonc
+  { "schema_version": 2, "profile": { "name": "...", "screens": {} }, "pages": [] }
+  ```
+
+- **Import shows the pages beside the lamps and lines**, each ticked on its
+  own. A slot pointing at a page left unticked comes in empty.
+- **A page already here by id** is left alone if it matches, and otherwise
+  comes in under a new id. **A name already taken** gets a number added,
+  which the preview shows and can be changed there.
+- **Merge from... offers slots on the MCDU** instead of lines: slot n of the
+  source replaces slot n of the target, and brings its page into the library
+  if it is not there. The UFC and the DED still merge a line at a time.
+- **Version 1 files are refused**, on import and in the active folder, with a
+  message saying they were made before pages. There is no migration: the
+  testers reset their app data for this release.
+
+### Swapping, later
+
+Not part of this change, and written down so the schema holds still for it.
+
+- **Hold Alt, Ctrl or Shift and press a left line select key**, LSK 1L to 6L
+  for slots 1 to 6 unless `key` says otherwise. DCS already treats those keys
+  as modifiers, so a modifier and a line select key is a binding DCS has only
+  if the user made one, and needing the keyboard and the panel together makes
+  it hard to do by accident.
+- **The modifier is an app-wide setting**, not part of a profile, since which
+  one is free depends on how DCS is bound on that PC, not on the aircraft.
+- **Needs first:** a SimAppPro capture of the MCDU's input report for the key
+  bits, and a keyboard reader in the daemon.
+- **The page in use is not saved.** Every aircraft load starts on `start`.
+- **One swap per press**, however long it is held.
+
 ## Open questions
 
 1. **Profile inheritance.** Should a profile be able to extend a base, so a

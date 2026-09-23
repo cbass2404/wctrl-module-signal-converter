@@ -1,0 +1,52 @@
+{
+  "module": "AH-64D",
+  "pages": [
+    {
+      "id": "ah64d-ku",
+      "name": "KU",
+      "display": "MCDU",
+      "fields": [
+        {
+          "cells": "313-334",
+          "source": "PLT_KU_DISPLAY",
+          "seat": 0,
+          "colour": "green",
+          "replace": {
+            "~": "█",
+            "<": "◀",
+            "#": "█",
+            "=": "■",
+            ">": "▶"
+          },
+          "note": "KU scratchpad. The seat's own keyboard unit line, 22 characters, sits on the bottom row, 14, the MCDU's scratchpad row, one column in so it is centred across. SEAT_POSITION picks the pilot's KU (0) or the CPG's (1). The replace map follows the WCtrlDcsBiosBridge's AH-64D listener: ~ and # draw the block cursor, < and > the arrows, = a square."
+        },
+        {
+          "cells": "313-334",
+          "source": "CPG_KU_DISPLAY",
+          "seat": 1,
+          "colour": "green",
+          "replace": {
+            "<": "◀",
+            "~": "█",
+            "#": "█",
+            "=": "■",
+            ">": "▶"
+          }
+        },
+        {
+          "cells": "288-311",
+          "content": [
+            {
+              "gap": true,
+              "rule": true,
+              "label": "KEYBOARD UNIT",
+              "label_colour": "white",
+              "colour": "amber",
+              "small": true
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

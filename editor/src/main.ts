@@ -24,6 +24,8 @@ import {
   exportProfile,
   importPick,
   importProfile,
+  mergeParts,
+  mergeProfile,
   saveProfile,
   updateCheck,
 } from "./api";
@@ -38,6 +40,11 @@ import type {
   Device,
   ImportPreview,
   Led,
+  LinePart,
+  MergeParts,
+  MergePick,
+  MergeReport,
+  MergeSource,
   ModuleChoice,
   Profile,
   ProfileSummary,
@@ -100,6 +107,193 @@ function aircraftSummary(names: string[], limit = 50): { text: string; title: Re
 
 function clear(): void {
   app.replaceChildren();
+}
+
+/**
+ * A checkbox over others: ticking it ticks them all, and it shows ticked,
+ * unticked or part ticked as they are. Nests: going down, what it ticks is
+ * told with a change event; coming up, a box that has taken on its boxes'
+ * state says so with an input event, so every level of a box over boxes over
+ * boxes stays true. While it ticks its boxes it does not listen to them, or
+ * the first one ticked would make it part ticked and stop the rest.
+ */
+function parentBox(children: HTMLInputElement[]): HTMLInputElement {
+  const all = el("input", { type: "checkbox" });
+  let setting = false;
+  const reflect = (): void => {
+    if (setting) return;
+    const n = children.filter((b) => b.checked).length;
+    all.checked = n === children.length;
+    all.indeterminate = n > 0 && n < children.length;
+    all.dispatchEvent(new Event("input"));
+  };
+  all.addEventListener("change", () => {
+    const on = all.checked;
+    setting = true;
+    for (const b of children) {
+      if (b.checked === on && !b.indeterminate) continue;
+      b.checked = on;
+      b.dispatchEvent(new Event("change"));
+    }
+    setting = false;
+    reflect();
+  });
+  for (const b of children) {
+    b.addEventListener("change", reflect);
+    b.addEventListener("input", reflect);
+  }
+  reflect();
+  return all;
+}
+
+/**
+ * Head a checklist of aircraft with Select all, when there is more than one to
+ * select, with the aircraft set in under it. It starts ticked when every
+ * aircraft does, and part ticked when only some do.
+ */
+function selectAll(list: HTMLElement, boxes: HTMLInputElement[]): void {
+  if (boxes.length < 2) return;
+  for (const b of boxes) b.parentElement?.classList.add("sub");
+  list.prepend(el("label", { class: "group" }, parentBox(boxes), el("span", {}, "Select all")));
+}
+
+function plural(n: number, one: string, many = `${one}s`): string {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/**
+ * The lights and screen lines a profile could give another, every one ticked
+ * to start with. Lights go a lamp at a time under a box per panel, screens a
+ * line at a time under a box per screen, and every group has a box over it.
+ */
+function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLElement; pick: () => MergePick } {
+  const list = el("div", { class: "checklist" });
+  const tick = (): HTMLInputElement => {
+    const b = el("input", { type: "checkbox" });
+    b.checked = true;
+    b.addEventListener("change", onChange);
+    return b;
+  };
+  const lights: [HTMLInputElement, { device: string; led: string }][] = [];
+  const lines: [HTMLInputElement, LinePart][] = [];
+
+  if (parts.lights.length > 0) {
+    const panelBoxes: HTMLInputElement[] = [];
+    const rows: HTMLElement[] = [];
+    for (const panel of parts.lights) {
+      const boxes = panel.lamps.map((lamp) => {
+        const b = tick();
+        lights.push([b, { device: panel.device, led: lamp.led }]);
+        return b;
+      });
+      const box = parentBox(boxes);
+      panelBoxes.push(box);
+      rows.push(
+        el(
+          "label",
+          { class: "sub" },
+          box,
+          el("span", {}, panel.label),
+          el("span", { class: "meta" }, plural(panel.lamps.length, "lamp")),
+        ),
+      );
+      panel.lamps.forEach((lamp, i) => {
+        rows.push(el("label", { class: "sub2" }, boxes[i] as HTMLInputElement, el("span", {}, lamp.label)));
+      });
+    }
+    list.append(el("label", { class: "group" }, parentBox(panelBoxes), el("span", {}, "Lights")), ...rows);
+  }
+
+  if (parts.lines.length > 0) {
+    const screens = new Map<string, LinePart[]>();
+    for (const l of parts.lines) {
+      const key = `${l.device}/${l.display}`;
+      screens.set(key, [...(screens.get(key) ?? []), l]);
+    }
+    const screenBoxes: HTMLInputElement[] = [];
+    const rows: HTMLElement[] = [];
+    for (const group of screens.values()) {
+      const boxes = group.map((l) => {
+        const b = tick();
+        lines.push([b, l]);
+        return b;
+      });
+      const box = parentBox(boxes);
+      screenBoxes.push(box);
+      rows.push(el("label", { class: "sub" }, box, el("span", {}, group[0]?.screen ?? "")));
+      group.forEach((l, i) => {
+        const b = boxes[i] as HTMLInputElement;
+        rows.push(
+          el(
+            "label",
+            { class: "sub2" },
+            b,
+            el("span", {}, l.line),
+            el("span", { class: "meta" }, plural(l.fields, "field")),
+          ),
+        );
+      });
+    }
+    list.append(el("label", { class: "group" }, parentBox(screenBoxes), el("span", {}, "Screens")), ...rows);
+  }
+
+  if (lights.length === 0 && lines.length === 0) {
+    list.append(el("p", { class: "meta" }, "Nothing is set up in it to merge: no lamp assigned and no screen field."));
+  }
+
+  const pick = (): MergePick => ({
+    lights: lights.filter(([b]) => b.checked).map(([, d]) => d),
+    lines: lines
+      .filter(([b]) => b.checked)
+      .map(([, l]) => ({ device: l.device, display: l.display, line: l.line })),
+  });
+  return { node: list, pick };
+}
+
+/** One panel's or line's part of a merge, as a sentence. */
+function describeChange(c: MergeReport["changes"][number]): string {
+  const noun = c.fields ? "field" : "lamp";
+  const bits: string[] = [];
+  if (c.added > 0) bits.push(`${plural(c.added, noun)} added`);
+  if (c.replaced > 0) bits.push(`${plural(c.replaced, noun)} replaced`);
+  if (c.removed > 0) bits.push(`${plural(c.removed, noun)} removed`);
+  if (c.unchanged > 0) bits.push(`${c.unchanged} already the same`);
+  return `${c.label}: ${bits.length > 0 ? bits.join(", ") : "nothing to take"}.`;
+}
+
+/**
+ * Merge what was ticked, once the user has seen what it does.
+ *
+ * Asked of the backend first without writing, so the question states what
+ * will change rather than what was ticked, and a merge the daemon would
+ * refuse is refused before it is asked. Nothing is asked when nothing would
+ * change. Throws the backend's refusal for the caller to show. Resolves true
+ * once written.
+ */
+async function runMerge(
+  from: MergeSource,
+  fromName: string,
+  into: ProfileSummary,
+  pick: MergePick,
+): Promise<boolean> {
+  const report = await mergeProfile(from, into.file, pick, false);
+  const changing = report.changes.filter((c) => c.added + c.replaced + c.removed > 0);
+  if (changing.length === 0) {
+    throw new Error(`Everything ticked is already the same in ${into.name}, so there is nothing to merge.`);
+  }
+  const ok = await confirmAction(
+    `Merge into ${into.name}?\n\n` +
+      `From ${fromName}, this changes:\n${changing.map(describeChange).join("\n")}\n\n` +
+      `A lamp takes ${fromName}'s setup where ${fromName} assigns it, and is left as it is where ` +
+      `${fromName} does not. A screen line is replaced whole: its fields become ${fromName}'s. ` +
+      `Everything not ticked, and ${into.name}'s name, aircraft and panel settings, stay as they are.` +
+      (report.notes.length > 0 ? `\n\n${report.notes.join("\n")}` : "") +
+      `\n\nThe rows replaced or removed cannot be recovered.`,
+    "Merge",
+  );
+  if (!ok) return false;
+  await mergeProfile(from, into.file, pick, true);
+  return true;
 }
 
 /**
@@ -257,6 +451,12 @@ async function showLibrary(): Promise<void> {
       const share = el("button", {}, "Export...");
       share.addEventListener("click", () => void exportOne(row));
       actions.append(copy, share);
+      // Offered only when there is something on the same module to take from.
+      if (mergeSources(row, rows).length > 0) {
+        const take = el("button", {}, "Merge from...");
+        take.addEventListener("click", () => void showMergeFrom(row, rows));
+        actions.append(take);
+      }
     }
     if (row.has_default) {
       const reset = el("button", { class: "danger" }, "Reset");
@@ -320,6 +520,11 @@ async function exportOne(row: ProfileSummary): Promise<void> {
  * ticked, ones another profile flies start unticked with where they are. Taking
  * one asks first. A profile that would be left with no aircraft is deleted, so
  * that asks too, and saying no to it cancels the import outright.
+ *
+ * Or it is merged into a profile already here on the same module, taking only
+ * the lights and screen lines ticked, and saying what that changes before it
+ * is done. Importing it whole asks nothing more than the moves and deletes
+ * above, since it rewrites no profile in place.
  */
 async function showImport(): Promise<void> {
   let preview: ImportPreview | null;
@@ -344,13 +549,25 @@ async function showImport(): Promise<void> {
   for (const a of picked.aircraft) {
     const owner = claimedBy.get(a);
     const box = el("input", { type: "checkbox", value: a });
-    box.checked = owner === undefined;
+    // Every aircraft it was made for starts ticked, even one another profile
+    // flies: taking it is still asked before anything moves.
+    box.checked = true;
     boxes.push(box);
     const row = el("label", {}, box, el("span", {}, a));
     if (owner) row.append(el("span", { class: "meta" }, `in ${owner.name}`));
     list.append(row);
   }
+  selectAll(list, boxes);
   const chosen = (): string[] => boxes.filter((b) => b.checked).map((b) => b.value);
+
+  // Profiles here it could be merged into instead.
+  const targets = existing.filter((p) => !p.error && p.module === picked.module);
+  const mode = el("select", {});
+  mode.append(el("option", { value: "" }, "Whole profile, as a profile of its own"));
+  for (const t of targets) {
+    mode.append(el("option", { value: t.file }, `Merged into ${t.name}: only the lights and screen lines ticked`));
+  }
+  const into = (): ProfileSummary | undefined => targets.find((t) => t.file === mode.value);
 
   const name = el("input", { type: "text", value: picked.name });
   const moves = el("p", { class: "meta" });
@@ -377,10 +594,31 @@ async function showImport(): Promise<void> {
         : `${t.taken.join(", ")} out of ${t.from.name}`,
     );
     moves.textContent = lines.length > 0 ? `Moves ${lines.join("; ")}.` : "";
-    if (chosen().length > 0 && name.value.trim() !== "") make.removeAttribute("disabled");
+    const merging = into() !== undefined;
+    whole.hidden = merging;
+    merge.node.hidden = !merging;
+    make.textContent = merging ? "Merge..." : "Import";
+    const pick = merge.pick();
+    const ready = merging
+      ? pick.lights.length + pick.lines.length > 0
+      : chosen().length > 0 && name.value.trim() !== "";
+    if (ready) make.removeAttribute("disabled");
     else make.setAttribute("disabled", "");
   };
+  const merge = mergeChecklist(picked.parts, () => sync());
+  const whole = el(
+    "div",
+    {},
+    el("p", { class: "meta" }, "Which aircraft is it for? These are the ones it was made for."),
+    list,
+    el("label", { class: "field" }, "Name", name),
+    moves,
+  );
   name.addEventListener("input", sync);
+  mode.addEventListener("change", () => {
+    failed.textContent = "";
+    sync();
+  });
   for (const b of boxes) b.addEventListener("change", sync);
 
   const about = [`Reads ${picked.module}.`];
@@ -405,14 +643,9 @@ async function showImport(): Promise<void> {
     for (const n of notes) box.append(el("div", { class: "caution" }, n));
     dialog.append(box);
   }
-  dialog.append(
-    el("p", { class: "meta" }, "Which aircraft is it for? These are the ones it was made for."),
-    list,
-    el("label", { class: "field" }, "Name", name),
-    moves,
-    failed,
-    el("div", { class: "actions" }, cancel, make),
-  );
+  // Merging is offered only where a profile here reads the same module.
+  if (targets.length > 0) dialog.append(el("label", { class: "field" }, "Import as", mode));
+  dialog.append(whole, merge.node, failed, el("div", { class: "actions" }, cancel, make));
   app.append(dialog);
   dialog.addEventListener("close", () => dialog.remove());
   dialog.showModal();
@@ -422,6 +655,18 @@ async function showImport(): Promise<void> {
   cancel.addEventListener("click", () => dialog.close());
   make.addEventListener("click", () => {
     void (async () => {
+      const target = into();
+      if (target) {
+        try {
+          if (!(await runMerge({ kind: "file", path: picked.path }, picked.name, target, merge.pick()))) return;
+          dialog.close();
+          showBanner(`Merged ${picked.name} into ${target.name}.`);
+          await showProfile(target.file);
+        } catch (e) {
+          failed.textContent = e instanceof Error ? e.message : String(e);
+        }
+        return;
+      }
       const plan = takes();
       // Taking an aircraft from another profile changes what that one flies,
       // so it is asked, not only listed.
@@ -473,6 +718,85 @@ async function showImport(): Promise<void> {
       }
     })();
   });
+}
+
+/** Profiles `row` could take lights and screen lines from: any other on its module. */
+function mergeSources(row: ProfileSummary, rows: ProfileSummary[]): ProfileSummary[] {
+  return rows.filter((r) => r.file !== row.file && !r.error && r.module === row.module);
+}
+
+/**
+ * Take some of another profile's setup into this one.
+ *
+ * For profiles that read one module and are kept apart on purpose, the F-14
+ * and F-14BU being the shipped case: a change made in one is wanted in the
+ * other, without making it twice. Laid out like Import's merge, which it is,
+ * with a profile here as the source in place of a file.
+ */
+async function showMergeFrom(row: ProfileSummary, rows: ProfileSummary[]): Promise<void> {
+  const sources = mergeSources(row, rows);
+  const from = el("select", {});
+  for (const s of sources) from.append(el("option", { value: s.file }, s.name));
+  const holder = el("div", {});
+  const failed = el("p", { class: "bad" });
+  const make = el("button", { class: "primary" }, "Merge...");
+  const cancel = el("button", {}, "Cancel");
+  let merge: { node: HTMLElement; pick: () => MergePick } | null = null;
+
+  const sync = (): void => {
+    const pick = merge?.pick();
+    if (pick && pick.lights.length + pick.lines.length > 0) make.removeAttribute("disabled");
+    else make.setAttribute("disabled", "");
+  };
+  const load = async (): Promise<void> => {
+    failed.textContent = "";
+    merge = null;
+    sync();
+    try {
+      merge = mergeChecklist(await mergeParts(from.value), sync);
+      holder.replaceChildren(merge.node);
+    } catch (e) {
+      holder.replaceChildren();
+      failed.textContent = e instanceof Error ? e.message : String(e);
+    }
+    sync();
+  };
+  from.addEventListener("change", () => void load());
+
+  const dialog = el(
+    "dialog",
+    { class: "picker" },
+    el("h2", {}, `Merge into ${row.name}`),
+    el(
+      "p",
+      { class: "meta" },
+      `Take lights and screen lines from another ${row.module} profile. Nothing is changed until you confirm.`,
+    ),
+    el("label", { class: "field" }, "Take from", from),
+    holder,
+    failed,
+    el("div", { class: "actions" }, cancel, make),
+  );
+  app.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
+  cancel.addEventListener("click", () => dialog.close());
+  make.addEventListener("click", () => {
+    const source = sources.find((s) => s.file === from.value);
+    if (!source || !merge) return;
+    const pick = merge.pick();
+    void (async () => {
+      try {
+        if (!(await runMerge({ kind: "profile", file: source.file }, source.name, row, pick))) return;
+        dialog.close();
+        showBanner(`Merged ${source.name} into ${row.name}.`);
+        await showLibrary();
+      } catch (e) {
+        failed.textContent = e instanceof Error ? e.message : String(e);
+      }
+    })();
+  });
+  await load();
 }
 
 /** Reset discards the user's work, so it asks first and says exactly what it does. */
@@ -812,6 +1136,7 @@ async function showNewProfile(): Promise<void> {
       if (owner) row.append(el("span", { class: "meta" }, `in ${owner.name}`));
       list.append(row);
     }
+    selectAll(list, boxes);
     const chosen = (): string[] => boxes.filter((b) => b.checked).map((b) => b.value);
 
     // Anything this could sensibly be copied from: a profile on the same

@@ -550,6 +550,56 @@ export interface ImportPreview {
   /** Rows reading something this DCS-BIOS cannot back. They load and stay off. */
   flagged: number;
   cautions: string[];
+  /** What it could give a profile already here, for a merge. */
+  parts: MergeParts;
+}
+
+/** A panel whose assigned lamps can be merged into another profile. */
+export interface LightPart {
+  device: string;
+  label: string;
+  /** In the panel's order. */
+  lamps: { led: string; label: string }[];
+}
+
+/** One line of a screen whose fields can be merged into another profile. */
+export interface LinePart {
+  device: string;
+  display: string;
+  /** The panel and screen, the heading its lines are grouped under. */
+  screen: string;
+  line: string;
+  fields: number;
+}
+
+export interface MergeParts {
+  lights: LightPart[];
+  lines: LinePart[];
+}
+
+/** What the user ticked to merge: lamps and lines by name. */
+export interface MergePick {
+  lights: { device: string; led: string }[];
+  lines: { device: string; display: string; line: string }[];
+}
+
+/** Where a merge takes from: the file picked for import, or a profile here. */
+export type MergeSource = { kind: "file"; path: string } | { kind: "profile"; file: string };
+
+/** What merging did, or would do, to one panel's lamps or one screen line. */
+export interface MergeChange {
+  label: string;
+  added: number;
+  replaced: number;
+  removed: number;
+  unchanged: number;
+  /** Counts fields rather than lamps. */
+  fields: boolean;
+}
+
+export interface MergeReport {
+  changes: MergeChange[];
+  notes: string[];
 }
 
 export interface ProfileSummary {

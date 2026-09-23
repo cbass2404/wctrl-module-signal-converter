@@ -10,12 +10,18 @@
 //! it and confirms the move. Unlike Copy to..., a move may take every aircraft
 //! a profile has, and that profile is then deleted, but only once the user has
 //! confirmed deleting it. The file it came from is never written.
+//!
+//! An import can instead be merged into a profile already here, taking only
+//! the panels' lamps and screen lines the user ticks. So can another profile
+//! on the same module, which is how the F-14 and F-14BU share a change
+//! without it being made twice. See `dsc_config::merge`.
 
 use std::path::{Path, PathBuf};
 
+use dsc_config::merge::{self, Change, Parts, Pick};
 use dsc_config::paths::Paths;
-use dsc_config::Profile;
-use serde::Serialize;
+use dsc_config::{DeviceInventory, DisplayCatalogue, Profile};
+use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::check::Cache;
@@ -36,6 +42,44 @@ pub struct Preview {
     /// Rows reading something this DCS-BIOS cannot back. They load and stay off.
     pub flagged: usize,
     pub cautions: Vec<String>,
+    /// What it could give a profile already here, for a merge.
+    pub parts: Parts,
+}
+
+/// Where a merge takes from: a file picked for import, or a profile here.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Source {
+    File { path: String },
+    Profile { file: String },
+}
+
+/// What a merge would do, for the window to put to the user before it is done.
+#[derive(Serialize)]
+pub struct MergeReport {
+    /// Every panel and line picked, including any it would leave as they are.
+    pub changes: Vec<Change>,
+    pub notes: Vec<String>,
+}
+
+fn maps(paths: &Paths) -> Result<(DeviceInventory, DisplayCatalogue), String> {
+    let devices = DeviceInventory::load(&paths.devices).map_err(|e| format!("reading {}: {e}", paths.devices.display()))?;
+    let displays =
+        DisplayCatalogue::load_dir(&paths.displays).map_err(|e| format!("loading {}: {e}", paths.displays.display()))?;
+    Ok((devices, displays))
+}
+
+impl Source {
+    /// The profile to take from, checked the way an import is when it comes
+    /// from outside.
+    fn load(&self, paths: &Paths, cache: &Cache) -> Result<Profile, String> {
+        match self {
+            Source::File { path } => read(paths, cache, Path::new(path)),
+            Source::Profile { file } => {
+                Profile::load(&paths.profiles.active.join(file)).map_err(|e| format!("reading {file}: {e}"))
+            }
+        }
+    }
 }
 
 /// The profile at `path`, if it is one this install would load.
@@ -129,7 +173,9 @@ pub async fn import_pick(app: tauri::AppHandle, cache: tauri::State<'_, Cache>) 
     let paths = Paths::resolve();
     let profile = read(&paths, &cache, &path)?;
     let (flags, _) = cache.flags(&paths, &profile);
+    let (devices, displays) = maps(&paths)?;
     Ok(Some(Preview {
+        parts: merge::parts(&profile, &devices, &displays),
         path: path.display().to_string(),
         name: profile.name.clone(),
         author: profile.author.clone(),
@@ -161,6 +207,52 @@ pub fn import_profile(
     let paths = Paths::resolve();
     let profile = read(&paths, &cache, Path::new(&path))?;
     claims::write_new_deleting(&paths.profiles.active, settle(profile, name, aircraft)?, &delete)
+}
+
+/// What a profile here could give another, for Merge from....
+#[tauri::command]
+pub fn merge_parts(file: String) -> Result<Parts, String> {
+    let paths = Paths::resolve();
+    let profile = Profile::load(&paths.profiles.active.join(&file)).map_err(|e| format!("reading {file}: {e}"))?;
+    let (devices, displays) = maps(&paths)?;
+    Ok(merge::parts(&profile, &devices, &displays))
+}
+
+/// Take the picked lamps and lines from `from` into the profile `into`, and
+/// say what that did. With `write` false nothing is saved, which is how the
+/// window asks what a merge would do before asking the user.
+///
+/// Refused, either way, when the result would not load: a lamp merged in that
+/// matches one on a panel that was not, or a field that now shares cells with
+/// one on a line left alone.
+#[tauri::command]
+pub fn merge_profile(
+    from: Source,
+    into: String,
+    pick: Pick,
+    write: bool,
+    cache: tauri::State<'_, Cache>,
+) -> Result<MergeReport, String> {
+    let paths = Paths::resolve();
+    let source = from.load(&paths, &cache)?;
+    let path = paths.profiles.active.join(&into);
+    let target = Profile::load(&path).map_err(|e| format!("reading {into}: {e}"))?;
+    let (devices, displays) = maps(&paths)?;
+    let merged = merge::merge(&target, &source, &pick, &devices, &displays)?;
+    let problems = cache.problems(&paths, &merged.profile);
+    if !problems.is_empty() {
+        return Err(format!(
+            "{} would not load with this merged in, so nothing was changed:
+{}",
+            target.name,
+            problems.join("
+")
+        ));
+    }
+    if write && merged.changes.iter().any(Change::changes_anything) {
+        merged.profile.save(&path).map_err(|e| format!("writing {into}: {e}"))?;
+    }
+    Ok(MergeReport { changes: merged.changes, notes: merged.notes })
 }
 
 #[cfg(test)]

@@ -323,6 +323,20 @@ dialog.picker .checklist label {
   padding: 1px 4px;
 }
 
+/* A box over the boxes below it: Select all, or a merge's Lights and Screens,
+   with what it covers set in under it. */
+dialog.picker .checklist label.group {
+  font-weight: 600;
+}
+
+dialog.picker .checklist label.sub {
+  padding-left: 26px;
+}
+
+dialog.picker .checklist label.sub2 {
+  padding-left: 48px;
+}
+
 /* A dropdown inside a field takes the field's spacing, not the list's. */
 dialog.picker label.field select {
   margin: 0;

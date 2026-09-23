@@ -10,6 +10,7 @@ import { displaySection } from "./readout";
 import {
   catalogueStatus,
   checkProfile,
+  openPages,
   cloneProfile,
   createProfile,
   defaultProfile,
@@ -21,6 +22,7 @@ import {
   openUpdate,
   resetProfile,
   deleteProfile,
+  exportPages,
   exportProfile,
   importPick,
   importProfile,
@@ -33,11 +35,14 @@ import { bindingEditor, iconButton } from "./binding";
 import { confirmAction } from "./confirm";
 import { manageConverter } from "./converter";
 import { showFieldCautions, showFlags } from "./flags";
+import { pageBook, pagesChecked, pageSection, pageUnsaved, showPageProblems } from "./pages";
+import type { PageBook } from "./pages";
 import { setLearnContext, stopLearning } from "./learn";
 import { infoIcon } from "./typeahead";
 import type {
   Binding,
   Device,
+  ExportPage,
   ImportPreview,
   Led,
   LinePart,
@@ -46,6 +51,8 @@ import type {
   MergeReport,
   MergeSource,
   ModuleChoice,
+  PagePlan,
+  PageTake,
   Profile,
   ProfileSummary,
   Readout,
@@ -176,6 +183,7 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
   };
   const lights: [HTMLInputElement, { device: string; led: string }][] = [];
   const lines: [HTMLInputElement, LinePart][] = [];
+  const slots: [HTMLInputElement, { device: string; slot: number }][] = [];
 
   if (parts.lights.length > 0) {
     const panelBoxes: HTMLInputElement[] = [];
@@ -237,8 +245,39 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
     list.append(el("label", { class: "group" }, parentBox(screenBoxes), el("span", {}, "Screens")), ...rows);
   }
 
-  if (lights.length === 0 && lines.length === 0) {
-    list.append(el("p", { class: "meta" }, "Nothing is set up in it to merge: no lamp assigned and no screen field."));
+  // An MCDU merges a slot at a time: slot n of the source replaces slot n
+  // here, and brings its page with it.
+  if (parts.slots.length > 0) {
+    const screens = new Map<string, typeof parts.slots>();
+    for (const s of parts.slots) screens.set(s.device, [...(screens.get(s.device) ?? []), s]);
+    const screenBoxes: HTMLInputElement[] = [];
+    const rows: HTMLElement[] = [];
+    for (const group of screens.values()) {
+      const boxes = group.map((s) => {
+        const b = tick();
+        slots.push([b, { device: s.device, slot: s.slot }]);
+        return b;
+      });
+      const box = parentBox(boxes);
+      screenBoxes.push(box);
+      rows.push(el("label", { class: "sub" }, box, el("span", {}, `${group[0]?.screen ?? ""} pages`)));
+      group.forEach((s, i) => {
+        rows.push(
+          el(
+            "label",
+            { class: "sub2" },
+            boxes[i] as HTMLInputElement,
+            el("span", {}, `Slot ${s.slot}: ${s.blank ? "blank screen" : s.page}`),
+            el("span", { class: "meta" }, s.start ? "starts" : ""),
+          ),
+        );
+      });
+    }
+    list.append(el("label", { class: "group" }, parentBox(screenBoxes), el("span", {}, "Page slots")), ...rows);
+  }
+
+  if (lights.length === 0 && lines.length === 0 && slots.length === 0) {
+    list.append(el("p", { class: "meta" }, "Nothing is set up in it to merge: no lamp assigned, no screen field and no page in a slot."));
   }
 
   const pick = (): MergePick => ({
@@ -246,12 +285,17 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
     lines: lines
       .filter(([b]) => b.checked)
       .map(([, l]) => ({ device: l.device, display: l.display, line: l.line })),
+    slots: slots.filter(([b]) => b.checked).map(([, s]) => s),
   });
   return { node: list, pick };
 }
 
 /** One panel's or line's part of a merge, as a sentence. */
 function describeChange(c: MergeReport["changes"][number]): string {
+  if (c.pages) {
+    const what = c.added > 0 ? "gets a page" : c.replaced > 0 ? "shows another page" : c.removed > 0 ? "is emptied" : "already shows that page";
+    return `${c.label} ${what}.`;
+  }
   const noun = c.fields ? "field" : "lamp";
   const bits: string[] = [];
   if (c.added > 0) bits.push(`${plural(c.added, noun)} added`);
@@ -286,6 +330,7 @@ async function runMerge(
       `From ${fromName}, this changes:\n${changing.map(describeChange).join("\n")}\n\n` +
       `A lamp takes ${fromName}'s setup where ${fromName} assigns it, and is left as it is where ` +
       `${fromName} does not. A screen line is replaced whole: its fields become ${fromName}'s. ` +
+      `A page slot takes ${fromName}'s page, which comes into the library if it is not there. ` +
       `Everything not ticked, and ${into.name}'s name, aircraft and panel settings, stay as they are.` +
       (report.notes.length > 0 ? `\n\n${report.notes.join("\n")}` : "") +
       `\n\nThe rows replaced or removed cannot be recovered.`,
@@ -501,15 +546,66 @@ async function showLibrary(): Promise<void> {
   apply();
 }
 
-/** Save a copy of one profile where the user chooses, and say where it went. */
+/**
+ * Save a copy of one profile where the user chooses, with its pages, and say
+ * where it went.
+ *
+ * The pages its slots show always go. Where the module has others, a dialog
+ * offers them first, unticked, so a page someone kept out of every slot can
+ * still be shared.
+ */
 async function exportOne(row: ProfileSummary): Promise<void> {
+  const send = async (also: string[]): Promise<void> => {
+    try {
+      const to = await exportProfile(row.file, also);
+      if (to === null) return;
+      showBanner(`Exported ${row.name} to ${to}.`);
+    } catch (e) {
+      showError("Exporting the profile", e);
+    }
+  };
+  let pages: ExportPage[];
   try {
-    const to = await exportProfile(row.file);
-    if (to === null) return;
-    showBanner(`Exported ${row.name} to ${to}.`);
+    pages = await exportPages(row.file);
   } catch (e) {
     showError("Exporting the profile", e);
+    return;
   }
+  if (pages.every((p) => p.used)) {
+    await send([]);
+    return;
+  }
+
+  const list = el("div", { class: "checklist" });
+  const extra: [HTMLInputElement, string][] = [];
+  for (const p of pages) {
+    const box = el("input", { type: "checkbox" }) as HTMLInputElement;
+    box.checked = p.used;
+    box.disabled = p.used;
+    if (!p.used) extra.push([box, p.id]);
+    list.append(
+      el("label", {}, box, el("span", {}, p.name), el("span", { class: "meta" }, p.used ? "in a slot, so it goes" : "")),
+    );
+  }
+  const go = el("button", { class: "primary" }, "Export...");
+  const cancel = el("button", {}, "Cancel");
+  const dialog = el(
+    "dialog",
+    { class: "picker" },
+    el("h2", {}, `Export ${row.name}`),
+    el("p", { class: "meta" }, `Which ${row.module} pages go with it? The ones its slots show always do.`),
+    list,
+    el("div", { class: "actions" }, cancel, go),
+  );
+  app.append(dialog);
+  dialog.addEventListener("close", () => dialog.remove());
+  dialog.showModal();
+  cancel.addEventListener("click", () => dialog.close());
+  go.addEventListener("click", () => {
+    const also = extra.filter(([b]) => b.checked).map(([, id]) => id);
+    dialog.close();
+    void send(also);
+  });
 }
 
 /**
@@ -571,6 +667,31 @@ async function showImport(): Promise<void> {
 
   const name = el("input", { type: "text", value: picked.name });
   const moves = el("p", { class: "meta" });
+
+  // The pages it brings, each ticked on its own and named as it would come in.
+  // One already here unchanged adds nothing, so it has no name to give.
+  const pageRows: { plan: PagePlan; box: HTMLInputElement; name: HTMLInputElement }[] = [];
+  const pageList = el("div", { class: "checklist" });
+  for (const plan of picked.pages) {
+    const box = el("input", { type: "checkbox" }) as HTMLInputElement;
+    box.checked = true;
+    const called = el("input", { type: "text", value: plan.name_after }) as HTMLInputElement;
+    const fate =
+      plan.fate === "same"
+        ? "already here, unchanged"
+        : plan.fate === "new_id"
+          ? "a different page here has its id, so it comes in as a new page"
+          : "new";
+    const row = el("label", {}, box, el("span", {}, plan.name));
+    if (plan.fate === "same") called.hidden = true;
+    row.append(called, el("span", { class: "meta" }, `${fate}${plan.used ? "; in a slot" : ""}`));
+    pageList.append(row);
+    pageRows.push({ plan, box, name: called });
+    box.addEventListener("change", () => sync());
+    called.addEventListener("input", () => sync());
+  }
+  const pagesTaken = (): PageTake[] =>
+    pageRows.filter((r) => r.box.checked).map((r) => ({ id: r.plan.id, name: r.name.value.trim() || r.plan.name_after }));
   const failed = el("p", { class: "bad" });
   const make = el("button", { class: "primary" }, "Import");
   const cancel = el("button", {}, "Cancel");
@@ -600,7 +721,7 @@ async function showImport(): Promise<void> {
     make.textContent = merging ? "Merge..." : "Import";
     const pick = merge.pick();
     const ready = merging
-      ? pick.lights.length + pick.lines.length > 0
+      ? pick.lights.length + pick.lines.length + pick.slots.length > 0
       : chosen().length > 0 && name.value.trim() !== "";
     if (ready) make.removeAttribute("disabled");
     else make.setAttribute("disabled", "");
@@ -614,6 +735,12 @@ async function showImport(): Promise<void> {
     el("label", { class: "field" }, "Name", name),
     moves,
   );
+  if (pageRows.length > 0) {
+    whole.append(
+      el("p", { class: "meta" }, "Which MCDU pages come with it? A slot showing a page left unticked comes in empty."),
+      pageList,
+    );
+  }
   name.addEventListener("input", sync);
   mode.addEventListener("change", () => {
     failed.textContent = "";
@@ -709,6 +836,7 @@ async function showImport(): Promise<void> {
           name.value,
           chosen(),
           emptied.map((p) => p.file),
+          pagesTaken(),
         );
         dialog.close();
         await showProfile(file);
@@ -745,7 +873,7 @@ async function showMergeFrom(row: ProfileSummary, rows: ProfileSummary[]): Promi
 
   const sync = (): void => {
     const pick = merge?.pick();
-    if (pick && pick.lights.length + pick.lines.length > 0) make.removeAttribute("disabled");
+    if (pick && pick.lights.length + pick.lines.length + pick.slots.length > 0) make.removeAttribute("disabled");
     else make.setAttribute("disabled", "");
   };
   const load = async (): Promise<void> => {
@@ -1255,6 +1383,10 @@ interface Session {
    * and an edit can be a keystroke.
    */
   recheck: () => void;
+  /** The profile's module's pages, and the one open for editing, if any. */
+  book: PageBook;
+  /** Say something that happened, at the top of the page. */
+  tell: (text: string) => void;
 }
 
 /**
@@ -1310,6 +1442,16 @@ async function showProfile(file: string): Promise<void> {
     shippedReadouts = original?.readouts ?? [];
   } catch {
     // A missing or unreadable default only costs the revert buttons.
+  }
+
+  // The module's pages, which the MCDU's slots point into. A library that
+  // cannot be read leaves every slot showing as empty, with the reason.
+  let book: PageBook;
+  try {
+    book = pageBook(profile.module, file, await openPages(profile.module));
+  } catch (e) {
+    const why = e instanceof Error ? e.message : String(e);
+    book = pageBook(profile.module, file, { pages: [], broken: why, used: [] });
   }
 
   clear();
@@ -1404,6 +1546,8 @@ async function showProfile(file: string): Promise<void> {
     baseline: "",
     dirty: false,
     followSync: [],
+    book,
+    tell: showBanner,
     refreshDirty: () => {
       session.dirty = JSON.stringify(session.profile) !== session.baseline;
       refreshSave();
@@ -1418,15 +1562,18 @@ async function showProfile(file: string): Promise<void> {
         // Snapshotted before the call: the user keeps typing while it is in
         // flight, and a late answer about an older profile must not be shown
         // as though it were about this one.
-        const asked = JSON.stringify(session.profile);
-        void checkProfile(session.profile)
+        const snapshot = (): string => JSON.stringify([session.profile, book.editing]);
+        const asked = snapshot();
+        const working = book.editing;
+        void checkProfile(session.profile, working?.page ?? null, working?.device ?? null)
           .then((found) => {
-            if (JSON.stringify(session.profile) !== asked) return;
+            if (snapshot() !== asked) return;
             problems = found.problems;
             cautions = found.cautions;
             drawProblems();
-            showFlags(session.profile, found.flags);
-            showFieldCautions(session.profile, found.field_cautions);
+            showFlags(session.profile, pagesChecked(book), found.flags);
+            showFieldCautions(session.profile, pagesChecked(book), found.field_cautions);
+            showPageProblems(book, found.page_problems);
             drawNotice(found.notice);
             refreshSave();
           })
@@ -1436,8 +1583,9 @@ async function showProfile(file: string): Promise<void> {
             problems = [`The profile could not be checked: ${e instanceof Error ? e.message : String(e)}`];
             cautions = [];
             drawProblems();
-            showFlags(session.profile, []);
-            showFieldCautions(session.profile, []);
+            showFlags(session.profile, pagesChecked(book), []);
+            showFieldCautions(session.profile, pagesChecked(book), []);
+            showPageProblems(book, []);
             drawNotice(null);
             refreshSave();
           });
@@ -1445,12 +1593,13 @@ async function showProfile(file: string): Promise<void> {
     },
   };
   save.setAttribute("disabled", "");
-  unsavedWork = () => session.dirty;
+  // A page open with changes is unsaved work too, though Save does not write it.
+  unsavedWork = () => session.dirty || pageUnsaved(book);
 
   const back = el("button", {}, "← Profiles");
   back.addEventListener("click", () => {
     void (async () => {
-      if (session.dirty && !(await confirmAction("Leave without saving? Your changes will be lost.", "Leave"))) return;
+      if (unsavedWork() && !(await confirmAction("Leave without saving? Your changes will be lost.", "Leave"))) return;
       await showLibrary();
     })();
   });
@@ -1749,6 +1898,21 @@ function deviceSection(
 
   section.append(summary, table);
   if (glass) section.append(glass);
+  // A text grid takes its fields from pages rather than from the profile.
+  for (const display of device.displays.filter((d) => d.text_grid)) {
+    section.append(
+      pageSection(device, display, {
+        profile: session.profile,
+        signals: session.signals,
+        book: session.book,
+        profileChanged: session.refreshDirty,
+        pageChanged: session.recheck,
+        nameOf,
+        tell: session.tell,
+        fail: showError,
+      }),
+    );
+  }
   return section;
 }
 

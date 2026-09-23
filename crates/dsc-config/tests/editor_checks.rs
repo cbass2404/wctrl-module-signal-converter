@@ -50,7 +50,7 @@ fn module() -> Module {
 
 fn profile(body: &str) -> Profile {
     serde_json::from_str(&format!(
-        r#"{{"name": "T", "aircraft": ["TEST"], "module": "TEST", {body}}}"#
+        r#"{{"schema_version": 2, "name": "T", "aircraft": ["TEST"], "module": "TEST", {body}}}"#
     ))
     .expect("the fixture profile parses")
 }
@@ -58,7 +58,7 @@ fn profile(body: &str) -> Profile {
 fn found(p: &Profile) -> Vec<String> {
     let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
-    p.problems(&module(), &devices, &displays)
+    p.problems(&module(), &devices, &displays, &dsc_config::PageLibrary::default())
         .iter()
         .map(|e| e.to_string())
         .collect()
@@ -107,7 +107,7 @@ fn validate_still_stops_at_the_first_one() {
              "conditions": [{"source": "GEAR", "on_when": {"equals": 1}}]}
         ]"#,
     );
-    p.validate(&module(), &devices, &displays)
+    p.validate(&module(), &devices, &displays, &dsc_config::PageLibrary::default())
         .expect_err("a bad profile is still an error");
 
     // A signal this DCS-BIOS lacks is not one: the profile loads, flagged.
@@ -118,7 +118,7 @@ fn validate_still_stops_at_the_first_one() {
         ]"#,
     );
     other_release
-        .validate(&module(), &devices, &displays)
+        .validate(&module(), &devices, &displays, &dsc_config::PageLibrary::default())
         .expect("a missing signal flags the row rather than refusing the profile");
 
     let clean = profile(
@@ -128,7 +128,7 @@ fn validate_still_stops_at_the_first_one() {
         ]"#,
     );
     clean
-        .validate(&module(), &devices, &displays)
+        .validate(&module(), &devices, &displays, &dsc_config::PageLibrary::default())
         .expect("a clean profile still loads");
 }
 

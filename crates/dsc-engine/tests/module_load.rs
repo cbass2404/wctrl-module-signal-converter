@@ -433,7 +433,7 @@ fn a_stub_profile_covers_every_lamp_and_binds_none_but_the_gates_and_screens() {
     // or auto-generating one would produce a file the loader then rejects.
     let cat = catalogue();
     let module = cat.module("TEST").expect("fixture module");
-    stub.validate(module, &devs, &DisplayCatalogue::default())
+    stub.validate(module, &devs, &DisplayCatalogue::default(), &dsc_config::PageLibrary::default())
         .expect("a stub must validate");
 }
 

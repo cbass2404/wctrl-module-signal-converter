@@ -84,7 +84,7 @@ fn parts_offer_only_what_the_source_sets_up() {
 
 #[test]
 fn a_picked_panel_takes_assigned_lamps_and_keeps_the_rest() {
-    let pick = Pick { lights: lamps("TAKEOFF_PLANEL_2", &["HOOK", "NOSE", "Backlight"]), lines: vec![] };
+    let pick = Pick { lights: lamps("TAKEOFF_PLANEL_2", &["HOOK", "NOSE", "Backlight"]), lines: vec![], slots: vec![] };
     let merged = merge::merge(&target(), &source(), &pick, &inventory(), &displays()).unwrap();
     let row = |led: &str| {
         merged.profile.bindings.iter().find(|b| b.device == "TAKEOFF_PLANEL_2" && b.led == led).unwrap()
@@ -101,7 +101,7 @@ fn a_picked_panel_takes_assigned_lamps_and_keeps_the_rest() {
 
 #[test]
 fn a_lamp_not_picked_keeps_the_target_row() {
-    let pick = Pick { lights: lamps("TAKEOFF_PLANEL_2", &["NOSE"]), lines: vec![] };
+    let pick = Pick { lights: lamps("TAKEOFF_PLANEL_2", &["NOSE"]), lines: vec![], slots: vec![] };
     let merged = merge::merge(&target(), &source(), &pick, &inventory(), &displays()).unwrap();
     let hook = merged
         .profile
@@ -119,6 +119,7 @@ fn a_picked_line_becomes_the_source_line() {
     let pick = Pick {
         lights: vec![],
         lines: vec![LinePick { device: "MCDU_Captain".into(), display: "MCDU".into(), line: "Row 1".into() }],
+        slots: vec![],
     };
     let merged = merge::merge(&target(), &source(), &pick, &inventory(), &displays()).unwrap();
     let sources: Vec<&str> = merged
@@ -140,6 +141,7 @@ fn merging_onto_a_follower_says_it_will_not_be_used() {
     let pick = Pick {
         lights: vec![],
         lines: vec![LinePick { device: "MCDU_CoPilot".into(), display: "MCDU".into(), line: "Row 1".into() }],
+        slots: vec![],
     };
     let merged = merge::merge(&target(), &source(), &pick, &inventory(), &displays()).unwrap();
     assert!(merged.notes.iter().any(|n| n.contains("follows")), "{:?}", merged.notes);

@@ -23,6 +23,19 @@ const MCDU: &str = "MCDU_Captain";
 const A10C_FONT: &str = "../mcdu/a10c-font-21x31.json";
 const F14BU_FONT: &str = "../mcdu/f14bu-font-21x31.json";
 
+/// The profile as `with_pages` leaves it: every field on the MCDU marked as
+/// its start page's. A text grid takes its fields only from a page, and
+/// these fixtures hold the fields a page would put there.
+fn resolved(p: &Profile) -> Profile {
+    let mut p = p.clone();
+    for r in &mut p.readouts {
+        if r.display == "MCDU" {
+            r.page = Some("fixture".into());
+        }
+    }
+    p
+}
+
 fn r(p: &str) -> std::path::PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../..").join(p)
 }
@@ -117,7 +130,7 @@ fn refusals(p: &Profile) -> Vec<String> {
     let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
     let module = e.catalogue().module(&p.module).expect("the module");
-    p.problems(module, &devices, &displays)
+    resolved(p).problems(module, &devices, &displays, &dsc_config::PageLibrary::default())
         .iter()
         .map(|e| e.to_string())
         .collect()

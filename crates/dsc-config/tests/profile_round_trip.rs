@@ -34,7 +34,7 @@ fn an_alias_with_no_colour_is_written_as_bare_characters() {
     // `colour: None` as well as parsed, because the editor builds them that
     // way and a row it touched must not change shape under it.
     let parsed: Profile = serde_json::from_str(
-        r#"{"schema_version": 1, "name": "T", "aircraft": [], "module": "A-10C",
+        r#"{"schema_version": 2, "name": "T", "aircraft": [], "module": "A-10C",
              "readouts": [{"device": "MCDU_Captain", "display": "MCDU", "cells": "0-3",
                            "source": "KNOB", "value_aliases": {"0": "OFF"}}]}"#,
     )

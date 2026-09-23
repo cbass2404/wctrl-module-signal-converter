@@ -19,7 +19,7 @@ use dsc_config::log::{self as dlog, Level};
 use dsc_config::nightly_only::{Change, NightlyOnly};
 use dsc_config::paths::{Layout, Paths};
 use dsc_config::{Flag, Place, Unsound};
-use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, Profile, Profiles, Readout, Span, Transport};
+use dsc_config::{file_stem, profile_name_for, Catalogue, DeviceInventory, DisplayCatalogue, PageLibrary, Pages, Profile, Profiles, Readout, Span, Transport};
 use dsc_engine::{Batch, Cause, Engine, Watcher};
 use wctrl_hid::Device;
 
@@ -226,6 +226,13 @@ enum Command {
         /// that is not there yet. Never overwrites one the user already has.
         #[arg(long)]
         defaults: Option<PathBuf>,
+        /// The MCDU page library the profiles' slots point into.
+        #[arg(long)]
+        pages: Option<PathBuf>,
+        /// Shipped MCDU pages, copied into --pages as the defaults are into
+        /// --profiles.
+        #[arg(long)]
+        default_pages: Option<PathBuf>,
         /// Segment display maps, for panels with glass. A missing directory is
         /// not an error: most panels have none.
         #[arg(long)]
@@ -553,6 +560,8 @@ fn main() -> Result<()> {
             catalogue,
             profiles,
             defaults,
+            pages,
+            default_pages,
             displays,
             nightly_only,
             dry_run,
@@ -610,6 +619,8 @@ fn main() -> Result<()> {
                 &catalogue.unwrap_or(paths.catalogue),
                 &profiles.unwrap_or(paths.profiles.active),
                 &defaults.unwrap_or(paths.profiles.defaults),
+                &pages.unwrap_or(paths.pages.active),
+                &default_pages.unwrap_or(paths.pages.defaults),
                 &displays.unwrap_or(paths.displays),
                 &nightly_only.unwrap_or(paths.nightly_only),
                 bios,
@@ -1255,6 +1266,15 @@ fn nightly_only(
     for path in paths {
         profiles.push(Profile::load(&path).with_context(|| format!("reading {}", path.display()))?);
     }
+    // The shipped MCDU pages read signals too, and live beside the defaults
+    // rather than in them. Each module's pages go in as one more profile
+    // holding every page's fields, which is all the comparison reads.
+    let pages = PageLibrary::load_dir(&defaults.with_file_name("default-pages"));
+    for (module, file) in &pages.files {
+        let mut p = Profile::stub(&format!("the {module} pages"), module, module, &DeviceInventory { devices: Vec::new() });
+        p.readouts = file.pages.iter().flat_map(|page| page.fields.iter().cloned()).collect();
+        profiles.push(p);
+    }
 
     let (list, unknown) = NightlyOnly::compare(&profiles, &nightly, &stable_cat);
     for line in &unknown {
@@ -1685,7 +1705,7 @@ mod tests {
 
     /// A module with one lamp signal and one string signal, so a trace can be
     /// followed without the generated catalogue, which is machine-local.
-    fn fixture() -> (Catalogue, Profile) {
+    pub(super) fn fixture() -> (Catalogue, Profile) {
         let module: Module = serde_json::from_str(
             r#"{
               "module": "FA-18C_hornet",
@@ -1943,7 +1963,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         std::fs::write(
             dir.join("hornet.json"),
-            r#"{"name": "Hornet", "aircraft": ["FA-18C_hornet"], "module": "FA-18C_hornet",
+            r#"{"schema_version": 2, "name": "Hornet", "aircraft": ["FA-18C_hornet"], "module": "FA-18C_hornet",
                 "bindings": [
                   {"device": "TAKEOFF_PLANEL_2", "led": "Master_Caution", "off": 0,
                    "conditions": [{"source": "MASTER_CAUTION_LT", "on_when": {"equals": 1}}]},
@@ -1953,7 +1973,7 @@ mod tests {
         )
         .unwrap();
 
-        let loaded = load_profiles(&dir, &cat, &inventory, &displays, &NightlyOnly::default());
+        let loaded = load_profiles(&dir, &dir.join("no-pages"), &cat, &inventory, &displays, &NightlyOnly::default());
         let _ = std::fs::remove_dir_all(&dir);
         assert_eq!(loaded.skipped, 0, "{:?}", loaded.messages);
         assert_eq!(loaded.profiles.len(), 1);
@@ -1967,6 +1987,74 @@ mod tests {
             "{:?}",
             loaded.messages
         );
+    }
+}
+
+#[cfg(test)]
+mod page_load_tests {
+    use super::tests::fixture;
+
+    #[test]
+    fn the_start_page_is_loaded_as_the_screens_fields() {
+        use super::load_profiles;
+        use dsc_config::nightly_only::NightlyOnly;
+        use dsc_config::{DeviceInventory, DisplayCatalogue};
+
+        let (cat, _) = fixture();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let inventory = DeviceInventory::load(&root.join("data/devices.json")).unwrap();
+        let displays = DisplayCatalogue::load_dir(&root.join("data/displays")).unwrap();
+        let dir = std::env::temp_dir().join(format!("dsc-paged-{}", std::process::id()));
+        let pages = dir.join("pages");
+        std::fs::create_dir_all(&pages).unwrap();
+        std::fs::write(
+            dir.join("hornet.json"),
+            r#"{"schema_version": 2, "name": "Hornet", "aircraft": ["FA-18C_hornet"], "module": "FA-18C_hornet",
+                "font": "../mcdu/f14bu-font-21x31.json",
+                "screens": {"MCDU_Captain": {"start": 2, "slots": [
+                  {"page": "p1aaaa", "key": null}, {"page": "p2bbbb", "key": null}, null, null, null, null]}}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            pages.join("FA-18C_hornet.json"),
+            r#"{"module": "FA-18C_hornet", "pages": [
+                {"id": "p1aaaa", "name": "One", "display": "MCDU", "fields": [{"cells": "0-2", "source": "MASTER_CAUTION_LT"}]},
+                {"id": "p2bbbb", "name": "Two", "display": "MCDU", "fields": [{"cells": "24-26", "source": "MASTER_CAUTION_LT"}]}
+            ]}"#,
+        )
+        .unwrap();
+
+        let loaded = load_profiles(&dir, &pages, &cat, &inventory, &displays, &NightlyOnly::default());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(loaded.skipped, 0, "{:?}", loaded.messages);
+        let p = &loaded.profiles[0];
+        assert!(p.screens.is_empty(), "the slots are resolved away");
+        assert_eq!(p.readouts.len(), 1);
+        assert_eq!(p.readouts[0].device, "MCDU_Captain");
+        assert_eq!(p.readouts[0].cells.to_string(), "24-26", "slot 2 starts");
+    }
+
+    #[test]
+    fn a_version_1_profile_is_skipped_and_says_why() {
+        use super::load_profiles;
+        use dsc_config::nightly_only::NightlyOnly;
+        use dsc_config::{DeviceInventory, DisplayCatalogue};
+
+        let (cat, _) = fixture();
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let inventory = DeviceInventory::load(&root.join("data/devices.json")).unwrap();
+        let displays = DisplayCatalogue::load_dir(&root.join("data/displays")).unwrap();
+        let dir = std::env::temp_dir().join(format!("dsc-v1-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("old.json"),
+            r#"{"schema_version": 1, "name": "Old", "aircraft": ["FA-18C_hornet"], "module": "FA-18C_hornet"}"#,
+        )
+        .unwrap();
+        let loaded = load_profiles(&dir, &dir.join("pages"), &cat, &inventory, &displays, &NightlyOnly::default());
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(loaded.skipped, 1);
+        assert!(loaded.messages.iter().any(|m| m.contains("old.json") && m.contains("before MCDU pages")), "{:?}", loaded.messages);
     }
 }
 
@@ -1989,6 +2077,7 @@ struct Loaded {
 /// configured should lose the one they mistyped, not the whole session.
 fn load_profiles(
     dir: &PathBuf,
+    pages_dir: &Path,
     cat: &Catalogue,
     inventory: &DeviceInventory,
     displays: &DisplayCatalogue,
@@ -2005,6 +2094,15 @@ fn load_profiles(
     let Ok(entries) = std::fs::read_dir(dir) else {
         return out;
     };
+    // Read with the profiles every time, so a page saved in the editor is
+    // on the glass at the next reload like a profile saved there.
+    let pages = PageLibrary::load_dir(pages_dir);
+    for (module, why) in &pages.broken {
+        out.messages.push(format!("warning  the pages for {module} did not load, so every slot on it is empty: {why}"));
+    }
+    for line in pages.problems() {
+        out.messages.push(format!("caution  pages: {line}"));
+    }
     let mut paths: Vec<PathBuf> = entries
         .filter_map(|e| e.ok().map(|e| e.path()))
         .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
@@ -2034,11 +2132,17 @@ fn load_profiles(
             out.skipped += 1;
             continue;
         };
-        if let Err(e) = p.validate(module, inventory, displays) {
+        if let Err(e) = p.validate(module, inventory, displays, &pages) {
             out.messages.push(format!("skipped  {name}: {e}"));
             out.skipped += 1;
             continue;
         }
+        for note in p.slot_notes(&pages) {
+            out.messages.push(format!("caution  {name}: {}: {}", note.device, note.text));
+        }
+        // Each screen's start page becomes ordinary fields here, so what is
+        // flagged and turned off below covers them like any other field.
+        let p = p.with_pages(&pages);
         // What this DCS-BIOS cannot back is turned off rather than costing the
         // whole profile, and the copy that runs is the one without it.
         let flags = p.flags(module);
@@ -2215,6 +2319,8 @@ fn run(
     catalogue_dir: &PathBuf,
     profiles_dir: &PathBuf,
     defaults_dir: &PathBuf,
+    pages_dir: &PathBuf,
+    default_pages_dir: &PathBuf,
     displays_dir: &PathBuf,
     nightly_path: &Path,
     bios: Option<&Path>,
@@ -2236,6 +2342,8 @@ fn run(
         ("catalogue", catalogue_dir.as_path()),
         ("profiles ", profiles_dir.as_path()),
         ("defaults ", defaults_dir.as_path()),
+        ("pages    ", pages_dir.as_path()),
+        ("shipped pages", default_pages_dir.as_path()),
         ("displays ", displays_dir.as_path()),
         ("nightly  ", nightly_path),
     ] {
@@ -2287,7 +2395,23 @@ fn run(
         say!("updated  {note}");
     }
 
-    let loaded = load_profiles(profiles_dir, &cat, &inventory, &displays, &nightly);
+    // The page library the same way, and apart: each reconciles against its
+    // own snapshot and neither reads the other's files.
+    let pages = Pages::new(default_pages_dir, pages_dir);
+    let seeded = pages
+        .seed()
+        .with_context(|| format!("seeding {} from {}", pages_dir.display(), default_pages_dir.display()))?;
+    if !seeded.is_empty() {
+        say!("seeded   {} page file(s) from {}", seeded.len(), default_pages_dir.display());
+    }
+    for note in pages
+        .merge_new(env!("CARGO_PKG_VERSION"))
+        .with_context(|| format!("updating pages in {}", pages_dir.display()))?
+    {
+        say!("updated  {note}");
+    }
+
+    let loaded = load_profiles(profiles_dir, pages_dir, &cat, &inventory, &displays, &nightly);
     for line in &loaded.messages {
         // Kept, not merely said: which profiles ran, and which were thrown out
         // and why, is the first thing to check when a lamp does nothing.
@@ -2425,7 +2549,7 @@ fn run(
     // Profile hot reload. The directory is checked on a timer, and a change is
     // acted on only once it has stopped changing, so a profile caught halfway
     // through being written is not read.
-    let mut fingerprint = profiles_fingerprint(profiles_dir);
+    let mut fingerprint = [profiles_fingerprint(profiles_dir), profiles_fingerprint(pages_dir)].concat();
     let mut settling: Option<Vec<(String, u64, u64)>> = None;
     let mut next_check = Instant::now() + PROFILE_POLL;
     let mut next_status = Instant::now() + STATUS_EVERY;
@@ -2487,7 +2611,7 @@ fn run(
 
         if now >= next_check {
             next_check = now + PROFILE_POLL;
-            let current = profiles_fingerprint(profiles_dir);
+            let current = [profiles_fingerprint(profiles_dir), profiles_fingerprint(pages_dir)].concat();
             if current != fingerprint {
                 // Seen changed once; act on it when it looks the same twice
                 // running. An editor saving a file and a hand edit both settle
@@ -2497,7 +2621,7 @@ fn run(
                     settling = None;
 
                     let reloaded =
-                        load_profiles(profiles_dir, engine.catalogue(), engine.devices(), &displays, &nightly);
+                        load_profiles(profiles_dir, pages_dir, engine.catalogue(), engine.devices(), &displays, &nightly);
                     say!(
                         "reloaded {} profile(s) from {}",
                         reloaded.profiles.len(),
@@ -2608,7 +2732,7 @@ fn run(
                         rebuilt = true;
                         say!("catalogue rebuilt: DCS is running DCS-BIOS {running:?}");
                         let cat = load_catalogue(catalogue_dir, bios)?;
-                        let reloaded = load_profiles(profiles_dir, &cat, engine.devices(), &displays, &nightly);
+                        let reloaded = load_profiles(profiles_dir, pages_dir, &cat, engine.devices(), &displays, &nightly);
                         for line in &reloaded.messages {
                             emit(line);
                         }

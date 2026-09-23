@@ -4,21 +4,22 @@ setlocal enabledelayedexpansion
 rem  tools\release.cmd - tag and push a release. Maintainer tool.
 rem
 rem  Order of checks:
-rem    0. the shipped profiles: everything else here can be checked by the
-rem       machine, and this cannot. Changes to data\defaults are not written
-rem       up as they land, so this is the one thing reconstructed from memory.
+rem    0. the shipped profiles and MCDU pages: everything else here can be
+rem       checked by the machine, and this cannot. Changes to data\defaults
+rem       and data\default-pages are not written up as they land, so this is
+rem       the one thing reconstructed from memory.
 rem    1. on main, and main matches origin - releases build only from main,
 rem       and main takes changes through pull requests, so nothing is pushed
 rem       but the tag. Uncommitted changes warn and ask.
 rem    2. tag from VERSION.md must not already exist, locally or on origin
 rem    3. the checks the pipeline would fail on: every version in the repo
 rem       agrees with VERSION.md, in HEAD as well as in the working tree,
-rem       data\nightly-only.json is current, and data\defaults-previous still
-rem       holds the defaults the last release shipped
+rem       data\nightly-only.json is current, and data\defaults-previous and
+rem       data\default-pages-previous still hold what the last release shipped
 rem    4. CHANGELOG.md has a section for this version, or you say go anyway
 rem    5. asks for a release message; submitting an empty one cancels
 rem    6. pushes the tag
-rem    7. refreshes data\defaults-previous for the NEXT release, and leaves it
+rem    7. refreshes both snapshots for the NEXT release, and leaves them
 rem       unstaged for you to branch and open a pull request from
 rem
 rem  Pushing the tag is what triggers .github/workflows/release.yml, which
@@ -42,7 +43,7 @@ if errorlevel 1 (
 )
 
 rem ==========================================================================
-rem  0. the shipped profiles, named in CHANGELOG.md
+rem  0. the shipped profiles and pages, named in CHANGELOG.md
 rem ==========================================================================
 rem
 rem Asked first, and asked of a person, because it is the one thing here the
@@ -53,6 +54,9 @@ rem notes name it and they choose to take it. Changes to data\defaults are
 rem deliberately not written up as they land, since they move a great deal
 rem through experimentation, which is exactly why this is easy to forget.
 rem
+rem The shipped MCDU pages are the same: a fix to a page reaches somebody who
+rem edited it only if the notes name it, so they are listed beside the profiles.
+rem
 rem The files that moved are listed, so the answer is not from memory. A
 rem previous tag is needed to compare against; without one, the question is
 rem asked on its own rather than skipped.
@@ -61,25 +65,25 @@ set "LASTTAG="
 for /f "usebackq tokens=* delims= " %%t in (`git describe --tags --abbrev^=0 --match "v*" 2^>nul`) do set "LASTTAG=%%t"
 
 if defined LASTTAG (
-    echo   Shipped profiles changed since %LASTTAG%:
+    echo   Shipped profiles and pages changed since %LASTTAG%:
     echo(
     set "MOVED="
-    for /f "usebackq tokens=* delims= " %%f in (`git diff --name-only %LASTTAG% HEAD -- data/defaults 2^>nul`) do (
+    for /f "usebackq tokens=* delims= " %%f in (`git diff --name-only %LASTTAG% HEAD -- data/defaults data/default-pages 2^>nul`) do (
         set "MOVED=1"
         echo       %%f
     )
     if not defined MOVED echo       none.
 ) else (
     echo   No previous v* tag to compare against, so the changed profiles
-    echo   cannot be listed here.
+    echo   and pages cannot be listed here.
 )
 echo(
-echo   An update leaves a row you have changed alone, so a fix to a shipped
-echo   row reaches those people only if CHANGELOG.md names it.
+echo   An update leaves a row or page field you have changed alone, so a fix
+echo   to a shipped one reaches those people only if CHANGELOG.md names it.
 echo(
 echo   -----------------------------------------------
 set "NOTED="
-set /p "NOTED=Does CHANGELOG.md name every shipped row that moved? (y/N): "
+set /p "NOTED=Does CHANGELOG.md name every shipped row and page that moved? (y/N): "
 if /i "!NOTED!"=="y"   goto :profiles_ok
 if /i "!NOTED!"=="yes" goto :profiles_ok
 echo(
@@ -331,11 +335,12 @@ echo(
 
 rem data\defaults-previous is what an update compares a user's display fields
 rem against: a field still matching it was ours and can be corrected, anything
-rem else is theirs and is left alone. It has to hold the PREVIOUS release here,
-rem not this one, so it is checked before the tag and refreshed after the push.
+rem else is theirs and is left alone. data\default-pages-previous is the same
+rem for the MCDU pages. Each has to hold the PREVIOUS release here, not this
+rem one, so they are checked before the tag and refreshed after the push.
 rem Drift is silent at runtime - no field matches, so no correction reaches
 rem anybody - which is why it is caught here instead.
-echo   checking data\defaults-previous against the last release ...
+echo   checking the snapshots against the last release ...
 python tools\snapshot.py --check
 if errorlevel 1 (
     echo(
@@ -431,7 +436,7 @@ echo     %ORIGIN%/releases
 echo(
 
 rem ==========================================================================
-rem  7. snapshot these defaults for the next release
+rem  7. snapshot these defaults and pages for the next release
 rem ==========================================================================
 
 rem Last, and only once the tag is pushed: the release just cut ships the
@@ -439,19 +444,21 @@ rem PREVIOUS snapshot, and this sets up the one the NEXT release will compare
 rem against. Left unstaged deliberately. The pipeline has only just started, so
 rem nothing here is proven yet; if it goes red, throw this away and nothing ever
 rem claimed %VERSION% shipped.
-echo   snapshotting these defaults for the next release ...
+echo   snapshotting these defaults and pages for the next release ...
 python tools\snapshot.py
 if errorlevel 1 (
     echo(
-    echo   WARNING: could not refresh data\defaults-previous.
-    echo   The release is fine. Run  python tools\snapshot.py  before the next
-    echo   one, or updates will stop correcting display fields.
+    echo   WARNING: could not refresh data\defaults-previous or
+    echo   data\default-pages-previous. The release is fine. Run
+    echo   python tools\snapshot.py  before the next one, or updates will stop
+    echo   correcting display fields and pages.
     goto :end
 )
 echo(
 echo   Left unstaged. Once the pipeline is green:
 echo       git switch -c snapshot-%VERSION%
-echo       git commit -a -m "Snapshot %VERSION% defaults"
+echo       git add data/defaults-previous data/default-pages-previous
+echo       git commit -m "Snapshot %VERSION% defaults and pages"
 echo   then open a pull request, so the next release compares against these.
 echo(
 goto :end

@@ -1034,6 +1034,18 @@ details.device.follows > summary {
   margin-left: auto;
 }
 
+/* A text grid's page slots, and the page editor under them once one is
+   opened. Not inside .displays, so it takes that block's inset itself. */
+.display.pages {
+  margin: 12px 14px 14px;
+}
+
+.page-edit {
+  border-top: 1px solid var(--line);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
 table.readouts {
   width: 100%;
   border-collapse: collapse;

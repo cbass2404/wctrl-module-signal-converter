@@ -10,7 +10,7 @@
 // turns these rows off; the file keeps them so they work again once DCS-BIOS
 // is updated.
 
-import type { FieldCaution, FlagView, Profile } from "./types";
+import type { FieldCaution, FlagView, Page, Profile, Readout } from "./types";
 
 const reasons = new WeakMap<object, string>();
 const slots = new WeakMap<object, HTMLElement>();
@@ -21,15 +21,21 @@ function fill(slot: HTMLElement, text: string | undefined): void {
   slot.textContent = text ? `⚠ ${text}` : "";
 }
 
+/** A field by index: one of the profile's own, or one on a page. */
+function fieldAt(profile: Profile, pages: Page[], page: string | undefined, index: number): Readout | undefined {
+  if (page === undefined) return profile.readouts?.[index];
+  return pages.find((p) => p.id === page)?.fields[index];
+}
+
 /** The condition or field a flag names, if the profile still has it. */
-function locate(profile: Profile, f: FlagView): object | undefined {
+function locate(profile: Profile, pages: Page[], f: FlagView): object | undefined {
   switch (f.at) {
     case "condition":
       return profile.bindings[f.binding]?.conditions[f.index];
     case "branch":
       return profile.bindings[f.binding]?.any_of?.[f.branch]?.conditions[f.index];
     case "field":
-      return profile.readouts?.[f.readout];
+      return fieldAt(profile, pages, f.page, f.readout);
   }
 }
 
@@ -75,9 +81,9 @@ export function cautionSlot(field: object): HTMLElement {
 
 /**
  * Replace every field caution with what the latest check found. `profile`
- * must be the one that was checked, as for `showFlags`.
+ * and `pages` must be the ones that were checked, as for `showFlags`.
  */
-export function showFieldCautions(profile: Profile, found: FieldCaution[]): void {
+export function showFieldCautions(profile: Profile, pages: Page[], found: FieldCaution[]): void {
   for (const field of noted) {
     notes.delete(field);
     const slot = noteSlots.get(field);
@@ -85,7 +91,7 @@ export function showFieldCautions(profile: Profile, found: FieldCaution[]): void
   }
   noted = [];
   for (const c of found) {
-    const field = profile.readouts?.[c.readout];
+    const field = fieldAt(profile, pages, c.page, c.readout);
     if (!field) continue;
     const list = notes.get(field) ?? [];
     if (list.length === 0) noted.push(field);
@@ -99,10 +105,10 @@ export function showFieldCautions(profile: Profile, found: FieldCaution[]): void
 }
 
 /**
- * Replace every mark with what the latest check found. `profile` must be the
- * one that was checked, or the indices point at the wrong rows.
+ * Replace every mark with what the latest check found. `profile` and `pages`
+ * must be the ones that were checked, or the indices point at the wrong rows.
  */
-export function showFlags(profile: Profile, flags: FlagView[]): void {
+export function showFlags(profile: Profile, pages: Page[], flags: FlagView[]): void {
   for (const row of marked) {
     reasons.delete(row);
     const slot = slots.get(row);
@@ -110,7 +116,7 @@ export function showFlags(profile: Profile, flags: FlagView[]): void {
   }
   marked = [];
   for (const f of flags) {
-    const row = locate(profile, f);
+    const row = locate(profile, pages, f);
     // A field reading two missing signals is flagged twice, and both say the
     // same thing about it.
     if (!row || reasons.has(row)) continue;

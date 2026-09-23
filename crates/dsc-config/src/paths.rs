@@ -19,7 +19,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::Profiles;
+use crate::{Pages, Profiles};
 
 /// The product's folder name, under Saved Games by default.
 pub const PRODUCT: &str = "DCS Signal Converter";
@@ -64,6 +64,8 @@ pub struct Paths {
     pub catalogue: PathBuf,
     /// Shipped defaults and the active folder the user edits.
     pub profiles: Profiles,
+    /// Shipped MCDU pages and the library in use, laid out as the profiles.
+    pub pages: Pages,
 }
 
 impl Paths {
@@ -128,6 +130,7 @@ impl Paths {
             nightly_only: root.join("nightly-only.json"),
             catalogue: root.join("catalogue"),
             profiles: Profiles::new(root.join("defaults"), root.join("defaults")),
+            pages: Pages::new(root.join("default-pages"), root.join("default-pages")),
         }
     }
 
@@ -139,6 +142,7 @@ impl Paths {
             nightly_only: root.join("nightly-only.json"),
             catalogue: root.join("catalogue"),
             profiles: Profiles::new(root.join("defaults"), root.join("profiles")),
+            pages: Pages::new(root.join("default-pages"), root.join("pages")),
         }
     }
 
@@ -151,6 +155,7 @@ impl Paths {
             nightly_only: shipped.join("nightly-only.json"),
             catalogue: writable.join("catalogue"),
             profiles: Profiles::new(shipped.join("defaults"), writable.join("profiles")),
+            pages: Pages::new(shipped.join("default-pages"), writable.join("pages")),
         }
     }
 }
@@ -359,6 +364,9 @@ mod tests {
         assert_eq!(p.profiles.defaults, Path::new("C:/app/data/defaults"));
         assert_eq!(p.profiles.active, Path::new("D:/sg/DCS Signal Converter/profiles"));
         assert_eq!(p.catalogue, Path::new("D:/sg/DCS Signal Converter/catalogue"));
+        assert_eq!(p.pages.defaults, Path::new("C:/app/data/default-pages"));
+        assert_eq!(p.pages.previous, Path::new("C:/app/data/default-pages-previous"));
+        assert_eq!(p.pages.active, Path::new("D:/sg/DCS Signal Converter/pages"));
     }
 
     #[test]

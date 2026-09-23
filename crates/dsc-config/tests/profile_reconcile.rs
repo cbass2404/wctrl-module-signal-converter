@@ -54,7 +54,7 @@ fn inventory() -> DeviceInventory {
 fn profile_with(readouts: &str) -> String {
     format!(
         r#"{{
-      "schema_version": 1,
+      "schema_version": 2,
       "name": "Hog",
       "aircraft": ["A-10C"],
       "module": "A-10C",

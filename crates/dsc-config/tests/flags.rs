@@ -32,7 +32,7 @@ fn module() -> Module {
 
 fn profile(body: &str) -> Profile {
     serde_json::from_str(&format!(
-        r#"{{"name": "T", "aircraft": ["TEST"], "module": "TEST", {body}}}"#
+        r#"{{"schema_version": 2, "name": "T", "aircraft": ["TEST"], "module": "TEST", {body}}}"#
     ))
     .expect("the fixture profile parses")
 }
@@ -40,7 +40,7 @@ fn profile(body: &str) -> Profile {
 fn loads(p: &Profile) {
     let devices = DeviceInventory::load(&r("data/devices.json")).expect("devices");
     let displays = DisplayCatalogue::load_dir(&r("data/displays")).expect("displays");
-    p.validate(&module(), &devices, &displays).expect("the profile loads");
+    p.validate(&module(), &devices, &displays, &dsc_config::PageLibrary::default()).expect("the profile loads");
 }
 
 #[test]

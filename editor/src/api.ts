@@ -9,6 +9,7 @@ import type {
   CellInk,
   ConverterState,
   Device,
+  ExportPage,
   Findings,
   FontGlyphs,
   ImportPreview,
@@ -18,6 +19,9 @@ import type {
   MergeReport,
   MergeSource,
   ModuleChoice,
+  Page,
+  PageTake,
+  PagesView,
   Profile,
   ProfileSummary,
   RuleCell,
@@ -79,14 +83,35 @@ export const defaultProfile = (file: string) => invoke<Profile | null>("default_
  */
 export const createProfile = (module: string, name: string, aircraft: string[], from: string | null) =>
   invoke<string>("create_profile", { module, name, aircraft, from });
+/** Write the profile. Its pages are saved on their own, by `savePage`. */
 export const saveProfile = (file: string, profile: Profile) =>
   invoke<void>("save_profile", { file, profile });
 /**
  * Everything the daemon would refuse this profile for, in its own words, and
  * everything it would caution about. No problems means it will load. Run after
- * each edit, not only on save.
+ * each edit, not only on save. `working` is the page open for editing on
+ * `device`, if one is: its rows are marked, and why it could not be saved is
+ * said apart from the profile's own problems.
  */
-export const checkProfile = (profile: Profile) => invoke<Findings>("check_profile", { profile });
+export const checkProfile = (profile: Profile, working: Page | null, device: string | null) =>
+  invoke<Findings>("check_profile", { profile, working, device });
+/** One module's pages, and where the saved profiles use them. */
+export const openPages = (module: string) => invoke<PagesView>("open_pages", { module });
+/** An id no page has, nor any of `avoid`, the new pages not saved yet. */
+export const newPageId = (avoid: string[]) => invoke<string>("new_page_id", { avoid });
+/**
+ * Save one page to the library, checked as `device` of `profile` would draw
+ * it. Returns the module's pages as they now are.
+ */
+export const savePage = (profile: Profile, page: Page, device: string) =>
+  invoke<PagesView>("save_page", { profile, page, device });
+/**
+ * Delete a page from the library, emptying its slots in every other saved
+ * profile on the module, which it names. The open profile's slots are the
+ * window's to empty.
+ */
+export const deletePage = (module: string, id: string, current: string) =>
+  invoke<[PagesView, string[]]>("delete_page", { module, id, current });
 export const resetProfile = (file: string) => invoke<void>("reset_profile", { file });
 /**
  * Delete a profile, first giving its aircraft to `giveTo` if one is named. It
@@ -99,8 +124,14 @@ export const cloneProfile = (file: string, name: string, aircraft: string[]) =>
   invoke<string>("clone_profile", { file, name, aircraft });
 
 // Sharing. The backend runs the file dialogs; the window is allowed none.
-/** Where the profile was saved, or null if the dialog was cancelled. */
-export const exportProfile = (file: string) => invoke<string | null>("export_profile", { file });
+/**
+ * Where the profile was saved, with the pages its slots show and those in
+ * `also`, or null if the dialog was cancelled.
+ */
+export const exportProfile = (file: string, also: string[]) =>
+  invoke<string | null>("export_profile", { file, also });
+/** Every page on a profile's module, for choosing which go with an export. */
+export const exportPages = (file: string) => invoke<ExportPage[]>("export_pages", { file });
 /** Asks for a file and checks it. Null if the dialog was cancelled; refused if it would not load. */
 export const importPick = () => invoke<ImportPreview | null>("import_pick");
 /**
@@ -108,8 +139,8 @@ export const importPick = () => invoke<ImportPreview | null>("import_pick");
  * those it came with. Aircraft other profiles fly move to it. A profile left
  * with none is deleted only if `remove` names it, which the user confirms first.
  */
-export const importProfile = (path: string, name: string, aircraft: string[], remove: string[]) =>
-  invoke<string>("import_profile", { path, name, aircraft, delete: remove });
+export const importProfile = (path: string, name: string, aircraft: string[], remove: string[], pages: PageTake[]) =>
+  invoke<string>("import_profile", { path, name, aircraft, delete: remove, pages });
 
 /** What the profile in `file` could give another on its module. */
 export const mergeParts = (file: string) => invoke<MergeParts>("merge_parts", { file });

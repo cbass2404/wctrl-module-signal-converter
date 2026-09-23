@@ -2064,6 +2064,13 @@ pub struct Readout {
     /// draws a rule instead.
     pub content: Vec<Span>,
     pub note: String,
+    /// The page this field was taken from, when a profile's pages have been
+    /// resolved into fields. Never written: on disk a page field lives in its
+    /// page file and a profile's own fields have no page.
+    ///
+    /// It is what tells a field a page put on a text grid from one written
+    /// loose on it, which version 2 refuses.
+    pub page: Option<String>,
 }
 
 /// A field as it is written on disk.
@@ -2074,7 +2081,12 @@ pub struct Readout {
 /// cannot be forgotten about by some code path that builds a field by hand.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 struct ReadoutRepr {
+    // Both left out of a field on a page, which takes its display from the
+    // page and its device from the slot that shows it. A profile's own fields
+    // always have both, so a profile is written as it always was.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     device: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     display: String,
     cells: CellRange,
     #[serde(default, skip_serializing_if = "is_false")]
@@ -2172,6 +2184,7 @@ impl From<ReadoutRepr> for Readout {
             align: r.align,
             content,
             note: r.note,
+            page: None,
         }
     }
 }
@@ -2251,6 +2264,7 @@ impl Default for Readout {
             align: Align::Left,
             content: vec![Span::default()],
             note: String::new(),
+            page: None,
         }
     }
 }

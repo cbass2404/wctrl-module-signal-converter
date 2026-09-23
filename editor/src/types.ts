@@ -326,13 +326,67 @@ export interface Readout {
 export type FlagView = { text: string } & (
   | { at: "condition"; binding: number; index: number }
   | { at: "branch"; binding: number; branch: number; index: number }
-  | { at: "field"; readout: number }
+  /** A field on a page carries the page's id, and its index is into the page's fields. */
+  | { at: "field"; readout: number; page?: string }
 );
 
-/** A caution about one display field, by its index in `readouts`. */
+/**
+ * A caution about one display field, by its index in `readouts`, or in a
+ * page's `fields` when it names the page.
+ */
 export interface FieldCaution {
+  page?: string;
   readout: number;
   text: string;
+}
+
+/**
+ * One slot in use: the page it shows, or null for a blank screen. A slot not
+ * in use is null in `slots` instead; once pages can be swapped from the panel,
+ * its line select key will do nothing, where a blank slot's takes the screen
+ * dark.
+ */
+export interface Slot {
+  page: string | null;
+  /** Kept for swapping pages from the panel. Always null for now. */
+  key: null;
+}
+
+/** A text grid's six slots, and the one shown when a mission starts. */
+export interface PageSlots {
+  /** Counting from 1. Absent when every slot is empty. */
+  start?: number;
+  slots: (Slot | null)[];
+}
+
+/**
+ * A named screen's worth of text grid fields, kept in the library for its
+ * module rather than in a profile. Every profile on the module can show it.
+ */
+export interface Page {
+  /** Fixed when the page is made. What a slot points at. */
+  id: string;
+  /** What the window shows. Unique on its module. */
+  name: string;
+  display: string;
+  fields: Readout[];
+}
+
+/** One slot showing a page, somewhere in the saved profiles. */
+export interface PageUse {
+  page: string;
+  file: string;
+  profile: string;
+  device: string;
+  slot: number;
+}
+
+/** One module's pages, as the editor opens them with a profile. */
+export interface PagesView {
+  pages: Page[];
+  /** Why the module's page file would not load, if it would not. */
+  broken: string | null;
+  used: PageUse[];
 }
 
 /**
@@ -345,6 +399,8 @@ export interface Findings {
   cautions: string[];
   /** About what one display field will draw, shown on that field. */
   field_cautions: FieldCaution[];
+  /** Why the page open for editing could not be saved. Never the profile's. */
+  page_problems: string[];
   flags: FlagView[];
   /** One line for the page, only when a flagged row needs the DCS-BIOS nightly. */
   notice: string | null;
@@ -393,6 +449,11 @@ export interface Profile {
    * kept and ignored while it follows.
    */
   follows?: Record<string, string>;
+  /**
+   * Page slots for each device with a text grid. Everything on a text grid
+   * comes from a page, so a device with none here shows nothing on it.
+   */
+  screens?: Record<string, PageSlots>;
 }
 
 export interface Led {
@@ -552,6 +613,50 @@ export interface ImportPreview {
   cautions: string[];
   /** What it could give a profile already here, for a merge. */
   parts: MergeParts;
+  /** The pages it brings, and what becomes of each here. */
+  pages: PagePlan[];
+}
+
+/**
+ * A page an import brings. `same` is already here unchanged and adds nothing;
+ * `new_id` is a different page from one here with its id, so it comes in
+ * under a new one.
+ */
+export interface PagePlan {
+  id: string;
+  name: string;
+  fields: number;
+  /** A slot in the profile shows it. */
+  used: boolean;
+  fate: "new" | "same" | "new_id";
+  /** What it would be called here; the dialog can change it. */
+  name_after: string;
+}
+
+/** A page ticked for import, under the name given it. */
+export interface PageTake {
+  id: string;
+  name: string;
+}
+
+/** A page on the module, as the export dialog offers it. */
+export interface ExportPage {
+  id: string;
+  name: string;
+  /** A slot shows it, so it goes whether ticked or not. */
+  used: boolean;
+}
+
+/** One filled page slot that can be merged into another profile. */
+export interface SlotPart {
+  device: string;
+  screen: string;
+  slot: number;
+  /** The page's name, or its id where it cannot be found. Empty when blank. */
+  page: string;
+  /** Shows a blank screen rather than a page. */
+  blank: boolean;
+  start: boolean;
 }
 
 /** A panel whose assigned lamps can be merged into another profile. */
@@ -575,12 +680,14 @@ export interface LinePart {
 export interface MergeParts {
   lights: LightPart[];
   lines: LinePart[];
+  slots: SlotPart[];
 }
 
 /** What the user ticked to merge: lamps and lines by name. */
 export interface MergePick {
   lights: { device: string; led: string }[];
   lines: { device: string; display: string; line: string }[];
+  slots: { device: string; slot: number }[];
 }
 
 /** Where a merge takes from: the file picked for import, or a profile here. */
@@ -595,6 +702,8 @@ export interface MergeChange {
   unchanged: number;
   /** Counts fields rather than lamps. */
   fields: boolean;
+  /** A page slot rather than lamps or fields. */
+  pages: boolean;
 }
 
 export interface MergeReport {

@@ -13,6 +13,11 @@
 //! signals are named by id and an id means something only in its own
 //! catalogue.
 //!
+//! A text grid holds no fields of its own, only page slots, so it is merged a
+//! slot at a time instead: slot n of the source replaces slot n of the target.
+//! Bringing the page into the library, when it comes from a file, is the
+//! caller's; see `bundle::bring_in`.
+//!
 //! Nothing else moves. The name, the aircraft, the font, disabled panels and
 //! which panel follows which are the target's and stay so.
 
@@ -20,7 +25,7 @@ use std::collections::BTreeMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{CellRange, DeviceInventory, DisplayCatalogue, Profile, Readout};
+use crate::{CellRange, DeviceInventory, DisplayCatalogue, PageSlots, Profile, Readout, SLOTS};
 
 /// Where a field sits when no region of its display holds its first cell.
 pub const OTHER_CELLS: &str = "Other cells";
@@ -53,11 +58,29 @@ pub struct LinePart {
     pub fields: usize,
 }
 
+/// One filled page slot that can be taken.
+#[derive(Debug, Clone, Serialize)]
+pub struct SlotPart {
+    pub device: String,
+    /// The panel, the heading its slots are grouped under.
+    pub screen: String,
+    /// Counting from 1.
+    pub slot: usize,
+    /// The page's name, or its id where the page cannot be found. Empty for
+    /// a blank slot.
+    pub page: String,
+    /// Whether the slot shows a blank screen rather than a page.
+    pub blank: bool,
+    /// Whether this is the slot the source starts on.
+    pub start: bool,
+}
+
 /// Everything a profile has to offer another.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Parts {
     pub lights: Vec<LightPart>,
     pub lines: Vec<LinePart>,
+    pub slots: Vec<SlotPart>,
 }
 
 /// A lamp picked for merging.
@@ -75,6 +98,14 @@ pub struct LinePick {
     pub line: String,
 }
 
+/// A page slot picked for merging.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct SlotPick {
+    pub device: String,
+    /// Counting from 1.
+    pub slot: usize,
+}
+
 /// What the user ticked.
 #[derive(Debug, Clone, Default, Deserialize)]
 pub struct Pick {
@@ -82,6 +113,8 @@ pub struct Pick {
     pub lights: Vec<LampPick>,
     #[serde(default)]
     pub lines: Vec<LinePick>,
+    #[serde(default)]
+    pub slots: Vec<SlotPick>,
 }
 
 /// What merging did to one panel's lamps or one screen line.
@@ -99,6 +132,8 @@ pub struct Change {
     pub unchanged: usize,
     /// Whether this counts fields rather than lamps.
     pub fields: bool,
+    /// Whether this is a page slot rather than lamps or fields.
+    pub pages: bool,
 }
 
 impl Change {
@@ -213,6 +248,30 @@ pub fn parts(source: &Profile, devices: &DeviceInventory, displays: &DisplayCata
     out
 }
 
+/// Every filled page slot `source` has, by panel, named with `name_of`.
+///
+/// A panel the source has following another is left out, as for `parts`.
+pub fn slot_parts(source: &Profile, devices: &DeviceInventory, name_of: impl Fn(&str) -> Option<String>) -> Vec<SlotPart> {
+    let mut out = Vec::new();
+    for spec in &devices.devices {
+        if source.follows.contains_key(&spec.key) {
+            continue;
+        }
+        let Some(slots) = source.screens.get(&spec.key) else { continue };
+        for (i, slot) in slots.filled() {
+            out.push(SlotPart {
+                device: spec.key.clone(),
+                screen: device_label(devices, &spec.key),
+                slot: i + 1,
+                page: slot.page.as_ref().map_or(String::new(), |id| name_of(id).unwrap_or_else(|| id.clone())),
+                blank: slot.page.is_none(),
+                start: slots.start == Some(i + 1),
+            });
+        }
+    }
+    out
+}
+
 /// `target` with the lamps and lines in `pick` taken from `source`.
 ///
 /// A picked lamp takes the source's row in place of the target's; a lamp the
@@ -256,6 +315,7 @@ pub fn merge(
             removed: 0,
             unchanged: 0,
             fields: false,
+            pages: false,
         };
         let picked = |b: &&crate::Binding| {
             b.device == device
@@ -291,6 +351,7 @@ pub fn merge(
             removed: 0,
             unchanged: 0,
             fields: true,
+            pages: false,
         };
         // Where the line's first field was, so a merged line lands where the
         // old one sat in the file rather than at the end. Nothing before the
@@ -316,6 +377,36 @@ pub fn merge(
         changes.push(change);
     }
 
+    for pick in &pick.slots {
+        let i = pick.slot.saturating_sub(1);
+        let incoming = source.screens.get(&pick.device).and_then(|s| s.slots.get(i)).cloned().flatten();
+        let mut slots = profile.screens.get(&pick.device).cloned().unwrap_or_default();
+        slots.slots.resize(SLOTS.max(slots.slots.len()), None);
+        let mut change = Change {
+            label: format!("{} slot {}", device_label(devices, &pick.device), pick.slot),
+            added: 0,
+            replaced: 0,
+            removed: 0,
+            unchanged: 0,
+            fields: false,
+            pages: true,
+        };
+        match (&slots.slots[i], &incoming) {
+            (a, b) if a == b => change.unchanged += 1,
+            (None, Some(_)) => change.added += 1,
+            (Some(_), Some(_)) => change.replaced += 1,
+            (Some(_), None) => change.removed += 1,
+            (None, None) => {}
+        }
+        slots.slots[i] = incoming;
+        // The target's own start stands, unless the merge emptied it or it
+        // had none; then the first filled slot starts.
+        slots.settle_start();
+        store(&mut profile, &pick.device, slots);
+        touched.push(&pick.device);
+        changes.push(change);
+    }
+
     let mut notes = Vec::new();
     touched.sort();
     touched.dedup();
@@ -336,4 +427,13 @@ pub fn merge(
         }
     }
     Ok(Merged { profile, changes, notes })
+}
+
+/// Put a device's slots on `profile`, leaving no entry for six empty ones.
+fn store(profile: &mut Profile, device: &str, slots: PageSlots) {
+    if slots.filled().next().is_none() {
+        profile.screens.remove(device);
+    } else {
+        profile.screens.insert(device.to_string(), slots);
+    }
 }

@@ -7,9 +7,8 @@ a thing is shaped the way it is, and what flying it taught, belong in
 [CHANGELOG.md](../CHANGELOG.md) under the version in
 [VERSION.md](../VERSION.md), as it lands.
 
-Line links point into `STATUS.md` as it stood on 2026-09-22. If one lands in
-the wrong place, search the phrase beside it; line numbers move and the words
-do not.
+Links into `STATUS.md` name the section or phrase to search for, since line
+numbers move and the words do not.
 
 ## Next
 
@@ -37,12 +36,34 @@ do not.
       offering its pages, and a partial merge from an F-14BU export bringing
       its page slot into the F-14.
 
-- [ ] **Fly pages on the UFC and the ICP.** Built 2026-09-24, checked with
-      the tests and a dry run only. In the F/A-18 (UFC page) and the F-16
-      (DED page): the start page looks as before, a page, a blank and a
-      disabled slot swap as on the MCDU, and the modifier held alone is the
-      only thing that swaps. Then the A-10C CMSC and Mi-24P Radios pages.
-      [STATUS.md](STATUS.md), "Built 2026-09-24: pages on the UFC and the ICP"
+- [x] ~~**Fly pages on the UFC and the ICP.**~~ Flown 2026-09-24: pages on
+      the UFC and the ICP's DED swap from the mapped page keys (A/P to BCN,
+      COM 1 to A-G), with the modifier chosen in Settings, and only with that
+      modifier. [STATUS.md](STATUS.md), "pages on the UFC and the ICP"
+
+- [ ] **Finish the UFC and ICP page checks.** Not covered by the flight
+      above: a blank slot taking the screen dark and a disabled slot's key
+      doing nothing on these two screens, and the A-10C CMSC and Mi-24P
+      Radios pages on the glass.
+
+- [ ] **Fly the A-10C split.** Upgrade an alpha.007 install whose A-10C
+      profile is untouched: the A-10C II should land on the new A-10C2 profile
+      with the ARC-210 CDU page, and the A-10C keep its profile with the VHF AM
+      CDU page. Then fly each and watch the PTO2 NMSP lamps (EGI, STEER PT,
+      TCN, ANCHR, ILS). [STATUS.md](STATUS.md), "a shipped profile can split"
+
+- [ ] **Give the A-10C CDU page a readable id before alpha.008 ships.** It is
+      `i63dn3`, made in the editor; every other shipped page has a readable
+      one. Once it ships, the id is in everyone's snapshot and renaming it
+      reads as one page deleted and another added.
+
+- [ ] **Decide the F-14BU's ICP: disabled, or a Blank slot.** alpha.007
+      shipped it disabled; the page move took that out. Then the changelog
+      entry under F-14BU stands or goes.
+
+- [ ] **Bring the A-10C PTO2 notes up to date.** CTR, LI, LO, RI and RO in
+      `a-10c.json` and `a-10c2.json` show the NMSP lamps, and their notes
+      still say fire lamps and UNDECIDED.
 
 - [ ] **Decide on the dead field-reset code.** With every screen on pages,
       nothing in a profile's own `readouts` is valid, so Reset this field,
@@ -78,7 +99,7 @@ do not.
       controls menu for more than 20 seconds: every lamp and screen should
       keep the last cockpit and come back without a blank and a rebuild. Then
       quit DCS: the panels should clear and the daemon exit on its own.
-      [STATUS.md:25](STATUS.md#L25)
+      [STATUS.md](STATUS.md), "the panels stay lit through a quiet stream"
 
 - [ ] **Look at the UFC and DED glass for the preview.** Two things only the
       panel can answer. What colour each glass is, since both previews are
@@ -86,12 +107,12 @@ do not.
       And whether each UFC segment sits where `art` in
       `data/displays/ufc1.json` draws it, which was read out of the glyph
       table rather than captured; a photograph of a few lit cells settles it.
-      [STATUS.md:83](STATUS.md#L83), [STATUS.md:94](STATUS.md#L94)
+      [STATUS.md](STATUS.md), "the UFC and the DED are previewed too"
 
 - [ ] **Fly `follows` on two MCDUs.** Built 2026-09-21 and tested, not yet on
       a panel. Point the Co-Pilot unit at the Captain in the Hornet and check
       that both show the IFEI page and dim together.
-      [STATUS.md:98](STATUS.md#L98)
+      [STATUS.md](STATUS.md), "one panel under several names shares a setup"
 
 - [ ] **See a PFP on a real panel.** Built 2026-09-24 from WwDevicesDotnet
       alone; nobody here owns one. When a PFP owner reports back, confirm the
@@ -125,11 +146,13 @@ do not.
 
 ## Release
 
-- [ ] **The release-notes list of changed default rows.** Still written by
-      hand. An update never rewrites a row the user has changed, so a fix
-      reaches them only if the notes name the row and they choose to reset it.
-      [STATUS.md:681](STATUS.md#L681), the rule at
-      [STATUS.md:1119](STATUS.md#L1119) and
+- [ ] **The release-notes list of changed default rows.** Written by hand
+      for alpha.008, per profile and per page module, from a throwaway diff of
+      `data/defaults` and `data/default-pages` against their `-previous`
+      snapshots. That diff belongs in `tools/` as a release step. An update
+      never rewrites a row the user has changed, so a fix reaches them only if
+      the notes name the row and they choose to reset it.
+      [STATUS.md](STATUS.md), "Release notes", and
       [CHANGELOG.md:9](../CHANGELOG.md#L9)
 
 ## Smaller
@@ -141,9 +164,9 @@ do not.
       next item needs it.
 - [ ] **Replace the drawn DED glyphs** as captures turn up. The 27 in
       `data/displays/ded.json` that were drawn by hand rather than captured.
-      [STATUS.md:817](STATUS.md#L817)
+      [STATUS.md](STATUS.md), "39 of 66 glyphs"
 - [ ] **Name a display from a device spec**, so a part can carry one.
-      [STATUS.md:1334](STATUS.md#L1334)
+      [STATUS.md](STATUS.md), "naming a display from a device spec"
 
 ## Blocked on hardware
 
@@ -173,13 +196,13 @@ do not.
 ## Deferred, not scheduled
 
 - [ ] **Profile inheritance.** Leaning no for v1.
-      [STATUS.md:1725](STATUS.md#L1725)
+      [STATUS.md](STATUS.md), "Open threads"
 - [ ] **Backlight contention** with SimAppPro's "Sync with DCS": the one lamp
       both applications may drive. Detect and warn.
-      [STATUS.md:1726](STATUS.md#L1726)
+      [STATUS.md](STATUS.md), "Open threads"
 - [ ] **A perceptual response curve for dimmers.** Linear PWM feels wrong at
-      the bottom. [STATUS.md:1728](STATUS.md#L1728)
+      the bottom. [STATUS.md](STATUS.md), "Open threads"
 - [ ] **The 175 ms pass at mission start.** Loading a profile and painting
       every screen is one pass of the main loop, and nothing else runs during
       it. Watch only: worth a look if the panels ever feel behind at mission
-      start. [STATUS.md:445](STATUS.md#L445)
+      start. [STATUS.md](STATUS.md), "longest pass 175 ms"

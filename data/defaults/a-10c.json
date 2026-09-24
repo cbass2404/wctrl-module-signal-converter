@@ -819,7 +819,7 @@
       "led": "CTR",
       "conditions": [
         {
-          "source": "APU_FIRE",
+          "source": "NMSP_EGI_LED",
           "on_when": {
             "equals": 1
           }
@@ -832,7 +832,7 @@
       "led": "LI",
       "conditions": [
         {
-          "source": "L_ENG_FIRE",
+          "source": "NMSP_STEERPT_LED",
           "on_when": {
             "equals": 1
           }
@@ -843,13 +843,27 @@
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "LO",
-      "conditions": [],
+      "conditions": [
+        {
+          "source": "NMSP_TCN_LED",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
       "note": "UNDECIDED. Suggested: CANOPY_UNLOCKED (green)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "RO",
-      "conditions": [],
+      "conditions": [
+        {
+          "source": "NMSP_ILS_LED",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
       "note": "UNDECIDED. Suggested: NOSEWHEEL_STEERING (green)."
     },
     {
@@ -857,7 +871,7 @@
       "led": "RI",
       "conditions": [
         {
-          "source": "R_ENG_FIRE",
+          "source": "NMSP_ANCHR_LED",
           "on_when": {
             "equals": 1
           }
@@ -1050,7 +1064,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "a10c-cdu",
+          "page": "i63dn3",
           "key": null
         },
         {

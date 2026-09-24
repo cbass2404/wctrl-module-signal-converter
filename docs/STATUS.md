@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 476 passing
+cargo test --workspace            # expect 481 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -22,11 +22,47 @@ wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
 
-**Built 2026-09-24: pages on the UFC and the ICP.** Cory reversed "text
-grids only": every screen now takes pages, with six slots each and the same
-app-wide modifier. The design is "Pages" in [CONFIG.md](CONFIG.md), the
-section formerly "MCDU pages". Checked with the tests and a dry run; not yet
-flown, see [TODO.md](TODO.md).
+**Built 2026-09-24: the editor keeps things in reach, and a shipped profile
+can split.** `80a1123` to `a87bb32`. What users see is in
+[CHANGELOG.md](../CHANGELOG.md); the split's rules are "Splitting a shipped
+profile" in [CONFIG.md](CONFIG.md).
+
+- **Panels grouped by plug state**: Active Devices, Inactive Devices and
+  Devices not found, each alphabetical. The device poll moves a panel between
+  groups and keeps unsaved edits.
+- **The profile list**: the row opens the profile; Copy to..., Export...,
+  Merge from..., Reset and Delete are under the row's menu.
+- **`docs/language.html`**, the profile language guide, opens from the **?**
+  through the fixed-URL `open_guide` command. Any change to profile logic
+  updates its prose, demo and dictionary in the same change.
+- **The page editor stays open** after Save page, and Save as new page carries
+  on with the copy. Its buttons stick to the foot of the window, and an open
+  device's title sticks under the header.
+- **The A-10C split.** `a-10c.json` flies `A-10C` only and the new
+  `a-10c2.json` flies `A-10C_2`, because the two want different radios on the
+  CDU rows. `a10c-cdu`, renamed "A-10C2 CDU", stays with the A-10C II; the
+  A-10C has "A-10C CDU", reading VHF AM. That page's id, `i63dn3`, was made in
+  the editor, against the readable-id rule for shipped pages; see
+  [TODO.md](TODO.md).
+- **PTO2 on both A-10C profiles** shows the NMSP EGI, STEER PT, TCN, ANCHR and
+  ILS lamps on CTR, LI, LO, RI and RO, in place of the fire lamps. The rows'
+  `note`s still describe the old assignments.
+- **The F-14BU's ICP is no longer disabled.** It came out of
+  `disabled_devices` with the move of the UFC and DED fields onto pages
+  (`6c05d7a`), so the DED now shows a Blank slot. Whether that was meant is
+  open; see [TODO.md](TODO.md).
+- **alpha.008's changed rows are written up** in CHANGELOG.md, per profile and
+  per page module, from a diff of `data/defaults` and `data/default-pages`
+  against their `-previous` snapshots.
+
+**Built and flown 2026-09-24: pages on the UFC and the ICP.** Cory reversed
+"text grids only": every screen now takes pages, with six slots each and the
+same app-wide modifier. The design is "Pages" in [CONFIG.md](CONFIG.md), the
+section formerly "MCDU pages". Flown the same day: pages on the UFC and the
+ICP's DED swap from the mapped page keys, with the modifier chosen in
+Settings and only with that one. Blank and disabled slots on these screens,
+and the A-10C CMSC and Mi-24P Radios pages, are still to see; see
+[TODO.md](TODO.md).
 
 - **The gate is any known display.** `Profile::takes_pages` is
   `displays.get(display).is_some()`, so nothing names a panel or a glass

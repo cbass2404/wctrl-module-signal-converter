@@ -77,7 +77,8 @@ starter profile the first time you fly it, ready to fill in with the
 
 | Profile     | Covers                                |
 | ----------- | ------------------------------------- |
-| A-10C       | A-10C, A-10C II                       |
+| A-10C       | A-10C                                 |
+| A-10C2      | A-10C II                              |
 | AH-64D      | AH-64D                                |
 | CH-47F      | CH-47F                                |
 | F-14        | F-14A, F-14B                          |
@@ -192,6 +193,8 @@ panel without leaving the cockpit.
 
 A few more things the editor does:
 
+- **Click a profile's row** to open it. Copy to..., Export..., Merge from...,
+  Reset and Delete are in the **⋯** menu at the end of the row.
 - **New profile** starts one for an aircraft that has none, blank or copied from a
   related one. **Copy to...** copies an existing profile to other aircraft, which
   is how the Hornet profile serves the Super Hornet mod.

@@ -319,8 +319,7 @@ later addition, not part of v1.
 
 ## The editor window
 
-Nothing fancy. A profile list with new, edit, copy and reset, and one profile
-open at a time.
+Nothing fancy. A profile list, and one profile open at a time.
 
 **New profile asks for a module, then its aircraft, never a typed name.** Both
 lists come from the catalogue index, so they offer only what the user's own

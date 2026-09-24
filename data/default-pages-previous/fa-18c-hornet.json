@@ -332,6 +332,85 @@
           ]
         }
       ]
+    },
+    {
+      "id": "fa18-ufc",
+      "name": "UFC",
+      "display": "UFC1",
+      "fields": [
+        {
+          "cells": "0",
+          "source": "UFC_SCRATCHPAD_STRING_1_DISPLAY",
+          "note": "Two characters into one cell. A digit keeps its leading space, which selects the small form the hardware was observed being sent. A letter has no spaced form, so ' G' falls back to 'G'."
+        },
+        {
+          "cells": "1",
+          "source": "UFC_SCRATCHPAD_STRING_2_DISPLAY",
+          "aliases": {
+            "--": "_"
+          },
+          "note": "DCS-BIOS reports '--' where DCS's own indication says '_', and '--' is not a glyph. Without the alias this cell draws a single dash."
+        },
+        {
+          "cells": "2-8",
+          "content": [
+            {
+              "source": "UFC_SCRATCHPAD_NUMBER_DISPLAY",
+              "width": 7,
+              "align": "right"
+            }
+          ],
+          "note": "DCS-BIOS gives 8 characters for 7 cells, so one of them cannot be shown. Held to 7 and aligned right, which drops the leading pad rather than a digit and lands keypresses at the right. Written as a box rather than as a field alignment because it says out loud that a character goes, so the editor stops warning that one might."
+        },
+        {
+          "cells": "9",
+          "source": "UFC_OPTION_CUEING_1"
+        },
+        {
+          "cells": "10-13",
+          "source": "UFC_OPTION_DISPLAY_1"
+        },
+        {
+          "cells": "14",
+          "source": "UFC_OPTION_CUEING_2"
+        },
+        {
+          "cells": "15-18",
+          "source": "UFC_OPTION_DISPLAY_2"
+        },
+        {
+          "cells": "19",
+          "source": "UFC_OPTION_CUEING_3"
+        },
+        {
+          "cells": "20-23",
+          "source": "UFC_OPTION_DISPLAY_3"
+        },
+        {
+          "cells": "24",
+          "source": "UFC_OPTION_CUEING_4"
+        },
+        {
+          "cells": "25-28",
+          "source": "UFC_OPTION_DISPLAY_4"
+        },
+        {
+          "cells": "29",
+          "source": "UFC_OPTION_CUEING_5"
+        },
+        {
+          "cells": "30-33",
+          "source": "UFC_OPTION_DISPLAY_5"
+        },
+        {
+          "cells": "34",
+          "source": "UFC_COMM1_DISPLAY"
+        },
+        {
+          "cells": "35",
+          "source": "UFC_COMM2_DISPLAY"
+        }
+      ]
     }
   ]
 }

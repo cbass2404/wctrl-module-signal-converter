@@ -194,15 +194,17 @@ fn a_page_file_that_will_not_load_takes_only_its_module_out() {
     let dir = std::env::temp_dir().join(format!("dsc-pages-broken-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("TEST.json"), "{ not json").unwrap();
-    std::fs::write(dir.join("OTHER.json"), r#"{"module": "OTHER", "pages": []}"#).unwrap();
-    std::fs::write(dir.join("WRONG.json"), r#"{"module": "NOT_WRONG", "pages": []}"#).unwrap();
+    std::fs::write(dir.join("test.json"), "{ not json").unwrap();
+    std::fs::write(dir.join("other-one.json"), r#"{"module": "OTHER_one", "pages": []}"#).unwrap();
+    std::fs::write(dir.join("wrong.json"), r#"{"module": "NOT_WRONG", "pages": []}"#).unwrap();
+    std::fs::write(dir.join("Upper.json"), r#"{"module": "Upper", "pages": []}"#).unwrap();
     let lib = PageLibrary::load_dir(&dir);
     let _ = std::fs::remove_dir_all(&dir);
 
     assert!(lib.broken("TEST").is_some());
     assert!(lib.broken("WRONG").is_some(), "a file named for one module holding another's is refused");
-    assert!(lib.files.contains_key("OTHER"));
+    assert!(lib.broken("Upper").is_some(), "so is one named by the module key as it is");
+    assert!(lib.files.contains_key("OTHER_one"), "named as a profile would be, by the lowercase stem");
 
     let mut p = profile("");
     p.screens.insert(CAPTAIN.into(), slots(Some(1), &[Some("aaaaaa")]));

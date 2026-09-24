@@ -46,6 +46,21 @@ unless this says what moved.
   so a PFP follows only another of its own model, never an MCDU. None has
   been tried on a real panel here yet: the support is built from
   WwDevicesDotnet, where other owners have confirmed it works.
+- **The page editor stays open after a save.** Save page and Save as new
+  page leave you where you were in the page, to keep going; Close shuts it.
+  After Save as new page, the editor carries on with the new copy. While a
+  page is open, its Save, Delete and Close buttons stay at the foot of the
+  window, so you can save without scrolling away from the field you changed.
+- **An open panel's name stays in view.** While you scroll through an open
+  panel, its title row stays under the header, so you can close it from
+  anywhere in it. It moves on when the next panel comes up.
+- **Updates can split a shipped profile.** When a release gives an aircraft
+  variant a profile of its own, an update moves that aircraft to the new
+  profile, as long as you have not changed which aircraft the old profile
+  flies. The new profile arrives as shipped. Your edits stay in the old one,
+  and Merge from... can carry them across. If you did change the aircraft
+  list, it is left alone, and the update log says what the release moved, so
+  a Reset brings the split when you want it.
 
 ### Breaking
 
@@ -55,3 +70,8 @@ unless this says what moved.
   or made yourself is skipped by the converter and listed with the reason in
   the editor. Reset your app data before installing this release, or move
   those fields onto a page.
+- **Page files are named in lowercase, like profiles.** The pages for
+  `FA-18C_hornet` are now in `fa-18c-hornet.json`, not `FA-18C_hornet.json`.
+  A page file under its old name no longer loads, and every slot on its
+  module is left empty. Reset your app data before installing this release,
+  or rename the files in the `pages` folder.

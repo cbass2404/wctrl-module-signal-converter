@@ -1710,23 +1710,27 @@ async function showProfile(file: string): Promise<void> {
 
   const toggle = el("button", {}, "Expand all");
   const aircraft = aircraftSummary(profile.aircraft);
-  app.append(
+  const header = el(
+    "header",
+    {},
+    back,
     el(
-      "header",
-      {},
-      back,
-      el(
-        "div",
-        { class: "grow" },
-        profileTitle(session, taken),
-        el("span", { class: "meta block", ...aircraft.title }, `${profile.module} · ${aircraft.text}`),
-      ),
-      state,
-      toggle,
-      save,
-      guideButton(),
+      "div",
+      { class: "grow" },
+      profileTitle(session, taken),
+      el("span", { class: "meta block", ...aircraft.title }, `${profile.module} · ${aircraft.text}`),
     ),
+    state,
+    toggle,
+    save,
+    guideButton(),
   );
+  app.append(header);
+  // An open panel's title sticks just under the header, which is as tall as
+  // the profile's name makes it, so its height is kept where the CSS reads it.
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
+  }).observe(header);
   app.append(notice, problemList, cautionList);
 
   if (signalError) {
@@ -2025,8 +2029,16 @@ function deviceSection(
     if (shut() && !(e.target as Element).closest("label")) e.preventDefault();
   });
   // Anything that opens it some other way is closed again.
+  //
+  // Closed from its title while that was stuck under the header, the rows
+  // above the title vanish and the page would land somewhere further down,
+  // so it is scrolled back to where the title now sits.
   section.addEventListener("toggle", () => {
     if (section.open && shut()) section.open = false;
+    if (section.open) return;
+    const under = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+    const top = section.getBoundingClientRect().top;
+    if (top < under) window.scrollBy(0, top - under);
   });
   drive.addEventListener("click", (e) => e.stopPropagation());
   drive.addEventListener("change", () => {

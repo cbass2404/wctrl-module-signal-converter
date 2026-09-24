@@ -503,6 +503,21 @@ details[open] > summary {
   border-bottom: 1px solid var(--line);
 }
 
+/* An open panel's title sticks under the header while its rows are on
+   screen, so it can be closed from anywhere in it, and goes with the section
+   when the next panel comes up. Opaque, because the rows pass beneath it,
+   and below the header and the hint box. The divider is a shadow for the
+   header's reason: a stuck border drops out at fractional offsets. */
+details.device[open] > summary {
+  position: sticky;
+  top: var(--header-h, 0px);
+  z-index: 4;
+  background: var(--panel);
+  border-radius: 8px 8px 0 0;
+  border-bottom: none;
+  box-shadow: 0 1px 0 var(--line);
+}
+
 /* Fixed layout with explicit widths, so the columns line up from one device
    section to the next. Each section is its own table, and automatic widths made
    every one of them size to its own longest lamp name. */
@@ -1156,6 +1171,31 @@ details.device.follows > summary {
   border-top: 1px solid var(--line);
   margin-top: 12px;
   padding-top: 10px;
+}
+
+/* Save page and the rest, held at the foot of the window while the page is
+   on screen, so a save is a click away from wherever the edit was made. At
+   the end of the page the row settles back into its own place. Opaque,
+   because the fields pass beneath it, and lifted above the bars along the
+   foot of the window rather than covered by them: the saved message comes
+   up there just as the row is clicked. */
+.page-actions {
+  position: sticky;
+  bottom: var(--foot, 0px);
+  z-index: 5;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 10px 0;
+  background: var(--panel);
+  box-shadow: 0 -1px 0 var(--line);
+}
+
+body:has(> .update) {
+  --foot: 38px;
+}
+
+body:has(> .update.banner):has(> .update:not(.banner)) {
+  --foot: 76px;
 }
 
 table.readouts {

@@ -158,7 +158,8 @@ pub struct Page {
     pub fields: Vec<Readout>,
 }
 
-/// Every page on one module, as one file named by the module's catalogue key.
+/// Every page on one module, as one file named after the module's catalogue
+/// key by [`file_stem`](crate::file_stem), as a profile is after its name.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageFile {
     pub module: String,
@@ -207,9 +208,10 @@ impl PageFile {
     }
 }
 
-/// The file name holding a module's pages.
+/// The file name holding a module's pages: `FA-18C_hornet` is in
+/// `fa-18c-hornet.json`.
 pub fn page_file_name(module: &str) -> String {
-    format!("{module}.json")
+    format!("{}.json", crate::file_stem(module))
 }
 
 /// Whether two page names read as the same to a person.
@@ -222,8 +224,8 @@ pub fn same_name(a: &str, b: &str) -> bool {
 pub struct PageLibrary {
     /// By module.
     pub files: BTreeMap<String, PageFile>,
-    /// Modules whose file would not load, with why. Every slot on one of these
-    /// modules loads empty.
+    /// Files that would not load, by file name without `.json`, with why.
+    /// Every slot on the module a file is named for loads empty.
     pub broken: BTreeMap<String, String>,
 }
 
@@ -246,12 +248,12 @@ impl PageLibrary {
                 continue;
             };
             match PageFile::load(&path) {
-                Ok(file) if file.module == stem => {
-                    lib.files.insert(stem, file);
+                Ok(file) if page_file_name(&file.module) == format!("{stem}.json") => {
+                    lib.files.insert(file.module.clone(), file);
                 }
-                // Named by module, so the name is where the daemon and the
-                // editor look for it. One saying otherwise would be read as
-                // the wrong aircraft's pages by one of them.
+                // Named after its module, so the name is where the daemon
+                // and the editor look for it. One saying otherwise would be
+                // read as the wrong aircraft's pages by one of them.
                 Ok(file) => {
                     lib.broken.insert(
                         stem.clone(),
@@ -292,7 +294,8 @@ impl PageLibrary {
 
     /// Why a module's pages did not load, if they did not.
     pub fn broken(&self, module: &str) -> Option<&str> {
-        self.broken.get(module).map(String::as_str)
+        let stem = crate::file_stem(module);
+        self.broken.iter().find(|(f, _)| crate::file_stem(f) == stem).map(|(_, why)| why.as_str())
     }
 
     /// Things wrong with the library as a whole: an id used twice, which would

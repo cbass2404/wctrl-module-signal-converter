@@ -2878,6 +2878,73 @@ impl Profiles {
         Profile::load(&self.previous.join(name)).ok()
     }
 
+    /// Bring the aircraft a profile flies up to the new release, the way
+    /// [`reconcile_settings`] does its settings: ours while the list is still
+    /// the one `was` shipped, and the user's once it differs. Returns what it
+    /// did, as phrases for the update notes, and whether it gave any aircraft
+    /// up, which is what [`merge_new`](Self::merge_new) seeds again for.
+    ///
+    /// This is how a profile is split. DCS-BIOS can report two variants under
+    /// one module that want different signals for the same lamp, and the
+    /// answer is a shipped profile each. An aircraft the release moves to
+    /// another shipped profile is dropped here, and [`seed`](Self::seed) then
+    /// brings that profile in, since nothing claims the aircraft any more.
+    /// The new profile comes as shipped: edits the user made while the
+    /// variants shared a profile stay with this one.
+    ///
+    /// An aircraft the release adds is taken on only where no other profile
+    /// flies it, so a merge never leaves one aircraft claimed twice. One
+    /// dropped without going anywhere is kept, since dropping it would leave
+    /// it with no profile at all.
+    ///
+    /// A list the user changed is left as it is, and the notes say what the
+    /// release would have moved, so they know a reset would bring the split.
+    fn reconcile_aircraft(&self, name: &str, profile: &mut Profile, shipped: &Profile, was: &Profile) -> (Vec<String>, bool) {
+        let set = |a: &[String]| a.iter().cloned().collect::<BTreeSet<String>>();
+        let (mine, before, after) = (set(&profile.aircraft), set(&was.aircraft), set(&shipped.aircraft));
+        if before == after {
+            return (Vec::new(), false);
+        }
+        let families = self.families();
+        let moved: Vec<(String, String)> = before
+            .difference(&after)
+            .filter_map(|a| families.0.get(a).filter(|f| f.as_str() != name).map(|f| (a.clone(), f.clone())))
+            .collect();
+        let listed = |pairs: &[(String, String)]| {
+            pairs.iter().map(|(a, f)| format!("{a} to {f}")).collect::<Vec<_>>().join(", ")
+        };
+        if mine != before {
+            if moved.is_empty() {
+                return (Vec::new(), false);
+            }
+            return (
+                vec![format!(
+                    "kept your own aircraft list, where this release moves {}; reset the profile to take the split",
+                    listed(&moved)
+                )],
+                false,
+            );
+        }
+        let claimed = self.claimed_except(Some(name));
+        let joined: Vec<String> =
+            after.difference(&before).filter(|a| !claimed.contains_key(*a)).cloned().collect();
+        let mut kept = profile.aircraft.clone();
+        kept.retain(|a| !moved.iter().any(|(m, _)| m == a));
+        kept.extend(joined.iter().cloned());
+        if kept.is_empty() || (moved.is_empty() && joined.is_empty()) {
+            return (Vec::new(), false);
+        }
+        profile.aircraft = kept;
+        let mut what = Vec::new();
+        if !moved.is_empty() {
+            what.push(format!("moved {}", listed(&moved)));
+        }
+        if !joined.is_empty() {
+            what.push(format!("now also flies {}", joined.join(", ")));
+        }
+        (what, !moved.is_empty())
+    }
+
     /// Every aircraft an active profile already claims, with the name of the
     /// profile that claims it.
     ///
@@ -3086,6 +3153,7 @@ impl Profiles {
             self.defaults != self.active && self.last_update().as_deref() != Some(version);
 
         let mut notes = Vec::new();
+        let mut released = false;
         let mut files: Vec<PathBuf> = std::fs::read_dir(&self.active)?
             .filter_map(|e| e.ok().map(|e| e.path()))
             .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
@@ -3115,6 +3183,7 @@ impl Profiles {
             let before = profile.bindings.len();
             let mut from_default = 0usize;
             let mut work = FieldWork::default();
+            let mut aircraft = Vec::new();
 
             if let Ok(shipped) = Profile::load(&self.defaults.join(&name)) {
                 for b in &shipped.bindings {
@@ -3134,6 +3203,9 @@ impl Profiles {
                         work.lamps = reconcile_lamps(&mut profile, &shipped.bindings, &was.bindings);
                         work.settings = reconcile_settings(&mut profile, &shipped, was);
                         work.slots = reconcile_slots(&mut profile, &shipped, was);
+                        let (what, gave_up) = self.reconcile_aircraft(&name, &mut profile, &shipped, was);
+                        aircraft = what;
+                        released |= gave_up;
                     }
                 }
             }
@@ -3152,7 +3224,7 @@ impl Profiles {
             // a release that retires one field and adds another nets to zero
             // and would save nothing, and a release that retires two would
             // underflow the subtraction it used to be.
-            if added == 0 && work.nothing() && !order_changed {
+            if added == 0 && work.nothing() && aircraft.is_empty() && !order_changed {
                 continue;
             }
             profile.save(&path)?;
@@ -3198,9 +3270,18 @@ impl Profiles {
                     work.slots
                 ));
             }
+            what.extend(aircraft);
             match what.is_empty() {
                 true => notes.push(format!("{name}: reordered")),
                 false => notes.push(format!("{name}: {}", what.join(", "))),
+            }
+        }
+        // An aircraft given up belongs to a shipped profile the user does not
+        // have yet. Seeding ran before this, while the aircraft was still
+        // claimed, so it runs again for the split to arrive on this start.
+        if released {
+            for copied in self.seed()? {
+                notes.push(format!("{copied}: added, split from a profile you had"));
             }
         }
         // Written whether or not anything changed: the question it answers is

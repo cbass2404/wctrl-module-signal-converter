@@ -341,6 +341,16 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
     ctx.pageChanged();
   };
 
+  /**
+   * Take `page` as saved and keep it open, so the editor stays where it was;
+   * only Close shuts it.
+   */
+  const saved = (page: Page): void => {
+    book.editing = { page, device: device.key, baseline: JSON.stringify(page), fresh: false };
+    redrawAll(book);
+    ctx.pageChanged();
+  };
+
   const close = (): void => {
     book.editing = null;
     book.problems = [];
@@ -399,7 +409,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
           page.name = page.name.trim();
           update(book, await savePage(ctx.profile, page, device.key));
           ctx.tell(`Saved page ${page.name}.`);
-          close();
+          saved(page);
         } catch (err) {
           ctx.fail("Saving the page", err);
         }
@@ -408,6 +418,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
 
     // A copy under a new id, leaving the page it came from as saved. The
     // name typed is kept if it is free, which is the usual way to name it.
+    // The editor carries on with the copy.
     saveAs.addEventListener("click", () => {
       void (async () => {
         try {
@@ -415,7 +426,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
           const copy: Page = { ...structuredClone(page), id, name: freeName(book, page.name) };
           update(book, await savePage(ctx.profile, copy, device.key));
           ctx.tell(`Saved as a new page, ${copy.name}. Pick it in a slot to show it.`);
-          close();
+          saved(copy);
         } catch (err) {
           ctx.fail("Saving the page", err);
         }
@@ -476,7 +487,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
       clash,
       problems,
       table,
-      el("div", { class: "chain-add" }, save, saveAs, remove, shut),
+      el("div", { class: "chain-add page-actions" }, save, saveAs, remove, shut),
     );
     refresh();
     return wrap;

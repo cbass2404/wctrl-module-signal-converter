@@ -2186,7 +2186,7 @@ mod page_load_tests {
         )
         .unwrap();
         std::fs::write(
-            pages.join("FA-18C_hornet.json"),
+            pages.join("fa-18c-hornet.json"),
             r#"{"module": "FA-18C_hornet", "pages": [
                 {"id": "p1aaaa", "name": "One", "display": "MCDU", "fields": [{"cells": "0-2", "source": "MASTER_CAUTION_LT"}]},
                 {"id": "p2bbbb", "name": "Two", "display": "MCDU", "fields": [{"cells": "24-26", "source": "MASTER_CAUTION_LT"}]}
@@ -2267,8 +2267,8 @@ fn load_profiles(
     // Read with the profiles every time, so a page saved in the editor is
     // on the glass at the next reload like a profile saved there.
     let pages = PageLibrary::load_dir(pages_dir);
-    for (module, why) in &pages.broken {
-        out.messages.push(format!("warning  the pages for {module} did not load, so every slot on it is empty: {why}"));
+    for (file, why) in &pages.broken {
+        out.messages.push(format!("warning  the page file {file}.json did not load, so every slot on its module is empty: {why}"));
     }
     for line in pages.problems() {
         out.messages.push(format!("caution  pages: {line}"));

@@ -1,20 +1,19 @@
 {
   "schema_version": 2,
-  "name": "F-14BU",
-  "author": "",
+  "name": "A-10C2",
+  "author": "coryb",
   "profile_version": "0.1.0",
   "aircraft": [
-    "F-14BU"
+    "A-10C_2"
   ],
-  "module": "F-14",
+  "module": "A-10C",
   "bindings": [
     {
       "device": "CarrierAce_MFD_C",
       "led": "INST_PNL_Backlight",
       "conditions": [],
       "always": true,
-      "on": 175,
-      "note": "Every backlight is held at 175 rather than following a cockpit knob, so the panels stay readable whatever the cockpit lighting is set to. Point this row at a knob to have them dim with the cockpit again."
+      "on": 175
     },
     {
       "device": "CarrierAce_MFD_L",
@@ -50,7 +49,8 @@
       "led": "HUD_INST_PNL_Backlight",
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C"
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255
     },
     {
       "device": "MCDU_Captain",
@@ -285,31 +285,34 @@
       "led": "Backlight",
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C"
+      "same_as_device": "CarrierAce_MFD_C",
+      "note": "Throttle backlight takes the panel backlight's level. Unlike the PTO2 SL, this only dims A/A and A/G, it does not gate them."
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "A/A",
       "conditions": [
         {
-          "source": "PLT_HUD_MODE_A2A",
+          "source": "AHCP_MASTER_ARM",
           "on_when": {
-            "equals": 1
+            "equals": 2
           }
         }
-      ]
+      ],
+      "note": "Master arm at ARM. The A-10 has no master modes, so the lamp shows whether weapons are live."
     },
     {
       "device": "Orion_Throttle_Base_II",
       "led": "A/G",
       "conditions": [
         {
-          "source": "PLT_HUD_MODE_A2G",
+          "source": "AHCP_GUNPAC",
           "on_when": {
-            "equals": 1
+            "equals": 2
           }
         }
-      ]
+      ],
+      "note": "GUN/PAC switch at ARM, which arms the gun and the PAC together. The other armed position arms the PAC alone, so the lamp stays dark there: it shows whether the gun is live."
     },
     {
       "device": "PFP3N_Captain",
@@ -757,19 +760,22 @@
       "led": "Backlight",
       "conditions": [],
       "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C"
+      "same_as_device": "CarrierAce_MFD_C",
+      "note": "Panel backlight takes the same level as every other backlight."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Landing_gear_lights",
       "conditions": [
         {
-          "source": "PLT_GEAR_LIGHT",
+          "source": "HANDLE_GEAR_WARNING",
           "on_when": {
             "equals": 1
           }
         }
-      ]
+      ],
+      "on": 255,
+      "note": "Gear handle warning light (red). Lit on gear disagreement or unsafe configuration, not on gear down."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -778,7 +784,7 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
+      "note": "Held at full. SL gates indices 4-17 entirely, so tying it to a cockpit dimmer with no floor would blank every lamp in daylight. The off value is that floor, set now so that changing on_when to a scale keeps the panel lit by day."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -787,151 +793,170 @@
       "same_as": "INST_PNL_Backlight",
       "same_as_device": "CarrierAce_MFD_C",
       "off": 255,
-      "note": "Held at full, because at 0 it hides the lamps beneath it. To follow a cockpit dimmer instead, keep the value at zero at full, since a dark cockpit means daylight."
+      "note": "Flag lamp brightness: NOSE, LEFT, RIGHT, FLAPS, HALF, FULL and HOOK. Takes the backlight's level, and goes full bright if the backlight is ever at 0, because a dim flag lamp is unreadable in daylight. That case is the off value: a binding that resolves to zero takes its off value."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Master_Caution",
-      "conditions": [],
-      "any_of": [
+      "conditions": [
         {
-          "conditions": [
-            {
-              "source": "PLT_MASTER_CAUTION",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
-        },
-        {
-          "conditions": [
-            {
-              "source": "RIO_MASTERCAUTION_LIGHT",
-              "on_when": {
-                "equals": 1
-              }
-            }
-          ]
+          "source": "MASTER_CAUTION",
+          "on_when": {
+            "equals": 1
+          }
         }
-      ]
+      ],
+      "note": "Master Caution (yellow)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "JETT",
-      "conditions": []
+      "conditions": [],
+      "note": "UNDECIDED. Suggested: GUN_READY, but that conflicts with the throttle A/G suggestion. GUN_READY can only go one place."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "CTR",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "APU_FIRE",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "APU fire (yellow), centre of the fire group."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "LI",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "L_ENG_FIRE",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "Left engine fire (yellow). The jettison row reads left to right, so the fire warnings sit on it naturally."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "LO",
-      "conditions": []
+      "conditions": [],
+      "note": "UNDECIDED. Suggested: CANOPY_UNLOCKED (green)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "RO",
-      "conditions": []
+      "conditions": [],
+      "note": "UNDECIDED. Suggested: NOSEWHEEL_STEERING (green)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "RI",
-      "conditions": []
+      "conditions": [
+        {
+          "source": "R_ENG_FIRE",
+          "on_when": {
+            "equals": 1
+          }
+        }
+      ],
+      "note": "Right engine fire (yellow)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "FLAPS",
       "conditions": [
         {
-          "source": "PLT_FLAPS_IND_LIGHT",
+          "source": "FLAP_POS",
           "on_when": {
-            "equals": 1
+            "gte": 1000
           }
         }
-      ]
+      ],
+      "note": "Lit whenever the flaps are off the stops, so it covers travel as well as the settled positions. Measured 2026-09-16 with FLAPS_SWITCH captured alongside: retracted does NOT rest at zero. It undershoots to 34, rebounds to 462 and settles near 138, and a second capture settled at 0, so rest is somewhere in 0 to 462. The retracted rebound at 462 is higher than the first sample of real travel at 283, so those regions overlap and no floor separates them perfectly. 1000 clears the rebound with margin and costs about 50 ms of lateness at the start of extension, which is invisible. An earlier floor of 100 came from a capture that happened to reach exactly 0 and would have left this lamp lit with the flaps fully up."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "NOSE",
       "conditions": [
         {
-          "source": "PLT_GEAR_NOSE_IND_L",
+          "source": "GEAR_N_SAFE",
           "on_when": {
             "equals": 1
           }
         }
-      ]
+      ],
+      "note": "Nose gear safe (green)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "FULL",
       "conditions": [
         {
-          "source": "PLT_FLAPS_IND",
+          "source": "FLAP_POS",
           "on_when": {
-            "gte": 62000
+            "gte": 64000
           }
         }
-      ]
+      ],
+      "note": "Flaps arrived at DN. Measured 2026-09-16: DN settles at 65535 and rings down to 65206 before it stops, so 64000 clears the ringing. No lever condition is needed: DN is the top of travel, so nothing passes through this range on the way somewhere else. That simplification also kept this binding correct when the lever mapping turned out to be the reverse of what was inferred. Reading position rather than the lever also means an emergency retract shows the truth."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "RIGHT",
       "conditions": [
         {
-          "source": "PLT_GEAR_R_IND_L",
+          "source": "GEAR_R_SAFE",
           "on_when": {
             "equals": 1
           }
         }
-      ]
+      ],
+      "note": "Right gear safe (green)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "LEFT",
       "conditions": [
         {
-          "source": "PLT_GEAR_L_IND_L",
+          "source": "GEAR_L_SAFE",
           "on_when": {
             "equals": 1
           }
         }
-      ]
+      ],
+      "note": "Left gear safe (green)."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "HALF",
       "conditions": [
         {
-          "source": "PLT_FLAPS_IND",
+          "source": "FLAPS_SWITCH",
+          "on_when": {
+            "equals": 1
+          }
+        },
+        {
+          "source": "FLAP_POS",
           "on_when": {
             "between": [
-              32768,
-              45000
+              21000,
+              25000
             ]
           }
         }
-      ]
+      ],
+      "note": "Lever at MVR and the flaps arrived there. FLAPS_SWITCH is MEASURED 2026-09-16: 0 = UP, 1 = MVR, 2 = DN. Note that is the reverse of what the DCS-BIOS description order 'DN - MVR - UP' suggests, so do not re-derive it from the definition. MVR settles at 22726 arriving from retracted and 23411 arriving from DN, ringing out to 22415 and 23476 across two captures. The window is deliberately wide enough for both directions and the overshoot. The lever condition is what stops HALF flashing when travelling straight from UP to DN, since the flaps pass through this window on the way."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
       "led": "HOOK",
-      "conditions": [
-        {
-          "source": "PLT_HOOK_LIGHT",
-          "on_when": {
-            "equals": 1
-          }
-        }
-      ]
+      "conditions": [],
+      "note": "UNDECIDED. This is the physically dim lamp, so it should carry something that never needs catching at a glance. Suggested: MARKER_BEACON or TAKE_OFF_TRIM."
     },
     {
       "device": "ViperAce_ICP",
@@ -980,7 +1005,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         {
@@ -997,7 +1022,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1011,7 +1036,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1025,7 +1050,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         {
@@ -1042,7 +1067,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1056,7 +1081,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1070,7 +1095,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         {
@@ -1087,7 +1112,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1101,7 +1126,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1115,7 +1140,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         {
@@ -1132,7 +1157,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1146,7 +1171,7 @@
       "start": 1,
       "slots": [
         {
-          "page": "f14-cdnu",
+          "page": "a10c-cdu",
           "key": null
         },
         null,
@@ -1160,10 +1185,13 @@
       "start": 1,
       "slots": [
         {
+          "page": "a10c-cmsc",
+          "key": null
+        },
+        {
           "page": null,
           "key": null
         },
-        null,
         null,
         null,
         null,

@@ -531,6 +531,26 @@ A shipped default renamed between releases (`a-10c-2.json` to `a-10c.json`,
 after the DCS-BIOS module) no longer leaves two profiles behind: the new file
 finds its aircraft claimed by the old one and is not seeded.
 
+**Splitting a shipped profile.** DCS-BIOS can report two variants under one
+module that want different signals for the same lamp (the A-10C and A-10C II
+on the ICP's radio lines), and the answer is a shipped profile each. The
+aircraft list is reconciled against `data/defaults-previous` once per version,
+like a field:
+
+| The profile's aircraft | What happens |
+| --- | --- |
+| as the last release shipped them | an aircraft moved to another shipped default is dropped; one added is taken on if nothing else flies it |
+| changed | left alone, and the update log names what the release moved |
+
+An aircraft the last release listed and no default lists now is kept, since
+dropping it would leave it with no profile. Seeding runs before this, while
+the moved aircraft is still claimed, so `merge_new` seeds again once an
+aircraft is dropped and the new profile arrives on the same start. It arrives
+as shipped: edits made while the variants shared a profile stay in the old
+one, where Merge from... can carry them over. A changed list keeps the old
+profile flying both, and Reset takes the split. `tests/profile_split.rs` pins
+the cases.
+
 **Sharing a profile.** Export copies the file as it is on disk, so unsaved
 edits are not in it. Import checks the file the way Save does and refuses one
 that will not parse, reads a module the installed DCS-BIOS does not have, or
@@ -1351,11 +1371,12 @@ page is on: pages are resolved into ordinary fields before it sees them.
 
 ### A page file
 
-One file per module, named by its catalogue key, holding every page on that
-module:
+One file per module, named after its catalogue key the way a profile's file
+is named after the profile (lowercase, each run of anything else one dash),
+holding every page on that module:
 
 ```jsonc
-// data/pages/FA-18C_hornet.json
+// data/pages/fa-18c-hornet.json
 {
   "module": "FA-18C_hornet", // the only aircraft limit, see below
   "pages": [

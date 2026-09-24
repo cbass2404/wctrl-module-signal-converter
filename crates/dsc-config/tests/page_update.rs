@@ -74,6 +74,50 @@ fn a_page_file_is_seeded_whole_only_where_there_is_none() {
 }
 
 #[test]
+fn a_file_named_by_its_module_key_is_renamed_before_seeding() {
+    let dir = scratch("legacy-names");
+    write(&dir, "default-pages", vec![page("aaaaaa", "Radios", vec![field("0-1", "A")])]);
+    let fuel = page("bbbbbb", "Fuel", vec![field("24-25", "B")]);
+    PageFile { module: "A-10C".into(), pages: vec![fuel.clone()] }.save(&dir.join("pages").join("A-10C.json")).unwrap();
+    let hornet = |pages| PageFile { module: "FA-18C_hornet".into(), pages };
+    hornet(vec![fuel]).save(&dir.join("pages").join("FA-18C_hornet.json")).unwrap();
+    hornet(Vec::new()).save(&dir.join("pages").join("fa-18c-hornet.json")).unwrap();
+    let pages = Pages::new(dir.join("default-pages"), dir.join("pages"));
+
+    assert!(pages.seed().unwrap().is_empty(), "the user's A-10C file is still theirs");
+    let names: Vec<String> = std::fs::read_dir(dir.join("pages"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .collect();
+    assert!(names.contains(&"a-10c.json".to_string()), "{names:?}");
+    assert!(names.contains(&"fa-18c-hornet.json.seeded".to_string()), "{names:?}");
+    assert!(!names.iter().any(|n| n == "A-10C.json" || n == "FA-18C_hornet.json"), "{names:?}");
+    let lib = library(&dir);
+    assert!(lib.broken.is_empty(), "{:?}", lib.broken);
+    let ids = |module| lib.on_module(module).iter().map(|p| p.id.clone()).collect::<Vec<_>>();
+    assert_eq!(ids("A-10C"), vec!["bbbbbb"]);
+    assert_eq!(ids("FA-18C_hornet"), vec!["bbbbbb"], "the old file wins over one seeded beside it");
+}
+
+#[test]
+fn a_renamed_file_takes_the_pages_the_snapshot_already_had() {
+    let dir = scratch("legacy-merge");
+    let radios = page("aaaaaa", "Radios", vec![field("0-1", "A")]);
+    let fuel = page("bbbbbb", "Fuel", vec![field("24-25", "B")]);
+    write(&dir, "default-pages", vec![radios.clone(), fuel.clone()]);
+    write(&dir, "default-pages-previous", vec![radios.clone(), fuel]);
+    PageFile { module: "A-10C".into(), pages: vec![radios] }.save(&dir.join("pages").join("A-10C.json")).unwrap();
+    let pages = Pages::new(dir.join("default-pages"), dir.join("pages")).with_previous(dir.join("default-pages-previous"));
+
+    pages.seed().unwrap();
+    assert!(!pages.merge_new("2").unwrap().is_empty());
+    let ids: Vec<String> = library(&dir).on_module("A-10C").iter().map(|p| p.id.clone()).collect();
+    assert_eq!(ids, vec!["aaaaaa", "bbbbbb"], "Fuel shipped before this file was brought up to date, so it is new to it");
+    assert!(!dir.join("pages").join(".renamed").exists(), "and only once");
+}
+
+#[test]
 fn new_pages_come_in_and_deleted_ones_stay_deleted() {
     let dir = scratch("new-deleted");
     let radios = page("aaaaaa", "Radios", vec![field("0-1", "A")]);

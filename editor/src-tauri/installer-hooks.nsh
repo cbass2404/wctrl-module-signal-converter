@@ -263,7 +263,9 @@ FunctionEnd
   ${EndIf}
 
   ; The catalogue is rebuilt from DCS-BIOS whenever it is missing, so it goes.
-  ; Profiles are the user's work and stay, unless they ask for app data to go.
+  ; Profiles, pages and settings are the user's work and stay, unless they
+  ; ask for app data to go. Each by name, since the folder may be one they
+  ; chose and hold other things.
   ${If} $UpdateMode <> 1
   ${AndIf} $DscDataDir != ""
     RMDir /r "$DscDataDir\catalogue"
@@ -272,6 +274,8 @@ FunctionEnd
     Delete "$DscDataDir\catalogue.lock"
     ${If} $DeleteAppDataCheckboxState = 1
       RMDir /r "$DscDataDir\profiles"
+      RMDir /r "$DscDataDir\pages"
+      Delete "$DscDataDir\settings.json"
       DeleteRegKey HKCU "${DSC_KEY}"
     ${EndIf}
     RMDir "$DscDataDir"

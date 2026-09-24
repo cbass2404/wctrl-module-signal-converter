@@ -427,6 +427,10 @@ impl PageLibrary {
     }
 }
 
+/// Modules whose page file [`Pages::seed`] renamed, one per line, for
+/// [`Pages::merge_new`] to bring up without the snapshot.
+const RENAMED: &str = ".renamed";
+
 /// Shipped pages, and the library in use: the same arrangement as
 /// [`Profiles`](crate::Profiles), one file per module in each.
 pub struct Pages {
@@ -465,6 +469,7 @@ impl Pages {
             return Ok(Vec::new());
         }
         std::fs::create_dir_all(&self.active)?;
+        self.rename_to_stems()?;
         let mut shipped: Vec<PathBuf> = std::fs::read_dir(&self.defaults)?
             .flatten()
             .map(|e| e.path())
@@ -485,6 +490,52 @@ impl Pages {
         Ok(copied)
     }
 
+    /// Give every file in the library the name its module is looked up by.
+    ///
+    /// Earlier releases named a file by its module key as it is, and on
+    /// Windows `AH-64D.json` also stands in for `ah-64d.json`, so
+    /// [`seed`](Self::seed) took it for the file it wanted and the loader
+    /// refused it: a library of empty slots. Only a file named for the module
+    /// it holds is renamed. Where a release since seeded the new name beside
+    /// the old one, the old file is the user's and wins, and the seeded one is
+    /// kept as `.json.seeded`.
+    ///
+    /// A renamed file was last brought up to date by the release before the
+    /// snapshot, so its module is noted for [`merge_new`](Self::merge_new).
+    fn rename_to_stems(&self) -> Result<()> {
+        let mut renamed = Vec::new();
+        let names: BTreeSet<String> = std::fs::read_dir(&self.active)?
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        for name in &names {
+            let Some(stem) = name.strip_suffix(".json") else {
+                continue;
+            };
+            let Ok(file) = PageFile::load(&self.active.join(name)) else {
+                continue;
+            };
+            let want = page_file_name(&file.module);
+            if *name == want || crate::file_stem(stem) != crate::file_stem(&file.module) {
+                continue;
+            }
+            if names.contains(&want) {
+                std::fs::rename(self.active.join(&want), self.active.join(format!("{want}.seeded")))?;
+            }
+            std::fs::rename(self.active.join(name), self.active.join(&want))?;
+            renamed.push(file.module);
+        }
+        if !renamed.is_empty() {
+            let path = self.active.join(RENAMED);
+            let mut all = std::fs::read_to_string(&path).unwrap_or_default();
+            for module in renamed {
+                all.push_str(&format!("{module}\r\n"));
+            }
+            std::fs::write(path, all)?;
+        }
+        Ok(())
+    }
+
     /// Bring the library up to the pages this release ships, keeping every
     /// change the user made. Returns a line for each module it touched.
     ///
@@ -503,6 +554,9 @@ impl Pages {
     ///   shipped one only while it still matches the snapshot's.
     /// * A page the release no longer ships goes only if it is still exactly
     ///   as the snapshot has it.
+    /// * A module whose file [`seed`](Self::seed) renamed has no snapshot, since
+    ///   its file is older than the one there: every shipped page it lacks
+    ///   comes in, and a page it has gains the fields it lacks.
     ///
     /// Once per version, recorded in the library folder, and never in a
     /// development checkout, where the shipped pages are the library.
@@ -521,6 +575,8 @@ impl Pages {
         } else {
             PageLibrary::load_dir(&self.previous)
         };
+        let renamed = std::fs::read_to_string(self.active.join(RENAMED)).unwrap_or_default();
+        let fresh: BTreeSet<&str> = renamed.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
         let mut lib = self.library();
         let mut notes = Vec::new();
 
@@ -532,7 +588,7 @@ impl Pages {
             }
             let (mut pages, mut added, mut updated, mut removed, mut renamed, mut retired) = (0, 0, 0, 0, 0, 0);
             for s in &file.pages {
-                let w = was.page_on(module, &s.id);
+                let w = if fresh.contains(module.as_str()) { None } else { was.page_on(module, &s.id) };
                 let at = lib.on_module(module).iter().position(|p| p.id == s.id);
                 match (at, w) {
                     (None, None) => {
@@ -608,6 +664,7 @@ impl Pages {
             notes.push(format!("pages {module}: {}", what.join(", ")));
         }
         std::fs::write(&marker, format!("{version}\r\n"))?;
+        let _ = std::fs::remove_file(self.active.join(RENAMED));
         Ok(notes)
     }
 }

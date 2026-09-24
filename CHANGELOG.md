@@ -32,6 +32,9 @@ unless this says what moved.
   alone can be read to see how it was set up, and one not plugged in can
   still be set up. Plugging a panel in or pulling it out while the page is
   open moves it to its group within a couple of seconds, keeping your edits.
+- **A tidier profile list.** Each profile row keeps its Edit button, and
+  Copy to..., Export..., Merge from..., Reset and Delete move into a menu
+  under the ⋯ button beside it.
 
 ### Breaking
 

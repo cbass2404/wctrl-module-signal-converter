@@ -89,6 +89,46 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** One entry in an action menu. `danger` ones are red and sit below a rule. */
+interface MenuItem {
+  label: string;
+  danger?: boolean;
+  run: () => void;
+}
+
+let menuCount = 0;
+
+/**
+ * A "..." button and the menu it opens, to append side by side.
+ *
+ * A native popover, so a click elsewhere or Escape closes it with no code
+ * here, and it draws above the row rather than being clipped by it. It is
+ * anchored to its button in CSS, which also flips it above when the row is
+ * too near the bottom of the window.
+ */
+function actionMenu(label: string, items: MenuItem[]): [HTMLButtonElement, HTMLElement] {
+  const anchor = `--menu-${++menuCount}`;
+  const menu = el("div", { class: "menu", popover: "auto", role: "menu" });
+  menu.style.setProperty("position-anchor", anchor);
+  let ruled = false;
+  for (const item of items) {
+    if (item.danger && !ruled) {
+      ruled = true;
+      if (menu.childElementCount > 0) menu.append(el("hr"));
+    }
+    const pick = el("button", { role: "menuitem", ...(item.danger ? { class: "danger" } : {}) }, item.label);
+    pick.addEventListener("click", () => {
+      menu.hidePopover();
+      item.run();
+    });
+    menu.append(pick);
+  }
+  const open = el("button", { class: "more", title: label, "aria-label": label, "aria-haspopup": "menu" }, "⋯");
+  open.style.setProperty("anchor-name", anchor);
+  open.popoverTargetElement = menu;
+  return [open, menu];
+}
+
 /**
  * An aircraft list short enough to read at a glance, and the whole list for a
  * tooltip.
@@ -516,23 +556,20 @@ async function showLibrary(): Promise<void> {
       edit.addEventListener("click", () => void showProfile(row.file));
       actions.append(edit);
     }
+    // Everything but Edit is used rarely enough to wait behind one button.
+    const more: MenuItem[] = [];
     if (!row.error) {
-      const copy = el("button", {}, "Copy to...");
-      copy.addEventListener("click", () => void showCloneProfile(row));
-      const share = el("button", {}, "Export...");
-      share.addEventListener("click", () => void exportOne(row));
-      actions.append(copy, share);
+      more.push(
+        { label: "Copy to...", run: () => void showCloneProfile(row) },
+        { label: "Export...", run: () => void exportOne(row) },
+      );
       // Offered only when there is something on the same module to take from.
       if (mergeSources(row, rows).length > 0) {
-        const take = el("button", {}, "Merge from...");
-        take.addEventListener("click", () => void showMergeFrom(row, rows));
-        actions.append(take);
+        more.push({ label: "Merge from...", run: () => void showMergeFrom(row, rows) });
       }
     }
     if (row.has_default) {
-      const reset = el("button", { class: "danger" }, "Reset");
-      reset.addEventListener("click", () => void resetOne(row));
-      actions.append(reset);
+      more.push({ label: "Reset", danger: true, run: () => void resetOne(row) });
     }
     // A shipped profile goes only when another can take its aircraft. Deleted
     // otherwise, it would be seeded straight back, so the button would be a
@@ -540,10 +577,9 @@ async function showLibrary(): Promise<void> {
     const plan = deletePlan(row, rows);
     const canDelete = !row.has_default || plan.orphans.length === 0 || plan.homes.length > 0;
     if (canDelete) {
-      const remove = el("button", { class: "danger" }, "Delete");
-      remove.addEventListener("click", () => void deleteOne(row, rows));
-      actions.append(remove);
+      more.push({ label: "Delete", danger: true, run: () => void deleteOne(row, rows) });
     }
+    if (more.length > 0) actions.append(...actionMenu(`More for ${row.name}`, more));
 
     const item = el("li", {}, el("div", { class: "grow" }, el("strong", {}, row.name), el("br"), meta), actions);
     shown.push([row, item]);

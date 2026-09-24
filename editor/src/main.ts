@@ -25,6 +25,7 @@ import {
   exportProfile,
   importPick,
   importProfile,
+  connectedDevices,
   mergeParts,
   mergeProfile,
   saveProfile,
@@ -111,8 +112,29 @@ function aircraftSummary(names: string[], limit = 50): { text: string; title: Re
   };
 }
 
+/** Stops the profile page asking which panels are plugged in, once it is left. */
+let stopWatching: (() => void) | null = null;
+
 function clear(): void {
+  stopWatching?.();
+  stopWatching = null;
   app.replaceChildren();
+}
+
+/** How often the profile page asks which panels are plugged in. */
+const PLUG_POLL_MS = 2000;
+
+/**
+ * The keys of the panels plugged in now, or the reason nobody can tell. A
+ * failure is kept rather than thrown: the page still works, it just cannot
+ * say which panels are here.
+ */
+async function lookForPanels(): Promise<Set<string> | string> {
+  try {
+    return new Set(await connectedDevices());
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
 }
 
 /**
@@ -1453,6 +1475,10 @@ async function showProfile(file: string): Promise<void> {
     book = pageBook(profile.module, file, { pages: [], broken: why, used: [] });
   }
 
+  // Which panels are here, so the page can put them first. Asked again while
+  // the page is open; see `regroup` below.
+  let found = await lookForPanels();
+
   clear();
 
   const save = el("button", { class: "primary" }, "Save");
@@ -1653,8 +1679,74 @@ async function showProfile(file: string): Promise<void> {
     byLamp.set(lampKey(b.device, b.led), b);
   }
 
-  const sections = devices.map((device) => deviceSection(device, devices, byLamp, session));
-  app.append(...sections);
+  // Grouped by what the panel is doing tonight: plugged in and driven,
+  // plugged in and left alone, or not here. Every group opens and edits, so a
+  // panel still in the post can be set up, and one left alone can be read to
+  // see how the rest were done. Each group keeps the inventory's alphabetical
+  // order, since `regroup` appends in that order.
+  const group = (title: string, lead: string): { box: HTMLElement; list: HTMLElement; lead: HTMLElement } => {
+    const leadLine = el("p", { class: "meta" }, lead);
+    const list = el("div", {});
+    return { box: el("section", { class: "device-group" }, el("h2", {}, title), leadLine, list), list, lead: leadLine };
+  };
+  const active = group("Active Devices", "");
+  const inactive = group("Inactive Devices", "Plugged in, but this profile leaves them alone. Open one to see how it is set up.");
+  const missing = group("Devices not found", "Supported, but not plugged in. They can still be opened and set up.");
+  app.append(active.box, inactive.box, missing.box);
+
+  const sections = devices.map((device) => deviceSection(device, devices, byLamp, session, () => regroup()));
+  const regroup = (): void => {
+    const off = session.profile.disabled_devices ?? [];
+    sections.forEach((section, i) => {
+      const key = devices[i]?.key ?? "";
+      const into = typeof found !== "string" && !found.has(key)
+        ? missing
+        : off.includes(key) ? inactive : active;
+      // Moved only when it changes group, so a panel being edited is not
+      // pulled out from under the cursor by a poll that changed nothing.
+      if (section.parentElement !== into.list) into.list.append(section);
+    });
+    // A section moved in is appended at the end; putting each list back in
+    // inventory order keeps them alphabetical without touching the rest.
+    for (const g of [active, inactive, missing]) {
+      const inOrder = sections.filter((s) => s.parentElement === g.list);
+      if (inOrder.some((s, i) => g.list.children[i] !== s)) g.list.append(...inOrder);
+    }
+    // Active always shows, so an empty page says why it is empty.
+    active.lead.hidden = active.list.children.length > 0 && typeof found !== "string";
+    active.lead.textContent = typeof found === "string"
+      ? `Could not tell which panels are plugged in (${found}), so every panel is listed here.`
+      : "No panel this profile drives is plugged in.";
+    inactive.box.hidden = inactive.list.children.length === 0;
+    missing.box.hidden = missing.list.children.length === 0;
+  };
+  regroup();
+
+  // A panel plugged in or pulled out while the page is open moves to its
+  // group without a reload. Listing is cheap and opens nothing, so asking
+  // often costs the converter nothing. One question at a time, and a late
+  // answer after the page is left is dropped.
+  let asking = false;
+  let left = false;
+  const poll = window.setInterval(() => {
+    if (asking) return;
+    asking = true;
+    void lookForPanels().then((now) => {
+      asking = false;
+      if (left) return;
+      const same = typeof now === "string"
+        ? typeof found === "string"
+        : typeof found !== "string" && now.size === found.size && [...now].every((k) => found instanceof Set && found.has(k));
+      if (same) return;
+      found = now;
+      regroup();
+      syncToggle();
+    });
+  }, PLUG_POLL_MS);
+  stopWatching = () => {
+    left = true;
+    window.clearInterval(poll);
+  };
 
   // Taken after the rows are built, because building them adds a binding for
   // any lamp the file did not already list. Measuring before that would have
@@ -1682,8 +1774,8 @@ async function showProfile(file: string): Promise<void> {
     offersCollapse = collapse;
     toggle.textContent = collapse ? "Collapse all" : "Expand all";
   };
-  // Only panels this profile drives can open, so only they count.
-  const live = (): HTMLDetailsElement[] => sections.filter((s) => !s.classList.contains("off"));
+  // A unit following another does not open, so it does not count.
+  const live = (): HTMLDetailsElement[] => sections.filter((s) => !s.classList.contains("follows"));
   const syncToggle = (): void => {
     const open = live();
     if (open.length > 0 && open.every((s) => s.open)) setLabel(true);
@@ -1774,6 +1866,7 @@ function deviceSection(
   all: Device[],
   byLamp: Map<string, Binding>,
   session: Session,
+  driveChanged: () => void,
 ): HTMLDetailsElement {
   const count = el("span", { class: "meta" }, "");
   const nameOf = (key: string): string => all.find((d) => d.key === key)?.display_name ?? key;
@@ -1835,13 +1928,12 @@ function deviceSection(
   const drive = el("input", { type: "checkbox" }) as HTMLInputElement;
   drive.checked = !disabled.includes(device.key);
   const section = el("details", { class: "device" });
-  // A panel left alone does not open. Its lamps and fields are kept, so ticking
-  // it again brings back exactly what was set up, but there is nothing to edit
-  // on a panel that will not be driven.
+  // A panel left alone still opens, dimmed: its lamps and fields are kept, and
+  // reading them is how someone sees what a finished panel looks like.
   //
-  // A unit that follows another does not open either: what it will do is
-  // edited on the one it follows, and its own rows are not in use.
-  const shut = (): boolean => !drive.checked || following() !== undefined;
+  // A unit that follows another does not open: what it will do is edited on
+  // the one it follows, and its own rows are not in use.
+  const shut = (): boolean => following() !== undefined;
   const applyDriveState = (): void => {
     section.classList.toggle("off", !drive.checked);
     section.classList.toggle("follows", following() !== undefined);
@@ -1882,6 +1974,7 @@ function deviceSection(
     else delete session.profile.disabled_devices;
     applyDriveState();
     session.refreshDirty();
+    driveChanged();
   });
   applyDriveState();
 

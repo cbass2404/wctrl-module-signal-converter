@@ -1015,9 +1015,13 @@ details.device.off table {
   opacity: 0.45;
 }
 
-/* It will not open, so it should not look like it will. */
-details.device.off > summary {
-  cursor: default;
+/* Active, inactive and not found, one after another down the page. */
+.device-group {
+  margin-top: 18px;
+}
+
+.device-group > p {
+  margin: 0 0 8px;
 }
 
 .drive {

@@ -25,6 +25,13 @@ unless this says what moved.
   COM 1, COM 2, IFF, LIST, A-A and A-G. Each screen's slots offer only the
   pages made for that screen. Export, Import and Merge from... carry
   their pages and slots as they do the MCDU's.
+- **Panels grouped by what is plugged in.** A profile's panels are listed
+  under Active Devices (plugged in and driven), Inactive Devices (plugged in,
+  but "drive this panel" is off) and Devices not found (supported, not
+  plugged in), each in alphabetical order. Every one opens: a panel left
+  alone can be read to see how it was set up, and one not plugged in can
+  still be set up. Plugging a panel in or pulling it out while the page is
+  open moves it to its group within a couple of seconds, keeping your edits.
 
 ### Breaking
 

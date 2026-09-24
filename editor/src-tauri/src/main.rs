@@ -58,6 +58,29 @@ fn devices() -> Reply<Vec<DeviceView>> {
     Ok(out)
 }
 
+/// The keys of the devices plugged in now, for grouping the profile page.
+///
+/// Listed, never opened, so asking while the converter holds the panels takes
+/// nothing from it. Asked again every few seconds while a profile is open, so
+/// a panel plugged in mid-edit moves into place without a reload. A new
+/// `HidApi` each time, since one caches the list it was built with.
+///
+/// Only devices on a protocol this build can list are ever reported; any other
+/// reads as not found, which is true as far as the editor can tell.
+#[tauri::command]
+fn connected_devices() -> Reply<Vec<String>> {
+    let paths = Paths::resolve();
+    let inv = inventory(&paths)?;
+    let api = hidapi::HidApi::new().map_err(|e| format!("looking for connected panels: {e}"))?;
+    let pids: Vec<u16> = wctrl_hid::enumerate(&api).iter().map(|d| d.product_id).collect();
+    Ok(inv
+        .devices
+        .iter()
+        .filter(|d| d.protocol == dsc_config::DEFAULT_PROTOCOL && pids.contains(&d.usb_pid))
+        .map(|d| d.key.clone())
+        .collect())
+}
+
 /// The modules a new profile can be built for.
 ///
 /// Read from the catalogue's `index.json` rather than by loading the catalogue,
@@ -534,6 +557,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             catalogue_status,
             devices,
+            connected_devices,
             modules,
             profiles,
             signals,

@@ -465,6 +465,7 @@ impl Pages {
             return Ok(Vec::new());
         }
         std::fs::create_dir_all(&self.active)?;
+        self.rename_to_stems()?;
         let mut shipped: Vec<PathBuf> = std::fs::read_dir(&self.defaults)?
             .flatten()
             .map(|e| e.path())
@@ -483,6 +484,39 @@ impl Pages {
             }
         }
         Ok(copied)
+    }
+
+    /// Give every file in the library the name its module is looked up by.
+    ///
+    /// Earlier releases named a file by its module key as it is, and on
+    /// Windows `AH-64D.json` also stands in for `ah-64d.json`, so
+    /// [`seed`](Self::seed) took it for the file it wanted and the loader
+    /// refused it: a library of empty slots. Only a file named for the module
+    /// it holds is renamed. Where a release since seeded the new name beside
+    /// the old one, the old file is the user's and wins, and the seeded one is
+    /// kept as `.json.seeded`.
+    fn rename_to_stems(&self) -> Result<()> {
+        let names: BTreeSet<String> = std::fs::read_dir(&self.active)?
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        for name in &names {
+            let Some(stem) = name.strip_suffix(".json") else {
+                continue;
+            };
+            let Ok(file) = PageFile::load(&self.active.join(name)) else {
+                continue;
+            };
+            let want = page_file_name(&file.module);
+            if *name == want || crate::file_stem(stem) != crate::file_stem(&file.module) {
+                continue;
+            }
+            if names.contains(&want) {
+                std::fs::rename(self.active.join(&want), self.active.join(format!("{want}.seeded")))?;
+            }
+            std::fs::rename(self.active.join(name), self.active.join(&want))?;
+        }
+        Ok(())
     }
 
     /// Bring the library up to the pages this release ships, keeping every

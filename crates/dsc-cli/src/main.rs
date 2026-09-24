@@ -1440,6 +1440,12 @@ fn nightly_only(
     // rather than in them. Each module's pages go in as one more profile
     // holding every page's fields, which is all the comparison reads.
     let pages = PageLibrary::load_dir(&defaults.with_file_name("default-pages"));
+    // A page file that will not load would drop its signals from the list
+    // without a word, and the list would pass for current.
+    if !pages.broken.is_empty() {
+        let why: Vec<String> = pages.broken.iter().map(|(stem, e)| format!("{stem}: {e}")).collect();
+        anyhow::bail!("default pages that will not load:\n  {}", why.join("\n  "));
+    }
     for (module, file) in &pages.files {
         let mut p = Profile::stub(&format!("the {module} pages"), module, module, &DeviceInventory { devices: Vec::new() });
         p.readouts = file.pages.iter().flat_map(|page| page.fields.iter().cloned()).collect();

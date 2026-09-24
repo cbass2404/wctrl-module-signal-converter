@@ -47,7 +47,7 @@ fn page(id: &str, name: &str, fields: Vec<Readout>) -> Page {
 }
 
 fn write(dir: &Path, sub: &str, pages: Vec<Page>) {
-    PageFile { module: "A-10C".into(), pages }.save(&dir.join(sub).join("A-10C.json")).unwrap();
+    PageFile { module: "A-10C".into(), pages }.save(&dir.join(sub).join("a-10c.json")).unwrap();
 }
 
 fn update(dir: &Path, version: &str) -> Vec<String> {
@@ -67,7 +67,7 @@ fn a_page_file_is_seeded_whole_only_where_there_is_none() {
     let dir = scratch("seed");
     write(&dir, "default-pages", vec![page("aaaaaa", "Radios", vec![field("0-1", "A")])]);
     let pages = Pages::new(dir.join("default-pages"), dir.join("pages"));
-    assert_eq!(pages.seed().unwrap(), vec!["A-10C.json".to_string()]);
+    assert_eq!(pages.seed().unwrap(), vec!["a-10c.json".to_string()]);
     write(&dir, "pages", Vec::new());
     assert!(pages.seed().unwrap().is_empty(), "a file the user has, emptied or not, is theirs");
     assert!(library(&dir).on_module("A-10C").is_empty());

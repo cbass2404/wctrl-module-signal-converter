@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-23. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-24. Enough context to resume cold.
 
 ## Resume here
 
@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 474 passing
+cargo test --workspace            # expect 481 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -21,6 +21,100 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
+
+**Built 2026-09-24: the editor keeps things in reach, and a shipped profile
+can split.** `80a1123` to `a87bb32`. What users see is in
+[CHANGELOG.md](../CHANGELOG.md); the split's rules are "Splitting a shipped
+profile" in [CONFIG.md](CONFIG.md).
+
+- **Panels grouped by plug state**: Active Devices, Inactive Devices and
+  Devices not found, each alphabetical. The device poll moves a panel between
+  groups and keeps unsaved edits.
+- **The profile list**: the row opens the profile; Copy to..., Export...,
+  Merge from..., Reset and Delete are under the row's menu.
+- **`docs/language.html`**, the profile language guide, opens from the **?**
+  through the fixed-URL `open_guide` command. Any change to profile logic
+  updates its prose, demo and dictionary in the same change.
+- **The page editor stays open** after Save page, and Save as new page carries
+  on with the copy. Its buttons stick to the foot of the window, and an open
+  device's title sticks under the header.
+- **The A-10C split.** `a-10c.json` flies `A-10C` only and the new
+  `a-10c2.json` flies `A-10C_2`, because the two want different radios on the
+  CDU rows. `a10c-cdu`, renamed "A-10C2 CDU", stays with the A-10C II; the
+  A-10C has "A-10C CDU", reading VHF AM. That page's id, `i63dn3`, was made in
+  the editor, against the readable-id rule for shipped pages; see
+  [TODO.md](TODO.md).
+- **PTO2 on both A-10C profiles** shows the NMSP EGI, STEER PT, TCN, ANCHR and
+  ILS lamps on CTR, LI, LO, RI and RO, in place of the fire lamps. The rows'
+  `note`s still describe the old assignments.
+- **The F-14BU's ICP is no longer disabled.** It came out of
+  `disabled_devices` with the move of the UFC and DED fields onto pages
+  (`6c05d7a`), so the DED now shows a Blank slot. Whether that was meant is
+  open; see [TODO.md](TODO.md).
+- **alpha.008's changed rows are written up** in CHANGELOG.md, per profile and
+  per page module, from a diff of `data/defaults` and `data/default-pages`
+  against their `-previous` snapshots.
+
+**Built and flown 2026-09-24: pages on the UFC and the ICP.** Cory reversed
+"text grids only": every screen now takes pages, with six slots each and the
+same app-wide modifier. The design is "Pages" in [CONFIG.md](CONFIG.md), the
+section formerly "MCDU pages". Flown the same day: pages on the UFC and the
+ICP's DED swap from the mapped page keys, with the modifier chosen in
+Settings and only with that one. Blank and disabled slots on these screens,
+and the A-10C CMSC and Mi-24P Radios pages, are still to see; see
+[TODO.md](TODO.md).
+
+- **The gate is any known display.** `Profile::takes_pages` is
+  `displays.get(display).is_some()`, so nothing names a panel or a glass
+  type. Errors renamed to match: `LooseScreenField`, `SlotsWithoutScreen`,
+  `PageOnUnknownDisplay`.
+- **Loose fields refused everywhere, no migration** (Cory, 2026-09-24):
+  nobody had updated past the version 2 break yet, so this lands as part of
+  it. An unchanged shipped profile updates cleanly (its UFC/DED rows are
+  removed as no longer shipped and the slot comes in); an edited one is
+  refused with the reason. Checked with a throwaway test against
+  `defaults-previous`.
+- **Shipped pages added**, names agreed with Cory: A-10C "CMSC"
+  (`a10c-cmsc`, DED), F-16C_50 "DED" (`f16-ded`), FA-18C_hornet "UFC"
+  (`fa18-ufc`), Mi-24P "Radios" (`mi24p-ufc`, a new page file). Each in slot
+  1 and the start slot, slots 2 to 6 disabled.
+- **Page keys captured** with `dcs-signal buttons`: ICP COM 1 to A-G are
+  buttons 1 to 6, UFC A/P to BCN are 20 to 25. In `devices.json` as
+  `buttons` and `page_keys`, named `COM_1`, `COM_2`, `IFF`, `LIST`, `A_A`,
+  `A_G` and `A_P`, `IFF`, `TCN`, `ILS`, `D_N`, `BCN`.
+- **Editor**: every display gets a page section; `displaySection` and the
+  session's shipped readouts are gone. Reset this field and "+ the field
+  that shipped here" are now unreachable; see TODO.
+- **Test fixtures** in `editor_checks.rs` and `seat_validation.rs` mark their
+  fields as a page's, the way the engine tests' `resolved()` does.
+
+**Built 2026-09-24: the PFP-3N, PFP-7 and PFP-4, from WwDevicesDotnet.** Cory
+owns none, so nothing is captured: PIDs, parts, lamps and keys are the
+library's, taken from Cory's checkout at `C:\Users\coryb\Dev\WwDevicesDotnet`
+(`2bf28fa`, the bridge's pin), and everything is `verified: false`. Cory's
+rule, 2026-09-24: **only pages are shared** between the MCDU and the PFPs,
+because the screens are identical; lamps and keys belong to each model; the
+three names of one model follow each other as the MCDU's do. See the PFP
+section in [PROTOCOL.md](PROTOCOL.md).
+
+- **A display map no longer carries a part id.** `devices.json` already says
+  which part carries each screen (`display` on the part), and live writes
+  always took the part id from there, so the map's own `part_id` only fed
+  `mcdu-test` and an invariant. Removed from `Display` and the three maps;
+  `mcdu-test` now finds the part from `--pid` in `devices.json`, so it
+  works on a PFP too. That is what lets four parts share `MCDU`, and so its
+  pages, with no compatibility table.
+- **`same_hardware` compares keys too.** The PFP-3N, PFP-7 and PFP-4 have the
+  same five lamps, so on lamps and screen alone they counted as one panel and
+  could follow each other. `the_cdus_share_a_screen_and_nothing_else` pins
+  the rule.
+- **31px fonts on the PFP for now.** Its glass fits 32px, which the bridge
+  uses to line rows up with the keys; that needs a per-part glyph height and
+  32px copies of every font, and cannot be checked without a panel.
+- **Every default** has the PFP rows (dimmers copied from the MCDU's seat,
+  indicators blank), the MCDU's slots on each PFP name, Co-Pilot and
+  Observer following their own Captain, and no-aircraft disabling them. Held
+  out of the feature commit, per the defaults rule.
 
 **Built and flown 2026-09-23: page swapping and the Settings dialog, on
 `feature/mcdu-page-selection-inputs`.** The design is "Swapping" under "MCDU

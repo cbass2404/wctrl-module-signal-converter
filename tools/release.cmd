@@ -4,7 +4,7 @@ setlocal enabledelayedexpansion
 rem  tools\release.cmd - tag and push a release. Maintainer tool.
 rem
 rem  Order of checks:
-rem    0. the shipped profiles and MCDU pages: everything else here can be
+rem    0. the shipped profiles and pages: everything else here can be
 rem       checked by the machine, and this cannot. Changes to data\defaults
 rem       and data\default-pages are not written up as they land, so this is
 rem       the one thing reconstructed from memory.
@@ -54,7 +54,7 @@ rem notes name it and they choose to take it. Changes to data\defaults are
 rem deliberately not written up as they land, since they move a great deal
 rem through experimentation, which is exactly why this is easy to forget.
 rem
-rem The shipped MCDU pages are the same: a fix to a page reaches somebody who
+rem The shipped pages are the same: a fix to a page reaches somebody who
 rem edited it only if the notes name it, so they are listed beside the profiles.
 rem
 rem The files that moved are listed, so the answer is not from memory. A
@@ -336,7 +336,7 @@ echo(
 rem data\defaults-previous is what an update compares a user's display fields
 rem against: a field still matching it was ours and can be corrected, anything
 rem else is theirs and is left alone. data\default-pages-previous is the same
-rem for the MCDU pages. Each has to hold the PREVIOUS release here, not this
+rem for the pages. Each has to hold the PREVIOUS release here, not this
 rem one, so they are checked before the tag and refreshed after the push.
 rem Drift is silent at runtime - no field matches, so no correction reaches
 rem anybody - which is why it is caught here instead.

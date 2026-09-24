@@ -299,6 +299,447 @@
       "conditions": []
     },
     {
+      "device": "PFP3N_Captain",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP3N_Captain",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP3N_Captain",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP3N_Captain",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Captain",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Captain",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Captain",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Captain",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_CoPilot",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP3N_Observer",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Captain",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_CoPilot",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP4_Observer",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Captain",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_CoPilot",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "Backlight",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C"
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "Screen_Backlight",
+      "conditions": [],
+      "always": true,
+      "off": 255,
+      "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "Marker_Light",
+      "conditions": [],
+      "same_as": "INST_PNL_Backlight",
+      "same_as_device": "CarrierAce_MFD_C",
+      "off": 255,
+      "note": "Gates all five indicators, like the PTO2's SL: at 0 none of them shows. Held with the PTO2's FLAG: it takes the backlight's level, and goes full bright if the backlight is ever at 0."
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "DSPY",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "FAIL",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "MSG",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "OFST",
+      "conditions": []
+    },
+    {
+      "device": "PFP7_Observer",
+      "led": "EXEC",
+      "conditions": []
+    },
+    {
       "device": "TAKEOFF_PLANEL_2",
       "led": "Backlight",
       "conditions": [],
@@ -414,34 +855,105 @@
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
-  "readouts": [
-    {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "35",
-      "source": "PLT_R828_CHAN_S"
-    },
-    {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "34",
-      "source": "PLT_R863_CHAN_S"
-    },
-    {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "30-33",
-      "source": "PLT_RV5_ALT",
-      "reads": [
-        0.0,
-        750.0
-      ]
-    }
-  ],
   "follows": {
     "CarrierAce_MFD_L": "CarrierAce_MFD_C",
     "CarrierAce_MFD_R": "CarrierAce_MFD_C",
     "MCDU_CoPilot": "MCDU_Captain",
-    "MCDU_Observer": "MCDU_Captain"
+    "MCDU_Observer": "MCDU_Captain",
+    "PFP3N_CoPilot": "PFP3N_Captain",
+    "PFP3N_Observer": "PFP3N_Captain",
+    "PFP4_CoPilot": "PFP4_Captain",
+    "PFP4_Observer": "PFP4_Captain",
+    "PFP7_CoPilot": "PFP7_Captain",
+    "PFP7_Observer": "PFP7_Captain"
+  },
+  "screens": {
+    "CarrierAce_UFC": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "mi24p-ufc",
+          "key": null
+        },
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "PFP3N_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "PFP4_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "PFP7_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "ViperAce_ICP": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
   }
 }

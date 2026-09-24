@@ -42,16 +42,8 @@ fn every_declared_display_has_a_map() {
     let displays =
         DisplayCatalogue::load_dir(&root().join("../../data/displays")).expect("displays load");
     for device in &inventory().devices {
-        for (part, key) in device.displays() {
-            let map = displays
-                .get(key)
-                .unwrap_or_else(|| panic!("{}: no display map named {key:?}", device.key));
-            assert_eq!(
-                map.part_id, part.part_id,
-                "{}: display {key:?} is declared on part {:#06x} but its map is \
-                 addressed to {:#06x}; a write would go to the wrong part",
-                device.key, part.part_id, map.part_id
-            );
+        for (_, key) in device.displays() {
+            assert!(displays.get(key).is_some(), "{}: no display map named {key:?}", device.key);
         }
     }
 }
@@ -72,6 +64,42 @@ fn a_dimmer_and_an_indicator_are_told_apart_by_their_range() {
                     led.name,
                     led.max_value()
                 );
+            }
+        }
+    }
+}
+
+#[test]
+fn the_cdus_share_a_screen_and_nothing_else() {
+    // The MCDU and the three PFPs have the same glass, so a page made for one
+    // shows on all of them. Their lamps and keys differ, so one may follow
+    // another of its own model under another seat name, never a different
+    // model: a PFP taking the MCDU's lamp rows would write lamps it lacks.
+    let inventory = inventory();
+    let families = ["MCDU", "PFP3N", "PFP7", "PFP4"];
+    let names = |family: &str| -> Vec<&dsc_config::DeviceSpec> {
+        ["Captain", "CoPilot", "Observer"]
+            .iter()
+            .map(|seat| {
+                let key = format!("{family}_{seat}");
+                inventory.device(&key).unwrap_or_else(|| panic!("{key} is in devices.json"))
+            })
+            .collect()
+    };
+    for family in families {
+        for a in names(family) {
+            assert_eq!(a.part_with_display("MCDU").map(|_| ()), Some(()), "{} has the MCDU screen", a.key);
+            for other in families {
+                for b in names(other) {
+                    assert_eq!(
+                        a.same_hardware(b),
+                        family == other,
+                        "{} and {} should {}be variants",
+                        a.key,
+                        b.key,
+                        if family == other { "" } else { "not " }
+                    );
+                }
             }
         }
     }

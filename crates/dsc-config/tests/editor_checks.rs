@@ -48,11 +48,18 @@ fn module() -> Module {
     .expect("the fixture module parses")
 }
 
+/// A profile of version 2 on TEST. Every screen takes its fields only from
+/// a page, so each field here is marked as a page's, which is what the
+/// field checks see once a start page is resolved.
 fn profile(body: &str) -> Profile {
-    serde_json::from_str(&format!(
+    let mut p: Profile = serde_json::from_str(&format!(
         r#"{{"schema_version": 2, "name": "T", "aircraft": ["TEST"], "module": "TEST", {body}}}"#
     ))
-    .expect("the fixture profile parses")
+    .expect("the fixture profile parses");
+    for r in &mut p.readouts {
+        r.page = Some("fixture".into());
+    }
+    p
 }
 
 fn found(p: &Profile) -> Vec<String> {

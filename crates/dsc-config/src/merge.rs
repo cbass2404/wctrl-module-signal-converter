@@ -13,7 +13,7 @@
 //! signals are named by id and an id means something only in its own
 //! catalogue.
 //!
-//! A text grid holds no fields of its own, only page slots, so it is merged a
+//! A screen holds no fields of its own, only page slots, so it is merged a
 //! slot at a time instead: slot n of the source replaces slot n of the target.
 //! Bringing the page into the library, when it comes from a file, is the
 //! caller's; see `bundle::bring_in`.

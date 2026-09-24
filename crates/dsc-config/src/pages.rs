@@ -1,5 +1,5 @@
-//! MCDU pages: named screens of text grid fields, kept in a library of their
-//! own and pointed at from a profile's slots. See docs/CONFIG.md "MCDU pages".
+//! Pages: named screens of display fields, kept in a library of their own
+//! and pointed at from a profile's slots. See docs/CONFIG.md "Pages".
 //!
 //! A page is only ever resolved into ordinary display fields, when the engine
 //! takes a profile, so nothing that paints or resolves a field learns that
@@ -140,7 +140,7 @@ pub struct PageRun {
     pub slots: Vec<SlotRun>,
 }
 
-/// A named screen's worth of text grid fields.
+/// A named screen's worth of display fields.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Page {
     /// Fixed when the page is made and unique across the whole library. What
@@ -158,7 +158,8 @@ pub struct Page {
     pub fields: Vec<Readout>,
 }
 
-/// Every page on one module, as one file named by the module's catalogue key.
+/// Every page on one module, as one file named after the module's catalogue
+/// key by [`file_stem`](crate::file_stem), as a profile is after its name.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PageFile {
     pub module: String,
@@ -207,9 +208,10 @@ impl PageFile {
     }
 }
 
-/// The file name holding a module's pages.
+/// The file name holding a module's pages: `FA-18C_hornet` is in
+/// `fa-18c-hornet.json`.
 pub fn page_file_name(module: &str) -> String {
-    format!("{module}.json")
+    format!("{}.json", crate::file_stem(module))
 }
 
 /// Whether two page names read as the same to a person.
@@ -222,8 +224,8 @@ pub fn same_name(a: &str, b: &str) -> bool {
 pub struct PageLibrary {
     /// By module.
     pub files: BTreeMap<String, PageFile>,
-    /// Modules whose file would not load, with why. Every slot on one of these
-    /// modules loads empty.
+    /// Files that would not load, by file name without `.json`, with why.
+    /// Every slot on the module a file is named for loads empty.
     pub broken: BTreeMap<String, String>,
 }
 
@@ -246,12 +248,12 @@ impl PageLibrary {
                 continue;
             };
             match PageFile::load(&path) {
-                Ok(file) if file.module == stem => {
-                    lib.files.insert(stem, file);
+                Ok(file) if page_file_name(&file.module) == format!("{stem}.json") => {
+                    lib.files.insert(file.module.clone(), file);
                 }
-                // Named by module, so the name is where the daemon and the
-                // editor look for it. One saying otherwise would be read as
-                // the wrong aircraft's pages by one of them.
+                // Named after its module, so the name is where the daemon
+                // and the editor look for it. One saying otherwise would be
+                // read as the wrong aircraft's pages by one of them.
                 Ok(file) => {
                     lib.broken.insert(
                         stem.clone(),
@@ -292,7 +294,8 @@ impl PageLibrary {
 
     /// Why a module's pages did not load, if they did not.
     pub fn broken(&self, module: &str) -> Option<&str> {
-        self.broken.get(module).map(String::as_str)
+        let stem = crate::file_stem(module);
+        self.broken.iter().find(|(f, _)| crate::file_stem(f) == stem).map(|(_, why)| why.as_str())
     }
 
     /// Things wrong with the library as a whole: an id used twice, which would
@@ -371,8 +374,8 @@ impl PageLibrary {
 
     /// Why a page cannot be saved on `module`, if it cannot.
     ///
-    /// What does not depend on where it is shown: that it is on a text grid,
-    /// that its name is free, and that its fields fit the glass and do not
+    /// What does not depend on where it is shown: that its display is one we
+    /// know, that its name is free, and that its fields fit the glass and do not
     /// fight over cells. The font depends on the profile, and is checked for
     /// each profile that shows the page, by [`Profile::problems`].
     pub fn page_problems(
@@ -393,8 +396,8 @@ impl PageLibrary {
         {
             out.push(Error::PageNameTaken(page.name.trim().to_string(), module.module.clone()));
         }
-        if !displays.get(&page.display).is_some_and(|d| d.is_text_grid()) {
-            out.push(Error::PageNotOnTextGrid(page.name.clone(), page.display.clone()));
+        if !Profile::takes_pages(displays, &page.display) {
+            out.push(Error::PageOnUnknownDisplay(page.name.clone(), page.display.clone()));
             return out;
         }
         // Any device carrying the display will do: the checks that remain are
@@ -619,10 +622,10 @@ pub struct SlotNote {
 }
 
 impl Profile {
-    /// Whether this profile's pages decide what is on `display`: it is a text
-    /// grid, and every field on one comes from a page.
+    /// Whether this profile's pages decide what is on `display`. Every screen
+    /// we know takes its fields from pages, whatever kind of glass it is.
     pub fn takes_pages(displays: &DisplayCatalogue, display: &str) -> bool {
-        displays.get(display).is_some_and(|d| d.is_text_grid())
+        displays.get(display).is_some()
     }
 
     /// This profile as it runs: each screen's start page put on it as ordinary
@@ -750,7 +753,7 @@ impl Profile {
                 continue;
             };
             if !spec.displays().any(|(_, d)| Profile::takes_pages(displays, d)) {
-                out.push(Error::SlotsWithoutTextGrid(device.clone()));
+                out.push(Error::SlotsWithoutScreen(device.clone()));
                 continue;
             }
             if slots.slots.len() != spec.slot_count() {
@@ -782,6 +785,15 @@ impl Profile {
                         i + 1,
                         page.name.clone(),
                         on.to_string(),
+                    ));
+                    continue;
+                }
+                if spec.part_with_display(&page.display).is_none() {
+                    out.push(Error::PageOnOtherDisplay(
+                        device.clone(),
+                        i + 1,
+                        page.name.clone(),
+                        page.display.clone(),
                     ));
                     continue;
                 }

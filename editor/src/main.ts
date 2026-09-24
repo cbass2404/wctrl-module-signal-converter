@@ -6,7 +6,6 @@
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { displaySection } from "./readout";
 import {
   catalogueStatus,
   checkProfile,
@@ -18,6 +17,7 @@ import {
   listModules,
   listProfiles,
   listSignals,
+  openGuide,
   openProfile,
   openUpdate,
   resetProfile,
@@ -26,6 +26,7 @@ import {
   exportProfile,
   importPick,
   importProfile,
+  connectedDevices,
   mergeParts,
   mergeProfile,
   saveProfile,
@@ -56,7 +57,6 @@ import type {
   PageTake,
   Profile,
   ProfileSummary,
-  Readout,
   SignalView,
   Update,
 } from "./types";
@@ -90,6 +90,46 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/** One entry in an action menu. `danger` ones are red and sit below a rule. */
+interface MenuItem {
+  label: string;
+  danger?: boolean;
+  run: () => void;
+}
+
+let menuCount = 0;
+
+/**
+ * A "..." button and the menu it opens, to append side by side.
+ *
+ * A native popover, so a click elsewhere or Escape closes it with no code
+ * here, and it draws above the row rather than being clipped by it. It is
+ * anchored to its button in CSS, which also flips it above when the row is
+ * too near the bottom of the window.
+ */
+function actionMenu(label: string, items: MenuItem[]): [HTMLButtonElement, HTMLElement] {
+  const anchor = `--menu-${++menuCount}`;
+  const menu = el("div", { class: "menu", popover: "auto", role: "menu" });
+  menu.style.setProperty("position-anchor", anchor);
+  let ruled = false;
+  for (const item of items) {
+    if (item.danger && !ruled) {
+      ruled = true;
+      if (menu.childElementCount > 0) menu.append(el("hr"));
+    }
+    const pick = el("button", { role: "menuitem", ...(item.danger ? { class: "danger" } : {}) }, item.label);
+    pick.addEventListener("click", () => {
+      menu.hidePopover();
+      item.run();
+    });
+    menu.append(pick);
+  }
+  const open = el("button", { class: "more", title: label, "aria-label": label, "aria-haspopup": "menu" }, "⋯");
+  open.style.setProperty("anchor-name", anchor);
+  open.popoverTargetElement = menu;
+  return [open, menu];
+}
+
 /**
  * An aircraft list short enough to read at a glance, and the whole list for a
  * tooltip.
@@ -113,8 +153,29 @@ function aircraftSummary(names: string[], limit = 50): { text: string; title: Re
   };
 }
 
+/** Stops the profile page asking which panels are plugged in, once it is left. */
+let stopWatching: (() => void) | null = null;
+
 function clear(): void {
+  stopWatching?.();
+  stopWatching = null;
   app.replaceChildren();
+}
+
+/** How often the profile page asks which panels are plugged in. */
+const PLUG_POLL_MS = 2000;
+
+/**
+ * The keys of the panels plugged in now, or the reason nobody can tell. A
+ * failure is kept rather than thrown: the page still works, it just cannot
+ * say which panels are here.
+ */
+async function lookForPanels(): Promise<Set<string> | string> {
+  try {
+    return new Set(await connectedDevices());
+  } catch (e) {
+    return e instanceof Error ? e.message : String(e);
+  }
 }
 
 /**
@@ -246,7 +307,7 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
     list.append(el("label", { class: "group" }, parentBox(screenBoxes), el("span", {}, "Screens")), ...rows);
   }
 
-  // An MCDU merges a slot at a time: slot n of the source replaces slot n
+  // A screen merges a slot at a time: slot n of the source replaces slot n
   // here, and brings its page with it.
   if (parts.slots.length > 0) {
     const screens = new Map<string, typeof parts.slots>();
@@ -380,6 +441,22 @@ function matchesFilter(row: ProfileSummary, filter: string): boolean {
     .every((word) => haystack.includes(word));
 }
 
+/**
+ * The profile language guide, in the sticky header of both pages, so what a
+ * test or a piece means is one click away while it is being set.
+ */
+function guideButton(): HTMLElement {
+  const button = el(
+    "button",
+    { class: "icon guide", type: "button", title: "The profile language: every test, reading and page, with examples", "aria-label": "Profile language guide" },
+    "?",
+  );
+  button.addEventListener("click", () => {
+    openGuide().catch((err: unknown) => showError("Opening the language guide", err));
+  });
+  return button;
+}
+
 async function showLibrary(): Promise<void> {
   // Nothing here is edited in place, so there is nothing to lose by closing.
   unsavedWork = () => false;
@@ -401,6 +478,7 @@ async function showLibrary(): Promise<void> {
     filter,
     el("div", { class: "spacer" }),
     el("button", { class: "primary", id: "new" }, "New profile"),
+    guideButton(),
     el("button", { class: "icon gear", id: "settings", type: "button", title: "Settings", "aria-label": "Settings" }, "\u2699"),
   );
   app.append(header);
@@ -491,28 +569,21 @@ async function showLibrary(): Promise<void> {
         );
 
     const actions = el("div", { class: "actions" });
+    // Everything but opening the profile is used rarely enough to wait
+    // behind one button.
+    const more: MenuItem[] = [];
     if (!row.error) {
-      const edit = el("button", {}, "Edit");
-      edit.addEventListener("click", () => void showProfile(row.file));
-      actions.append(edit);
-    }
-    if (!row.error) {
-      const copy = el("button", {}, "Copy to...");
-      copy.addEventListener("click", () => void showCloneProfile(row));
-      const share = el("button", {}, "Export...");
-      share.addEventListener("click", () => void exportOne(row));
-      actions.append(copy, share);
+      more.push(
+        { label: "Copy to...", run: () => void showCloneProfile(row) },
+        { label: "Export...", run: () => void exportOne(row) },
+      );
       // Offered only when there is something on the same module to take from.
       if (mergeSources(row, rows).length > 0) {
-        const take = el("button", {}, "Merge from...");
-        take.addEventListener("click", () => void showMergeFrom(row, rows));
-        actions.append(take);
+        more.push({ label: "Merge from...", run: () => void showMergeFrom(row, rows) });
       }
     }
     if (row.has_default) {
-      const reset = el("button", { class: "danger" }, "Reset");
-      reset.addEventListener("click", () => void resetOne(row));
-      actions.append(reset);
+      more.push({ label: "Reset", danger: true, run: () => void resetOne(row) });
     }
     // A shipped profile goes only when another can take its aircraft. Deleted
     // otherwise, it would be seeded straight back, so the button would be a
@@ -520,12 +591,27 @@ async function showLibrary(): Promise<void> {
     const plan = deletePlan(row, rows);
     const canDelete = !row.has_default || plan.orphans.length === 0 || plan.homes.length > 0;
     if (canDelete) {
-      const remove = el("button", { class: "danger" }, "Delete");
-      remove.addEventListener("click", () => void deleteOne(row, rows));
-      actions.append(remove);
+      more.push({ label: "Delete", danger: true, run: () => void deleteOne(row, rows) });
     }
+    if (more.length > 0) actions.append(...actionMenu(`More for ${row.name}`, more));
 
     const item = el("li", {}, el("div", { class: "grow" }, el("strong", {}, row.name), el("br"), meta), actions);
+    // The row itself opens the profile. Clicks in the menu, which sits inside
+    // the row, are its own; a profile that will not load has nothing to open.
+    if (!row.error) {
+      item.classList.add("open");
+      item.tabIndex = 0;
+      item.title = `Open ${row.name}`;
+      item.addEventListener("click", (e) => {
+        if (!actions.contains(e.target as Node)) void showProfile(row.file);
+      });
+      item.addEventListener("keydown", (e) => {
+        if (e.target === item && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          void showProfile(row.file);
+        }
+      });
+    }
     shown.push([row, item]);
     list.append(item);
   }
@@ -743,7 +829,7 @@ async function showImport(): Promise<void> {
   );
   if (pageRows.length > 0) {
     whole.append(
-      el("p", { class: "meta" }, "Which MCDU pages come with it? A slot showing a page left unticked comes in empty."),
+      el("p", { class: "meta" }, "Which pages come with it? A slot showing a page left unticked comes in empty."),
       pageList,
     );
   }
@@ -1362,9 +1448,6 @@ interface Session {
   /** This lamp as it shipped, keyed device and lamp. Empty for a profile the
    * user created, which has no shipped version to revert to. */
   shipped: Map<string, Binding>;
-  /** Every display field as it shipped, for the same reason. Also what says a
-   * field the user deleted can be offered back. */
-  shippedReadouts: Readout[];
   /**
    * The profile as it stood when the rows were built, serialised.
    *
@@ -1439,18 +1522,16 @@ async function showProfile(file: string): Promise<void> {
   // resetting the file. A profile the user made has none, which is not an
   // error.
   const shipped = new Map<string, Binding>();
-  let shippedReadouts: Readout[] = [];
   try {
     const original = await defaultProfile(file);
     for (const b of original?.bindings ?? []) {
       shipped.set(lampKey(b.device, b.led), b);
     }
-    shippedReadouts = original?.readouts ?? [];
   } catch {
     // A missing or unreadable default only costs the revert buttons.
   }
 
-  // The module's pages, which the MCDU's slots point into. A library that
+  // The module's pages, which the screens' slots point into. A library that
   // cannot be read leaves every slot showing as empty, with the reason.
   let book: PageBook;
   try {
@@ -1459,6 +1540,10 @@ async function showProfile(file: string): Promise<void> {
     const why = e instanceof Error ? e.message : String(e);
     book = pageBook(profile.module, file, { pages: [], broken: why, used: [] });
   }
+
+  // Which panels are here, so the page can put them first. Asked again while
+  // the page is open; see `regroup` below.
+  let found = await lookForPanels();
 
   clear();
 
@@ -1548,7 +1633,6 @@ async function showProfile(file: string): Promise<void> {
     profile,
     signals,
     shipped,
-    shippedReadouts,
     baseline: "",
     dirty: false,
     followSync: [],
@@ -1626,22 +1710,27 @@ async function showProfile(file: string): Promise<void> {
 
   const toggle = el("button", {}, "Expand all");
   const aircraft = aircraftSummary(profile.aircraft);
-  app.append(
+  const header = el(
+    "header",
+    {},
+    back,
     el(
-      "header",
-      {},
-      back,
-      el(
-        "div",
-        { class: "grow" },
-        profileTitle(session, taken),
-        el("span", { class: "meta block", ...aircraft.title }, `${profile.module} · ${aircraft.text}`),
-      ),
-      state,
-      toggle,
-      save,
+      "div",
+      { class: "grow" },
+      profileTitle(session, taken),
+      el("span", { class: "meta block", ...aircraft.title }, `${profile.module} · ${aircraft.text}`),
     ),
+    state,
+    toggle,
+    save,
+    guideButton(),
   );
+  app.append(header);
+  // An open panel's title sticks just under the header, which is as tall as
+  // the profile's name makes it, so its height is kept where the CSS reads it.
+  new ResizeObserver(() => {
+    document.documentElement.style.setProperty("--header-h", `${header.offsetHeight}px`);
+  }).observe(header);
   app.append(notice, problemList, cautionList);
 
   if (signalError) {
@@ -1661,8 +1750,74 @@ async function showProfile(file: string): Promise<void> {
     byLamp.set(lampKey(b.device, b.led), b);
   }
 
-  const sections = devices.map((device) => deviceSection(device, devices, byLamp, session));
-  app.append(...sections);
+  // Grouped by what the panel is doing tonight: plugged in and driven,
+  // plugged in and left alone, or not here. Every group opens and edits, so a
+  // panel still in the post can be set up, and one left alone can be read to
+  // see how the rest were done. Each group keeps the inventory's alphabetical
+  // order, since `regroup` appends in that order.
+  const group = (title: string, lead: string): { box: HTMLElement; list: HTMLElement; lead: HTMLElement } => {
+    const leadLine = el("p", { class: "meta" }, lead);
+    const list = el("div", {});
+    return { box: el("section", { class: "device-group" }, el("h2", {}, title), leadLine, list), list, lead: leadLine };
+  };
+  const active = group("Active Devices", "");
+  const inactive = group("Inactive Devices", "Plugged in, but this profile leaves them alone. Open one to see how it is set up.");
+  const missing = group("Devices not found", "Supported, but not plugged in. They can still be opened and set up.");
+  app.append(active.box, inactive.box, missing.box);
+
+  const sections = devices.map((device) => deviceSection(device, devices, byLamp, session, () => regroup()));
+  const regroup = (): void => {
+    const off = session.profile.disabled_devices ?? [];
+    sections.forEach((section, i) => {
+      const key = devices[i]?.key ?? "";
+      const into = typeof found !== "string" && !found.has(key)
+        ? missing
+        : off.includes(key) ? inactive : active;
+      // Moved only when it changes group, so a panel being edited is not
+      // pulled out from under the cursor by a poll that changed nothing.
+      if (section.parentElement !== into.list) into.list.append(section);
+    });
+    // A section moved in is appended at the end; putting each list back in
+    // inventory order keeps them alphabetical without touching the rest.
+    for (const g of [active, inactive, missing]) {
+      const inOrder = sections.filter((s) => s.parentElement === g.list);
+      if (inOrder.some((s, i) => g.list.children[i] !== s)) g.list.append(...inOrder);
+    }
+    // Active always shows, so an empty page says why it is empty.
+    active.lead.hidden = active.list.children.length > 0 && typeof found !== "string";
+    active.lead.textContent = typeof found === "string"
+      ? `Could not tell which panels are plugged in (${found}), so every panel is listed here.`
+      : "No panel this profile drives is plugged in.";
+    inactive.box.hidden = inactive.list.children.length === 0;
+    missing.box.hidden = missing.list.children.length === 0;
+  };
+  regroup();
+
+  // A panel plugged in or pulled out while the page is open moves to its
+  // group without a reload. Listing is cheap and opens nothing, so asking
+  // often costs the converter nothing. One question at a time, and a late
+  // answer after the page is left is dropped.
+  let asking = false;
+  let left = false;
+  const poll = window.setInterval(() => {
+    if (asking) return;
+    asking = true;
+    void lookForPanels().then((now) => {
+      asking = false;
+      if (left) return;
+      const same = typeof now === "string"
+        ? typeof found === "string"
+        : typeof found !== "string" && now.size === found.size && [...now].every((k) => found instanceof Set && found.has(k));
+      if (same) return;
+      found = now;
+      regroup();
+      syncToggle();
+    });
+  }, PLUG_POLL_MS);
+  stopWatching = () => {
+    left = true;
+    window.clearInterval(poll);
+  };
 
   // Taken after the rows are built, because building them adds a binding for
   // any lamp the file did not already list. Measuring before that would have
@@ -1690,8 +1845,8 @@ async function showProfile(file: string): Promise<void> {
     offersCollapse = collapse;
     toggle.textContent = collapse ? "Collapse all" : "Expand all";
   };
-  // Only panels this profile drives can open, so only they count.
-  const live = (): HTMLDetailsElement[] => sections.filter((s) => !s.classList.contains("off"));
+  // A unit following another does not open, so it does not count.
+  const live = (): HTMLDetailsElement[] => sections.filter((s) => !s.classList.contains("follows"));
   const syncToggle = (): void => {
     const open = live();
     if (open.length > 0 && open.every((s) => s.open)) setLabel(true);
@@ -1782,6 +1937,7 @@ function deviceSection(
   all: Device[],
   byLamp: Map<string, Binding>,
   session: Session,
+  driveChanged: () => void,
 ): HTMLDetailsElement {
   const count = el("span", { class: "meta" }, "");
   const nameOf = (key: string): string => all.find((d) => d.key === key)?.display_name ?? key;
@@ -1843,13 +1999,12 @@ function deviceSection(
   const drive = el("input", { type: "checkbox" }) as HTMLInputElement;
   drive.checked = !disabled.includes(device.key);
   const section = el("details", { class: "device" });
-  // A panel left alone does not open. Its lamps and fields are kept, so ticking
-  // it again brings back exactly what was set up, but there is nothing to edit
-  // on a panel that will not be driven.
+  // A panel left alone still opens, dimmed: its lamps and fields are kept, and
+  // reading them is how someone sees what a finished panel looks like.
   //
-  // A unit that follows another does not open either: what it will do is
-  // edited on the one it follows, and its own rows are not in use.
-  const shut = (): boolean => !drive.checked || following() !== undefined;
+  // A unit that follows another does not open: what it will do is edited on
+  // the one it follows, and its own rows are not in use.
+  const shut = (): boolean => following() !== undefined;
   const applyDriveState = (): void => {
     section.classList.toggle("off", !drive.checked);
     section.classList.toggle("follows", following() !== undefined);
@@ -1874,8 +2029,16 @@ function deviceSection(
     if (shut() && !(e.target as Element).closest("label")) e.preventDefault();
   });
   // Anything that opens it some other way is closed again.
+  //
+  // Closed from its title while that was stuck under the header, the rows
+  // above the title vanish and the page would land somewhere further down,
+  // so it is scrolled back to where the title now sits.
   section.addEventListener("toggle", () => {
     if (section.open && shut()) section.open = false;
+    if (section.open) return;
+    const under = document.querySelector("header")?.getBoundingClientRect().bottom ?? 0;
+    const top = section.getBoundingClientRect().top;
+    if (top < under) window.scrollBy(0, top - under);
   });
   drive.addEventListener("click", (e) => e.stopPropagation());
   drive.addEventListener("change", () => {
@@ -1890,22 +2053,13 @@ function deviceSection(
     else delete session.profile.disabled_devices;
     applyDriveState();
     session.refreshDirty();
+    driveChanged();
   });
   applyDriveState();
 
-  if (!session.profile.readouts) session.profile.readouts = [];
-  const glass = displaySection(
-    device,
-    session.profile,
-    session.signals,
-    session.refreshDirty,
-    session.shippedReadouts,
-  );
-
   section.append(summary, table);
-  if (glass) section.append(glass);
-  // A text grid takes its fields from pages rather than from the profile.
-  for (const display of device.displays.filter((d) => d.text_grid)) {
+  // Every screen takes its fields from pages rather than from the profile.
+  for (const display of device.displays) {
     section.append(
       pageSection(device, display, {
         profile: session.profile,

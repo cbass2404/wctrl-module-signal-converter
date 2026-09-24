@@ -16,6 +16,7 @@ copied into `data/mcdu` unchanged except where the table says otherwise.
 | `crates/wctrl-hid`, the MCDU grid channel | WwDevicesDotnet, ported | BSD-3-Clause |
 | `crates/dsc-config/src/mcdu_font.rs` | WwDevicesDotnet, ported | BSD-3-Clause |
 | `data/displays/mcdu.json`, grid and origins | WwDevicesDotnet | BSD-3-Clause |
+| `data/devices.json`, the PFP-3N, PFP-7 and PFP-4 PIDs, lamps and keys | WwDevicesDotnet, `SupportedDevices.cs`, `Winctrl/README.md` and `Winctrl/Pfp*/KeyboardMap.cs`, commit `2bf28fa` | BSD-3-Clause |
 | `data/mcdu/font-packet-map-3x31.json` | WwDevicesDotnet, `Resources/WinctrlFontPacketMap-3x31.json`, commit `2bf28fa` | BSD-3-Clause |
 | `data/mcdu/a10c-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/a10c-font-21x31.json`, commit `dd8e87b` | MIT |
 | `data/mcdu/ah64d-font-21x31.json` | WCtrlDcsBiosBridge, `Resources/ah64d-font-21x31.json`, commit `2d34b12` | MIT |

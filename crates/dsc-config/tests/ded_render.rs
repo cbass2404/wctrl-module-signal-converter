@@ -92,7 +92,6 @@ fn render_line(ded: &Display, line: usize, text: &str, format: &str) -> Vec<u8> 
 #[test]
 fn the_map_describes_the_ded() {
     let ded = ded();
-    assert_eq!(ded.part_id, 0xbf06);
     assert_eq!(ded.transport, Transport::Pixel);
     assert_eq!(ded.cells.len(), LINES * COLUMNS);
     // Every cell is its whole 8x13 box, so drawing one clears what was there.

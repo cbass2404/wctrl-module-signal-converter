@@ -45,13 +45,9 @@ fn load() -> (DisplayCatalogue, Fixture) {
 fn the_map_loads_and_describes_the_ufc() {
     let (cat, _) = load();
     let ufc = cat.get("UFC1").expect("UFC1 is in data/displays");
-    assert_eq!(ufc.part_id, 0xbed0);
     assert_eq!(ufc.cells.len(), 36);
     assert_eq!(ufc.buffer_bytes, 96);
     assert_eq!(ufc.groups(), 24);
-    // Found by part id too, which is how the daemon will reach it: a profile
-    // names a device, and the device's parts are what carry displays.
-    assert_eq!(cat.for_part(0xbed0).map(|d| d.key.as_str()), Some("UFC1"));
 }
 
 #[test]

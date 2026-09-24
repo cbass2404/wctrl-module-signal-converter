@@ -1,4 +1,4 @@
-//! MCDU pages as the editor works with them: one module's pages at a time.
+//! Pages as the editor works with them: one module's pages at a time.
 //!
 //! A page belongs to the library, not to the profile open in the window, so
 //! it is saved and deleted on its own and the profile's Save writes only which

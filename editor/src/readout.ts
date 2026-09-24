@@ -2602,35 +2602,6 @@ function regionOf(readout: Readout, display: DisplayInfo): RegionInfo | undefine
 }
 
 /**
- * The display section for one device, or null if it has no glass but text
- * grids.
- *
- * A text grid is left out: everything on one comes from a page, and pages are
- * edited in `pages.ts`, which uses the same field table.
- *
- * `shipped` is every field of the shipped default, which is what the reset
- * buttons put back and what says a deleted field can be brought back at all.
- * Empty for a profile the user made, which has nothing to go back to.
- */
-export function displaySection(
-  device: Device,
-  profile: Profile,
-  signals: SignalView[],
-  onChange: () => void,
-  shipped: Readout[],
-): HTMLElement | null {
-  const glass = device.displays.filter((d) => !d.text_grid);
-  if (glass.length === 0) return null;
-  if (!profile.readouts) profile.readouts = [];
-  const wrap = el("div", { class: "displays" });
-  for (const display of glass) {
-    const { head, table } = fieldTable(device, display, profile, profile.readouts, true, signals, onChange, shipped);
-    wrap.append(el("div", { class: "display" }, head, table));
-  }
-  return wrap;
-}
-
-/**
  * One screen's fields, a row per area, and the head that names the screen.
  *
  * `readouts` is the list the rows edit in place: the profile's own fields, or

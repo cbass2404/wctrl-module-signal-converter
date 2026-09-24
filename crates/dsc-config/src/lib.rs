@@ -173,12 +173,12 @@ pub enum Error {
     MadeBeforePages(u32),
     #[error("this profile is schema version {0}, made by a newer DCS Signal Converter than this one")]
     NewerSchema(u32),
-    #[error("cells {1} of display {0:?} are a field of the profile's own, but a text grid takes every field from a page; put it on a page instead")]
-    LooseTextField(String, String),
+    #[error("cells {1} of display {0:?} are a field of the profile's own, but a screen takes every field from a page; put it on a page instead")]
+    LooseScreenField(String, String),
     #[error("the profile gives page slots to {0:?}, which is not a device we know")]
     SlotsOnUnknownDevice(String),
-    #[error("{0:?} has page slots, but no screen that takes pages; only a text grid does")]
-    SlotsWithoutTextGrid(String),
+    #[error("{0:?} has page slots, but no screen to show them on")]
+    SlotsWithoutScreen(String),
     #[error("{0:?} has {1} page slots, but {2} page keys; a disabled slot is written as null")]
     SlotCount(String, usize, usize),
     #[error("devices.json lists {1} twice on {0:?}")]
@@ -193,14 +193,16 @@ pub enum Error {
     SlotKeySet(String, usize),
     #[error("slot {1} of {0:?} shows the page {2:?}, which is for {3}; a page reads signals by id, so it works only on its own module")]
     PageOnOtherModule(String, usize, String, String),
+    #[error("slot {1} of {0:?} shows the page {2:?}, which is drawn on {3:?}, a screen {0:?} does not have")]
+    PageOnOtherDisplay(String, usize, String, String),
     #[error("the page {0:?} in slot {1} of {2:?}: {3}")]
     OnPage(String, usize, String, Box<Error>),
     #[error("a page needs a name")]
     PageUnnamed,
     #[error("a page on {1} is already called {0:?}")]
     PageNameTaken(String, String),
-    #[error("the page {0:?} is drawn on {1:?}, which is not a text grid; only a text grid takes pages")]
-    PageNotOnTextGrid(String, String),
+    #[error("the page {0:?} is drawn on {1:?}, which is not a display we know")]
+    PageOnUnknownDisplay(String, String),
 }
 
 impl Error {
@@ -651,8 +653,10 @@ impl DeviceSpec {
     }
 
     /// Whether `other` is this device under another name: the same lamps at
-    /// the same indices and the same screens, whatever its part ids and USB id
-    /// say.
+    /// the same indices, the same screens and the same keys, whatever its part
+    /// ids and USB id say. Keys count because the lamps alone do not tell the
+    /// PFPs apart: a PFP-3N and a PFP-7 light the same five, and their page
+    /// keys could come to differ.
     ///
     /// WinWing sells one panel as several products, one per seat or position,
     /// each with its own PID so that more than one can sit on a desk. The
@@ -662,13 +666,16 @@ impl DeviceSpec {
     /// so a variant added to the inventory is one without anything else said.
     pub fn same_hardware(&self, other: &DeviceSpec) -> bool {
         let shape = |d: &DeviceSpec| {
-            d.parts
+            let parts = d
+                .parts
                 .iter()
                 .map(|p| {
                     let leds: Vec<_> = p.leds.iter().map(|l| (l.index, l.name.clone(), l.max)).collect();
                     (p.display.clone(), leds)
                 })
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            let keys: Vec<_> = d.buttons.iter().map(|b| (b.number, b.name.clone())).collect();
+            (parts, keys)
         };
         shape(self) == shape(other)
     }
@@ -1302,12 +1309,12 @@ pub struct Profile {
     /// a disabled device's are, so stopping gives back what was there.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub follows: BTreeMap<String, String>,
-    /// Page slots for each device with a text grid, keyed by device.
+    /// Page slots for each device with a screen, keyed by device.
     ///
-    /// Everything on a text grid comes from a page in the library, and a
-    /// device with no entry here shows nothing on it. Resolved into ordinary
-    /// fields by [`with_pages`](Self::with_pages) when the engine takes the
-    /// profile. See docs/CONFIG.md "MCDU pages".
+    /// Everything on a screen comes from a page in the library, and a device
+    /// with no entry here shows nothing on it. Resolved into ordinary fields
+    /// by [`with_pages`](Self::with_pages) when the engine takes the profile.
+    /// See docs/CONFIG.md "Pages".
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub screens: BTreeMap<String, PageSlots>,
     /// Every device's slots resolved, and which one shows, once the profile
@@ -1329,9 +1336,10 @@ impl Profile {
 
     /// Whether this profile drives a device at all.
     ///
-    /// A disabled device keeps whatever was last written to it, because panel
-    /// state latches on this hardware. That is the point: it is hidden, and
-    /// leaving its backlight where the user set it beats zeroing it.
+    /// A disabled device keeps whatever someone else last wrote to it, because
+    /// panel state latches on this hardware. That is the point: it is hidden,
+    /// and leaving its backlight where the user set it beats zeroing it. What
+    /// the engine itself lit there for an earlier aircraft is taken back.
     pub fn drives(&self, device: &str) -> bool {
         !self.disabled_devices.iter().any(|d| d == device)
     }
@@ -1586,12 +1594,12 @@ impl Profile {
             return vec![Error::NewerSchema(self.schema_version)];
         }
         let mut out = Vec::new();
-        // One owner for a text grid, and it is the pages. A field resolved
+        // One owner for a screen, and it is the pages. A field resolved
         // from a page carries its id, so a profile checked after
         // `with_pages` is not refused for its own start page.
         for r in &self.readouts {
             if r.page.is_none() && Profile::takes_pages(displays, &r.display) {
-                out.push(Error::LooseTextField(r.display.clone(), r.cells.to_string()));
+                out.push(Error::LooseScreenField(r.display.clone(), r.cells.to_string()));
             }
         }
         for b in &self.bindings {
@@ -2871,6 +2879,73 @@ impl Profiles {
         Profile::load(&self.previous.join(name)).ok()
     }
 
+    /// Bring the aircraft a profile flies up to the new release, the way
+    /// [`reconcile_settings`] does its settings: ours while the list is still
+    /// the one `was` shipped, and the user's once it differs. Returns what it
+    /// did, as phrases for the update notes, and whether it gave any aircraft
+    /// up, which is what [`merge_new`](Self::merge_new) seeds again for.
+    ///
+    /// This is how a profile is split. DCS-BIOS can report two variants under
+    /// one module that want different signals for the same lamp, and the
+    /// answer is a shipped profile each. An aircraft the release moves to
+    /// another shipped profile is dropped here, and [`seed`](Self::seed) then
+    /// brings that profile in, since nothing claims the aircraft any more.
+    /// The new profile comes as shipped: edits the user made while the
+    /// variants shared a profile stay with this one.
+    ///
+    /// An aircraft the release adds is taken on only where no other profile
+    /// flies it, so a merge never leaves one aircraft claimed twice. One
+    /// dropped without going anywhere is kept, since dropping it would leave
+    /// it with no profile at all.
+    ///
+    /// A list the user changed is left as it is, and the notes say what the
+    /// release would have moved, so they know a reset would bring the split.
+    fn reconcile_aircraft(&self, name: &str, profile: &mut Profile, shipped: &Profile, was: &Profile) -> (Vec<String>, bool) {
+        let set = |a: &[String]| a.iter().cloned().collect::<BTreeSet<String>>();
+        let (mine, before, after) = (set(&profile.aircraft), set(&was.aircraft), set(&shipped.aircraft));
+        if before == after {
+            return (Vec::new(), false);
+        }
+        let families = self.families();
+        let moved: Vec<(String, String)> = before
+            .difference(&after)
+            .filter_map(|a| families.0.get(a).filter(|f| f.as_str() != name).map(|f| (a.clone(), f.clone())))
+            .collect();
+        let listed = |pairs: &[(String, String)]| {
+            pairs.iter().map(|(a, f)| format!("{a} to {f}")).collect::<Vec<_>>().join(", ")
+        };
+        if mine != before {
+            if moved.is_empty() {
+                return (Vec::new(), false);
+            }
+            return (
+                vec![format!(
+                    "kept your own aircraft list, where this release moves {}; reset the profile to take the split",
+                    listed(&moved)
+                )],
+                false,
+            );
+        }
+        let claimed = self.claimed_except(Some(name));
+        let joined: Vec<String> =
+            after.difference(&before).filter(|a| !claimed.contains_key(*a)).cloned().collect();
+        let mut kept = profile.aircraft.clone();
+        kept.retain(|a| !moved.iter().any(|(m, _)| m == a));
+        kept.extend(joined.iter().cloned());
+        if kept.is_empty() || (moved.is_empty() && joined.is_empty()) {
+            return (Vec::new(), false);
+        }
+        profile.aircraft = kept;
+        let mut what = Vec::new();
+        if !moved.is_empty() {
+            what.push(format!("moved {}", listed(&moved)));
+        }
+        if !joined.is_empty() {
+            what.push(format!("now also flies {}", joined.join(", ")));
+        }
+        (what, !moved.is_empty())
+    }
+
     /// Every aircraft an active profile already claims, with the name of the
     /// profile that claims it.
     ///
@@ -3079,6 +3154,7 @@ impl Profiles {
             self.defaults != self.active && self.last_update().as_deref() != Some(version);
 
         let mut notes = Vec::new();
+        let mut released = false;
         let mut files: Vec<PathBuf> = std::fs::read_dir(&self.active)?
             .filter_map(|e| e.ok().map(|e| e.path()))
             .filter(|p| p.extension().and_then(|e| e.to_str()) == Some("json"))
@@ -3108,6 +3184,7 @@ impl Profiles {
             let before = profile.bindings.len();
             let mut from_default = 0usize;
             let mut work = FieldWork::default();
+            let mut aircraft = Vec::new();
 
             if let Ok(shipped) = Profile::load(&self.defaults.join(&name)) {
                 for b in &shipped.bindings {
@@ -3127,6 +3204,9 @@ impl Profiles {
                         work.lamps = reconcile_lamps(&mut profile, &shipped.bindings, &was.bindings);
                         work.settings = reconcile_settings(&mut profile, &shipped, was);
                         work.slots = reconcile_slots(&mut profile, &shipped, was);
+                        let (what, gave_up) = self.reconcile_aircraft(&name, &mut profile, &shipped, was);
+                        aircraft = what;
+                        released |= gave_up;
                     }
                 }
             }
@@ -3145,7 +3225,7 @@ impl Profiles {
             // a release that retires one field and adds another nets to zero
             // and would save nothing, and a release that retires two would
             // underflow the subtraction it used to be.
-            if added == 0 && work.nothing() && !order_changed {
+            if added == 0 && work.nothing() && aircraft.is_empty() && !order_changed {
                 continue;
             }
             profile.save(&path)?;
@@ -3187,13 +3267,22 @@ impl Profiles {
             }
             if work.slots > 0 {
                 what.push(format!(
-                    "updated {} unchanged MCDU page slot(s) to the new default",
+                    "updated {} unchanged page slot(s) to the new default",
                     work.slots
                 ));
             }
+            what.extend(aircraft);
             match what.is_empty() {
                 true => notes.push(format!("{name}: reordered")),
                 false => notes.push(format!("{name}: {}", what.join(", "))),
+            }
+        }
+        // An aircraft given up belongs to a shipped profile the user does not
+        // have yet. Seeding ran before this, while the aircraft was still
+        // claimed, so it runs again for the split to arrive on this start.
+        if released {
+            for copied in self.seed()? {
+                notes.push(format!("{copied}: added, split from a profile you had"));
             }
         }
         // Written whether or not anything changed: the question it answers is

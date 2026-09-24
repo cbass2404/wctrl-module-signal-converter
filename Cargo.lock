@@ -841,12 +841,14 @@ dependencies = [
  "dsc-bios",
  "dsc-config",
  "dsc-engine",
+ "hidapi",
  "reqwest",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
+ "wctrl-hid",
 ]
 
 [[package]]

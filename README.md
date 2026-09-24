@@ -3,7 +3,7 @@
 **Your WinWing panels, lit by the cockpit you are actually sitting in.**
 
 Gear lamps that follow the gear. A Master Caution that comes on when the jet's
-does. Panel backlights that dim with the cockpit's console knob. The Hornet UFC
+does. Panel backlights that can dim with the cockpit's console knob. The Hornet UFC
 showing the Hornet UFC, the Viper's DED on the ICP, the A-10C's CDU on your
 MCDU screen, and more.
 
@@ -66,6 +66,8 @@ a profile can bind one you do not own without harm.
 - CarrierAce MFD (L, C and R)
 - Orion Combat Rudder Pedals
 - MCDU (Captain, Co-Pilot and Observer)
+- PFP-3N, PFP-7 and PFP-4 (Captain, Co-Pilot and Observer), not yet tried on
+  a real panel here
 
 Which lamps each one has is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -75,7 +77,8 @@ starter profile the first time you fly it, ready to fill in with the
 
 | Profile     | Covers                                |
 | ----------- | ------------------------------------- |
-| A-10C       | A-10C, A-10C II                       |
+| A-10C       | A-10C                                 |
+| A-10C2      | A-10C II                              |
 | AH-64D      | AH-64D                                |
 | CH-47F      | CH-47F                                |
 | F-14        | F-14A, F-14B                          |
@@ -87,12 +90,13 @@ starter profile the first time you fly it, ready to fill in with the
 | No aircraft | Spectator and free camera             |
 
 The A-10C, AH-64D, CH-47F and F-14B (Upgrade) also put their own CDU on the MCDU
-screen. On any other aircraft the screen is yours to fill in the
+screen, and on a PFP's, which is the same screen. On any other aircraft the screen is yours to fill in the
 [editor](#4-make-it-yours): a label you type, a reading beside it, each in the
 colour and size you choose. Open a profile to see exactly what it drives.
 
-Every profile puts every panel backlight on one cockpit knob, so the whole pit
-dims together until you decide otherwise.
+Every profile ties every panel backlight to one row, held at a steady
+brightness, so the whole pit stays readable whatever the cockpit lighting is
+set to. Point that row at a cockpit knob and every panel dims with it.
 
 ---
 
@@ -156,7 +160,7 @@ sets every lamp to match the cockpit as it stands, then follows it from there.
   clears the panels and exits on its own.
 
 To check it is working, fly one of the [shipped aircraft](#what-it-drives) and put
-the gear down, or turn the console lights knob. If nothing moves, see
+the gear down, or watch the panel backlights come up as the cockpit loads. If nothing moves, see
 [Troubleshooting](#troubleshooting).
 
 ### 4. Make it yours
@@ -189,6 +193,8 @@ panel without leaving the cockpit.
 
 A few more things the editor does:
 
+- **Click a profile's row** to open it. Copy to..., Export..., Merge from...,
+  Reset and Delete are in the **⋯** menu at the end of the row.
 - **New profile** starts one for an aircraft that has none, blank or copied from a
   related one. **Copy to...** copies an existing profile to other aircraft, which
   is how the Hornet profile serves the Super Hornet mod.
@@ -200,12 +206,13 @@ A few more things the editor does:
   before the aircraft moves, and asked again before a profile left with no
   aircraft is deleted. Saying no to the delete cancels the import. Or merge it
   into a profile you already have for the same module, taking only the panels'
-  lights and the screen lines you tick. **Merge from...** does the same between
+  lights and the page slots you tick. **Merge from...** does the same between
   two of your own profiles, such as the F-14 and F-14BU.
 - **Delete** removes a profile. If that leaves an aircraft with no profile, you
   choose which profile takes it, so splitting a profile and deleting a half
   gives its aircraft back.
-- **Put your own text on a screen.** Where an aircraft leaves rows free, or has
+- **Put your own text on a screen.** Open a page with **Edit page** or
+  **New page** (see Pages, below). Where an aircraft leaves rows free, or has
   no CDU of its own, a row is yours. Start one with `+ text` for characters you
   type or `+ a reading` for a cockpit signal, then add more pieces to it: a
   field is a chain drawn end to end, and each piece takes its own colour and
@@ -216,29 +223,32 @@ A few more things the editor does:
   how many cells it needs.
 - **`+ a rule`** draws a line across a row, for a page that does not fill the
   glass, and can carry a label in the middle naming what it divides. The rule
-  and the label each take their own colour. The A-10C and AH-64D profiles ship
-  with one.
-- **MCDU pages.** Each MCDU has a slot per left line select key, each showing
-  a page, a blank screen, or nothing. In flight, hold Ctrl and press LSK 1L
-  to 6L to swap the screen to that slot's page. DCS still sees the press, so
-  keep Ctrl with a line select key unbound there, or pick Shift or Alt in
+  and the label each take their own colour. The A-10C, AH-64D and F-16 pages
+  ship with one.
+- **Pages.** Every screen shows pages: the MCDU, the UFC and the ICP's DED
+  each have six slots, each showing a page, a blank screen, or nothing. In
+  flight, hold Ctrl and press a page key to swap the screen to that slot's
+  page: LSK 1L to 6L on the MCDU, A/P, IFF, TCN, ILS, D/N and BCN on the UFC,
+  and COM 1, COM 2, IFF, LIST, A-A and A-G on the ICP. DCS still sees the
+  press, so keep Ctrl with those keys unbound there, or pick Shift or Alt in
   Settings.
 - **Settings**, the gear at the top of the Profiles page, picks the window's
-  theme and the key held to swap MCDU pages, and holds Import profile... and
+  theme and the key held to swap pages, and holds Import profile... and
   Manage Converter.
 - **Manage Converter**, under the gear, is for the rare times the converter
   needs restarting. Saving a profile is not one of them. See below.
-- **Reset** puts a profile back to the shipped one. **Reset this lamp** and
-  **Reset this field** do the same for a single one, and show you what they
-  will reset to before they do. An area whose shipped field you deleted offers
-  it back.
+- **Reset** puts a profile back to the shipped one. **Reset this lamp** does
+  the same for a single lamp, and shows you what it will reset to before it
+  does.
 - **Drive this panel** per panel. Untick it and the profile leaves that panel
   alone entirely, so another program can have it.
 - **Problems** in red stop a save until they are fixed. **Cautions** in yellow are
   about a profile that works but probably not as meant, and never stop a save.
 
-The full profile model, every condition form and the reasons behind them, is in
-[docs/CONFIG.md](docs/CONFIG.md).
+**What every setting means**, with examples you can try in the browser, is in
+[the profile language guide](https://cbass2404.github.io/wctrl-module-signal-converter/language.html),
+also opened by the **?** in the editor's header. The full profile model and the
+reasons behind each rule are in [docs/CONFIG.md](docs/CONFIG.md).
 
 ---
 
@@ -253,11 +263,11 @@ its own, but never rewrites a lamp you have changed. When a release fixes a
 shipped lamp, its release notes say so, and you choose whether to reset that lamp
 to pick up the fix.
 
-**Screen fields are the one exception, and only where you have not touched
-them.** A field still exactly as it shipped is corrected for you, so a fix to a
-shipped row arrives without you doing anything. Change a field in any way and it
-is yours: it is left alone, and **Reset this field** is how you take the new one
-if you decide you want it. Delete a shipped field and it stays deleted. The
+**Fields on a shipped page are the one exception, and only where you have not
+touched them.** A field still exactly as it shipped is corrected for you, so a
+fix to a shipped page arrives without you doing anything. Change a field in any
+way and it is yours: it is left alone. Delete a shipped field and it stays
+deleted. The
 release notes name every shipped row that moved either way.
 
 **Uninstalling.** From **Settings → Apps**, like any other program. It removes the
@@ -311,7 +321,8 @@ everything else works, and they come back when you update DCS-BIOS. See
 If SimAppPro is running with "Sync with DCS" on, it can drive the same backlights.
 Turn that off for each panel, or close SimAppPro. In the Hornet and the Viper
 both programs also draw the UFC and the DED; to leave those to SimAppPro, untick
-**drive this panel** for that panel in the profile, or clear its screen fields.
+**drive this panel** for that panel in the profile, or set its page slots to
+Disabled.
 
 **Reporting a bug.** Include the version (`dcs-signal --version`, or the bar at the
 foot of the editor), the aircraft, and this file:
@@ -374,15 +385,16 @@ ships, and nothing you do while developing reaches the profiles you fly.
 
 ## Further reading
 
-| Document                                   | What is in it                                                        |
-| ------------------------------------------ | -------------------------------------------------------------------- |
-| [docs/CLI.md](docs/CLI.md)                 | Running the converter by hand, its flags, and reading its output     |
-| [docs/CONFIG.md](docs/CONFIG.md)           | The profile format, every binding form, and how the editor checks it |
-| [docs/PROTOCOL.md](docs/PROTOCOL.md)       | The reverse-engineered HID protocol and every panel's lamp map       |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Memory, CPU and install size, and how they were measured             |
-| [CHANGELOG.md](CHANGELOG.md)               | What changed in each release, and which shipped profiles moved       |
-| [docs/STATUS.md](docs/STATUS.md)           | Development status, verified hardware facts, and what is next        |
-| [docs/TODO.md](docs/TODO.md)               | The outstanding work as a checklist, linked into the docs above      |
+| Document                                                                                    | What is in it                                                        |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Profile language](https://cbass2404.github.io/wctrl-module-signal-converter/language.html) | Every test, reading and page setting, with examples and a dictionary |
+| [docs/CLI.md](docs/CLI.md)                                                                  | Running the converter by hand, its flags, and reading its output     |
+| [docs/CONFIG.md](docs/CONFIG.md)                                                            | The profile format, every binding form, and how the editor checks it |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md)                                                        | The reverse-engineered HID protocol and every panel's lamp map       |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md)                                                  | Memory, CPU and install size, and how they were measured             |
+| [CHANGELOG.md](CHANGELOG.md)                                                                | What changed in each release, and which shipped profiles moved       |
+| [docs/STATUS.md](docs/STATUS.md)                                                            | Development status, verified hardware facts, and what is next        |
+| [docs/TODO.md](docs/TODO.md)                                                                | The outstanding work as a checklist, linked into the docs above      |
 
 ---
 

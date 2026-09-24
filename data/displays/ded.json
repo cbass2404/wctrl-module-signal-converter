@@ -12,7 +12,6 @@
   "displays": [
     {
       "key": "DED",
-      "part_id": 48902,
       "transport": "pixel",
       "buffer_bytes": 1600,
       "group_bytes": 25,

@@ -5,7 +5,7 @@
   python tools/snapshot.py            refresh them from what ships now
 
 Two pairs, handled alike: data/defaults into data/defaults-previous, and the
-MCDU pages, data/default-pages into data/default-pages-previous. An update
+pages, data/default-pages into data/default-pages-previous. An update
 reconciles the profiles and the pages apart, each against its own snapshot.
 
 A release step, run by tools/release.cmd at both ends. The daemon corrects a
@@ -84,6 +84,24 @@ def names(folder):
     return {n for n in os.listdir(folder) if n.endswith(".json")}
 
 
+def stem(name):
+    """A file name as `file_stem` in dsc-config writes it: lowercase, each run
+    of anything else one dash. Releases up to v1.0.0-alpha.007 named page
+    files by the module key as it is (`FA-18C_hornet.json`), so a snapshot
+    is matched to what a tag shipped by this, not by the name as spelled."""
+    out = []
+    for c in name[: -len(".json")]:
+        if c.isascii() and c.isalnum():
+            out.append(c.lower())
+        elif not out or out[-1] != "-":
+            out.append("-")
+    return "".join(out).strip("-")
+
+
+def by_stem(files):
+    return {stem(n): n for n in files}
+
+
 def load(path):
     with open(path, "rb") as f:
         return json.loads(f.read().decode("utf-8-sig"))
@@ -122,16 +140,18 @@ def check_pair(tag, current, previous):
         print("ERROR: data/%s is missing." % previous)
         print("  It should hold data/%s as %s shipped it." % (current, tag))
         return 1
-    have = names(snapshot)
+    want = by_stem(want)
+    have = by_stem(names(snapshot))
 
     wrong = []
-    for name in sorted(want - have):
-        wrong.append("missing from the snapshot: %s" % name)
-    for name in sorted(have - want):
-        wrong.append("in the snapshot but not in %s: %s" % (tag, name))
-    for name in sorted(want & have):
+    for key in sorted(want.keys() - have.keys()):
+        wrong.append("missing from the snapshot: %s" % want[key])
+    for key in sorted(have.keys() - want.keys()):
+        wrong.append("in the snapshot but not in %s: %s" % (tag, have[key]))
+    for key in sorted(want.keys() & have.keys()):
+        name = have[key]
         try:
-            if at_tag(tag, current, name) != load(os.path.join(snapshot, name)):
+            if at_tag(tag, current, want[key]) != load(os.path.join(snapshot, name)):
                 wrong.append("differs from %s: %s" % (tag, name))
         except (OSError, ValueError) as e:
             wrong.append("could not be read: %s (%s)" % (name, e))

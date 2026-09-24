@@ -642,7 +642,8 @@
       .step a {
         color: var(--accent);
       }
-      .btn-note a {
+      .btn-note a,
+      .foot-note a {
         color: var(--accent);
       }
     </style>
@@ -673,7 +674,7 @@
           </h1>
           <p class="lede">
             Gear lamps that follow the gear. A Master Caution that comes on when
-            the jet's does. Backlights that dim with the console knob. Jump into
+            the jet's does. Backlights that can dim with the console knob. Jump into
             a Hornet and the panels follow the Hornet; switch to an Apache and
             they follow the Apache. Quit DCS and they go dark.
           </p>
@@ -682,6 +683,9 @@
               class="btn"
               href="https://github.com/cbass2404/wctrl-module-signal-converter/releases/latest"
               >Get the latest release from GitHub</a
+            >
+            <a class="btn btn-ghost" href="language.html"
+              >Learn the profile language</a
             >
             <span class="btn-note"
               >Run the <span class="mono">setup.exe</span>. No admin prompt, no
@@ -721,18 +725,19 @@
           <div class="feat">
             <h3>Backlights</h3>
             <p>
-              Every panel backlight follows one cockpit knob, so the whole pit
-              dims together until you decide otherwise.
+              Every panel backlight shares one setting, held steady so the pit
+              stays readable. Point it at a cockpit knob and they all dim
+              together.
             </p>
           </div>
           <div class="feat">
             <h3>Screens</h3>
             <p>
               The Hornet UFC on the UFC, the Viper's DED on the ICP, and on your
-              MCDU the A-10C, CH-47F and F-14B (Upgrade) CDU, the AH-64D KU, the
-              Hornet's IFEI or a Viper flight page. Any screen is yours to fill:
-              write a label, put a reading beside it, and pick the colour and
-              size of each.
+              MCDU or PFP the A-10C, CH-47F and F-14B (Upgrade) CDU, the AH-64D
+              KU, the Hornet's IFEI or a Viper flight page. Every screen takes
+              pages you build yourself: write a label, put a reading beside it,
+              and pick the colour and size of each.
             </p>
           </div>
         </div>
@@ -749,11 +754,12 @@
           <div class="group">
             <div class="group-head">
               <span class="group-title">Panels</span>
-              <span class="group-count">7</span>
+              <span class="group-count">8</span>
             </div>
             <p class="group-why">
               Any that are plugged in. The rest are skipped, so a profile can
-              bind a panel you do not own without harm.
+              bind a panel you do not own without harm. The PFPs are not yet
+              tried on a real panel here.
             </p>
             <ul class="group-list">
               <li><span class="gi-name">PTO2</span></li>
@@ -767,6 +773,10 @@
               <li><span class="gi-name">Orion Combat Rudder Pedals</span></li>
               <li>
                 <span class="gi-name">MCDU</span
+                ><span class="gi-pct">CPT FO OBS</span>
+              </li>
+              <li>
+                <span class="gi-name">PFP-3N, PFP-7, PFP-4</span
                 ><span class="gi-pct">CPT FO OBS</span>
               </li>
             </ul>
@@ -783,7 +793,7 @@
             <ul class="group-list">
               <li>
                 <span class="gi-name">A-10C</span
-                ><span class="gi-pct">CDU</span>
+                ><span class="gi-pct">CDU · CMSC</span>
               </li>
               <li>
                 <span class="gi-name">AH-64D</span
@@ -800,23 +810,27 @@
               </li>
               <li>
                 <span class="gi-name">F-16C / D / I</span
-                ><span class="gi-pct">Flight</span>
+                ><span class="gi-pct">Flight · DED</span>
               </li>
               <li>
                 <span class="gi-name">F/A-18C + mods</span
-                ><span class="gi-pct">IFEI</span>
+                ><span class="gi-pct">IFEI · UFC</span>
               </li>
-              <li><span class="gi-name">Mi-24P</span></li>
+              <li>
+                <span class="gi-name">Mi-24P</span
+                ><span class="gi-pct">Radios</span>
+              </li>
               <li><span class="gi-name">Flaming Cliffs</span></li>
               <li><span class="gi-name">Spectator</span></li>
             </ul>
           </div>
         </div>
         <p class="foot-note">
-          The tag names the page each aircraft ships on the MCDU: its own
+          The tags name the pages each aircraft ships. On the MCDU, its own
           CDU, CDNU or KU where it has one, and a page built from its readings
-          where it does not. Open a profile in the editor to see exactly what
-          it drives.
+          where it does not; then its UFC or DED page, such as the A-10C's
+          countermeasures on the DED. Open a profile in the editor to see
+          exactly what it drives.
         </p>
       </div>
     </section>
@@ -883,7 +897,7 @@
               <div class="crop">
                 <img
                   src="img/profile-selection.png"
-                  alt="The profile list: one row per aircraft with Edit, Copy to, Export, Merge from and Reset, and the settings gear beside New profile"
+                  alt="The profile list: one row per aircraft with Edit and a menu of the rarer actions, and the settings gear beside New profile"
                   width="1101"
                   height="787"
                   loading="lazy"
@@ -964,9 +978,11 @@
               </div>
             </div>
             <figcaption>
-              <b>Six pages per MCDU.</b> Each slot is a line select key: pick a
-              page, a blank screen, or nothing, and tick the one a mission
-              starts on. In flight, hold Ctrl and press the key to swap.
+              <b>Six pages per screen.</b> Each slot is one of the panel's keys:
+              the MCDU's line select keys, the UFC's A/P to BCN, the ICP's COM 1
+              to A-G. Pick a page, a blank screen, or nothing, and tick the one
+              a mission starts on. In flight, hold Ctrl and press the key to
+              swap.
             </figcaption>
           </figure>
           <figure>
@@ -1001,11 +1017,15 @@
             </div>
             <figcaption>
               <b>Light or dark, and your choice of key.</b> Follow Windows or
-              pick a theme, and choose whether Ctrl, Shift or Alt swaps the
-              MCDU pages, to suit how DCS is bound on your PC.
+              pick a theme, and choose whether Ctrl, Shift or Alt swaps
+              pages, to suit how DCS is bound on your PC.
             </figcaption>
           </figure>
         </div>
+        <p class="foot-note" style="font-size: 1rem">
+          Every test, reading and page the editor offers is explained, with
+          examples to try, in <a href="language.html">the profile language</a>.
+        </p>
       </div>
     </section>
 
@@ -1065,10 +1085,11 @@
             </p>
           </div>
           <div class="feat">
-            <h3>Swap MCDU pages</h3>
+            <h3>Swap pages</h3>
             <p>
-              Give each MCDU up to six pages. Hold Ctrl and press a left line
-              select key to put that page on the screen, mid-flight.
+              Give the MCDU, the UFC and the ICP's DED up to six pages each.
+              Hold Ctrl and press one of the panel's page keys to put that
+              page on the screen, mid-flight.
             </p>
           </div>
           <div class="feat">
@@ -1082,9 +1103,9 @@
             <h3>Share it with a friend</h3>
             <p>
               <b>Export</b> a profile to a file, send it over, and they
-              <b>import</b> it, its MCDU pages with it. It is checked before it
+              <b>import</b> it, its pages with it. It is checked before it
               lands, and refused if it would not load on their machine. Or merge
-              in only the lamps, lines and pages you want.
+              in only the lamps, page slots and pages you want.
             </p>
           </div>
           <div class="feat">
@@ -1105,9 +1126,9 @@
             <h3>Your changes are kept</h3>
             <p>
               Updates add new profiles, panels and pages but never rewrite a
-              lamp you have changed. A screen field or MCDU page still exactly as
-              it shipped is corrected for you; one you have touched is yours and
-              is left alone. Release notes say which shipped rows moved.
+              lamp you have changed. A page or slot still exactly as it shipped
+              is corrected for you; one you have touched is yours and is left
+              alone. Release notes say which shipped rows moved.
             </p>
           </div>
         </div>
@@ -1145,7 +1166,7 @@
               two do not fight over the backlights. In the Hornet and the Viper
               it also draws the UFC and the DED itself; to leave those to
               SimAppPro, untick <strong>drive this panel</strong> for that panel
-              in the profile, or clear its screen fields.
+              in the profile, or set its page slots to Disabled.
             </div>
           </div>
         </div>
@@ -1235,6 +1256,8 @@
               rel="noopener noreferrer"
               >buy me a coffee</a
             >
+            <span style="color: var(--ink-3)">&nbsp;&middot;&nbsp;</span>
+            <a href="language.html">profile language</a>
             <span style="color: var(--ink-3)">&nbsp;&middot;&nbsp;</span>
             <a href="https://github.com/cbass2404/wctrl-module-signal-converter"
               >github.com/cbass2404/wctrl-module-signal-converter</a

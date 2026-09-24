@@ -34,6 +34,7 @@ import type {
 /** Whether the catalogue matched DCS-BIOS at startup, or was rebuilt, or why not. */
 export const catalogueStatus = () => invoke<CatalogueStatus>("catalogue_status");
 export const listDevices = () => invoke<Device[]>("devices");
+export const connectedDevices = () => invoke<string[]>("connected_devices");
 export const listModules = () => invoke<ModuleChoice[]>("modules");
 export const listProfiles = () => invoke<ProfileSummary[]>("profiles");
 export const listSignals = (module: string) => invoke<SignalView[]>("signals", { module });
@@ -170,3 +171,5 @@ export const learnStop = () => invoke<void>("learn_stop");
 export const updateCheck = () => invoke<Update | null>("update_check");
 /** Opens the release the check found; the backend holds its address. */
 export const openUpdate = () => invoke<void>("open_update");
+/** Opens the profile language guide on the project's site. */
+export const openGuide = () => invoke<void>("open_guide");

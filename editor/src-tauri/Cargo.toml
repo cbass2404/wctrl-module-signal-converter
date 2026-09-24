@@ -22,3 +22,7 @@ reqwest = { version = "0.13", default-features = false, features = ["native-tls"
 dsc-bios = { path = "../../crates/dsc-bios" }
 dsc-config = { path = "../../crates/dsc-config" }
 dsc-engine = { path = "../../crates/dsc-engine" }
+# Which panels are plugged in, for grouping the profile page. Listed only,
+# never opened, so a running converter keeps them.
+wctrl-hid = { path = "../../crates/wctrl-hid" }
+hidapi = { version = "2.6", default-features = false, features = ["windows-native"] }

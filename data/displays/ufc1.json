@@ -16,7 +16,6 @@
   "displays": [
     {
       "key": "UFC1",
-      "part_id": 48848,
       "buffer_bytes": 96,
       "group_bytes": 4,
       "cells": [

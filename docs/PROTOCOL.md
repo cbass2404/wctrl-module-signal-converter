@@ -392,6 +392,59 @@ Captured 2026-09-18. Each dimmer was swept 0 to 255 to 0, then typed, and the
 nine indicators were switched on and back off in the order above, each only
 ever written 1 or 0. Indices 3 to 7 were never written.
 
+### PFP-3N part `0xbb31`, PFP-7 part `0xbb33`, PFP-4 part `0xbb34`
+
+**Not captured here.** Nobody on this project has a PFP, so everything below
+is WwDevicesDotnet's (commit `2bf28fa`: `SupportedDevices.cs`,
+`Winctrl/README.md`, `Winctrl/Pfp*/`). Its PFP support has been confirmed
+working by other owners, which is why it was taken on; every lamp and key is
+still marked unverified in `devices.json` until a panel is seen here.
+
+Each PFP has three names, each its own PID, as the MCDU does:
+
+| Model  | Captain  | Observer | Co-Pilot |
+| ------ | -------- | -------- | -------- |
+| PFP-3N | `0xbb35` | `0xbb39` | `0xbb3d` |
+| PFP-7  | `0xbb37` | `0xbb3b` | `0xbb3f` |
+| PFP-4  | `0xbb38` | `0xbb3c` | `0xbb40` |
+
+The library pairs the PFP-4's PIDs with no seat, so its seats are taken from
+the pattern every other CDU follows: Observer +4, Co-Pilot +8.
+
+**The part id is the library's command prefix.** WwDevicesDotnet calls the
+two bytes after the report id a command prefix: `31 bb` on the PFP-3N, `32 bb`
+on the MCDU, `33 bb` on the PFP-7 and `34 bb` on the PFP-4. On the MCDU that is
+part `0xbb32` written low byte first, which our own captures confirm, so the
+PFPs are parts `0xbb31`, `0xbb33` and `0xbb34`.
+
+**The screen is the MCDU's**: the same 24x14 grid on report `0xf2` and the
+same font upload, so every PFP part declares display `MCDU` and shares its
+pages. The library measured the PFP's visible area as 86mm tall against the
+MCDU's 80mm, which fits 32px glyphs where the MCDU takes 31. The MCDU's 31px
+fonts are used on both for now, so on a PFP the rows drift up to about 12px
+above their line select keys toward the bottom.
+
+| Index | LED              | Kind   |
+| ----- | ---------------- | ------ |
+| 0     | Backlight        | dimmer |
+| 1     | Screen Backlight | dimmer |
+| 2     | Marker Light     | dimmer |
+| 3     | DSPY             | on/off |
+| 4     | FAIL             | on/off |
+| 5     | MSG              | on/off |
+| 6     | OFST             | on/off |
+| 7     | EXEC             | on/off |
+
+The same on all three models. Indices 0 to 2 are the dimmers the library
+drives on every WinWing CDU, and 3 to 7 are the ones the MCDU never took.
+
+**The keys differ by model.** The twelve line select keys are the MCDU's
+(bytes 1 and 2), and the rest are from each model's `KeyboardMap.cs`: the
+PFP-7 is the PFP-4 with ALTN where the PFP-4 has ATC, and the PFP-3N moves
+about ten keys and adds CLB, CRZ, DES and N1 LIMIT. A key at byte `b`, flag
+bit `n` is button `(b - 1) * 8 + n + 1`, which is how the MCDU's captured LSKs
+number.
+
 ## Driving a segment display
 
 `SET_LCDS` (`0x4c`) writes four bytes of a device-side bitmap. It is volatile,

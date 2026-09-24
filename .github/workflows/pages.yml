@@ -1,0 +1,48 @@
+# Publishes docs/ to GitHub Pages: the landing page and the language page.
+#
+# The same Jekyll build that "Deploy from a branch" ran, as a workflow of our
+# own. GitHub's built-in one pins actions still on Node 20 and cannot be
+# edited, so each run warned; here the actions are ours to keep current.
+# Needs Settings > Pages > Source set to "GitHub Actions".
+
+name: Pages
+
+on:
+  push:
+    branches: [main]
+    paths: ["docs/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deployment at a time, and a newer push waits rather than cancelling one
+# already publishing.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/configure-pages@v6
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./docs
+          destination: ./_site
+      - uses: actions/upload-pages-artifact@v5
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,28 @@
+{
+  "module": "Mi-24P",
+  "pages": [
+    {
+      "id": "mi24p-ufc",
+      "name": "Radios",
+      "display": "UFC1",
+      "fields": [
+        {
+          "cells": "35",
+          "source": "PLT_R828_CHAN_S"
+        },
+        {
+          "cells": "34",
+          "source": "PLT_R863_CHAN_S"
+        },
+        {
+          "cells": "30-33",
+          "source": "PLT_RV5_ALT",
+          "reads": [
+            0.0,
+            750.0
+          ]
+        }
+      ]
+    }
+  ]
+}

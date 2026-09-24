@@ -378,10 +378,14 @@ fn fit(value: &str, width: usize) -> String {
     }
 }
 
+/// A kind of screen: its cells, glyphs and how it is written.
+///
+/// Not tied to a part. Which parts carry it is said once, by `display` on the
+/// part in devices.json, so one map serves every panel with the same glass:
+/// the MCDU and the three PFPs share one, and so share their pages.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Display {
     pub key: String,
-    pub part_id: u32,
     #[serde(default)]
     pub transport: Transport,
     /// Worked out from `text` on a text grid, so it can be left out there.
@@ -798,11 +802,6 @@ impl DisplayCatalogue {
 
     pub fn get(&self, key: &str) -> Option<&Display> {
         self.displays.iter().find(|d| d.key == key)
-    }
-
-    /// The display carried by a given part, if any.
-    pub fn for_part(&self, part_id: u32) -> Option<&Display> {
-        self.displays.iter().find(|d| d.part_id == part_id)
     }
 }
 

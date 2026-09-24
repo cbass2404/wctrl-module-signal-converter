@@ -92,6 +92,13 @@ do not.
       that both show the IFEI page and dim together.
       [STATUS.md:98](STATUS.md#L98)
 
+- [ ] **See a PFP on a real panel.** Built 2026-09-24 from WwDevicesDotnet
+      alone; nobody here owns one. When a PFP owner reports back, confirm the
+      part id (a lamp lights at all), the five lamps, the LSK page keys, and
+      whether the 31px rows sit acceptably against the keys or the 32px
+      fonts are worth a per-part glyph height. Then mark `verified` in
+      `devices.json`. [STATUS.md](STATUS.md), "Built 2026-09-24: the PFP-3N"
+
 - [x] ~~**Point the defaults' backlights at one lamp across panels.**~~ Done
       2026-09-21: every backlight in every default matches the MFD C's
       `INST_PNL_Backlight`, moved in the editor. The changed rows are named in

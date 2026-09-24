@@ -653,8 +653,10 @@ impl DeviceSpec {
     }
 
     /// Whether `other` is this device under another name: the same lamps at
-    /// the same indices and the same screens, whatever its part ids and USB id
-    /// say.
+    /// the same indices, the same screens and the same keys, whatever its part
+    /// ids and USB id say. Keys count because the lamps alone do not tell the
+    /// PFPs apart: a PFP-3N and a PFP-7 light the same five, and their page
+    /// keys could come to differ.
     ///
     /// WinWing sells one panel as several products, one per seat or position,
     /// each with its own PID so that more than one can sit on a desk. The
@@ -664,13 +666,16 @@ impl DeviceSpec {
     /// so a variant added to the inventory is one without anything else said.
     pub fn same_hardware(&self, other: &DeviceSpec) -> bool {
         let shape = |d: &DeviceSpec| {
-            d.parts
+            let parts = d
+                .parts
                 .iter()
                 .map(|p| {
                     let leds: Vec<_> = p.leds.iter().map(|l| (l.index, l.name.clone(), l.max)).collect();
                     (p.display.clone(), leds)
                 })
-                .collect::<Vec<_>>()
+                .collect::<Vec<_>>();
+            let keys: Vec<_> = d.buttons.iter().map(|b| (b.number, b.name.clone())).collect();
+            (parts, keys)
         };
         shape(self) == shape(other)
     }

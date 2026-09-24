@@ -161,9 +161,13 @@ enum Command {
     /// sizes and the corners of the 24x14 grid. The screen keeps the page after
     /// this exits, and a power cycle clears the font.
     McduTest {
-        /// CAPTAIN 0xbb36, CO-PILOT 0xbb3e, OBSERVER 0xbb3a.
+        /// Any panel with the MCDU screen. MCDU CAPTAIN 0xbb36, CO-PILOT
+        /// 0xbb3e, OBSERVER 0xbb3a; the PFPs are in devices.json.
         #[arg(long, value_parser = parse_hex16, default_value = "0xbb36")]
         pid: u16,
+        /// Which part at that PID carries the screen.
+        #[arg(long)]
+        devices: Option<PathBuf>,
         /// Where `mcdu.json` is, which says the grid and the font upload.
         #[arg(long)]
         displays: Option<PathBuf>,
@@ -470,6 +474,7 @@ fn hex_trimmed(report: &[u8]) -> String {
 
 fn mcdu_test(
     pid: u16,
+    devices: &std::path::Path,
     displays: &std::path::Path,
     aircraft: &str,
     brightness: u8,
@@ -481,7 +486,17 @@ fn mcdu_test(
     let catalogue = DisplayCatalogue::load_dir(displays)?;
     let display = catalogue.get("MCDU").context("no MCDU display in that directory")?;
     let grid = display.text.as_ref().context("the MCDU display has no text grid")?;
-    let part = display.part_id;
+    // The part is the panel's, not the screen's: the MCDU and each PFP carry
+    // the same screen under their own part id.
+    let inventory = DeviceInventory::load(devices)?;
+    let part = inventory
+        .devices
+        .iter()
+        .find(|d| d.usb_pid == pid)
+        .with_context(|| format!("no device with pid {pid:#06x} in {}", devices.display()))?
+        .part_with_display(&display.key)
+        .with_context(|| format!("pid {pid:#06x} has no {} screen", display.key))?
+        .part_id;
     let origin = (grid.origin[0], grid.origin[1]);
     let (rows, columns) = (grid.rows as u16, grid.columns as u16);
     anyhow::ensure!((rows, columns) == (14, 24), "the test page is laid out for 24x14");
@@ -634,13 +649,15 @@ fn main() -> Result<()> {
 
         Command::McduTest {
             pid,
+            devices,
             displays,
             aircraft,
             brightness,
             no_font,
         } => {
+            let devices = devices.unwrap_or(paths.devices);
             let displays = displays.unwrap_or(paths.displays);
-            mcdu_test(pid, &displays, &aircraft, brightness, no_font)?
+            mcdu_test(pid, &devices, &displays, &aircraft, brightness, no_font)?
         }
 
         Command::Blink {

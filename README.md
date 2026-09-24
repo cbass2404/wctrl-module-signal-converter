@@ -66,6 +66,8 @@ a profile can bind one you do not own without harm.
 - CarrierAce MFD (L, C and R)
 - Orion Combat Rudder Pedals
 - MCDU (Captain, Co-Pilot and Observer)
+- PFP-3N, PFP-7 and PFP-4 (Captain, Co-Pilot and Observer), not yet tried on
+  a real panel here
 
 Which lamps each one has is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 
@@ -87,7 +89,7 @@ starter profile the first time you fly it, ready to fill in with the
 | No aircraft | Spectator and free camera             |
 
 The A-10C, AH-64D, CH-47F and F-14B (Upgrade) also put their own CDU on the MCDU
-screen. On any other aircraft the screen is yours to fill in the
+screen, and on a PFP's, which is the same screen. On any other aircraft the screen is yours to fill in the
 [editor](#4-make-it-yours): a label you type, a reading beside it, each in the
 colour and size you choose. Open a profile to see exactly what it drives.
 

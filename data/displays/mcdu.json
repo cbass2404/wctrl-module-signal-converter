@@ -9,7 +9,6 @@
   "displays": [
     {
       "key": "MCDU",
-      "part_id": 47922,
       "transport": "text",
       "text": {
         "columns": 24,

@@ -35,6 +35,13 @@ unless this says what moved.
 - **A tidier profile list.** Each profile row keeps its Edit button, and
   Copy to..., Export..., Merge from..., Reset and Delete move into a menu
   under the ⋯ button beside it.
+- **The PFP-3N, PFP-7 and PFP-4.** WinWing's Boeing CDUs are supported under
+  each of their Captain, Co-Pilot and Observer names. Their screen is the
+  MCDU's, so every MCDU page shows on them too, swapped with LSK 1L to 6L the
+  same way. Their lamps (DSPY, FAIL, MSG, OFST, EXEC) and keys are their own,
+  so a PFP follows only another of its own model, never an MCDU. None has
+  been tried on a real panel here yet: the support is built from
+  WwDevicesDotnet, where other owners have confirmed it works.
 
 ### Breaking
 

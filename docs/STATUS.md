@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-23. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-24. Enough context to resume cold.
 
 ## Resume here
 
@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 474 passing
+cargo test --workspace            # expect 476 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -51,6 +51,34 @@ flown, see [TODO.md](TODO.md).
   that shipped here" are now unreachable; see TODO.
 - **Test fixtures** in `editor_checks.rs` and `seat_validation.rs` mark their
   fields as a page's, the way the engine tests' `resolved()` does.
+
+**Built 2026-09-24: the PFP-3N, PFP-7 and PFP-4, from WwDevicesDotnet.** Cory
+owns none, so nothing is captured: PIDs, parts, lamps and keys are the
+library's, taken from Cory's checkout at `C:\Users\coryb\Dev\WwDevicesDotnet`
+(`2bf28fa`, the bridge's pin), and everything is `verified: false`. Cory's
+rule, 2026-09-24: **only pages are shared** between the MCDU and the PFPs,
+because the screens are identical; lamps and keys belong to each model; the
+three names of one model follow each other as the MCDU's do. See the PFP
+section in [PROTOCOL.md](PROTOCOL.md).
+
+- **A display map no longer carries a part id.** `devices.json` already says
+  which part carries each screen (`display` on the part), and live writes
+  always took the part id from there, so the map's own `part_id` only fed
+  `mcdu-test` and an invariant. Removed from `Display` and the three maps;
+  `mcdu-test` now finds the part from `--pid` in `devices.json`, so it
+  works on a PFP too. That is what lets four parts share `MCDU`, and so its
+  pages, with no compatibility table.
+- **`same_hardware` compares keys too.** The PFP-3N, PFP-7 and PFP-4 have the
+  same five lamps, so on lamps and screen alone they counted as one panel and
+  could follow each other. `the_cdus_share_a_screen_and_nothing_else` pins
+  the rule.
+- **31px fonts on the PFP for now.** Its glass fits 32px, which the bridge
+  uses to line rows up with the keys; that needs a per-part glyph height and
+  32px copies of every font, and cannot be checked without a panel.
+- **Every default** has the PFP rows (dimmers copied from the MCDU's seat,
+  indicators blank), the MCDU's slots on each PFP name, Co-Pilot and
+  Observer following their own Captain, and no-aircraft disabling them. Held
+  out of the feature commit, per the defaults rule.
 
 **Built and flown 2026-09-23: page swapping and the Settings dialog, on
 `feature/mcdu-page-selection-inputs`.** The design is "Swapping" under "MCDU

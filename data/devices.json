@@ -939,6 +939,4833 @@
       "_notes": [
         "The same hardware as MCDU_Captain under its OBSERVER name, PID 0xbb3a. See that entry's notes for the rename, the lamps and the screen."
       ]
+    },
+    {
+      "key": "PFP3N_Captain",
+      "display_name": "PFP-3N Captain",
+      "protocol": "wctrl",
+      "usb_pid": 47925,
+      "parts": [
+        {
+          "part_id": 47921,
+          "name": "PFP-3N",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-3N's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "CLB",
+          "label": "CLB",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "CRZ",
+          "label": "CRZ",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "DES",
+          "label": "DES",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "N1_LIMIT",
+          "label": "N1 LIMIT",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "One physical PFP-3N, three possible identities, as the MCDU has: CAPTAIN 0xbb35, CO-PILOT 0xbb3d, OBSERVER 0xbb39. Same part 0xbb31 under every name, so this entry, PFP3N_CoPilot and PFP3N_Observer differ only in PID and name. None of this has been seen on a panel here: PIDs, part, lamps, keys and screen are all WwDevicesDotnet's (BSD-3), whose PFP support other users have confirmed working.",
+        "The part id is the library's command prefix read as a part id, the way the MCDU's prefix 32 bb is part 0xbb32. It is what every write goes to.",
+        "The screen is the MCDU's: the same 24x14 grid on report 0xf2 and the same font upload, so a page made for the MCDU shows here too. The PFP's glass is 6mm taller and fits 32px glyphs; the MCDU's 31px fonts are used for now, so rows sit slightly above their line select keys toward the bottom.",
+        "Lamps and keys are not the MCDU's. Indices 3 to 7 are this family's indicators, and the keys are from the library's Winctrl/Pfp3N/KeyboardMap.cs, numbered the way the MCDU's are: byte 1 bit 0 is button 1. The page keys are LSK 1L to 6L, one per slot.",
+        "The Boeing 737 NG unit. WwDevicesDotnet's author never had one, so its support there is provisional, but its command prefix 31 bb comes from a USB capture of SimAppPro driving one. Lamp names are the library's."
+      ]
+    },
+    {
+      "key": "PFP3N_CoPilot",
+      "display_name": "PFP-3N Co-Pilot",
+      "protocol": "wctrl",
+      "usb_pid": 47933,
+      "parts": [
+        {
+          "part_id": 47921,
+          "name": "PFP-3N",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-3N's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "CLB",
+          "label": "CLB",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "CRZ",
+          "label": "CRZ",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "DES",
+          "label": "DES",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "N1_LIMIT",
+          "label": "N1 LIMIT",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "The same hardware as PFP3N_Captain under its CO-PILOT name, PID 0xbb3d. See that entry's notes."
+      ]
+    },
+    {
+      "key": "PFP3N_Observer",
+      "display_name": "PFP-3N Observer",
+      "protocol": "wctrl",
+      "usb_pid": 47929,
+      "parts": [
+        {
+          "part_id": 47921,
+          "name": "PFP-3N",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-3N's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "CLB",
+          "label": "CLB",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "CRZ",
+          "label": "CRZ",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "DES",
+          "label": "DES",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "N1_LIMIT",
+          "label": "N1 LIMIT",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "The same hardware as PFP3N_Captain under its OBSERVER name, PID 0xbb39. See that entry's notes."
+      ]
+    },
+    {
+      "key": "PFP7_Captain",
+      "display_name": "PFP-7 Captain",
+      "protocol": "wctrl",
+      "usb_pid": 47927,
+      "parts": [
+        {
+          "part_id": 47923,
+          "name": "PFP-7",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-7's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "ALTN",
+          "label": "ALTN",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "VNAV",
+          "label": "VNAV",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "FMC_COMM",
+          "label": "FMC COMM",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "NAV_RAD",
+          "label": "NAV RAD",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "One physical PFP-7, three possible identities, as the MCDU has: CAPTAIN 0xbb37, CO-PILOT 0xbb3f, OBSERVER 0xbb3b. Same part 0xbb33 under every name, so this entry, PFP7_CoPilot and PFP7_Observer differ only in PID and name. None of this has been seen on a panel here: PIDs, part, lamps, keys and screen are all WwDevicesDotnet's (BSD-3), whose PFP support other users have confirmed working.",
+        "The part id is the library's command prefix read as a part id, the way the MCDU's prefix 32 bb is part 0xbb32. It is what every write goes to.",
+        "The screen is the MCDU's: the same 24x14 grid on report 0xf2 and the same font upload, so a page made for the MCDU shows here too. The PFP's glass is 6mm taller and fits 32px glyphs; the MCDU's 31px fonts are used for now, so rows sit slightly above their line select keys toward the bottom.",
+        "Lamps and keys are not the MCDU's. Indices 3 to 7 are this family's indicators, and the keys are from the library's Winctrl/Pfp7/KeyboardMap.cs, numbered the way the MCDU's are: byte 1 bit 0 is button 1. The page keys are LSK 1L to 6L, one per slot.",
+        "The Boeing 777 unit. Its keys are the PFP-4's but for ALTN where the PFP-4 has ATC."
+      ]
+    },
+    {
+      "key": "PFP7_CoPilot",
+      "display_name": "PFP-7 Co-Pilot",
+      "protocol": "wctrl",
+      "usb_pid": 47935,
+      "parts": [
+        {
+          "part_id": 47923,
+          "name": "PFP-7",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-7's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "ALTN",
+          "label": "ALTN",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "VNAV",
+          "label": "VNAV",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "FMC_COMM",
+          "label": "FMC COMM",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "NAV_RAD",
+          "label": "NAV RAD",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "The same hardware as PFP7_Captain under its CO-PILOT name, PID 0xbb3f. See that entry's notes."
+      ]
+    },
+    {
+      "key": "PFP7_Observer",
+      "display_name": "PFP-7 Observer",
+      "protocol": "wctrl",
+      "usb_pid": 47931,
+      "parts": [
+        {
+          "part_id": 47923,
+          "name": "PFP-7",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-7's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "ALTN",
+          "label": "ALTN",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "VNAV",
+          "label": "VNAV",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "FMC_COMM",
+          "label": "FMC COMM",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "NAV_RAD",
+          "label": "NAV RAD",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "The same hardware as PFP7_Captain under its OBSERVER name, PID 0xbb3b. See that entry's notes."
+      ]
+    },
+    {
+      "key": "PFP4_Captain",
+      "display_name": "PFP-4 Captain",
+      "protocol": "wctrl",
+      "usb_pid": 47928,
+      "parts": [
+        {
+          "part_id": 47924,
+          "name": "PFP-4",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-4's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "ATC",
+          "label": "ATC",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "VNAV",
+          "label": "VNAV",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "FMC_COMM",
+          "label": "FMC COMM",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "NAV_RAD",
+          "label": "NAV RAD",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "One physical PFP-4, three possible identities, as the MCDU has: CAPTAIN 0xbb38, CO-PILOT 0xbb40, OBSERVER 0xbb3c. Same part 0xbb34 under every name, so this entry, PFP4_CoPilot and PFP4_Observer differ only in PID and name. None of this has been seen on a panel here: PIDs, part, lamps, keys and screen are all WwDevicesDotnet's (BSD-3), whose PFP support other users have confirmed working.",
+        "The part id is the library's command prefix read as a part id, the way the MCDU's prefix 32 bb is part 0xbb32. It is what every write goes to.",
+        "The screen is the MCDU's: the same 24x14 grid on report 0xf2 and the same font upload, so a page made for the MCDU shows here too. The PFP's glass is 6mm taller and fits 32px glyphs; the MCDU's 31px fonts are used for now, so rows sit slightly above their line select keys toward the bottom.",
+        "Lamps and keys are not the MCDU's. Indices 3 to 7 are this family's indicators, and the keys are from the library's Winctrl/Pfp4/KeyboardMap.cs, numbered the way the MCDU's are: byte 1 bit 0 is button 1. The page keys are LSK 1L to 6L, one per slot.",
+        "The Boeing 747 unit. WwDevicesDotnet lists its three PIDs but does not say which seat SimAppPro gives each; they are paired here by the pattern every other CDU follows (Observer +4, Co-Pilot +8)."
+      ]
+    },
+    {
+      "key": "PFP4_CoPilot",
+      "display_name": "PFP-4 Co-Pilot",
+      "protocol": "wctrl",
+      "usb_pid": 47936,
+      "parts": [
+        {
+          "part_id": 47924,
+          "name": "PFP-4",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-4's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "ATC",
+          "label": "ATC",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "VNAV",
+          "label": "VNAV",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "FMC_COMM",
+          "label": "FMC COMM",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "NAV_RAD",
+          "label": "NAV RAD",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "The same hardware as PFP4_Captain under its CO-PILOT name, PID 0xbb40. See that entry's notes."
+      ]
+    },
+    {
+      "key": "PFP4_Observer",
+      "display_name": "PFP-4 Observer",
+      "protocol": "wctrl",
+      "usb_pid": 47932,
+      "parts": [
+        {
+          "part_id": 47924,
+          "name": "PFP-4",
+          "display": "MCDU",
+          "leds": [
+            {
+              "index": 0,
+              "name": "Backlight",
+              "label": "Key backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "backlight": true,
+              "note": "The keyboard backlight. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 1,
+              "name": "Screen_Backlight",
+              "label": "Screen backlight",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "lights_display": true,
+              "note": "Sets the screen's brightness, as on the MCDU: bound like any lamp, but it lights only while a profile puts fields on the screen and is 0 when nothing is drawn there. Every default holds it at full. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 2,
+              "name": "Marker_Light",
+              "label": "Indicator brightness",
+              "kind": "dimmer",
+              "max": 255,
+              "verified": false,
+              "governs": [
+                "DSPY",
+                "FAIL",
+                "MSG",
+                "OFST",
+                "EXEC"
+              ],
+              "note": "The gate for the PFP-4's five indicators, as on the MCDU: at 0 none of them is visible. Index from WwDevicesDotnet (Winctrl/README.md), which drives it on every Winwing CDU; not yet seen on a panel here."
+            },
+            {
+              "index": 3,
+              "name": "DSPY",
+              "label": "DSPY",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 4,
+              "name": "FAIL",
+              "label": "FAIL",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 5,
+              "name": "MSG",
+              "label": "MSG",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 6,
+              "name": "OFST",
+              "label": "OFST",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            },
+            {
+              "index": 7,
+              "name": "EXEC",
+              "label": "EXEC",
+              "kind": "indicator",
+              "max": 1,
+              "on_value": 1,
+              "verified": false
+            }
+          ]
+        }
+      ],
+      "buttons": [
+        {
+          "number": 1,
+          "name": "LSK_1L",
+          "label": "LSK 1L",
+          "verified": false
+        },
+        {
+          "number": 2,
+          "name": "LSK_2L",
+          "label": "LSK 2L",
+          "verified": false
+        },
+        {
+          "number": 3,
+          "name": "LSK_3L",
+          "label": "LSK 3L",
+          "verified": false
+        },
+        {
+          "number": 4,
+          "name": "LSK_4L",
+          "label": "LSK 4L",
+          "verified": false
+        },
+        {
+          "number": 5,
+          "name": "LSK_5L",
+          "label": "LSK 5L",
+          "verified": false
+        },
+        {
+          "number": 6,
+          "name": "LSK_6L",
+          "label": "LSK 6L",
+          "verified": false
+        },
+        {
+          "number": 7,
+          "name": "LSK_1R",
+          "label": "LSK 1R",
+          "verified": false
+        },
+        {
+          "number": 8,
+          "name": "LSK_2R",
+          "label": "LSK 2R",
+          "verified": false
+        },
+        {
+          "number": 9,
+          "name": "LSK_3R",
+          "label": "LSK 3R",
+          "verified": false
+        },
+        {
+          "number": 10,
+          "name": "LSK_4R",
+          "label": "LSK 4R",
+          "verified": false
+        },
+        {
+          "number": 11,
+          "name": "LSK_5R",
+          "label": "LSK 5R",
+          "verified": false
+        },
+        {
+          "number": 12,
+          "name": "LSK_6R",
+          "label": "LSK 6R",
+          "verified": false
+        },
+        {
+          "number": 13,
+          "name": "INIT_REF",
+          "label": "INIT REF",
+          "verified": false
+        },
+        {
+          "number": 14,
+          "name": "RTE",
+          "label": "RTE",
+          "verified": false
+        },
+        {
+          "number": 15,
+          "name": "DEP_ARR",
+          "label": "DEP ARR",
+          "verified": false
+        },
+        {
+          "number": 16,
+          "name": "ATC",
+          "label": "ATC",
+          "verified": false
+        },
+        {
+          "number": 17,
+          "name": "VNAV",
+          "label": "VNAV",
+          "verified": false
+        },
+        {
+          "number": 18,
+          "name": "DIM",
+          "label": "DIM",
+          "verified": false
+        },
+        {
+          "number": 19,
+          "name": "BRT",
+          "label": "BRT",
+          "verified": false
+        },
+        {
+          "number": 20,
+          "name": "FIX",
+          "label": "FIX",
+          "verified": false
+        },
+        {
+          "number": 21,
+          "name": "LEGS",
+          "label": "LEGS",
+          "verified": false
+        },
+        {
+          "number": 22,
+          "name": "HOLD",
+          "label": "HOLD",
+          "verified": false
+        },
+        {
+          "number": 23,
+          "name": "FMC_COMM",
+          "label": "FMC COMM",
+          "verified": false
+        },
+        {
+          "number": 24,
+          "name": "PROG",
+          "label": "PROG",
+          "verified": false
+        },
+        {
+          "number": 25,
+          "name": "EXEC",
+          "label": "EXEC",
+          "verified": false
+        },
+        {
+          "number": 26,
+          "name": "MENU",
+          "label": "MENU",
+          "verified": false
+        },
+        {
+          "number": 27,
+          "name": "NAV_RAD",
+          "label": "NAV RAD",
+          "verified": false
+        },
+        {
+          "number": 28,
+          "name": "PREV_PAGE",
+          "label": "PREV PAGE",
+          "verified": false
+        },
+        {
+          "number": 29,
+          "name": "NEXT_PAGE",
+          "label": "NEXT PAGE",
+          "verified": false
+        },
+        {
+          "number": 30,
+          "name": "DIGIT_1",
+          "label": "1",
+          "verified": false
+        },
+        {
+          "number": 31,
+          "name": "DIGIT_2",
+          "label": "2",
+          "verified": false
+        },
+        {
+          "number": 32,
+          "name": "DIGIT_3",
+          "label": "3",
+          "verified": false
+        },
+        {
+          "number": 33,
+          "name": "DIGIT_4",
+          "label": "4",
+          "verified": false
+        },
+        {
+          "number": 34,
+          "name": "DIGIT_5",
+          "label": "5",
+          "verified": false
+        },
+        {
+          "number": 35,
+          "name": "DIGIT_6",
+          "label": "6",
+          "verified": false
+        },
+        {
+          "number": 36,
+          "name": "DIGIT_7",
+          "label": "7",
+          "verified": false
+        },
+        {
+          "number": 37,
+          "name": "DIGIT_8",
+          "label": "8",
+          "verified": false
+        },
+        {
+          "number": 38,
+          "name": "DIGIT_9",
+          "label": "9",
+          "verified": false
+        },
+        {
+          "number": 39,
+          "name": "DOT",
+          "label": ".",
+          "verified": false
+        },
+        {
+          "number": 40,
+          "name": "DIGIT_0",
+          "label": "0",
+          "verified": false
+        },
+        {
+          "number": 41,
+          "name": "PLUS_MINUS",
+          "label": "+/-",
+          "verified": false
+        },
+        {
+          "number": 42,
+          "name": "A",
+          "label": "A",
+          "verified": false
+        },
+        {
+          "number": 43,
+          "name": "B",
+          "label": "B",
+          "verified": false
+        },
+        {
+          "number": 44,
+          "name": "C",
+          "label": "C",
+          "verified": false
+        },
+        {
+          "number": 45,
+          "name": "D",
+          "label": "D",
+          "verified": false
+        },
+        {
+          "number": 46,
+          "name": "E",
+          "label": "E",
+          "verified": false
+        },
+        {
+          "number": 47,
+          "name": "F",
+          "label": "F",
+          "verified": false
+        },
+        {
+          "number": 48,
+          "name": "G",
+          "label": "G",
+          "verified": false
+        },
+        {
+          "number": 49,
+          "name": "H",
+          "label": "H",
+          "verified": false
+        },
+        {
+          "number": 50,
+          "name": "I",
+          "label": "I",
+          "verified": false
+        },
+        {
+          "number": 51,
+          "name": "J",
+          "label": "J",
+          "verified": false
+        },
+        {
+          "number": 52,
+          "name": "K",
+          "label": "K",
+          "verified": false
+        },
+        {
+          "number": 53,
+          "name": "L",
+          "label": "L",
+          "verified": false
+        },
+        {
+          "number": 54,
+          "name": "M",
+          "label": "M",
+          "verified": false
+        },
+        {
+          "number": 55,
+          "name": "N",
+          "label": "N",
+          "verified": false
+        },
+        {
+          "number": 56,
+          "name": "O",
+          "label": "O",
+          "verified": false
+        },
+        {
+          "number": 57,
+          "name": "P",
+          "label": "P",
+          "verified": false
+        },
+        {
+          "number": 58,
+          "name": "Q",
+          "label": "Q",
+          "verified": false
+        },
+        {
+          "number": 59,
+          "name": "R",
+          "label": "R",
+          "verified": false
+        },
+        {
+          "number": 60,
+          "name": "S",
+          "label": "S",
+          "verified": false
+        },
+        {
+          "number": 61,
+          "name": "T",
+          "label": "T",
+          "verified": false
+        },
+        {
+          "number": 62,
+          "name": "U",
+          "label": "U",
+          "verified": false
+        },
+        {
+          "number": 63,
+          "name": "V",
+          "label": "V",
+          "verified": false
+        },
+        {
+          "number": 64,
+          "name": "W",
+          "label": "W",
+          "verified": false
+        },
+        {
+          "number": 65,
+          "name": "X",
+          "label": "X",
+          "verified": false
+        },
+        {
+          "number": 66,
+          "name": "Y",
+          "label": "Y",
+          "verified": false
+        },
+        {
+          "number": 67,
+          "name": "Z",
+          "label": "Z",
+          "verified": false
+        },
+        {
+          "number": 68,
+          "name": "SP",
+          "label": "SP",
+          "verified": false
+        },
+        {
+          "number": 69,
+          "name": "DEL",
+          "label": "DEL",
+          "verified": false
+        },
+        {
+          "number": 70,
+          "name": "SLASH",
+          "label": "/",
+          "verified": false
+        },
+        {
+          "number": 71,
+          "name": "CLR",
+          "label": "CLR",
+          "verified": false
+        }
+      ],
+      "page_keys": [
+        "LSK_1L",
+        "LSK_2L",
+        "LSK_3L",
+        "LSK_4L",
+        "LSK_5L",
+        "LSK_6L"
+      ],
+      "_notes": [
+        "The same hardware as PFP4_Captain under its OBSERVER name, PID 0xbb3c. See that entry's notes."
+      ]
     }
   ],
   "_persisted_brightness": {

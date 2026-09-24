@@ -62,6 +62,15 @@ unless this says what moved.
   list, it is left alone, and the update log says what the release moved, so
   a Reset brings the split when you want it.
 
+### Fixed
+
+- **An inactive panel no longer keeps the last aircraft's state.** Switching
+  from an aircraft that drives a panel to one where it is inactive, such as
+  the F-16 to the Hornet with the ICP, used to leave the ICP's lamps and DED
+  showing the F-16. Now whatever the converter lit there is turned off and
+  the screen cleared when the new aircraft loads, or when you turn "drive
+  this panel" off. A panel the converter never drove is still left alone.
+
 ### Breaking
 
 - **A profile with fields of its own on the UFC or the DED no longer loads.**

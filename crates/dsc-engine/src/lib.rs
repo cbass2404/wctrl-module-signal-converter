@@ -278,8 +278,11 @@ impl Engine {
         }
 
         let mut writes = self.sweep();
-        let (lamps, lcd) = self.paint();
+        let (lamps, mut lcd) = self.paint();
         writes.extend(lamps);
+        let (released, blanked) = self.release_undriven();
+        writes.extend(released);
+        lcd.extend(blanked);
         Batch {
             cause: Cause::ProfileReload,
             writes,
@@ -406,8 +409,11 @@ impl Engine {
             if quiet_for >= self.settle_quiet || waited >= self.settle_max {
                 self.pending = None;
                 let mut writes = self.sweep();
-                let (lamps, lcd) = self.paint();
+                let (lamps, mut lcd) = self.paint();
                 writes.extend(lamps);
+                let (released, blanked) = self.release_undriven();
+                writes.extend(released);
+                lcd.extend(blanked);
                 return Batch {
                     cause: Cause::ModuleLoad,
                     writes,
@@ -656,8 +662,60 @@ impl Engine {
 
     /// Blank every display we have driven, for shutdown and mission end.
     fn blank_displays(&mut self) -> Vec<LcdWrite> {
+        self.blank_screens(|_| true)
+    }
+
+    /// Take back what we left on the panels the active profile does not
+    /// drive, after a sweep.
+    ///
+    /// A disabled device is left alone as far as anyone else's settings go,
+    /// but what the last aircraft put on it is ours. Left latched, it shows
+    /// that aircraft's lamps and page under this one. So every lamp we lit
+    /// there goes to zero and every screen we drew is blanked, as `shutdown`
+    /// does for the lot. A device we never wrote is still never touched.
+    ///
+    /// With no profile for this aircraft nothing is driven, and the same goes
+    /// for every panel: the sweep has already darkened the ordinary lamps, and
+    /// this takes the screens and the lamps that light them.
+    fn release_undriven(&mut self) -> (Vec<LedWrite>, Vec<LcdWrite>) {
+        let profile = self.active.map(|i| &self.profiles[i]);
+        let undriven: HashSet<String> = self
+            .shadow
+            .keys()
+            .map(|id| &id.device)
+            .chain(self.screens.keys().map(|(d, _)| d))
+            .filter(|d| !profile.is_some_and(|p| p.drives(d)))
+            .cloned()
+            .collect();
+        if undriven.is_empty() {
+            return (Vec::new(), Vec::new());
+        }
+
+        let mut ids: Vec<LedId> = self
+            .shadow
+            .iter()
+            .filter(|(id, v)| **v != 0 && undriven.contains(&id.device))
+            .map(|(id, _)| id.clone())
+            .collect();
+        ids.sort_by(|a, b| {
+            (&a.device, a.part_id, a.index).cmp(&(&b.device, b.part_id, b.index))
+        });
+        let mut writes = Vec::with_capacity(ids.len());
+        for id in ids {
+            self.shadow.insert(id.clone(), 0);
+            writes.push(LedWrite { id, value: 0 });
+        }
+        let lcd = self.blank_screens(|d| undriven.contains(d));
+        (writes, lcd)
+    }
+
+    /// Blank the displays we have driven on the devices `which` picks, and
+    /// forget them, so driving one again paints it in full.
+    fn blank_screens(&mut self, which: impl Fn(&str) -> bool) -> Vec<LcdWrite> {
         let mut out = Vec::new();
-        let ids: Vec<(String, String)> = self.screens.keys().cloned().collect();
+        let mut ids: Vec<(String, String)> =
+            self.screens.keys().filter(|(d, _)| which(d)).cloned().collect();
+        ids.sort();
         for id in ids {
             let Some(map) = self.displays.get(&id.1) else {
                 continue;
@@ -801,6 +859,7 @@ impl Engine {
     /// A disabled device contributes nothing, so the sweep does not zero it.
     /// That is the whole difference between disabling a device and binding
     /// nothing on it: one is left alone, the other is deliberately darkened.
+    /// Only what we lit on it ourselves is taken back, by `release_undriven`.
     fn all_leds(&self) -> Vec<LedId> {
         let mut out = Vec::new();
         let profile = self.active.map(|i| &self.profiles[i]);

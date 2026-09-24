@@ -1336,9 +1336,10 @@ impl Profile {
 
     /// Whether this profile drives a device at all.
     ///
-    /// A disabled device keeps whatever was last written to it, because panel
-    /// state latches on this hardware. That is the point: it is hidden, and
-    /// leaving its backlight where the user set it beats zeroing it.
+    /// A disabled device keeps whatever someone else last wrote to it, because
+    /// panel state latches on this hardware. That is the point: it is hidden,
+    /// and leaving its backlight where the user set it beats zeroing it. What
+    /// the engine itself lit there for an earlier aircraft is taken back.
     pub fn drives(&self, device: &str) -> bool {
         !self.disabled_devices.iter().any(|d| d == device)
     }

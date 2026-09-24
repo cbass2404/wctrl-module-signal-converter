@@ -1,4 +1,5 @@
-//! A panel a profile does not drive is never written, by any path.
+//! A panel a profile does not drive is never written, by any path, beyond
+//! taking back what an earlier aircraft left on it.
 //!
 //! The ICP and UFC share a swing arm, so whichever is in use hides the other,
 //! and a profile turns one off. Its lamps and fields stay in the profile, so
@@ -88,4 +89,67 @@ fn a_disabled_ufc_is_never_written() {
         !touches_ufc(&batches),
         "nothing may reach a panel the profile does not drive: {batches:?}"
     );
+}
+
+/// The Hornet's rows under another aircraft's name, with the UFC turned off:
+/// the Viper's case, where the ICP swings in and the UFC swings out.
+fn other() -> Profile {
+    let mut p = Profile::load(&r("crates/dsc-engine/tests/fixtures/fa-18.json")).expect("hornet");
+    p.name = "Other".into();
+    p.aircraft = vec!["OTHER".into()];
+    p.disabled_devices.push(UFC.into());
+    p
+}
+
+fn ufc_lamps_lit(batch: &Batch) -> bool {
+    batch.writes.iter().any(|w| w.id.device == UFC && w.value != 0)
+}
+
+#[test]
+fn switching_to_an_aircraft_without_the_ufc_takes_back_what_the_last_one_lit() {
+    let mut e = engine(true);
+    let hornet = Profile::load(&r("crates/dsc-engine/tests/fixtures/fa-18.json")).expect("hornet");
+    e.set_profiles(vec![hornet, other()]);
+    let t0 = Instant::now();
+    let mut writes = text_at(0, "FA-18C_hornet\0\0\0\0\0\0\0\0\0\0\0");
+    writes.extend(text_at(29746, "GRCV"));
+    e.ingest(&writes, t0);
+    let hornet = e.tick(t0 + Duration::from_secs(5));
+    assert!(ufc_lamps_lit(&hornet) && hornet.lcd.iter().any(|w| w.device == UFC));
+
+    let t1 = t0 + Duration::from_secs(10);
+    e.ingest(&text_at(0, "OTHER\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"), t1);
+    let swap = e.tick(t1 + Duration::from_secs(5));
+    let ufc: Vec<_> = swap.writes.iter().filter(|w| w.id.device == UFC).collect();
+    assert!(!ufc.is_empty(), "the UFC's lamps are taken back: {swap:?}");
+    assert!(ufc.iter().all(|w| w.value == 0), "and only ever to zero: {ufc:?}");
+    assert!(
+        swap.lcd.iter().any(|w| w.device == UFC && w.bytes.iter().all(|b| *b == 0)),
+        "the Hornet's page is wiped off the glass"
+    );
+
+    // Taken back once, then left alone like any disabled panel.
+    let later = e.ingest(&text_at(29746, "SQCH"), t1 + Duration::from_secs(6));
+    assert!(!touches_ufc(&[later]));
+}
+
+#[test]
+fn disabling_the_ufc_in_the_editor_takes_back_what_it_showed() {
+    let mut e = engine(true);
+    let batches = fly_without_ending(&mut e);
+    assert!(touches_ufc(&batches));
+
+    let mut hornet = e.active_profile().cloned().expect("hornet");
+    hornet.disabled_devices.push(UFC.into());
+    let reload = e.set_profiles(vec![hornet]);
+    assert!(reload.writes.iter().any(|w| w.id.device == UFC));
+    assert!(!ufc_lamps_lit(&reload), "{reload:?}");
+    assert!(reload.lcd.iter().any(|w| w.device == UFC));
+}
+
+fn fly_without_ending(e: &mut Engine) -> Vec<Batch> {
+    let t0 = Instant::now();
+    let mut writes = text_at(0, "FA-18C_hornet\0\0\0\0\0\0\0\0\0\0\0");
+    writes.extend(text_at(29746, "GRCV"));
+    vec![e.ingest(&writes, t0), e.tick(t0 + Duration::from_secs(5))]
 }

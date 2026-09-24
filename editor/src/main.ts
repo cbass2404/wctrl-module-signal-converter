@@ -569,12 +569,8 @@ async function showLibrary(): Promise<void> {
         );
 
     const actions = el("div", { class: "actions" });
-    if (!row.error) {
-      const edit = el("button", {}, "Edit");
-      edit.addEventListener("click", () => void showProfile(row.file));
-      actions.append(edit);
-    }
-    // Everything but Edit is used rarely enough to wait behind one button.
+    // Everything but opening the profile is used rarely enough to wait
+    // behind one button.
     const more: MenuItem[] = [];
     if (!row.error) {
       more.push(
@@ -600,6 +596,22 @@ async function showLibrary(): Promise<void> {
     if (more.length > 0) actions.append(...actionMenu(`More for ${row.name}`, more));
 
     const item = el("li", {}, el("div", { class: "grow" }, el("strong", {}, row.name), el("br"), meta), actions);
+    // The row itself opens the profile. Clicks in the menu, which sits inside
+    // the row, are its own; a profile that will not load has nothing to open.
+    if (!row.error) {
+      item.classList.add("open");
+      item.tabIndex = 0;
+      item.title = `Open ${row.name}`;
+      item.addEventListener("click", (e) => {
+        if (!actions.contains(e.target as Node)) void showProfile(row.file);
+      });
+      item.addEventListener("keydown", (e) => {
+        if (e.target === item && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          void showProfile(row.file);
+        }
+      });
+    }
     shown.push([row, item]);
     list.append(item);
   }

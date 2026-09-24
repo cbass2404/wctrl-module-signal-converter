@@ -32,9 +32,9 @@ unless this says what moved.
   alone can be read to see how it was set up, and one not plugged in can
   still be set up. Plugging a panel in or pulling it out while the page is
   open moves it to its group within a couple of seconds, keeping your edits.
-- **A tidier profile list.** Each profile row keeps its Edit button, and
-  Copy to..., Export..., Merge from..., Reset and Delete move into a menu
-  under the ⋯ button beside it.
+- **A tidier profile list.** Click a profile's row to open it; the Edit
+  button is gone. Copy to..., Export..., Merge from..., Reset and Delete move
+  into a menu under the ⋯ button at the end of the row.
 - **A guide to the profile language.** The **?** beside New profile, and
   beside Save in a profile, opens a page explaining every test, alternative,
   reading, piece and page slot, with examples to try and a dictionary of

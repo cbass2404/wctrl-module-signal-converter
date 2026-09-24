@@ -372,6 +372,19 @@ ul.profiles li {
   background: var(--panel);
 }
 
+ul.profiles li.open {
+  cursor: pointer;
+}
+
+ul.profiles li.open:hover {
+  border-color: var(--muted);
+}
+
+ul.profiles li.open:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
 ul.profiles li[hidden] {
   display: none;
 }

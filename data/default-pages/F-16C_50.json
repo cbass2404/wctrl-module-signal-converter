@@ -352,6 +352,39 @@
           "note": "pitch is read in 0.5g's with + equaling nose up and - equaling nose down per dot\nroll is read in 1.0 degrees/second increments per dot - equaling right wing down + equaling left wing down per dot\nyaw is read in 0.5 degrees deflection per dot with left yaw equaling - and right yaw equaling + per dot"
         }
       ]
+    },
+    {
+      "id": "f16-ded",
+      "name": "DED",
+      "display": "DED",
+      "fields": [
+        {
+          "cells": "0-23",
+          "source": "DED_L1",
+          "format": "DED_L1_FORMAT",
+          "note": "One DCS-BIOS line per DED line, 24 characters for 24 cells. The format line marks the highlighted field, drawn inverse."
+        },
+        {
+          "cells": "24-47",
+          "source": "DED_L2",
+          "format": "DED_L2_FORMAT"
+        },
+        {
+          "cells": "48-71",
+          "source": "DED_L3",
+          "format": "DED_L3_FORMAT"
+        },
+        {
+          "cells": "72-95",
+          "source": "DED_L4",
+          "format": "DED_L4_FORMAT"
+        },
+        {
+          "cells": "96-119",
+          "source": "DED_L5",
+          "format": "DED_L5_FORMAT"
+        }
+      ]
     }
   ]
 }

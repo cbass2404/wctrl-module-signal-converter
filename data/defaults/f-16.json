@@ -458,44 +458,6 @@
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
-  "readouts": [
-    {
-      "device": "ViperAce_ICP",
-      "display": "DED",
-      "cells": "0-23",
-      "source": "DED_L1",
-      "format": "DED_L1_FORMAT",
-      "note": "One DCS-BIOS line per DED line, 24 characters for 24 cells. The format line marks the highlighted field, drawn inverse."
-    },
-    {
-      "device": "ViperAce_ICP",
-      "display": "DED",
-      "cells": "24-47",
-      "source": "DED_L2",
-      "format": "DED_L2_FORMAT"
-    },
-    {
-      "device": "ViperAce_ICP",
-      "display": "DED",
-      "cells": "48-71",
-      "source": "DED_L3",
-      "format": "DED_L3_FORMAT"
-    },
-    {
-      "device": "ViperAce_ICP",
-      "display": "DED",
-      "cells": "72-95",
-      "source": "DED_L4",
-      "format": "DED_L4_FORMAT"
-    },
-    {
-      "device": "ViperAce_ICP",
-      "display": "DED",
-      "cells": "96-119",
-      "source": "DED_L5",
-      "format": "DED_L5_FORMAT"
-    }
-  ],
   "disabled_devices": [
     "CarrierAce_UFC"
   ],
@@ -506,6 +468,20 @@
     "MCDU_Observer": "MCDU_Captain"
   },
   "screens": {
+    "CarrierAce_UFC": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
     "MCDU_Captain": {
       "start": 1,
       "slots": [
@@ -513,7 +489,10 @@
           "page": "f16-flight",
           "key": null
         },
-        null,
+        {
+          "page": null,
+          "key": null
+        },
         null,
         null,
         null,
@@ -542,6 +521,23 @@
           "key": null
         },
         null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "ViperAce_ICP": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "f16-ded",
+          "key": null
+        },
+        {
+          "page": null,
+          "key": null
+        },
         null,
         null,
         null,

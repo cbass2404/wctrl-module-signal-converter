@@ -419,6 +419,20 @@
     "MCDU_Observer": "MCDU_Captain"
   },
   "screens": {
+    "CarrierAce_UFC": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
     "MCDU_Captain": {
       "start": 1,
       "slots": [
@@ -426,7 +440,10 @@
           "page": "ch47f-cdu",
           "key": null
         },
-        null,
+        {
+          "page": null,
+          "key": null
+        },
         null,
         null,
         null,
@@ -452,6 +469,20 @@
       "slots": [
         {
           "page": "ch47f-cdu",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "ViperAce_ICP": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
           "key": null
         },
         null,

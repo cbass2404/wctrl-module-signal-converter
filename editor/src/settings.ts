@@ -1,7 +1,7 @@
 // The Settings dialog, behind the gear on the Profiles page.
 //
 // What belongs to the PC rather than to any profile: the window's theme and
-// the key held to swap MCDU pages, both kept in settings.json, and the two
+// the key held to swap pages, both kept in settings.json, and the two
 // things on this page that are not about one profile, Import and Manage
 // Converter, moved here to keep the header short. Laid out like converter.ts.
 
@@ -109,11 +109,11 @@ function open(current: Settings, problem: string | null | undefined, resolve: (e
   dialog.append(themeField);
 
   const [modifierField, modifier] = choice<PageModifier>(
-    "MCDU page keys",
+    "Page keys",
     [
-      ["ctrl", "Ctrl + line select key"],
-      ["shift", "Shift + line select key"],
-      ["alt", "Alt + line select key"],
+      ["ctrl", "Ctrl + page key"],
+      ["shift", "Shift + page key"],
+      ["alt", "Alt + page key"],
     ],
     settings.page_modifier,
   );

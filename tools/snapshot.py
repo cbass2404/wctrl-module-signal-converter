@@ -5,7 +5,7 @@
   python tools/snapshot.py            refresh them from what ships now
 
 Two pairs, handled alike: data/defaults into data/defaults-previous, and the
-MCDU pages, data/default-pages into data/default-pages-previous. An update
+pages, data/default-pages into data/default-pages-previous. An update
 reconciles the profiles and the pages apart, each against its own snapshot.
 
 A release step, run by tools/release.cmd at both ends. The daemon corrects a

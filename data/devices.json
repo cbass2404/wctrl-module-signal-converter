@@ -307,6 +307,15 @@
           ]
         }
       ],
+      "buttons": [
+        { "number": 20, "name": "A_P", "label": "A/P", "verified": true },
+        { "number": 21, "name": "IFF", "label": "IFF", "verified": true },
+        { "number": 22, "name": "TCN", "label": "TCN", "verified": true },
+        { "number": 23, "name": "ILS", "label": "ILS", "verified": true },
+        { "number": 24, "name": "D_N", "label": "D/N", "verified": true },
+        { "number": 25, "name": "BCN", "label": "BCN", "verified": true }
+      ],
+      "page_keys": ["A_P", "IFF", "TCN", "ILS", "D_N", "BCN"],
       "_notes": [
         "Verified on hardware 2026-09-17 by capturing SimAppPro driving the panel in a live Hornet mission. All three indices were seen taking values across the 0-255 range (1, 12, 123, 211 on UFC1 index 0; 1, 12, 123, 178 on UFC1 index 1; 2, 25, 251 on HUD1 index 1), which is what makes them dimmers rather than indicators.",
         "One USB interface at PID 0xbede, two parts, both answering a broadcast heartbeat. The UFC and the HUD control panel below it are one physical assembly but separate part ids.",
@@ -314,7 +323,8 @@
         "UFC1 carries a 96-byte segment display driven by SET_LCDS rather than SET_LEDX. Its cell and glyph map is data/displays/ufc1.json.",
         "SimAppPro drives LCDBacklight only from its own slider, never from DCS. INST_PNL_Backlight it drives from DCS only when the user has set that device to sync mode. Neither is a constraint on us; it just means a capture will not show them moving unless the sliders are.",
         "THE DISPLAY LATCHES, verified on hardware 2026-09-17: a pattern written with SET_LCDS was still on the glass minutes later with the writing process exited and no handle open. It must be blanked on mission end and on shutdown exactly as the lamps are. Writing zeros to all 24 groups clears it.",
-        "SET_LCDS is not acknowledged. 24 frames drew 0 replies from the same read window that had just taken an immediate echo from a SET_LEDX write to this device, so a display write cannot be confirmed the way a lamp write can."
+        "SET_LCDS is not acknowledged. 24 frames drew 0 replies from the same read window that had just taken an immediate echo from a SET_LEDX write to this device, so a display write cannot be confirmed the way a lamp write can.",
+        "The keys arrive on a game controller collection (usage page 0x01, usage 0x04), report id 1, 33 bytes, 128 buttons, captured 2026-09-24 with dcs-signal buttons. A/P, IFF, TCN, ILS, D/N and BCN are buttons 20 to 25, bits 3 to 7 of byte 3 and bit 0 of byte 4, and are the page keys, one per slot. Buttons 39, 65, 68, 71, 73, 75, 79 and 82 read down with nothing pressed, switches held in a position, so keys are read by what goes down. Only captured keys are listed."
       ]
     },
     {
@@ -352,12 +362,22 @@
           "display": "DED"
         }
       ],
+      "buttons": [
+        { "number": 1, "name": "COM_1", "label": "COM 1", "verified": true },
+        { "number": 2, "name": "COM_2", "label": "COM 2", "verified": true },
+        { "number": 3, "name": "IFF", "label": "IFF", "verified": true },
+        { "number": 4, "name": "LIST", "label": "LIST", "verified": true },
+        { "number": 5, "name": "A_A", "label": "A-A", "verified": true },
+        { "number": 6, "name": "A_G", "label": "A-G", "verified": true }
+      ],
+      "page_keys": ["COM_1", "COM_2", "IFF", "LIST", "A_A", "A_G"],
       "_notes": [
         "One USB interface at PID 0xbf06 answering as part 0xbf06. It declares 64-byte reports and a second output channel, 0xf0, for the screen.",
         "The DED is a 200x64 pixel screen, not a segment display. Its map is data/displays/ded.json and its protocol is in docs/PROTOCOL.md under \"Driving a pixel display\".",
         "THE SCREEN LATCHES, verified on hardware 2026-09-18: a page stays on the glass after the writing process exits. It must be blanked on mission end and on shutdown exactly as the lamps are.",
         "A PAGE CHANGE FLASHES, observed 2026-09-18: the DED shows a brief full-bright flash between the old page and the new one. SimAppPro driving the same panel does exactly the same, so it is the device, not our writes, and there is nothing to fix.",
-        "The lamp indices are SimAppPro's (www/js/DeviceConfig.js, AllDevice[PIDByName.ICP]): Backlight 0, Screen_Backlight 1. Both verified on hardware 2026-09-18."
+        "The lamp indices are SimAppPro's (www/js/DeviceConfig.js, AllDevice[PIDByName.ICP]): Backlight 0, Screen_Backlight 1. Both verified on hardware 2026-09-18.",
+        "The keys arrive on a game controller collection (usage page 0x01, usage 0x04), report id 1, 64 bytes, 34 buttons, captured 2026-09-24 with dcs-signal buttons. COM 1, COM 2, IFF, LIST, A-A and A-G are bits 0 to 5 of byte 1, buttons 1 to 6, and are the page keys, one per slot. Buttons 27 and 34 read down with nothing pressed, switches held in a position, so keys are read by what goes down. Only captured keys are listed."
       ]
     },
     {

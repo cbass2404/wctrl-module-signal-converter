@@ -44,14 +44,20 @@ fn module(with_seat: bool) -> Module {
     .expect("the fixture module parses")
 }
 
+/// Every screen takes its fields only from a page, so each field here is
+/// marked as a page's, as a resolved start page's fields are.
 fn profile(readouts: &str) -> Profile {
-    serde_json::from_str(&format!(
+    let mut p: Profile = serde_json::from_str(&format!(
         r#"{{
           "schema_version": 2, "name": "T", "aircraft": ["TEST"], "module": "TEST",
           "readouts": [{readouts}]
         }}"#
     ))
-    .expect("the fixture profile parses")
+    .expect("the fixture profile parses");
+    for r in &mut p.readouts {
+        r.page = Some("fixture".into());
+    }
+    p
 }
 
 fn field(source: &str, cells: &str, seat: Option<u32>) -> String {

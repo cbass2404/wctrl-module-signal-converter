@@ -37,6 +37,22 @@ do not.
       offering its pages, and a partial merge from an F-14BU export bringing
       its page slot into the F-14.
 
+- [ ] **Fly pages on the UFC and the ICP.** Built 2026-09-24, checked with
+      the tests and a dry run only. In the F/A-18 (UFC page) and the F-16
+      (DED page): the start page looks as before, a page, a blank and a
+      disabled slot swap as on the MCDU, and the modifier held alone is the
+      only thing that swaps. Then the A-10C CMSC and Mi-24P Radios pages.
+      [STATUS.md](STATUS.md), "Built 2026-09-24: pages on the UFC and the ICP"
+
+- [ ] **Decide on the dead field-reset code.** With every screen on pages,
+      nothing in a profile's own `readouts` is valid, so Reset this field,
+      "+ the field that shipped here", the `shipped` argument of `fieldTable`
+      and line merging in `merge.rs` can no longer be reached. Remove, or
+      give pages a reset of their own.
+
+- [ ] **Site page for UFC and ICP pages.** `docs/index.html` still says pages
+      are the MCDU's; bring it current once flown.
+
 - [ ] **See the pages on the panel.** Fly one aircraft per page file and check
       the MCDU looks as it did before the move: A-10C CDU, AH-64D KU, CH-47F
       CDU, F-14BU CDNU, F-16 Flight, F/A-18 IFEI.

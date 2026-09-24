@@ -237,6 +237,146 @@
           ]
         }
       ]
+    },
+    {
+      "id": "a10c-cmsc",
+      "name": "CMSC",
+      "display": "DED",
+      "fields": [
+        {
+          "cells": "0-23",
+          "content": [
+            {
+              "text": "JMR",
+              "width": 6
+            },
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "text": "CHF  FLR"
+            },
+            {
+              "gap": true,
+              "width": 1
+            },
+            {
+              "text": "MWS"
+            }
+          ]
+        },
+        {
+          "cells": "24-47",
+          "content": [
+            {
+              "source": "CMSC_TXT_JMR",
+              "width": 8
+            },
+            {
+              "gap": true,
+              "width": 1
+            },
+            {
+              "source": "CMSC_TXT_CHAFF_FLARE",
+              "width": 8
+            },
+            {
+              "gap": true,
+              "width": 1
+            },
+            {
+              "source": "CMSC_TXT_MWS",
+              "width": 6
+            }
+          ]
+        },
+        {
+          "cells": "72-95",
+          "content": [
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "source": "CMSC_LAUNCH",
+              "width": 1,
+              "value_aliases": {
+                "0": "",
+                "1": {
+                  "text": " ",
+                  "inverse": true
+                }
+              }
+            },
+            {
+              "gap": true,
+              "width": 9
+            },
+            {
+              "source": "CMSC_PRIO",
+              "width": 1,
+              "value_aliases": {
+                "0": "",
+                "1": {
+                  "text": " ",
+                  "inverse": true
+                }
+              }
+            },
+            {
+              "text": "-RWR-"
+            },
+            {
+              "source": "CMSC_UNKN",
+              "width": 1,
+              "reads": [
+                0.0,
+                1.0
+              ],
+              "value_aliases": {
+                "0": "",
+                "1": {
+                  "text": " ",
+                  "inverse": true
+                }
+              }
+            },
+            {
+              "gap": true
+            }
+          ]
+        },
+        {
+          "cells": "96-119",
+          "content": [
+            {
+              "gap": true,
+              "width": 2
+            },
+            {
+              "text": "ML"
+            },
+            {
+              "gap": true,
+              "width": 8
+            },
+            {
+              "text": "PRI"
+            },
+            {
+              "gap": true,
+              "width": 3
+            },
+            {
+              "text": "UNK"
+            },
+            {
+              "gap": true
+            }
+          ]
+        }
+      ]
     }
   ]
 }

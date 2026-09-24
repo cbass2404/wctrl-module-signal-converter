@@ -2068,7 +2068,7 @@ pub struct Readout {
     /// resolved into fields. Never written: on disk a page field lives in its
     /// page file and a profile's own fields have no page.
     ///
-    /// It is what tells a field a page put on a text grid from one written
+    /// It is what tells a field a page put on a screen from one written
     /// loose on it, which version 2 refuses.
     pub page: Option<String>,
 }

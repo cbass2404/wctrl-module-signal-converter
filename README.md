@@ -218,20 +218,21 @@ A few more things the editor does:
   glass, and can carry a label in the middle naming what it divides. The rule
   and the label each take their own colour. The A-10C and AH-64D profiles ship
   with one.
-- **MCDU pages.** Each MCDU has a slot per left line select key, each showing
-  a page, a blank screen, or nothing. In flight, hold Ctrl and press LSK 1L
-  to 6L to swap the screen to that slot's page. DCS still sees the press, so
-  keep Ctrl with a line select key unbound there, or pick Shift or Alt in
+- **Pages.** Every screen shows pages: the MCDU, the UFC and the ICP's DED
+  each have six slots, each showing a page, a blank screen, or nothing. In
+  flight, hold Ctrl and press a page key to swap the screen to that slot's
+  page: LSK 1L to 6L on the MCDU, A/P, IFF, TCN, ILS, D/N and BCN on the UFC,
+  and COM 1, COM 2, IFF, LIST, A-A and A-G on the ICP. DCS still sees the
+  press, so keep Ctrl with those keys unbound there, or pick Shift or Alt in
   Settings.
 - **Settings**, the gear at the top of the Profiles page, picks the window's
-  theme and the key held to swap MCDU pages, and holds Import profile... and
+  theme and the key held to swap pages, and holds Import profile... and
   Manage Converter.
 - **Manage Converter**, under the gear, is for the rare times the converter
   needs restarting. Saving a profile is not one of them. See below.
-- **Reset** puts a profile back to the shipped one. **Reset this lamp** and
-  **Reset this field** do the same for a single one, and show you what they
-  will reset to before they do. An area whose shipped field you deleted offers
-  it back.
+- **Reset** puts a profile back to the shipped one. **Reset this lamp** does
+  the same for a single lamp, and shows you what it will reset to before it
+  does.
 - **Drive this panel** per panel. Untick it and the profile leaves that panel
   alone entirely, so another program can have it.
 - **Problems** in red stop a save until they are fixed. **Cautions** in yellow are
@@ -253,11 +254,11 @@ its own, but never rewrites a lamp you have changed. When a release fixes a
 shipped lamp, its release notes say so, and you choose whether to reset that lamp
 to pick up the fix.
 
-**Screen fields are the one exception, and only where you have not touched
-them.** A field still exactly as it shipped is corrected for you, so a fix to a
-shipped row arrives without you doing anything. Change a field in any way and it
-is yours: it is left alone, and **Reset this field** is how you take the new one
-if you decide you want it. Delete a shipped field and it stays deleted. The
+**Fields on a shipped page are the one exception, and only where you have not
+touched them.** A field still exactly as it shipped is corrected for you, so a
+fix to a shipped page arrives without you doing anything. Change a field in any
+way and it is yours: it is left alone. Delete a shipped field and it stays
+deleted. The
 release notes name every shipped row that moved either way.
 
 **Uninstalling.** From **Settings → Apps**, like any other program. It removes the
@@ -311,7 +312,8 @@ everything else works, and they come back when you update DCS-BIOS. See
 If SimAppPro is running with "Sync with DCS" on, it can drive the same backlights.
 Turn that off for each panel, or close SimAppPro. In the Hornet and the Viper
 both programs also draw the UFC and the DED; to leave those to SimAppPro, untick
-**drive this panel** for that panel in the profile, or clear its screen fields.
+**drive this panel** for that panel in the profile, or set its page slots to
+Disabled.
 
 **Reporting a bug.** Include the version (`dcs-signal --version`, or the bar at the
 foot of the editor), the aircraft, and this file:

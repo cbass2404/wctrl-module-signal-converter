@@ -1,7 +1,6 @@
-// MCDU pages: which page each of a screen's slots shows, and the page
-// editor.
+// Pages: which page each of a screen's slots shows, and the page editor.
 //
-// A text grid takes every field from a page, and a page belongs to the library
+// A screen takes every field from a page, whatever its glass, and a page belongs to the library
 // for its module rather than to the profile open here. So this section is two
 // things kept apart. The slots are the profile's, and the profile's Save
 // writes them. The page editor opens only when asked, on a page picked or a
@@ -177,7 +176,7 @@ function shownAt(ctx: PageContext, id: string): string[] {
 }
 
 /**
- * One text grid's pages: its slots and which one starts, and the page
+ * One screen's pages: its slots and which one starts, and the page
  * editor when a page has been opened on this screen.
  */
 export function pageSection(device: Device, display: DisplayInfo, ctx: PageContext): HTMLElement {
@@ -189,8 +188,9 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
     const editingHere = book.editing?.device === device.key ? book.editing : null;
     const busy = book.editing !== null;
 
-    // The head names the screen and, where the aircraft has no font of its
-    // own, offers the profile's, since every page here is drawn in it.
+    // The head names the screen and, on a text grid where the aircraft has
+    // no font of its own, offers the profile's, since every page here is
+    // drawn in it.
     const head = el("div", { class: "display-head" }, el("span", { class: "name" }, `${display.key} pages`));
     const start = s.start !== undefined ? s.slots[s.start - 1] : null;
     const startName = !start
@@ -223,17 +223,29 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
     // this profile; which page starts is the one ticked. Disabled and blank
     // differ in what the slot's key does on the panel: nothing, or take the
     // screen dark.
+    // Only pages drawn on this screen: a UFC page means nothing on the MCDU.
+    const here = book.saved
+      .filter((p) => p.display === display.key)
+      .sort((a, b) => a.name.localeCompare(b.name));
     const body = el("tbody");
     const count = slotCount(device);
     for (let i = 0; i < count; i += 1) {
       const slot = s.slots[i] ?? null;
       const choose = el("select", { class: "test" }) as HTMLSelectElement;
       choose.append(el("option", { value: DISABLED }, "Disabled"), el("option", { value: BLANK }, "Blank"));
-      const pages = [...book.saved].sort((a, b) => a.name.localeCompare(b.name));
-      for (const p of pages) choose.append(el("option", { value: p.id }, p.name));
+      for (const p of here) choose.append(el("option", { value: p.id }, p.name));
+      // A slot already pointing somewhere this screen cannot show is kept on
+      // its own line, so the file's mistake is visible rather than hidden.
       const missing = slot?.page ?? null;
-      if (missing !== null && !book.saved.some((p) => p.id === missing)) {
-        choose.append(el("option", { value: missing }, `a page not in the library (${missing})`));
+      if (missing !== null && !here.some((p) => p.id === missing)) {
+        const other = book.saved.find((p) => p.id === missing);
+        choose.append(
+          el(
+            "option",
+            { value: missing },
+            other ? `${other.name}, a page for the ${other.display}` : `a page not in the library (${missing})`,
+          ),
+        );
       }
       choose.value = slot === null ? DISABLED : (slot.page ?? BLANK);
       choose.addEventListener("change", () => {
@@ -286,11 +298,9 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
     // Opening a page, or making one. Held while a page is open anywhere, so
     // an edit cannot be dropped by opening another over it.
     const pick = el("select", { class: "test" }) as HTMLSelectElement;
-    for (const p of [...book.saved].sort((a, b) => a.name.localeCompare(b.name))) {
-      pick.append(el("option", { value: p.id }, p.name));
-    }
+    for (const p of here) pick.append(el("option", { value: p.id }, p.name));
     const startPage = start?.page ?? null;
-    if (startPage !== null && book.saved.some((p) => p.id === startPage)) pick.value = startPage;
+    if (startPage !== null && here.some((p) => p.id === startPage)) pick.value = startPage;
     const open = el("button", { class: "add" }, "Edit page");
     open.addEventListener("click", () => {
       const page = book.saved.find((p) => p.id === pick.value);
@@ -307,7 +317,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
         }
       })();
     });
-    if (book.saved.length === 0) {
+    if (here.length === 0) {
       pick.disabled = true;
       open.setAttribute("disabled", "");
     }

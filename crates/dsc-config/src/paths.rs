@@ -64,7 +64,7 @@ pub struct Paths {
     pub catalogue: PathBuf,
     /// Shipped defaults and the active folder the user edits.
     pub profiles: Profiles,
-    /// Shipped MCDU pages and the library in use, laid out as the profiles.
+    /// Shipped pages and the library in use, laid out as the profiles.
     pub pages: Pages,
     /// The PC's own settings, beside the folders the user writes. Never
     /// shipped, so a missing file is every default.

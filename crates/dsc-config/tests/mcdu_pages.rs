@@ -1,9 +1,9 @@
-//! MCDU pages: slots in a profile pointing into a library kept apart from it.
+//! Pages: slots in a profile pointing into a library kept apart from it.
 //!
 //! What is pinned here is what a profile relies on: that version 1 is refused,
-//! that a text grid takes its fields only from pages, that the start page is
+//! that every screen takes its fields only from pages, that the start page is
 //! what runs, and that a page gone from the library costs a slot rather than
-//! the profile. See docs/CONFIG.md "MCDU pages".
+//! the profile. See docs/CONFIG.md "Pages".
 
 use std::path::Path;
 
@@ -112,12 +112,15 @@ fn a_newer_version_is_refused_too() {
 }
 
 #[test]
-fn a_field_of_the_profiles_own_on_the_mcdu_is_refused() {
-    let p = profile(
-        r#""readouts": [{"device": "MCDU_Captain", "display": "MCDU", "cells": "0-1", "source": "CHAN"}]"#,
-    );
-    let found = problems(&p, &library());
-    assert!(found.iter().any(|e| matches!(e, Error::LooseTextField(..))), "{found:?}");
+fn a_field_of_the_profiles_own_on_any_screen_is_refused() {
+    // The text grid, the segment display and the pixel screen alike.
+    for (device, display) in [("MCDU_Captain", "MCDU"), ("CarrierAce_UFC", "UFC1"), ("ViperAce_ICP", "DED")] {
+        let p = profile(&format!(
+            r#""readouts": [{{"device": "{device}", "display": "{display}", "cells": "0-1", "source": "CHAN"}}]"#
+        ));
+        let found = problems(&p, &library());
+        assert!(found.iter().any(|e| matches!(e, Error::LooseScreenField(..))), "{display}: {found:?}");
+    }
 }
 
 #[test]
@@ -125,6 +128,24 @@ fn slots_pointing_at_the_library_are_a_clean_profile() {
     let mut p = profile("");
     p.screens.insert(CAPTAIN.into(), slots(Some(2), &[Some("aaaaaa"), Some("bbbbbb")]));
     assert!(problems(&p, &library()).is_empty(), "{:?}", problems(&p, &library()));
+}
+
+#[test]
+fn a_slot_shows_only_pages_for_its_own_screen() {
+    // A UFC page in an MCDU slot would draw UFC cells on the MCDU's glass.
+    let mut ufc = page("cccccc", "UFC", Vec::new());
+    ufc.display = "UFC1".into();
+    let mut lib = library();
+    lib.files.get_mut("TEST").unwrap().pages.push(ufc);
+
+    let mut p = profile("");
+    p.screens.insert(CAPTAIN.into(), slots(Some(1), &[Some("cccccc")]));
+    let found = problems(&p, &lib);
+    assert!(found.iter().any(|e| matches!(e, Error::PageOnOtherDisplay(_, 1, _, _))), "{found:?}");
+
+    let mut p = profile("");
+    p.screens.insert("CarrierAce_UFC".into(), slots(Some(1), &[Some("cccccc")]));
+    assert!(problems(&p, &lib).is_empty(), "{:?}", problems(&p, &lib));
 }
 
 #[test]
@@ -229,7 +250,7 @@ fn the_shape_of_the_slots_is_checked() {
 
     let mut p = profile("");
     p.screens.insert("TAKEOFF_PLANEL_2".into(), slots(None, &[]));
-    assert!(problems(&p, &lib).iter().any(|e| matches!(e, Error::SlotsWithoutTextGrid(_))));
+    assert!(problems(&p, &lib).iter().any(|e| matches!(e, Error::SlotsWithoutScreen(_))));
 }
 
 #[test]
@@ -276,9 +297,16 @@ fn a_page_is_checked_on_its_own_before_it_is_saved() {
     let overlap = page("dddddd", "Both", vec![field("0-3", "CHAN"), field("2-5", "CHAN")]);
     assert!(lib.page_problems(&overlap, &m, &devs, &disp).iter().any(|e| matches!(e, Error::CellsOverlap(..))));
 
-    let mut ufc = page("dddddd", "UFC", Vec::new());
-    ufc.display = "UFC1".into();
-    assert!(lib.page_problems(&ufc, &m, &devs, &disp).iter().any(|e| matches!(e, Error::PageNotOnTextGrid(..))));
+    // Every screen takes pages, whatever its glass; only a display nobody
+    // has mapped does not.
+    for display in ["UFC1", "DED"] {
+        let mut other = page("dddddd", "Other", Vec::new());
+        other.display = display.into();
+        assert!(lib.page_problems(&other, &m, &devs, &disp).is_empty(), "{display}");
+    }
+    let mut unknown = page("dddddd", "Nowhere", Vec::new());
+    unknown.display = "NOPE".into();
+    assert!(lib.page_problems(&unknown, &m, &devs, &disp).iter().any(|e| matches!(e, Error::PageOnUnknownDisplay(..))));
 }
 
 #[test]

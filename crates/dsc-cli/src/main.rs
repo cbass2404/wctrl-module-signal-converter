@@ -249,10 +249,10 @@ enum Command {
         /// that is not there yet. Never overwrites one the user already has.
         #[arg(long)]
         defaults: Option<PathBuf>,
-        /// The MCDU page library the profiles' slots point into.
+        /// The page library the profiles' slots point into.
         #[arg(long)]
         pages: Option<PathBuf>,
-        /// Shipped MCDU pages, copied into --pages as the defaults are into
+        /// Shipped pages, copied into --pages as the defaults are into
         /// --profiles.
         #[arg(long)]
         default_pages: Option<PathBuf>,
@@ -1419,7 +1419,7 @@ fn nightly_only(
     for path in paths {
         profiles.push(Profile::load(&path).with_context(|| format!("reading {}", path.display()))?);
     }
-    // The shipped MCDU pages read signals too, and live beside the defaults
+    // The shipped pages read signals too, and live beside the defaults
     // rather than in them. Each module's pages go in as one more profile
     // holding every page's fields, which is all the comparison reads.
     let pages = PageLibrary::load_dir(&defaults.with_file_name("default-pages"));

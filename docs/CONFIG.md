@@ -846,8 +846,10 @@ whose setup it uses.
 
 ## Display fields
 
-A panel with glass carries `readouts` alongside `bindings`. They have almost
-nothing in common: a lamp asks "under what conditions" and resolves to a
+A field says which cells of a screen show what. Fields live on
+[pages](#pages), never loose in a profile, and the slot showing a page supplies
+the device; the examples below name one where it says which screen is meant.
+Fields and lamp bindings have almost nothing in common: a lamp asks "under what conditions" and resolves to a
 brightness, a field asks "which cells, fed by what" and resolves to characters.
 
 ```jsonc
@@ -1329,25 +1331,22 @@ Until the seat is known, a field bound to one stays dark. Guessing would put
 the other station's reading on the glass, which is worse than a blank cell
 because it looks correct.
 
-## MCDU pages
+## Pages
 
-Built 2026-09-23. Profile schema version 2, which every shipped profile
-uses.
+Built 2026-09-23 for the MCDU, and widened to the UFC and the DED
+2026-09-24. Profile schema version 2, which every shipped profile uses.
 
-A page is a named screen's worth of MCDU fields, kept in a library of its own
-rather than in a profile. A profile gives each MCDU a slot per page key
+A page is a named screen's worth of fields, kept in a library of its own
+rather than in a profile. A profile gives each screen a slot per page key
 that points into the library, and says which one shows when a mission
 starts. Pages exist so the screen can be swapped whole, by holding a keyboard
-modifier and pressing a line select key; see "Swapping".
+modifier and pressing one of the panel's page keys; see "Swapping".
 
-**Text grids only, for good.** Pages belong to CDU style screens: the MCDU
-under each of its names, and any other WinWing CDU with the same kind of
-glass, such as a PFP, once it is in `devices.json`. The UFC and the DED keep
-their fields in `readouts`, set up once and not swapped, because a fixed panel
-readout is what they are. The line is drawn by the display map rather than by
-name: a display with `"transport": "text"` takes slots and no other does, so
-the engine never learns the word MCDU and a new CDU qualifies with nothing
-else said.
+**Every screen.** The MCDU's text grid, the UFC's segment display and the
+DED's pixel screen all take pages, and so does any screen a new display map
+adds. A page is drawn on one display, named in the page, and the field checks
+are the ones that display already had. The engine never learns which panel a
+page is on: pages are resolved into ordinary fields before it sees them.
 
 ### A page file
 
@@ -1395,7 +1394,10 @@ and a rename, as profiles are, so only a hand edit can do it.
 id means something only in the catalogue of one module. The F/A-18C and the
 F/A-18E both fly `FA-18C_hornet`, so a page made in one works in the other; an
 F-14 page reads nothing in a Hornet. A slot is offered only pages on the
-profile's module, and `validate` refuses any other. The editor names the
+profile's module, and `validate` refuses any other. Nor does a page cross
+screens: a slot is offered only pages drawn on its own device's display, so
+the UFC's slots list UFC pages and the MCDU's list MCDU pages, and `validate`
+refuses a slot showing a page for a screen its device does not have. The editor names the
 aircraft a page suits from its module, and nothing more is stored.
 
 **A page is checked where it is used, as well as when it is saved.** Cells,
@@ -1439,9 +1441,12 @@ editor shows it on the slot.
 - **`key` is reserved**, and must be null. Swapping did not need it, since
   slot n is always the device's nth page key (see "Swapping"). It stays so
   that giving it a meaning later changes no profile's shape.
-- **No loose MCDU fields.** A field in `readouts` on the MCDU is refused in
-  version 2: everything on that screen comes from a page, so nothing on it
-  has two owners.
+- **No loose fields.** A field in `readouts` on any screen is refused in
+  version 2: everything on a screen comes from a page, so nothing on it has
+  two owners. On the UFC and the DED that came a day after version 2 shipped,
+  before anybody had updated, so there is no migration: a profile with fields
+  of its own there is refused with the reason, and the shipped ones moved
+  onto pages.
 - **Resolved when the engine takes the profile**, the way `follows` is: the
   start page's fields become ordinary display fields on the device, so
   painting, sweeping and resolving never learn about pages. Every other
@@ -1474,7 +1479,7 @@ hand, since saving would write over it.
 - **The screen's section lists its slots and nothing else** until asked:
   each slot's menu reads Disabled, Blank, then the module's pages by name,
   and a tick marks the start slot. **Edit page** opens the page picked beside
-  it in the MCDU field editor that already existed, and **New page** opens an
+  it in the field editor that already existed, and **New page** opens an
   empty one.
 - **A page is saved on its own.** **Save page** checks it, drawn in the open
   profile's font, and writes its module's page file, apart from the profile's
@@ -1563,9 +1568,9 @@ pairs of folders:
   imported profile's slots following it. So does one whose id a page on
   another module has. **A name already taken** gets a number added, which the
   preview shows and can be changed there.
-- **Merge from... offers slots on the MCDU** instead of lines: slot n of the
-  source replaces slot n of the target, and brings its page into the library
-  if it is not there. The UFC and the DED still merge a line at a time.
+- **Merge from... offers slots on every screen** instead of lines: slot n of
+  the source replaces slot n of the target, and brings its page into the
+  library if it is not there.
 - **Version 1 files are refused**, on import and in the active folder, with a
   message saying they were made before pages. There is no migration: the
   testers reset their app data for this release.
@@ -1579,8 +1584,8 @@ with `dcs-signal buttons`, which prints each button a panel reports by the
 number Windows gives it, with the raw report and which of Ctrl, Shift and Alt
 the keyboard held at that moment. It only reads.
 
-- **Hold the modifier and press a page key.** The modifier is Ctrl, Shift or
-  Alt, and Ctrl unless the user picks another. Left and right are the same
+- **Hold the modifier and press a page key.** One modifier for every panel.
+  The modifier is Ctrl, Shift or Alt, and Ctrl unless the user picks another. Left and right are the same
   key: the capture read left and right Ctrl, Shift and Alt each as one.
   Needing the keyboard and the panel together makes it hard to do by accident.
 - **The modifier on its own.** A press counts only when the chosen modifier
@@ -1591,7 +1596,7 @@ the keyboard held at that moment. It only reads.
   together, right Alt does not count as Alt. DCS sees it the same way.
 - **The chosen combination should stay unbound in DCS.** DCS still sees the
   press, since reading a panel takes nothing from anyone else reading it.
-  Ctrl and a line select key is a binding only if the user made one, and if
+  Ctrl and a page key is a binding only if the user made one, and if
   they did, one press both swaps the page and does what they bound. The
   setting says so where it is chosen.
 - **The modifier is an app-wide setting**, not part of a profile, since which
@@ -1652,6 +1657,13 @@ the keyboard held at that moment. It only reads.
   no key pressed, so the reader acts on buttons going down, never on the
   report changing. The Co-Pilot and Observer are the same panel under another
   PID and list the same keys.
+- **The UFC's and the ICP's page keys**, captured 2026-09-24, each on one game
+  controller collection, report id 1. The ICP's COM 1, COM 2, IFF, LIST, A-A
+  and A-G are buttons 1 to 6, bits 0 to 5 of byte 1 of a 64 byte report. The
+  UFC's A/P, IFF, TCN, ILS, D/N and BCN are buttons 20 to 25, bits 3 to 7 of
+  byte 3 and bit 0 of byte 4 of a 33 byte report. Both panels report
+  switches held in a position as buttons already down when the reader
+  starts, which is one more reason only a key going down counts.
 - **Read the way Windows reads them.** Button numbers come from Windows' own
   HID parser (`HidP_GetUsages`) rather than a descriptor walk of ours, so they
   are the numbers SimAppPro lights and DCS binds. The capture checked that

@@ -6,7 +6,6 @@
 
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { displaySection } from "./readout";
 import {
   catalogueStatus,
   checkProfile,
@@ -56,7 +55,6 @@ import type {
   PageTake,
   Profile,
   ProfileSummary,
-  Readout,
   SignalView,
   Update,
 } from "./types";
@@ -246,7 +244,7 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
     list.append(el("label", { class: "group" }, parentBox(screenBoxes), el("span", {}, "Screens")), ...rows);
   }
 
-  // An MCDU merges a slot at a time: slot n of the source replaces slot n
+  // A screen merges a slot at a time: slot n of the source replaces slot n
   // here, and brings its page with it.
   if (parts.slots.length > 0) {
     const screens = new Map<string, typeof parts.slots>();
@@ -743,7 +741,7 @@ async function showImport(): Promise<void> {
   );
   if (pageRows.length > 0) {
     whole.append(
-      el("p", { class: "meta" }, "Which MCDU pages come with it? A slot showing a page left unticked comes in empty."),
+      el("p", { class: "meta" }, "Which pages come with it? A slot showing a page left unticked comes in empty."),
       pageList,
     );
   }
@@ -1362,9 +1360,6 @@ interface Session {
   /** This lamp as it shipped, keyed device and lamp. Empty for a profile the
    * user created, which has no shipped version to revert to. */
   shipped: Map<string, Binding>;
-  /** Every display field as it shipped, for the same reason. Also what says a
-   * field the user deleted can be offered back. */
-  shippedReadouts: Readout[];
   /**
    * The profile as it stood when the rows were built, serialised.
    *
@@ -1439,18 +1434,16 @@ async function showProfile(file: string): Promise<void> {
   // resetting the file. A profile the user made has none, which is not an
   // error.
   const shipped = new Map<string, Binding>();
-  let shippedReadouts: Readout[] = [];
   try {
     const original = await defaultProfile(file);
     for (const b of original?.bindings ?? []) {
       shipped.set(lampKey(b.device, b.led), b);
     }
-    shippedReadouts = original?.readouts ?? [];
   } catch {
     // A missing or unreadable default only costs the revert buttons.
   }
 
-  // The module's pages, which the MCDU's slots point into. A library that
+  // The module's pages, which the screens' slots point into. A library that
   // cannot be read leaves every slot showing as empty, with the reason.
   let book: PageBook;
   try {
@@ -1548,7 +1541,6 @@ async function showProfile(file: string): Promise<void> {
     profile,
     signals,
     shipped,
-    shippedReadouts,
     baseline: "",
     dirty: false,
     followSync: [],
@@ -1893,19 +1885,9 @@ function deviceSection(
   });
   applyDriveState();
 
-  if (!session.profile.readouts) session.profile.readouts = [];
-  const glass = displaySection(
-    device,
-    session.profile,
-    session.signals,
-    session.refreshDirty,
-    session.shippedReadouts,
-  );
-
   section.append(summary, table);
-  if (glass) section.append(glass);
-  // A text grid takes its fields from pages rather than from the profile.
-  for (const display of device.displays.filter((d) => d.text_grid)) {
+  // Every screen takes its fields from pages rather than from the profile.
+  for (const display of device.displays) {
     section.append(
       pageSection(device, display, {
         profile: session.profile,

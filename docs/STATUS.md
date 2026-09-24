@@ -22,6 +22,36 @@ wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
 
+**Built 2026-09-24: pages on the UFC and the ICP.** Cory reversed "text
+grids only": every screen now takes pages, with six slots each and the same
+app-wide modifier. The design is "Pages" in [CONFIG.md](CONFIG.md), the
+section formerly "MCDU pages". Checked with the tests and a dry run; not yet
+flown, see [TODO.md](TODO.md).
+
+- **The gate is any known display.** `Profile::takes_pages` is
+  `displays.get(display).is_some()`, so nothing names a panel or a glass
+  type. Errors renamed to match: `LooseScreenField`, `SlotsWithoutScreen`,
+  `PageOnUnknownDisplay`.
+- **Loose fields refused everywhere, no migration** (Cory, 2026-09-24):
+  nobody had updated past the version 2 break yet, so this lands as part of
+  it. An unchanged shipped profile updates cleanly (its UFC/DED rows are
+  removed as no longer shipped and the slot comes in); an edited one is
+  refused with the reason. Checked with a throwaway test against
+  `defaults-previous`.
+- **Shipped pages added**, names agreed with Cory: A-10C "CMSC"
+  (`a10c-cmsc`, DED), F-16C_50 "DED" (`f16-ded`), FA-18C_hornet "UFC"
+  (`fa18-ufc`), Mi-24P "Radios" (`mi24p-ufc`, a new page file). Each in slot
+  1 and the start slot, slots 2 to 6 disabled.
+- **Page keys captured** with `dcs-signal buttons`: ICP COM 1 to A-G are
+  buttons 1 to 6, UFC A/P to BCN are 20 to 25. In `devices.json` as
+  `buttons` and `page_keys`, named `COM_1`, `COM_2`, `IFF`, `LIST`, `A_A`,
+  `A_G` and `A_P`, `IFF`, `TCN`, `ILS`, `D_N`, `BCN`.
+- **Editor**: every display gets a page section; `displaySection` and the
+  session's shipped readouts are gone. Reset this field and "+ the field
+  that shipped here" are now unreachable; see TODO.
+- **Test fixtures** in `editor_checks.rs` and `seat_validation.rs` mark their
+  fields as a page's, the way the engine tests' `resolved()` does.
+
 **Built and flown 2026-09-23: page swapping and the Settings dialog, on
 `feature/mcdu-page-selection-inputs`.** The design is "Swapping" under "MCDU
 pages" in [CONFIG.md](CONFIG.md). Flown in the A-10C with pages in the odd

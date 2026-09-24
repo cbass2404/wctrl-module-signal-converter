@@ -173,12 +173,12 @@ pub enum Error {
     MadeBeforePages(u32),
     #[error("this profile is schema version {0}, made by a newer DCS Signal Converter than this one")]
     NewerSchema(u32),
-    #[error("cells {1} of display {0:?} are a field of the profile's own, but a text grid takes every field from a page; put it on a page instead")]
-    LooseTextField(String, String),
+    #[error("cells {1} of display {0:?} are a field of the profile's own, but a screen takes every field from a page; put it on a page instead")]
+    LooseScreenField(String, String),
     #[error("the profile gives page slots to {0:?}, which is not a device we know")]
     SlotsOnUnknownDevice(String),
-    #[error("{0:?} has page slots, but no screen that takes pages; only a text grid does")]
-    SlotsWithoutTextGrid(String),
+    #[error("{0:?} has page slots, but no screen to show them on")]
+    SlotsWithoutScreen(String),
     #[error("{0:?} has {1} page slots, but {2} page keys; a disabled slot is written as null")]
     SlotCount(String, usize, usize),
     #[error("devices.json lists {1} twice on {0:?}")]
@@ -193,14 +193,16 @@ pub enum Error {
     SlotKeySet(String, usize),
     #[error("slot {1} of {0:?} shows the page {2:?}, which is for {3}; a page reads signals by id, so it works only on its own module")]
     PageOnOtherModule(String, usize, String, String),
+    #[error("slot {1} of {0:?} shows the page {2:?}, which is drawn on {3:?}, a screen {0:?} does not have")]
+    PageOnOtherDisplay(String, usize, String, String),
     #[error("the page {0:?} in slot {1} of {2:?}: {3}")]
     OnPage(String, usize, String, Box<Error>),
     #[error("a page needs a name")]
     PageUnnamed,
     #[error("a page on {1} is already called {0:?}")]
     PageNameTaken(String, String),
-    #[error("the page {0:?} is drawn on {1:?}, which is not a text grid; only a text grid takes pages")]
-    PageNotOnTextGrid(String, String),
+    #[error("the page {0:?} is drawn on {1:?}, which is not a display we know")]
+    PageOnUnknownDisplay(String, String),
 }
 
 impl Error {
@@ -1302,12 +1304,12 @@ pub struct Profile {
     /// a disabled device's are, so stopping gives back what was there.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub follows: BTreeMap<String, String>,
-    /// Page slots for each device with a text grid, keyed by device.
+    /// Page slots for each device with a screen, keyed by device.
     ///
-    /// Everything on a text grid comes from a page in the library, and a
-    /// device with no entry here shows nothing on it. Resolved into ordinary
-    /// fields by [`with_pages`](Self::with_pages) when the engine takes the
-    /// profile. See docs/CONFIG.md "MCDU pages".
+    /// Everything on a screen comes from a page in the library, and a device
+    /// with no entry here shows nothing on it. Resolved into ordinary fields
+    /// by [`with_pages`](Self::with_pages) when the engine takes the profile.
+    /// See docs/CONFIG.md "Pages".
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub screens: BTreeMap<String, PageSlots>,
     /// Every device's slots resolved, and which one shows, once the profile
@@ -1586,12 +1588,12 @@ impl Profile {
             return vec![Error::NewerSchema(self.schema_version)];
         }
         let mut out = Vec::new();
-        // One owner for a text grid, and it is the pages. A field resolved
+        // One owner for a screen, and it is the pages. A field resolved
         // from a page carries its id, so a profile checked after
         // `with_pages` is not refused for its own start page.
         for r in &self.readouts {
             if r.page.is_none() && Profile::takes_pages(displays, &r.display) {
-                out.push(Error::LooseTextField(r.display.clone(), r.cells.to_string()));
+                out.push(Error::LooseScreenField(r.display.clone(), r.cells.to_string()));
             }
         }
         for b in &self.bindings {
@@ -3187,7 +3189,7 @@ impl Profiles {
             }
             if work.slots > 0 {
                 what.push(format!(
-                    "updated {} unchanged MCDU page slot(s) to the new default",
+                    "updated {} unchanged page slot(s) to the new default",
                     work.slots
                 ));
             }

@@ -717,6 +717,20 @@
     "MCDU_Observer": "MCDU_Captain"
   },
   "screens": {
+    "CarrierAce_UFC": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
     "MCDU_Captain": {
       "start": 1,
       "slots": [
@@ -724,7 +738,10 @@
           "page": "ah64d-ku",
           "key": null
         },
-        null,
+        {
+          "page": null,
+          "key": null
+        },
         null,
         null,
         null,
@@ -750,6 +767,20 @@
       "slots": [
         {
           "page": "ah64d-ku",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "ViperAce_ICP": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
           "key": null
         },
         null,

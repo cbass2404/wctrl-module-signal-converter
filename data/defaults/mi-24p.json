@@ -414,34 +414,57 @@
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
-  "readouts": [
-    {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "35",
-      "source": "PLT_R828_CHAN_S"
-    },
-    {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "34",
-      "source": "PLT_R863_CHAN_S"
-    },
-    {
-      "device": "CarrierAce_UFC",
-      "display": "UFC1",
-      "cells": "30-33",
-      "source": "PLT_RV5_ALT",
-      "reads": [
-        0.0,
-        750.0
-      ]
-    }
-  ],
   "follows": {
     "CarrierAce_MFD_L": "CarrierAce_MFD_C",
     "CarrierAce_MFD_R": "CarrierAce_MFD_C",
     "MCDU_CoPilot": "MCDU_Captain",
     "MCDU_Observer": "MCDU_Captain"
+  },
+  "screens": {
+    "CarrierAce_UFC": {
+      "start": 1,
+      "slots": [
+        {
+          "page": "mi24p-ufc",
+          "key": null
+        },
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "MCDU_Captain": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "ViperAce_ICP": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    }
   }
 }

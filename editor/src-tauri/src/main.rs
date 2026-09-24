@@ -90,7 +90,7 @@ fn profiles() -> Reply<Vec<ProfileSummary>> {
         .profiles
         .merge_new(&inventory(&paths)?, env!("CARGO_PKG_VERSION"))
         .map_err(|e| fail("adding new hardware to the profiles", e))?;
-    // The MCDU pages the same way, apart from the profiles; see `Pages::merge_new`.
+    // The pages the same way, apart from the profiles; see `Pages::merge_new`.
     paths.pages.seed().map_err(|e| fail("copying in the shipped pages", e))?;
     paths
         .pages

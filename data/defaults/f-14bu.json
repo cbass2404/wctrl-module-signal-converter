@@ -508,9 +508,6 @@
       "note": "Held at full, because at 0 the screen shows nothing. It lights only while this profile puts fields on the screen, whatever it is bound to, so a screen with nothing on it stays black."
     }
   ],
-  "disabled_devices": [
-    "ViperAce_ICP"
-  ],
   "follows": {
     "CarrierAce_MFD_L": "CarrierAce_MFD_C",
     "CarrierAce_MFD_R": "CarrierAce_MFD_C",
@@ -518,6 +515,20 @@
     "MCDU_Observer": "MCDU_Captain"
   },
   "screens": {
+    "CarrierAce_UFC": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
     "MCDU_Captain": {
       "start": 1,
       "slots": [
@@ -525,7 +536,10 @@
           "page": "f14-cdnu",
           "key": null
         },
-        null,
+        {
+          "page": null,
+          "key": null
+        },
         null,
         null,
         null,
@@ -551,6 +565,20 @@
       "slots": [
         {
           "page": "f14-cdnu",
+          "key": null
+        },
+        null,
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    "ViperAce_ICP": {
+      "start": 1,
+      "slots": [
+        {
+          "page": null,
           "key": null
         },
         null,

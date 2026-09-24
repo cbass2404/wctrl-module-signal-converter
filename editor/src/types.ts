@@ -407,7 +407,7 @@ export interface Findings {
 }
 
 /** Whether the converter daemon is running, and whether there is one to start. */
-/** The key held with a page key to swap an MCDU's page. */
+/** The key held with a page key to swap a screen's page. */
 export type PageModifier = "ctrl" | "shift" | "alt";
 export type Theme = "system" | "light" | "dark";
 
@@ -465,8 +465,8 @@ export interface Profile {
    */
   follows?: Record<string, string>;
   /**
-   * Page slots for each device with a text grid. Everything on a text grid
-   * comes from a page, so a device with none here shows nothing on it.
+   * Page slots for each device with a screen. Everything on a screen comes
+   * from a page, so a device with none here shows nothing on it.
    */
   screens?: Record<string, PageSlots>;
 }

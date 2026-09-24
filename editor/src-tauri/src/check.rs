@@ -62,7 +62,7 @@ impl Cache {
                     // itself is added.
                     let about_page = matches!(
                         e,
-                        Error::PageUnnamed | Error::PageNameTaken(..) | Error::PageNotOnTextGrid(..)
+                        Error::PageUnnamed | Error::PageNameTaken(..) | Error::PageOnUnknownDisplay(..)
                     );
                     if shown.contains(&page.id) && !about_page {
                         continue;

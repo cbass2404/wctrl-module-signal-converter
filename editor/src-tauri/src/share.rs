@@ -16,7 +16,7 @@
 //! on the same module, which is how the F-14 and F-14BU share a change
 //! without it being made twice. See `dsc_config::merge`.
 //!
-//! A profile travels with its MCDU pages, which live in a library apart from
+//! A profile travels with its pages, which live in a library apart from
 //! it: an export writes the pages its slots show and any others ticked, and an
 //! import brings in the pages ticked, settling each against the library here.
 //! See `dsc_config::bundle`.

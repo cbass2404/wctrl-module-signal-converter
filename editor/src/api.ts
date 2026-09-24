@@ -171,3 +171,5 @@ export const learnStop = () => invoke<void>("learn_stop");
 export const updateCheck = () => invoke<Update | null>("update_check");
 /** Opens the release the check found; the backend holds its address. */
 export const openUpdate = () => invoke<void>("open_update");
+/** Opens the profile language guide on the project's site. */
+export const openGuide = () => invoke<void>("open_guide");

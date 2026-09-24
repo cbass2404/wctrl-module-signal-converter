@@ -17,6 +17,7 @@ import {
   listModules,
   listProfiles,
   listSignals,
+  openGuide,
   openProfile,
   openUpdate,
   resetProfile,
@@ -440,6 +441,22 @@ function matchesFilter(row: ProfileSummary, filter: string): boolean {
     .every((word) => haystack.includes(word));
 }
 
+/**
+ * The profile language guide, in the sticky header of both pages, so what a
+ * test or a piece means is one click away while it is being set.
+ */
+function guideButton(): HTMLElement {
+  const button = el(
+    "button",
+    { class: "icon guide", type: "button", title: "The profile language: every test, reading and page, with examples", "aria-label": "Profile language guide" },
+    "?",
+  );
+  button.addEventListener("click", () => {
+    openGuide().catch((err: unknown) => showError("Opening the language guide", err));
+  });
+  return button;
+}
+
 async function showLibrary(): Promise<void> {
   // Nothing here is edited in place, so there is nothing to lose by closing.
   unsavedWork = () => false;
@@ -461,6 +478,7 @@ async function showLibrary(): Promise<void> {
     filter,
     el("div", { class: "spacer" }),
     el("button", { class: "primary", id: "new" }, "New profile"),
+    guideButton(),
     el("button", { class: "icon gear", id: "settings", type: "button", title: "Settings", "aria-label": "Settings" }, "\u2699"),
   );
   app.append(header);
@@ -1694,6 +1712,7 @@ async function showProfile(file: string): Promise<void> {
       state,
       toggle,
       save,
+      guideButton(),
     ),
   );
   app.append(notice, problemList, cautionList);

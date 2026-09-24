@@ -32,7 +32,7 @@ Aircraft: AH-64D_BLK_II                              Devices: PTO2, Orion II
 
 ```jsonc
 {
-  "schema_version": 1,
+  "schema_version": 2, // version 1 is refused, see "Pages"
   "name": "AH-64D  Ground override on A/G",
   "author": "coryb",
   "profile_version": "1.0.0",
@@ -154,6 +154,7 @@ and get a numeric input clamped to `0..max_value`.
 | `{ "equals": 1 }`            | discrete    | dropdown of labelled values                 |
 | `{ "in": [1, 2] }`           | discrete    | multi-select of labelled values             |
 | `{ "gte": 32768 }`           | continuous  | number input, clamped to the signal's range |
+| `{ "lte": 1000 }`            | continuous  | number input, clamped to the signal's range |
 | `{ "between": [100, 4000] }` | continuous  | two number inputs, clamped                  |
 | `{ "scale": [0, 65535] }`    | continuous  | no threshold; brightness tracks the value   |
 
@@ -1296,11 +1297,11 @@ there rather than leaving a row of dark cells with nothing saying why. The dash
 must be in the aircraft's font, and the blank too where there is a label to set
 apart, which is checked the same way `replace` is.
 
-**The shipped A-10C and AH-64D profiles carry one.** The A-10C's CDU is ten
-lines on a screen of fourteen, so its rule sits on row 4, above the first line.
-The Apache exports only its keyboard unit, on the bottom row, so its rule sits
-on row 13 directly above, inset to the same 22 cells the keyboard unit uses, so
-the two line up. The F-14B (Upgrade) has
+**The shipped A-10C CDU and AH-64D KU pages carry one**, and the F-16 Flight
+page a labelled rule piece over its trim row. The A-10C's CDU is ten lines on a screen of fourteen, so its rule sits on row 4,
+above the first line. The Apache exports only its keyboard unit, on the bottom
+row, so its rule sits on row 13 directly above, inset to the same 22 cells the
+keyboard unit uses, so the two line up. The F-14B (Upgrade) has
 none: its CDNU comes within two rows of filling the glass. A screen showing
 only a rule still counts as a screen with something on it, so the backlight
 comes up with it.

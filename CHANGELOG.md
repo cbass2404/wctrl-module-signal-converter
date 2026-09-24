@@ -35,6 +35,10 @@ unless this says what moved.
 - **A tidier profile list.** Each profile row keeps its Edit button, and
   Copy to..., Export..., Merge from..., Reset and Delete move into a menu
   under the ⋯ button beside it.
+- **A guide to the profile language.** The **?** beside New profile, and
+  beside Save in a profile, opens a page explaining every test, alternative,
+  reading, piece and page slot, with examples to try and a dictionary of
+  every term.
 - **The PFP-3N, PFP-7 and PFP-4.** WinWing's Boeing CDUs are supported under
   each of their Captain, Co-Pilot and Observer names. Their screen is the
   MCDU's, so every MCDU page shows on them too, swapped with LSK 1L to 6L the

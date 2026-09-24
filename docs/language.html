@@ -1,0 +1,2594 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="How a DCS Signal Converter profile says what drives each lamp and what each screen shows: every test, combination, reading and page, with examples to try."
+    />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ECEEF1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#101418" media="(prefers-color-scheme: dark)" />
+    <title>Profile Language</title>
+    <link rel="icon" href="img/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="img/icon.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
+    />
+    <style>
+      /* The landing page's tokens and type, so the two pages read as one site. */
+      html {
+        -webkit-text-size-adjust: 100%;
+        scroll-padding-top: 64px;
+      }
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+      table {
+        border-collapse: collapse;
+      }
+      a {
+        color: var(--accent);
+      }
+      :root {
+        --ground: #eceef1;
+        --panel: #ffffff;
+        --panel-2: #f5f7f9;
+        --panel-3: #e3e7eb;
+        --ink: #16191d;
+        --ink-2: #4a5560;
+        --ink-3: #77828e;
+        --rule: #d3d9df;
+        --rule-2: #bfc7cf;
+        --accent: #c25e00;
+        --accent-2: #e88a2e;
+        --accent-wash: #fbeedf;
+        --btn-ink: #ffffff;
+        --live: #1f7a3d;
+        --live-wash: #c6efce;
+        --shadow: 0 1px 2px rgba(20, 26, 32, 0.08), 0 8px 24px rgba(20, 26, 32, 0.06);
+        --glass: #07090b;
+        --glass-edge: #2a3038;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root:not([data-theme="light"]) {
+          --ground: #101418;
+          --panel: #171c22;
+          --panel-2: #1d232a;
+          --panel-3: #262e36;
+          --ink: #e8ecf0;
+          --ink-2: #a6b2be;
+          --ink-3: #79848f;
+          --rule: #2a323a;
+          --rule-2: #39434d;
+          --accent: #f2a14b;
+          --accent-2: #c25e00;
+          --accent-wash: #2a2118;
+          --btn-ink: #12161a;
+          --live: #6fcf8e;
+          --live-wash: #1e3a26;
+          --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.34);
+        }
+      }
+      :root[data-theme="dark"] {
+        --ground: #101418;
+        --panel: #171c22;
+        --panel-2: #1d232a;
+        --panel-3: #262e36;
+        --ink: #e8ecf0;
+        --ink-2: #a6b2be;
+        --ink-3: #79848f;
+        --rule: #2a323a;
+        --rule-2: #39434d;
+        --accent: #f2a14b;
+        --accent-2: #c25e00;
+        --accent-wash: #2a2118;
+        --btn-ink: #12161a;
+        --live: #6fcf8e;
+        --live-wash: #1e3a26;
+        --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 28px rgba(0, 0, 0, 0.34);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        background: var(--ground);
+        color: var(--ink);
+        font-family: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+        font-size: 17px;
+        line-height: 1.62;
+        margin: 0;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 24px;
+      }
+      @media (max-width: 520px) {
+        .wrap {
+          padding: 0 16px;
+        }
+      }
+      .prose {
+        max-width: 66ch;
+      }
+      .prose p + p {
+        margin-top: 12px;
+      }
+      h1,
+      h2,
+      h3 {
+        font-family: "Barlow Condensed", system-ui, sans-serif;
+        text-wrap: balance;
+        margin: 0;
+      }
+      h1 {
+        font-weight: 700;
+        font-size: clamp(2.4rem, 6.4vw, 3.8rem);
+        line-height: 1;
+        letter-spacing: -0.015em;
+      }
+      h2 {
+        font-weight: 700;
+        font-size: clamp(1.6rem, 3.4vw, 2.2rem);
+        line-height: 1.08;
+      }
+      h3 {
+        font-weight: 600;
+        font-size: 1.22rem;
+        line-height: 1.2;
+      }
+      p {
+        margin: 0;
+      }
+      strong {
+        font-weight: 600;
+      }
+      .eyebrow {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.7rem;
+        font-weight: 500;
+        letter-spacing: 0.19em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      code,
+      .mono {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.88em;
+        font-variant-numeric: tabular-nums;
+      }
+      p code,
+      li code,
+      td code,
+      dd code {
+        background: var(--panel-3);
+        padding: 1px 5px;
+        overflow-wrap: anywhere;
+      }
+      .ed {
+        /* the editor's own words, set apart from file keys */
+        font-weight: 600;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+
+      /* ------------------------------------------------- sidebar layout */
+      .layout {
+        max-width: 1280px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 220px minmax(0, 1fr);
+      }
+      main {
+        min-width: 0;
+      }
+      .side {
+        position: sticky;
+        top: 52px;
+        align-self: start;
+        max-height: calc(100vh - 52px);
+        overflow-y: auto;
+        padding: 40px 12px 40px 24px;
+        border-right: 1px solid var(--rule);
+      }
+      .side .grp {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.66rem;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        margin: 18px 0 4px;
+      }
+      .side .grp:first-child {
+        margin-top: 0;
+      }
+      .side a {
+        display: block;
+        text-decoration: none;
+        color: var(--ink-2);
+        font-size: 0.93rem;
+        line-height: 1.3;
+        padding: 5px 10px;
+        border-left: 2px solid transparent;
+      }
+      .side a.sub {
+        font-size: 0.82rem;
+        padding: 3px 10px 3px 22px;
+        color: var(--ink-3);
+      }
+      .side a:hover,
+      .side a:focus-visible {
+        color: var(--accent);
+      }
+      .side a.here {
+        color: var(--ink);
+        font-weight: 600;
+        border-left-color: var(--accent);
+        background: var(--accent-wash);
+      }
+      .menu,
+      .scrim {
+        display: none;
+      }
+      /* Narrow: the sidebar becomes a drawer over the page, opened from the
+         bar, so the text keeps the whole width. */
+      @media (max-width: 1000px) {
+        .layout {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .bar .wrap {
+          justify-content: space-between;
+        }
+        .menu {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          background: var(--panel-2);
+          border: 1px solid var(--rule-2);
+          padding: 5px 12px;
+          font-family: "IBM Plex Mono", monospace;
+          font-size: 0.74rem;
+          letter-spacing: 0.08em;
+          text-transform: uppercase;
+          cursor: pointer;
+        }
+        .menu::before {
+          content: "\2630";
+          font-size: 0.95rem;
+          letter-spacing: 0;
+        }
+        .menu[aria-expanded="true"] {
+          border-color: var(--accent);
+          color: var(--accent);
+        }
+        .side {
+          position: fixed;
+          top: 52px;
+          left: 0;
+          z-index: 30;
+          width: min(290px, 84vw);
+          /* the small viewport, so a phone's toolbar never hides the end */
+          height: calc(100vh - 52px);
+          height: calc(100svh - 52px);
+          max-height: none;
+          padding: 24px 12px 32px 18px;
+          background: var(--panel);
+          border-right: 1px solid var(--rule);
+          box-shadow: var(--shadow);
+          transform: translateX(-100%);
+          visibility: hidden;
+          transition:
+            transform 0.2s ease,
+            visibility 0s linear 0.2s;
+        }
+        .side.open {
+          transform: none;
+          visibility: visible;
+          transition: transform 0.2s ease;
+        }
+        .scrim:not([hidden]) {
+          display: block;
+          position: fixed;
+          inset: 52px 0 0 0;
+          z-index: 25;
+          background: rgba(0, 0, 0, 0.45);
+        }
+      }
+      @media (min-width: 1001px) {
+        /* the brand over the sidebar's edge rather than the text column's */
+        .bar .wrap {
+          max-width: 1280px;
+        }
+      }
+
+      /* a heading is a link to itself */
+      a.self {
+        color: inherit;
+        text-decoration: none;
+      }
+      a.self::after {
+        content: "#";
+        margin-left: 0.3em;
+        color: var(--accent);
+        opacity: 0;
+        transition: opacity 0.12s;
+      }
+      a.self:hover::after,
+      a.self:focus-visible::after {
+        opacity: 1;
+      }
+      .demo:target {
+        outline: 2px solid var(--accent);
+      }
+
+      /* ---------------------------------------------------------- top bar */
+      .bar {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        background: var(--ground);
+        box-shadow: 0 1px 0 var(--rule);
+      }
+      .bar .wrap {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        height: 52px;
+      }
+      .home {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: var(--ink);
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 1.1rem;
+        flex: none;
+      }
+      .home img {
+        width: 26px;
+        height: 26px;
+      }
+
+      header.top {
+        padding: 54px 0 12px;
+      }
+      .lede {
+        font-size: clamp(1.08rem, 2.1vw, 1.26rem);
+        color: var(--ink-2);
+        margin-top: 18px;
+        max-width: 60ch;
+      }
+      section {
+        padding: 56px 0 8px;
+      }
+      .section-head {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 22px;
+      }
+      .ruler {
+        height: 9px;
+        margin: 36px 0 0;
+        border: 0;
+        background: repeating-linear-gradient(to right, var(--rule-2) 0 1px, transparent 1px 10px);
+        border-bottom: 1px solid var(--rule);
+      }
+
+      /* two questions */
+      .two {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 1px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+        margin-top: 26px;
+      }
+      .two > div {
+        background: var(--panel);
+        padding: 20px 22px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .two .q {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 1.35rem;
+        color: var(--accent);
+        line-height: 1.2;
+      }
+      .two p {
+        color: var(--ink-2);
+        font-size: 0.97rem;
+      }
+      .flow {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.78rem;
+        color: var(--ink-3);
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+      }
+      .flow b {
+        font-weight: 500;
+        color: var(--ink);
+        background: var(--panel-3);
+        padding: 2px 7px;
+      }
+
+      /* reference tables */
+      .table-scroll {
+        overflow-x: auto;
+        border: 1px solid var(--rule);
+        background: var(--panel);
+        margin: 18px 0;
+      }
+      table.ref {
+        width: 100%;
+        font-size: 0.93rem;
+      }
+      table.ref th,
+      table.ref td {
+        text-align: left;
+        vertical-align: top;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--rule);
+      }
+      table.ref th {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        font-weight: 500;
+        color: var(--ink-3);
+        background: var(--panel-2);
+      }
+      table.ref tr:last-child td {
+        border-bottom: 0;
+      }
+      table.ref td:first-child {
+        white-space: nowrap;
+      }
+
+      /* code */
+      pre {
+        margin: 0;
+        background: var(--panel-2);
+        border: 1px solid var(--rule);
+        padding: 12px 14px;
+        overflow-x: auto;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.8rem;
+        line-height: 1.55;
+        color: var(--ink);
+      }
+      pre .k {
+        color: var(--accent);
+      }
+      pre .c {
+        color: var(--ink-3);
+      }
+
+      /* demos */
+      .demo {
+        background: var(--panel);
+        border: 1px solid var(--rule);
+        box-shadow: var(--shadow);
+        margin: 22px 0 8px;
+      }
+      .demo-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--rule);
+        background: var(--panel-2);
+      }
+      .demo-head .t {
+        font-family: "Barlow Condensed", sans-serif;
+        font-weight: 700;
+        font-size: 1.18rem;
+      }
+      .demo-head .try {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--accent);
+      }
+      .demo-body {
+        padding: 16px 18px 18px;
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+        gap: 18px 26px;
+      }
+      .demo-body.one {
+        grid-template-columns: minmax(0, 1fr);
+      }
+      @media (max-width: 760px) {
+        .demo-body {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .controls {
+        display: flex;
+        flex-direction: column;
+        gap: 11px;
+        min-width: 0;
+      }
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px 10px;
+        font-size: 0.93rem;
+      }
+      .row > .lbl {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.7rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+        min-width: 86px;
+      }
+      select,
+      input[type="number"],
+      input[type="text"],
+      input[type="search"] {
+        background: var(--panel-2);
+        border: 1px solid var(--rule-2);
+        padding: 4px 7px;
+        font-size: 0.9rem;
+        min-width: 0;
+      }
+      input[type="number"] {
+        width: 88px;
+      }
+      input[type="range"] {
+        flex: 1;
+        min-width: 120px;
+        accent-color: var(--accent);
+      }
+      button.chip,
+      .seg button {
+        background: var(--panel-2);
+        border: 1px solid var(--rule-2);
+        padding: 4px 11px;
+        font-size: 0.86rem;
+        cursor: pointer;
+      }
+      button.chip:hover,
+      .seg button:hover {
+        border-color: var(--accent);
+      }
+      .seg {
+        display: inline-flex;
+        flex-wrap: wrap;
+      }
+      .seg button + button {
+        border-left: 0;
+      }
+      .seg button[aria-pressed="true"],
+      button.chip[aria-pressed="true"] {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: var(--btn-ink);
+      }
+      button:focus-visible,
+      select:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      .out {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+      }
+      .say {
+        font-size: 0.93rem;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+      .say b {
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .note {
+        font-size: 0.86rem;
+        color: var(--ink-3);
+        line-height: 1.45;
+      }
+
+      /* a lamp: a lens that glows with its value */
+      .lamps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .lamp {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 6px;
+        min-width: 76px;
+      }
+      .lens {
+        --v: 0;
+        width: 58px;
+        height: 34px;
+        border: 1px solid var(--glass-edge);
+        background:
+          linear-gradient(rgba(255, 176, 40, calc(var(--v) * 0.95)), rgba(255, 140, 0, calc(var(--v) * 0.85))),
+          #1a1d21;
+        box-shadow: 0 0 calc(var(--v) * 22px) rgba(255, 160, 30, calc(var(--v) * 0.8));
+        display: grid;
+        place-items: center;
+        font-family: "IBM Plex Mono", monospace;
+        font-weight: 600;
+        font-size: 0.66rem;
+        letter-spacing: 0.06em;
+        color: rgba(20, 12, 0, calc(0.25 + var(--v) * 0.75));
+        transition: background 0.12s linear, box-shadow 0.12s linear;
+      }
+      .lens.green {
+        background:
+          linear-gradient(rgba(90, 230, 120, calc(var(--v) * 0.95)), rgba(40, 190, 80, calc(var(--v) * 0.85))),
+          #1a1d21;
+        box-shadow: 0 0 calc(var(--v) * 22px) rgba(70, 220, 110, calc(var(--v) * 0.8));
+      }
+      .lamp .val {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.76rem;
+        color: var(--ink-2);
+        font-variant-numeric: tabular-nums;
+      }
+
+      /* the glass: a text grid drawn cell for cell */
+      .glass {
+        background: var(--glass);
+        border: 1px solid var(--glass-edge);
+        padding: 10px 8px;
+        overflow-x: auto;
+      }
+      .cells {
+        display: grid;
+        grid-template-columns: repeat(var(--n, 24), minmax(0, 1fr));
+        min-width: calc(var(--n, 24) * 13px);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: clamp(0.8rem, 2.2vw, 1.08rem);
+        font-weight: 500;
+        line-height: 1.5;
+        text-align: center;
+        color: #e8e8e8;
+      }
+      .cells span {
+        white-space: pre;
+        border-right: 1px dotted rgba(255, 255, 255, 0.05);
+      }
+      .cells span.small {
+        font-size: 0.72em;
+      }
+      .cells span.inv {
+        background: currentColor;
+      }
+      .cells span.inv > i {
+        color: var(--glass);
+        font-style: normal;
+      }
+      .cells span.over {
+        box-shadow: inset 0 -2px 0 #ff4a4a;
+      }
+      .scale {
+        display: grid;
+        grid-template-columns: repeat(var(--n, 24), minmax(0, 1fr));
+        min-width: calc(var(--n, 24) * 13px);
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.55rem;
+        color: #5b636c;
+        text-align: center;
+        margin-top: 2px;
+      }
+      .screen {
+        background: var(--glass);
+        border: 1px solid var(--glass-edge);
+        min-height: 128px;
+        display: grid;
+        place-items: center;
+        font-family: "IBM Plex Mono", monospace;
+        color: #3fe070;
+        font-size: 1.2rem;
+        letter-spacing: 0.08em;
+        text-align: center;
+        padding: 10px;
+      }
+      .screen small {
+        display: block;
+        font-size: 0.66rem;
+        color: #8a8f96;
+        letter-spacing: 0.1em;
+      }
+
+      /* reading pipeline */
+      .pipe {
+        display: flex;
+        flex-direction: column;
+        border: 1px solid var(--rule);
+      }
+      .pipe > div {
+        display: grid;
+        grid-template-columns: minmax(0, 9.5em) minmax(0, 1fr);
+        gap: 10px;
+        padding: 6px 10px;
+        border-bottom: 1px solid var(--rule);
+        font-size: 0.88rem;
+        align-items: baseline;
+      }
+      .pipe > div:last-child {
+        border-bottom: 0;
+        background: var(--accent-wash);
+      }
+      .pipe .s {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .pipe .v {
+        font-family: "IBM Plex Mono", monospace;
+        font-variant-numeric: tabular-nums;
+        overflow-wrap: anywhere;
+      }
+      .pipe .skip {
+        color: var(--ink-3);
+      }
+
+      /* chain pieces */
+      .pieces {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .piece {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 9px;
+        border: 1px solid var(--rule);
+        background: var(--panel-2);
+        font-size: 0.86rem;
+      }
+      .piece .kind {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--accent);
+        min-width: 58px;
+      }
+      .piece input[type="text"] {
+        width: 90px;
+      }
+      .piece input[type="number"] {
+        width: 76px;
+      }
+      .piece label {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        color: var(--ink-2);
+      }
+      .piece .x {
+        margin-left: auto;
+        background: none;
+        border: 0;
+        color: var(--ink-3);
+        cursor: pointer;
+        font-size: 1rem;
+        padding: 0 4px;
+      }
+      .piece .x:hover {
+        color: #d14343;
+      }
+      .log {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.74rem;
+        background: var(--panel-2);
+        border: 1px solid var(--rule);
+        padding: 8px 10px;
+        min-height: 92px;
+        max-height: 150px;
+        overflow: auto;
+        white-space: pre;
+        color: var(--ink-2);
+      }
+      .keys {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+        gap: 6px;
+      }
+      .keys button {
+        background: #22272e;
+        color: #dfe3e8;
+        border: 1px solid #3a424c;
+        padding: 8px 4px;
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.74rem;
+        cursor: pointer;
+      }
+      .keys button:active {
+        transform: translateY(1px);
+      }
+      .slots {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 5px 10px;
+        align-items: center;
+        font-size: 0.88rem;
+      }
+      .slots .k {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.74rem;
+        color: var(--ink-3);
+      }
+      .slots label {
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
+        font-size: 0.8rem;
+        color: var(--ink-2);
+      }
+
+      /* cards */
+      .cards {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+        gap: 1px;
+        background: var(--rule);
+        border: 1px solid var(--rule);
+        margin: 18px 0;
+      }
+      .card {
+        background: var(--panel);
+        padding: 18px 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        min-width: 0;
+      }
+      .card p {
+        font-size: 0.95rem;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+      .card .use {
+        font-size: 0.86rem;
+        color: var(--ink-3);
+      }
+      .card .use b {
+        color: var(--accent);
+        font-weight: 600;
+      }
+      .swatches {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .swatches span {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.74rem;
+        background: var(--glass);
+        padding: 3px 8px;
+        border: 1px solid var(--glass-edge);
+      }
+
+      /* dictionary */
+      .dict-tools {
+        position: sticky;
+        top: 52px;
+        z-index: 5;
+        background: var(--ground);
+        padding: 10px 0;
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+      .dict-tools input {
+        flex: 1;
+        min-width: 200px;
+        padding: 8px 11px;
+        font-size: 1rem;
+      }
+      .dict-count {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.76rem;
+        color: var(--ink-3);
+      }
+      dl.dict {
+        margin: 6px 0 0;
+        border: 1px solid var(--rule);
+        background: var(--panel);
+      }
+      .entry {
+        padding: 13px 18px;
+        border-bottom: 1px solid var(--rule);
+        display: grid;
+        grid-template-columns: minmax(0, 15em) minmax(0, 1fr);
+        gap: 4px 22px;
+      }
+      .entry:last-child {
+        border-bottom: 0;
+      }
+      .entry:target {
+        background: var(--accent-wash);
+      }
+      @media (max-width: 640px) {
+        .entry {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      .entry dt {
+        font-weight: 600;
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+      }
+      .entry dt .keyname {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.76rem;
+        font-weight: 400;
+        color: var(--accent);
+        overflow-wrap: anywhere;
+      }
+      .entry dd {
+        margin: 0;
+        font-size: 0.95rem;
+        color: var(--ink-2);
+        line-height: 1.5;
+      }
+      .entry dd a.see {
+        font-size: 0.82rem;
+        white-space: nowrap;
+      }
+      .entry .where {
+        font-family: "IBM Plex Mono", monospace;
+        font-size: 0.64rem;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: var(--ink-3);
+      }
+      .none {
+        padding: 18px;
+        color: var(--ink-3);
+      }
+
+      footer {
+        padding: 50px 0 70px;
+        border-top: 1px solid var(--rule);
+        margin-top: 60px;
+      }
+      .foot {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 14px;
+        justify-content: space-between;
+        align-items: baseline;
+        font-size: 0.9rem;
+        color: var(--ink-3);
+      }
+    </style>
+  </head>
+  <body>
+    <nav class="bar" aria-label="Sections">
+      <div class="wrap">
+        <a class="home" href="./"><img src="img/icon.svg" alt="" width="26" height="26" /><span>DCS Signal Converter</span></a>
+        <button type="button" class="menu" id="menu" aria-controls="side" aria-expanded="false">Contents</button>
+      </div>
+    </nav>
+
+    <div class="layout">
+      <aside class="side" id="side" aria-label="On this page"></aside>
+      <div class="scrim" id="scrim" hidden></div>
+      <main>
+    <header class="top">
+      <div class="wrap">
+        <span class="eyebrow">Reference</span>
+        <h1 style="margin-top: 10px">The profile language</h1>
+        <p class="lede">
+          Everything a profile does is said with a handful of small rules. This page is each one: what it
+          means, what it is for, and an example you can move. The words in <span class="ed">bold</span> are
+          the editor's; the ones in <code>code</code> are what the profile file stores.
+        </p>
+        <div class="two">
+          <div>
+            <span class="eyebrow">A lamp asks</span>
+            <span class="q">Under what conditions?</span>
+            <p>
+              Each lamp and backlight on a panel gets a row. The row picks cockpit signals and tests them,
+              and the answer is a brightness, 0 up to what the lamp takes.
+            </p>
+            <div class="flow"><b>signal</b> → <b>test</b> → <b>and / or</b> → <b>brightness</b></div>
+          </div>
+          <div>
+            <span class="eyebrow">A screen asks</span>
+            <span class="q">Which cells, fed by what?</span>
+            <p>
+              A page puts fields on a screen. Each field is a run of cells and a chain of pieces, typed text
+              or readings, and the answer is characters.
+            </p>
+            <div class="flow"><b>signal</b> → <b>reading</b> → <b>pieces</b> → <b>cells</b></div>
+          </div>
+        </div>
+        <hr class="ruler" />
+      </div>
+    </header>
+
+    <!-- ============================================================ tests -->
+    <section id="tests" data-group="Lamps" data-nav="Tests">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Lamps, part 1</span>
+          <h2>Tests: when a signal lights a lamp</h2>
+        </div>
+        <div class="prose">
+          <p>
+            A condition is one signal and one test. The signal is anything DCS-BIOS exports for the aircraft,
+            not only its lamps: a switch, a selector, a gauge, a lighting knob. The test is chosen from what
+            that signal can report, so a two position switch is offered <span class="ed">is exactly</span>
+            with its positions named, and a gauge is offered numbers inside its range.
+          </p>
+          <p>
+            <strong>On</strong> is how bright the lamp goes when the test holds, and <strong>at zero</strong>
+            is what it shows when the answer is zero. An indicator takes only on or off; a dimmer takes 0 to
+            255.
+          </p>
+        </div>
+
+        <div class="table-scroll">
+          <table class="ref">
+            <thead>
+              <tr><th>Editor</th><th>File</th><th>Offered for</th><th>Use it for</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="ed">is exactly</td><td><code>{"equals": 1}</code></td><td>switches, selectors, lamps</td><td>A cockpit lamp copied across, a switch in one position.</td></tr>
+              <tr><td class="ed">is one of</td><td><code>{"in": [1, 2]}</code></td><td>switches, selectors</td><td>A selector where several positions mean the same thing to you.</td></tr>
+              <tr><td class="ed">is at least</td><td><code>{"gte": 32768}</code></td><td>gauges, knobs</td><td>Past a threshold: a needle over the red line, a flap past half.</td></tr>
+              <tr><td class="ed">is at most</td><td><code>{"lte": 1000}</code></td><td>gauges, knobs</td><td>Under a threshold: fuel low, pressure lost.</td></tr>
+              <tr><td class="ed">is between</td><td><code>{"between": [100, 4000]}</code></td><td>gauges, knobs</td><td>A band: in the green arc, inside a detent. Both ends count.</td></tr>
+              <tr><td class="ed">scaled across</td><td><code>{"scale": [0, 65535]}</code></td><td>dimmers, knobs, gauges</td><td>No threshold: brightness follows the signal. Backlights.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="demo" id="demo-test">
+          <div class="demo-head"><span class="t">One condition, one lamp</span><span class="try">Try it</span></div>
+          <div class="demo-body">
+            <div class="controls">
+              <div class="row"><span class="lbl">Signal</span><select id="t-signal"></select></div>
+              <div class="row"><span class="lbl">Test</span><select id="t-kind"></select><span id="t-params" class="row"></span></div>
+              <div class="row"><span class="lbl">Lamp</span>
+                <div class="seg" id="t-lamp">
+                  <button type="button" data-v="dimmer" aria-pressed="true">Dimmer, 0 to 255</button>
+                  <button type="button" data-v="indicator" aria-pressed="false">Indicator, on or off</button>
+                </div>
+              </div>
+              <div class="row" id="t-onrow"><span class="lbl">On</span><input type="number" id="t-on" min="0" max="255" value="255" /></div>
+              <div class="row"><span class="lbl">At zero</span><input type="number" id="t-off" min="0" max="255" value="0" /></div>
+              <div class="row"><span class="lbl">Cockpit</span><input type="range" id="t-value" /><span class="mono" id="t-valtext"></span></div>
+            </div>
+            <div class="out">
+              <div class="lamps"><div class="lamp"><div class="lens" id="t-lens">LAMP</div><span class="val" id="t-out"></span></div></div>
+              <p class="say" id="t-say"></p>
+              <pre id="t-json"></pre>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          <strong>Scaled across</strong> ignores On: it spreads its range over the lamp's whole travel. To cap a
+          backlight, hold it with <span class="ed">Always on</span> instead, or scale across a wider range.
+        </p>
+      </div>
+    </section>
+
+    <!-- ======================================================== combining -->
+    <section id="combining" data-group="Lamps" data-nav="And, or">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Lamps, part 2</span>
+          <h2>And, or: several tests on one lamp</h2>
+        </div>
+        <div class="prose">
+          <p>
+            <span class="ed">+ Add condition</span> adds a test that must <em>also</em> hold.
+            <span class="ed">+ Add alternative (or)</span> adds another way to light the lamp. Together they
+            make a list of ANDs joined by OR, which says any rule you need with no brackets to misread.
+          </p>
+          <p>
+            Each has a one sentence rule. <strong>Within a group, the lamp takes the dimmest value any
+            condition asks for.</strong> For on and off tests that is AND; for a scaled backlight it is a
+            dimmer behind a switch. <strong>Across alternatives, the brightest group wins.</strong> For on and
+            off that is OR; for dimmers, the live branch supplies the value while the gated ones sit at zero.
+          </p>
+        </div>
+
+        <div class="demo" id="demo-and">
+          <div class="demo-head"><span class="t">And: stop a lamp flashing in passing</span><span class="try">Try it</span></div>
+          <div class="demo-body">
+            <div class="controls">
+              <p class="say">
+                A HALF flaps lamp keyed to flap position alone flickers as the flaps pass the half angle on the
+                way down. Adding the lever as a second condition removes it: by the time the flaps reach that
+                angle, the lever already reads DN.
+              </p>
+              <div class="row"><span class="lbl">Lever</span>
+                <div class="seg" id="a-lever">
+                  <button type="button" data-v="2" aria-pressed="true">UP</button>
+                  <button type="button" data-v="1" aria-pressed="false">MVR</button>
+                  <button type="button" data-v="0" aria-pressed="false">DN</button>
+                </div>
+              </div>
+              <div class="row"><span class="lbl">Row</span>
+                <div class="seg" id="a-mode">
+                  <button type="button" data-v="one" aria-pressed="false">Position only</button>
+                  <button type="button" data-v="two" aria-pressed="true">Position and lever</button>
+                </div>
+              </div>
+              <div class="row"><span class="lbl">FLAP_POS</span><input type="range" id="a-pos" min="0" max="65535" disabled /><span class="mono" id="a-postext"></span></div>
+            </div>
+            <div class="out">
+              <div class="lamps"><div class="lamp"><div class="lens green" id="a-lens">HALF</div><span class="val" id="a-out"></span></div></div>
+              <pre id="a-json"></pre>
+              <p class="note">Numbers are illustrative, to show the idea. Move the lever UP to DN and watch the lamp.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo" id="demo-or">
+          <div class="demo-head"><span class="t">Or: follow whichever seat you are in</span><span class="try">Try it</span></div>
+          <div class="demo-body">
+            <div class="controls">
+              <p class="say">
+                The shipped AH-64D Master Caution. DCS-BIOS exports both crew stations at once, so each
+                alternative pairs a seat's caution lamp with <code>SEAT_POSITION</code>.
+              </p>
+              <div class="row"><span class="lbl">You sit</span>
+                <div class="seg" id="o-seat">
+                  <button type="button" data-v="0" aria-pressed="true">Pilot</button>
+                  <button type="button" data-v="1" aria-pressed="false">CP/G</button>
+                </div>
+              </div>
+              <div class="row"><span class="lbl">Pilot's</span><button type="button" class="chip" id="o-plt" aria-pressed="false">MASTER CAUTION</button></div>
+              <div class="row"><span class="lbl">CP/G's</span><button type="button" class="chip" id="o-cpg" aria-pressed="false">MASTER CAUTION</button></div>
+            </div>
+            <div class="out">
+              <div class="lamps"><div class="lamp"><div class="lens" id="o-lens">M.CAUT</div><span class="val" id="o-out"></span></div></div>
+              <pre id="o-json"></pre>
+            </div>
+          </div>
+        </div>
+
+        <div class="demo" id="demo-latest">
+          <div class="demo-head"><span class="t">The one whose signal moved last</span><span class="try">Try it</span></div>
+          <div class="demo-body">
+            <div class="controls">
+              <p class="say">
+                The F-14 has a console knob per seat and no signal saying which seat is taken. With
+                <span class="ed">the brightest one</span>, dimming means turning both knobs down. With
+                <span class="ed">the one whose signal moved last</span>, the knob in your hand drives the lamp,
+                and in multiplayer either crew takes the panels back by turning theirs.
+              </p>
+              <div class="row"><span class="lbl">Use</span>
+                <div class="seg" id="l-pick">
+                  <button type="button" data-v="brightest" aria-pressed="false">the brightest one</button>
+                  <button type="button" data-v="latest" aria-pressed="true">moved last</button>
+                </div>
+              </div>
+              <div class="row"><span class="lbl">Pilot knob</span><input type="range" id="l-plt" min="0" max="8" value="6" /><span class="mono" id="l-plttext"></span></div>
+              <div class="row"><span class="lbl">RIO knob</span><input type="range" id="l-rio" min="0" max="8" value="3" /><span class="mono" id="l-riotext"></span></div>
+            </div>
+            <div class="out">
+              <div class="lamps"><div class="lamp"><div class="lens" id="l-lens">BACKLT</div><span class="val" id="l-out"></span></div></div>
+              <p class="say" id="l-say"></p>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          Until a knob is actually turned, the brightest branch lights the lamp: the values that arrive when the
+          aircraft loads are a baseline, not a movement. Which knob moved last is forgotten on an aircraft change.
+        </p>
+      </div>
+    </section>
+
+    <!-- ======================================================= other ways -->
+    <section id="other-ways" data-group="Lamps" data-nav="Other ways">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Lamps, part 3</span>
+          <h2>Other ways to drive a lamp</h2>
+        </div>
+        <div class="prose">
+          <p>
+            A row drives its lamp in exactly one of four ways: conditions, alternatives,
+            <span class="ed">Always on</span> or <span class="ed">Match another lamp</span>. The editor offers
+            each only where it can mean something, so a row never carries two answers to one question.
+          </p>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <h3>Always on</h3>
+            <p>Lit whenever the aircraft is loaded, reading nothing. On a dimmer, On sets a fixed brightness.</p>
+            <pre>{ "led": "SL", <span class="k">"always"</span>: true }
+{ "led": "Backlight", <span class="k">"always"</span>: true, <span class="k">"on"</span>: 175 }</pre>
+            <p class="use"><b>Use it for</b> a lamp with no cockpit counterpart, or a steady backlight. Every shipped profile holds its backlights at 175 this way.</p>
+          </div>
+          <div class="card">
+            <h3>Match another lamp</h3>
+            <p>Follow another dimmer, on this panel or another, as a link rather than a copy. Change the one, and every lamp matching it follows.</p>
+            <pre>{ "device": "CarrierAce_MFD_L",
+  "led": "INST_PNL_Backlight",
+  <span class="k">"same_as"</span>: "INST_PNL_Backlight",
+  <span class="k">"same_as_device"</span>: "CarrierAce_MFD_C" }</pre>
+            <p class="use"><b>Use it for</b> every backlight on one knob. Dimmers only, both ends, and no chains: the lamp matched must read signals of its own.</p>
+          </div>
+          <div class="card">
+            <h3>At zero: a floor</h3>
+            <p>When a row resolves to zero, the lamp shows its At zero value instead. A lamp matching another keeps its own.</p>
+            <pre>{ "led": "FLAG", <span class="k">"same_as"</span>: "Backlight",
+  <span class="k">"off"</span>: 255 }</pre>
+            <p class="use"><b>Use it for</b> lamps that must stay readable by day. The PTO2's <code>SL</code> and <code>FLAG</code> are gates over other lamps; at 0 they hide them, and the editor cautions.</p>
+          </div>
+          <div class="card">
+            <h3>Not set yet</h3>
+            <p>A row with no conditions is a placeholder: listed, not decided, and driven off. Not the same as Always on, which is a decision.</p>
+            <pre>{ "led": "Master_Caution", <span class="k">"conditions"</span>: [] }</pre>
+            <p class="use"><b>Use it for</b> nothing on purpose: it is simply how a lamp nobody has looked at yet reads.</p>
+          </div>
+        </div>
+
+        <div class="demo" id="demo-match">
+          <div class="demo-head"><span class="t">One knob, three lamps</span><span class="try">Try it</span></div>
+          <div class="demo-body">
+            <div class="controls">
+              <p class="say">
+                The PTO2 backlight is <span class="ed">scaled across</span> the A-10C console knob. The PTO2
+                FLAG gate and an MFD backlight both <span class="ed">Match another lamp</span>. Turn the knob
+                to zero with and without FLAG's floor.
+              </p>
+              <div class="row"><span class="lbl">LCP_CONSOLE</span><input type="range" id="m-knob" min="0" max="65535" value="30000" /><span class="mono" id="m-knobtext"></span></div>
+              <div class="row"><span class="lbl">FLAG at zero</span>
+                <div class="seg" id="m-floor">
+                  <button type="button" data-v="0" aria-pressed="false">0</button>
+                  <button type="button" data-v="255" aria-pressed="true">255</button>
+                </div>
+              </div>
+            </div>
+            <div class="out">
+              <div class="lamps">
+                <div class="lamp"><div class="lens" id="m-back">BACKLT</div><span class="val" id="m-backv"></span></div>
+                <div class="lamp"><div class="lens" id="m-flag">FLAG</div><span class="val" id="m-flagv"></span></div>
+                <div class="lamp"><div class="lens" id="m-mfd">MFD</div><span class="val" id="m-mfdv"></span></div>
+              </div>
+              <p class="say" id="m-say"></p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== panels -->
+    <section id="panels" data-group="Panels" data-nav="Whole panels">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Whole panels</span>
+          <h2>Leaving a panel alone, and one panel under several names</h2>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <h3>Drive this panel</h3>
+            <p>
+              Untick it and this aircraft never writes to that panel, which keeps whatever was last on it. Its
+              rows stay in the profile, so ticking it again restores them. An unbound panel is different: it is
+              still swept dark.
+            </p>
+            <pre><span class="k">"disabled_devices"</span>: ["CarrierAce_UFC"]</pre>
+            <p class="use"><b>Use it for</b> the UFC and ICP on one swing arm, where one covers the other, or leaving a panel to another program.</p>
+          </div>
+          <div class="card">
+            <h3>Uses</h3>
+            <p>
+              WinWing sells some panels under several names: the MCDU and each PFP as Captain, Co-Pilot and
+              Observer, the MFD as L, C and R. <span class="ed">uses</span> points one name at another of the
+              same hardware, which is then driven with a copy of its lamps, pages and slots.
+            </p>
+            <pre><span class="k">"follows"</span>: {
+  "MCDU_CoPilot": "MCDU_Captain",
+  "CarrierAce_MFD_L": "CarrierAce_MFD_C" }</pre>
+            <p class="use"><b>Use it for</b> setting a panel up once. One step deep: a panel that follows cannot be followed. Every shipped profile does this.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =========================================================== fields -->
+    <section id="fields" data-group="Screens" data-nav="Fields and pieces">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Screens, part 1</span>
+          <h2>Fields: a run of cells, a chain of pieces</h2>
+        </div>
+        <div class="prose">
+          <p>
+            A field names its cells, and fills them with pieces drawn end to end. The MCDU's screen is 24
+            cells across and 14 rows down, counted from 0, so row 2 is cells 24 to 47.
+          </p>
+          <p>
+            There are four kinds of piece. <span class="ed">+ text</span> is characters you type.
+            <span class="ed">+ a reading</span> is a signal. <span class="ed">+ a gap</span> draws blanks and
+            takes whatever room the rest of the line leaves. <span class="ed">+ a rule</span> is a gap drawn
+            as dashes, with an optional label set in its middle.
+          </p>
+          <p>
+            A chain only holds still at its ends, so a reading that loses a digit pulls everything after it
+            left. <strong>Width</strong> holds a piece to that many cells whatever it reads, and
+            <strong>aligned</strong> says where the value sits in its box: right for a number that counts
+            down, so the digits stay pinned.
+          </p>
+        </div>
+
+        <div class="demo" id="demo-chain">
+          <div class="demo-head"><span class="t">Build a line</span><span class="try">Try it</span></div>
+          <div class="demo-body one">
+            <div class="row"><span class="lbl">Start from</span><select id="c-preset"></select></div>
+            <div class="glass"><div class="cells" id="c-cells"></div><div class="scale" id="c-scale"></div></div>
+            <div class="row"><span class="lbl">Readings</span><input type="range" id="c-live" min="0" max="1000" value="620" /><span class="note">moves every reading on the line</span></div>
+            <p class="say" id="c-say"></p>
+            <div class="pieces" id="c-pieces"></div>
+            <div class="row">
+              <button type="button" class="chip" data-add="text">+ text</button>
+              <button type="button" class="chip" data-add="reading">+ a reading</button>
+              <button type="button" class="chip" data-add="gap">+ a gap</button>
+              <button type="button" class="chip" data-add="rule">+ a rule</button>
+            </div>
+            <pre id="c-json"></pre>
+            <p class="note">Some signal names in these line examples stand in for whatever reading you pick; the editor lists your aircraft's own.</p>
+          </div>
+        </div>
+
+        <div class="cards">
+          <div class="card">
+            <h3>Gap</h3>
+            <p>Measured last. Two or more split what is left evenly, the odd cell going to the earlier ones. With a width, a gap is a fixed spacer instead.</p>
+            <p class="use"><b>Use it for</b> a label at the left and its value hard against the right, without counting blanks.</p>
+          </div>
+          <div class="card">
+            <h3>Rule and label</h3>
+            <p>Dashes corner to corner. A label is centred with a blank each side, the odd dash going left, and needs its own length plus four cells.</p>
+            <p class="use"><b>Use it for</b> naming a block of rows the way a CDU does: <code>----- TRIM -----</code>.</p>
+          </div>
+          <div class="card">
+            <h3>Too long</h3>
+            <p>A run is a fixed width. Content past it is cropped from the end the alignment anchors away from, and the editor warns with the count ahead of time.</p>
+            <p class="use"><b>Use it for</b> nothing: fix it with a width, a shorter label, or a wider run.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================= readings -->
+    <section id="readings" data-group="Screens" data-nav="Readings">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Screens, part 2</span>
+          <h2>Readings: from what DCS sends to what the screen draws</h2>
+        </div>
+        <div class="prose">
+          <p>
+            DCS-BIOS sends a needle as a position, 0 to 65535, and says nothing about what the dial is marked
+            with. <span class="ed">as sent</span> draws the number it sends, which suits counters and
+            selectors. <span class="ed">converted</span> spreads that travel across the numbers on the face,
+            in a straight line, and then applies each step below in this order.
+          </p>
+        </div>
+        <div class="table-scroll">
+          <table class="ref">
+            <thead><tr><th>Step</th><th>File</th><th>What it does</th></tr></thead>
+            <tbody>
+              <tr><td>1. Convert</td><td><code>reads</code></td><td>Both ends of the face. May start below zero (<code>[-10, 12]</code>) or run backwards (<code>[100, 0]</code>).</td></tr>
+              <tr><td>2. Round</td><td><code>decimals</code>, <code>round</code></td><td>To that many places, to the nearest, or <code>"down"</code> so a drum shows a digit only once it has reached it.</td></tr>
+              <tr><td>3. Wrap</td><td><code>wrap</code></td><td>Start again from 0 every this many. After rounding, so 359.7 draws 0, not 360.</td></tr>
+              <tr><td>4. Draw as</td><td><code>value_aliases</code></td><td>A word in place of the number, matched against what the face reads. <code>"3"</code>, <code>"0,1,2"</code> or a band <code>"-1.5..-0.1"</code>, ends included. Each may take a colour, or inverse.</td></tr>
+              <tr><td>5. Sign</td><td><code>abs</code></td><td><span class="ed">without its sign</span>: only when no alias claimed the reading, so a band written for negatives still matches.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="demo" id="demo-reading">
+          <div class="demo-head"><span class="t">Follow one reading through</span><span class="try">Try it</span></div>
+          <div class="demo-body">
+            <div class="controls">
+              <div class="row"><span class="lbl">Example</span><select id="r-preset"></select></div>
+              <div class="row"><span class="lbl">DCS sends</span><input type="range" id="r-raw" /><span class="mono" id="r-rawtext"></span></div>
+              <div class="row"><span class="lbl">Draw it</span>
+                <div class="seg" id="r-mode">
+                  <button type="button" data-v="sent" aria-pressed="false">as sent</button>
+                  <button type="button" data-v="converted" aria-pressed="true">converted</button>
+                </div>
+              </div>
+              <div class="row" data-conv><span class="lbl">reads</span><input type="number" id="r-lo" step="any" /> to <input type="number" id="r-hi" step="any" /></div>
+              <div class="row" data-conv><span class="lbl">decimals</span><input type="number" id="r-dp" min="0" max="3" /><span class="lbl" style="min-width: 0">round</span><select id="r-round"><option value="nearest">to the nearest</option><option value="down">down</option></select></div>
+              <div class="row" data-conv><span class="lbl">wrap</span><input type="number" id="r-wrap" min="0" step="any" placeholder="never" /></div>
+              <div class="row" data-conv id="r-absrow"><span class="lbl">sign</span><label><input type="checkbox" id="r-abs" /> without its sign</label></div>
+              <div class="row"><span class="lbl">draw as</span><span class="note">reads, then what to draw and its colour</span></div>
+              <div class="pieces" id="r-aliases"></div>
+              <div class="row"><button type="button" class="chip" id="r-addalias">+ alias</button></div>
+            </div>
+            <div class="out">
+              <div class="pipe" id="r-pipe"></div>
+              <div class="glass"><div class="cells" id="r-cells" style="--n: 8"></div></div>
+              <pre id="r-json"></pre>
+            </div>
+          </div>
+        </div>
+        <p class="note">
+          Two aliases claiming one reading is a caution, and the lower one draws. An alias wholly outside
+          <code>reads</code> is a caution too: it is usually a band written in raw counts on a converted face.
+        </p>
+      </div>
+    </section>
+
+    <!-- ============================================================ glass -->
+    <section id="glass" data-group="Screens" data-nav="Each glass">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Screens, part 3</span>
+          <h2>What each glass can do</h2>
+        </div>
+        <div class="prose">
+          <p>
+            Three kinds of screen take pages. The MCDU and the PFPs share a <strong>text grid</strong> that
+            draws from a font, in colour and in two sizes. The UFC is a <strong>segment display</strong>, and
+            the ICP's DED a <strong>pixel screen</strong> that can draw inverse. Some settings mean something
+            on only one of them, and the check refuses them elsewhere rather than drawing nothing.
+          </p>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <h3>Colour</h3>
+            <p>Per piece, on a text grid. White when left out. An alias can carry its own, so a reading can turn red in a band.</p>
+            <div class="swatches" id="g-colours"></div>
+          </div>
+          <div class="card">
+            <h3>Small</h3>
+            <p>The small font, for a CDU's labels. Fonts draw fewer characters small than large, so both sizes are checked.</p>
+            <p class="use"><b>Text grid only.</b></p>
+          </div>
+          <div class="card">
+            <h3>Colours from a signal</h3>
+            <p>A second signal, one letter per cell, and what each letter means. The CH-47F sends each CDU line with a <code>_COLOR</code> twin.</p>
+            <pre><span class="k">"colours"</span>: { "source": "PLT_CDU_LINE1_COLOR",
+  "codes": { "g": "green", "p": "magenta" } }</pre>
+          </div>
+          <div class="card">
+            <h3>Substitutions</h3>
+            <p>One character for another inside a line, for symbols a module sends as stand-ins. The A-10C sends its arrows as <code>»</code> and <code>«</code>.</p>
+            <pre><span class="k">"replace"</span>: { "~": "█" }</pre>
+            <p class="use"><b>Any display.</b> On a text grid every character it writes must be in the font.</p>
+          </div>
+          <div class="card">
+            <h3>Aliases</h3>
+            <p>A whole value the glass cannot draw, swapped for one it can. The Hornet sends its scratchpad cursor as <code>--</code> where the cockpit shows <code>_</code>.</p>
+            <pre><span class="k">"aliases"</span>: { "--": "_" }</pre>
+            <p class="use"><b>Not</b> the same as draw as: that one matches a number's reading.</p>
+          </div>
+          <div class="card">
+            <h3>Inverse</h3>
+            <p>A filled box with the character knocked out. <code>format</code> names a second text signal marking which cells, as the F-16 DED sends <code>DED_L1_FORMAT</code>.</p>
+            <p class="use"><b>Glass that draws inverse</b>, which today is the DED.</p>
+          </div>
+          <div class="card">
+            <h3>Seat</h3>
+            <p>Restrict a field to one crew station. Two fields may share cells only when their seats differ, since both stations cannot be occupied at once.</p>
+            <pre>{ "cells": "34", "source": "PLT_CHAN", <span class="k">"seat"</span>: 0 },
+{ "cells": "34", "source": "OP_CHAN",  <span class="k">"seat"</span>: 1 }</pre>
+            <p class="use"><b>Only</b> on the five modules that export <code>SEAT_POSITION</code>.</p>
+          </div>
+          <div class="card">
+            <h3>Font</h3>
+            <p>An aircraft with a CDU of its own draws in that CDU's font, which wins. Any other aircraft takes the profile's <span class="ed">font</span>, picked in the editor.</p>
+            <p class="use"><b>Text grid only.</b> Until a font is picked, there is nothing to check a field against.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================================ pages -->
+    <section id="pages" data-group="Screens" data-nav="Pages and slots">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Screens, part 4</span>
+          <h2>Pages and slots</h2>
+        </div>
+        <div class="prose">
+          <p>
+            A <strong>page</strong> is a named screen's worth of fields, kept in a library beside the profiles
+            and shared by every profile on the same module. A profile gives each screen one
+            <strong>slot</strong> per page key, and ticks the one a mission starts on. A slot shows a page,
+            a <span class="ed">Blank</span> screen, or is <span class="ed">Disabled</span>.
+          </p>
+          <p>
+            In flight, hold the page modifier from Settings and press a page key. Blank takes the screen dark;
+            Disabled ignores the key and leaves the page up. The modifier counts only when it is the only one of
+            Ctrl, Shift and Alt held, and DCS still sees the press, so keep that combination unbound there.
+          </p>
+        </div>
+        <div class="table-scroll">
+          <table class="ref">
+            <thead><tr><th>Screen</th><th>Page keys, slots 1 to 6</th></tr></thead>
+            <tbody>
+              <tr><td>MCDU, PFP-3N, PFP-7, PFP-4</td><td class="mono">LSK 1L, 2L, 3L, 4L, 5L, 6L</td></tr>
+              <tr><td>CarrierAce UFC</td><td class="mono">A/P, IFF, TCN, ILS, D/N, BCN</td></tr>
+              <tr><td>ViperAce ICP (DED)</td><td class="mono">COM 1, COM 2, IFF, LIST, A-A, A-G</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="demo" id="demo-pages">
+          <div class="demo-head"><span class="t">Swap a screen</span><span class="try">Try it</span></div>
+          <div class="demo-body">
+            <div class="controls">
+              <div class="row"><span class="lbl">Panel</span>
+                <div class="seg" id="p-panel">
+                  <button type="button" data-v="mcdu" aria-pressed="true">MCDU</button>
+                  <button type="button" data-v="ufc" aria-pressed="false">UFC</button>
+                  <button type="button" data-v="icp" aria-pressed="false">ICP</button>
+                </div>
+              </div>
+              <div class="slots" id="p-slots"></div>
+              <div class="row"><span class="lbl">Setting</span><select id="p-mod"><option value="Ctrl">Ctrl</option><option value="Shift">Shift</option><option value="Alt">Alt</option></select><span class="note">the page modifier</span></div>
+              <div class="row"><span class="lbl">Holding</span>
+                <button type="button" class="chip" data-hold="Ctrl" aria-pressed="true">Ctrl</button>
+                <button type="button" class="chip" data-hold="Shift" aria-pressed="false">Shift</button>
+                <button type="button" class="chip" data-hold="Alt" aria-pressed="false">Alt</button>
+              </div>
+            </div>
+            <div class="out">
+              <div class="screen" id="p-screen"></div>
+              <div class="keys" id="p-keys"></div>
+              <div class="row"><button type="button" class="chip" id="p-load">Load the mission again</button></div>
+              <div class="log" id="p-log" aria-live="polite"></div>
+            </div>
+          </div>
+        </div>
+        <div class="cards">
+          <div class="card">
+            <h3>In the profile</h3>
+            <pre><span class="k">"screens"</span>: {
+  "MCDU_Captain": {
+    <span class="k">"start"</span>: 1,
+    <span class="k">"slots"</span>: [
+      { "page": "a10c-cdu", "key": null },
+      { "page": null, "key": null },  <span class="c">// Blank</span>
+      null, null, null, null           <span class="c">// Disabled</span>
+    ] } }</pre>
+          </div>
+          <div class="card">
+            <h3>What to know</h3>
+            <p>A page works in every profile on its module, and only on the screen it was drawn for. Editing a page changes it everywhere it is used; the editor lists where. <span class="ed">Save page</span> writes the page, apart from the profile's Save.</p>
+            <p>Deleting a page disables its slots rather than blanking them, so no screen goes dark that nobody chose to. The page shown is not remembered: each aircraft load starts on the start slot.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======================================================= dictionary -->
+    <section id="dictionary" data-group="Reference" data-nav="Dictionary">
+      <div class="wrap">
+        <div class="section-head">
+          <span class="eyebrow">Every term</span>
+          <h2>Dictionary</h2>
+        </div>
+        <div class="dict-tools">
+          <input type="search" id="d-find" placeholder="Find a word: scale, gap, follows, blank..." aria-label="Find a term" />
+          <span class="dict-count" id="d-count"></span>
+        </div>
+        <dl class="dict" id="d-list"></dl>
+      </div>
+    </section>
+
+      </main>
+    </div>
+
+    <footer>
+      <div class="wrap">
+        <div class="foot">
+          <span>
+            The full model, with the reasons behind each rule, is
+            <a href="https://github.com/cbass2404/wctrl-module-signal-converter/blob/main/docs/CONFIG.md">CONFIG.md</a>.
+          </span>
+          <span><a href="./">DCS Signal Converter</a> &middot; <a href="https://github.com/cbass2404/wctrl-module-signal-converter">GitHub</a></span>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      "use strict";
+      const $ = (id) => document.getElementById(id);
+      const h = (tag, attrs = {}, ...kids) => {
+        const n = document.createElement(tag);
+        for (const [k, v] of Object.entries(attrs)) {
+          if (k === "class") n.className = v;
+          else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+          else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+        }
+        n.append(...kids.filter((k) => k != null));
+        return n;
+      };
+      // Indented, but with a list of plain values kept on one line, as the
+      // profile files read.
+      const json = (o) =>
+        JSON.stringify(o, null, 2).replace(/\[\s+([^[\]{}]*?)\s+\]/g, (_, inner) => `[${inner.split(/,\s*/).join(", ")}]`);
+
+      /** A segmented control: returns a getter, calls back on change. */
+      function seg(id, onChange) {
+        const host = $(id);
+        let value = host.querySelector('[aria-pressed="true"]')?.dataset.v;
+        host.addEventListener("click", (e) => {
+          const b = e.target.closest("button");
+          if (!b) return;
+          value = b.dataset.v;
+          for (const x of host.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x === b));
+          onChange();
+        });
+        return {
+          get: () => value,
+          set: (v) => {
+            value = v;
+            for (const x of host.querySelectorAll("button")) x.setAttribute("aria-pressed", String(x.dataset.v === v));
+          },
+        };
+      }
+      function toggle(btn, onChange) {
+        btn.addEventListener("click", () => {
+          btn.setAttribute("aria-pressed", String(btn.getAttribute("aria-pressed") !== "true"));
+          onChange();
+        });
+        return () => btn.getAttribute("aria-pressed") === "true";
+      }
+      function glow(lens, value, max) {
+        lens.style.setProperty("--v", max > 0 ? String(value / max) : "0");
+      }
+
+      /* ---------------------------------------------------------- sidebar */
+      // Built from the headings, so the sidebar can never disagree with the
+      // page: each section by its short name under its group, each demo
+      // under its section, and every one of those titles a link to itself.
+      (() => {
+        const side = $("side");
+        const links = new Map();
+        let group = null;
+        for (const sec of document.querySelectorAll("section[data-nav]")) {
+          if (sec.dataset.group !== group) {
+            group = sec.dataset.group;
+            side.append(h("div", { class: "grp" }, group));
+          }
+          const h2 = sec.querySelector(".section-head h2");
+          h2.replaceChildren(h("a", { class: "self", href: `#${sec.id}` }, ...h2.childNodes));
+          const top = h("a", { href: `#${sec.id}` }, sec.dataset.nav);
+          side.append(top);
+          links.set(sec, top);
+          for (const demo of sec.querySelectorAll(".demo[id]")) {
+            const t = demo.querySelector(".demo-head .t");
+            side.append(h("a", { class: "sub", href: `#${demo.id}` }, t.textContent));
+            t.replaceChildren(h("a", { class: "self", href: `#${demo.id}` }, ...t.childNodes));
+          }
+        }
+        // The section nearest the top of the window is the one being read.
+        const mark = () => {
+          let here = null;
+          for (const sec of links.keys()) if (sec.getBoundingClientRect().top <= 120) here = sec;
+          for (const [sec, a] of links) a.classList.toggle("here", sec === here);
+        };
+        addEventListener("scroll", mark, { passive: true });
+        mark();
+
+        // The drawer, on a narrow window. Picking a link, tapping the page
+        // behind it or Escape puts it away; on a wide window none of this
+        // shows, since the menu button and the scrim are not drawn there.
+        const menu = $("menu");
+        const scrim = $("scrim");
+        const show = (open) => {
+          side.classList.toggle("open", open);
+          scrim.hidden = !open;
+          menu.setAttribute("aria-expanded", String(open));
+        };
+        menu.addEventListener("click", () => show(!side.classList.contains("open")));
+        scrim.addEventListener("click", () => show(false));
+        side.addEventListener("click", (e) => {
+          if (e.target.closest("a")) show(false);
+        });
+        addEventListener("keydown", (e) => {
+          if (e.key === "Escape" && side.classList.contains("open")) {
+            show(false);
+            menu.focus();
+          }
+        });
+      })();
+
+      /* ------------------------------------------------------------ lamps */
+      // The engine's rule, word for word: a test resolves to On or At zero,
+      // except scale, which spreads its range over the lamp's whole travel.
+      function test(when, value, on, off, max) {
+        const [k, p] = Object.entries(when)[0];
+        let lit;
+        if (k === "equals") lit = value === p;
+        else if (k === "in") lit = p.includes(value);
+        else if (k === "gte") lit = value >= p;
+        else if (k === "lte") lit = value <= p;
+        else if (k === "between") lit = value >= p[0] && value <= p[1];
+        else {
+          const [lo, hi] = p;
+          if (hi <= lo) return off;
+          return Math.floor(((Math.min(Math.max(value, lo), hi) - lo) * max) / (hi - lo));
+        }
+        return lit ? Math.min(on, max) : off;
+      }
+      /** A group: the dimmest any condition asks for. A zero takes At zero. */
+      const allOf = (values) => Math.min(...values);
+      const floor = (v, off) => (v === 0 ? off : v);
+
+      // ---- one condition
+      (() => {
+        const signals = [
+          { id: "GEAR_N_SAFE", name: "Nose Gear Safe (green)", max: 1, values: [[0, "off"], [1, "on"]] },
+          { id: "FLAPS_SWITCH", name: "Flaps Setting DN - MVR - UP", max: 2, values: [[0, "DN"], [1, "MVR"], [2, "UP"]] },
+          { id: "FLAP_POS", name: "Flap Position Indicator", max: 65535 },
+          { id: "LCP_CONSOLE", name: "Console Lights", max: 65535 },
+        ];
+        const labels = { equals: "is exactly", in: "is one of", gte: "is at least", lte: "is at most", between: "is between", scale: "scaled across" };
+        const sel = $("t-signal");
+        for (const s of signals) sel.append(h("option", { value: s.id }, `${s.id}  ${s.name}`));
+        const kind = $("t-kind");
+        const params = $("t-params");
+        // A new kind of lamp starts at its own top, as a new row in the editor does.
+        const lamp = seg("t-lamp", () => {
+          $("t-on").value = lamp.get() === "indicator" ? 1 : 255;
+          draw();
+        });
+        let when;
+
+        const sig = () => signals.find((s) => s.id === sel.value);
+        function offerTests() {
+          const s = sig();
+          kind.textContent = "";
+          const kinds = s.values ? ["equals", "in"] : ["gte", "lte", "between", "scale"];
+          for (const k of kinds) kind.append(h("option", { value: k }, labels[k]));
+          kind.value = s.values ? "equals" : s.id === "LCP_CONSOLE" ? "scale" : "gte";
+          const range = $("t-value");
+          range.max = s.max;
+          range.value = s.values ? 1 : Math.round(s.max * 0.55);
+          lamp.set(s.values && s.max === 1 ? "indicator" : "dimmer");
+          $("t-on").value = lamp.get() === "indicator" ? 1 : 255;
+          buildParams();
+        }
+        function num(v, onInput) {
+          const i = h("input", { type: "number", min: 0, max: sig().max, value: v });
+          i.addEventListener("input", onInput);
+          return i;
+        }
+        function buildParams() {
+          const s = sig();
+          const k = kind.value;
+          params.textContent = "";
+          const half = Math.round(s.max / 2);
+          if (k === "equals") {
+            const pick = h("select");
+            for (const [v, l] of s.values) pick.append(h("option", { value: v }, `${v}, ${l}`));
+            pick.value = "1";
+            const set = () => ((when = { equals: Number(pick.value) }), draw());
+            pick.addEventListener("change", set);
+            params.append(pick);
+            set();
+          } else if (k === "in") {
+            const boxes = s.values.map(([v, l]) => {
+              const b = h("input", { type: "checkbox", value: v });
+              b.checked = v !== 0;
+              b.addEventListener("change", set);
+              params.append(h("label", {}, b, ` ${l} `));
+              return b;
+            });
+            function set() {
+              when = { in: boxes.filter((b) => b.checked).map((b) => Number(b.value)) };
+              draw();
+            }
+            set();
+          } else if (k === "gte" || k === "lte") {
+            const i = num(half, () => ((when = { [k]: Number(i.value) || 0 }), draw()));
+            params.append(i);
+            when = { [k]: half };
+          } else {
+            const lo = num(k === "scale" ? 0 : Math.round(s.max * 0.3), set);
+            const hi = num(k === "scale" ? s.max : Math.round(s.max * 0.7), set);
+            params.append(lo, " and ", hi);
+            function set() {
+              when = { [k]: [Number(lo.value) || 0, Number(hi.value) || 0] };
+              draw();
+            }
+            set();
+            return;
+          }
+          draw();
+        }
+        function draw() {
+          if (!when) return;
+          const s = sig();
+          const max = lamp.get() === "indicator" ? 1 : 255;
+          for (const i of [$("t-on"), $("t-off")]) {
+            i.max = max;
+            if (Number(i.value) > max) i.value = max;
+          }
+          const scale = "scale" in when;
+          $("t-onrow").style.opacity = scale ? 0.4 : 1;
+          $("t-on").disabled = scale;
+          if (max === 1 && !scale && Number($("t-on").value) === 0) $("t-on").value = 1;
+          const on = Number($("t-on").value);
+          const off = Number($("t-off").value);
+          const v = Number($("t-value").value);
+          const named = s.values ? ` (${s.values.find(([x]) => x === v)?.[1]})` : "";
+          $("t-valtext").textContent = `${v}${named}`;
+          const out = floor(test(when, v, on, off, max), off);
+          glow($("t-lens"), out, max);
+          $("t-out").textContent = `${out} of ${max}`;
+          const [k, p] = Object.entries(when)[0];
+          const said = k === "scale" ? `follows it, scaled from ${p[0]} to ${p[1]}` : `${labels[k]} ${Array.isArray(p) ? p.join(k === "between" ? " and " : ", ") : p}`;
+          $("t-say").innerHTML = `The lamp is <b>${out}</b>: ${s.id} ${said}, and reads ${v}.`;
+          const row = { conditions: [{ source: s.id, on_when: when }] };
+          if (!scale && on !== max) row.on = on;
+          if (off) row.off = off;
+          $("t-json").textContent = json(row);
+        }
+        sel.addEventListener("change", offerTests);
+        kind.addEventListener("change", buildParams);
+        for (const id of ["t-on", "t-off", "t-value"]) $(id).addEventListener("input", draw);
+        offerTests();
+      })();
+
+      // ---- and: flaps
+      (() => {
+        const target = { 2: 0, 1: 23000, 0: 65535 };
+        let pos = 0;
+        let timer = null;
+        const lever = seg("a-lever", move);
+        const mode = seg("a-mode", draw);
+        const band = [20000, 26000];
+        function move() {
+          clearInterval(timer);
+          const to = target[lever.get()];
+          timer = setInterval(() => {
+            const step = 900;
+            pos = Math.abs(to - pos) <= step ? to : pos + Math.sign(to - pos) * step;
+            draw();
+            if (pos === to) clearInterval(timer);
+          }, 30);
+        }
+        function draw() {
+          const l = Number(lever.get());
+          $("a-pos").value = pos;
+          $("a-postext").textContent = pos;
+          const conds = [{ source: "FLAP_POS", on_when: { between: band } }];
+          if (mode.get() === "two") conds.unshift({ source: "FLAPS_SWITCH", on_when: { equals: 1 } });
+          const vals = conds.map((c) => test(c.on_when, c.source === "FLAP_POS" ? pos : l, 1, 0, 1));
+          const out = allOf(vals);
+          glow($("a-lens"), out, 1);
+          $("a-out").textContent = out ? "on" : "off";
+          $("a-json").textContent = json({ led: "HALF", conditions: conds });
+        }
+        draw();
+      })();
+
+      // ---- or: seats
+      (() => {
+        const seat = seg("o-seat", draw);
+        const plt = toggle($("o-plt"), draw);
+        const cpg = toggle($("o-cpg"), draw);
+        function draw() {
+          const s = Number(seat.get());
+          const a = allOf([test({ equals: 1 }, plt() ? 1 : 0, 1, 0, 1), test({ equals: 0 }, s, 1, 0, 1)]);
+          const b = allOf([test({ equals: 1 }, cpg() ? 1 : 0, 1, 0, 1), test({ equals: 1 }, s, 1, 0, 1)]);
+          const out = Math.max(a, b);
+          glow($("o-lens"), out, 1);
+          $("o-out").textContent = `${out ? "on" : "off"}  (${a} or ${b})`;
+          $("o-json").textContent = json({
+            led: "Master_Caution",
+            any_of: [
+              { conditions: [{ source: "PLT_MASTER_CAUTION_L", on_when: { equals: 1 } }, { source: "SEAT_POSITION", on_when: { equals: 0 } }] },
+              { conditions: [{ source: "CPG_MASTER_CAUTION_L", on_when: { equals: 1 } }, { source: "SEAT_POSITION", on_when: { equals: 1 } }] },
+            ],
+          });
+        }
+        draw();
+      })();
+
+      // ---- or: moved last
+      (() => {
+        let last = null;
+        const pick = seg("l-pick", draw);
+        for (const id of ["l-plt", "l-rio"]) {
+          $(id).addEventListener("input", () => {
+            last = id;
+            draw();
+          });
+        }
+        function draw() {
+          const p = Number($("l-plt").value);
+          const r = Number($("l-rio").value);
+          $("l-plttext").textContent = `${p} of 8`;
+          $("l-riotext").textContent = `${r} of 8`;
+          const vp = test({ scale: [0, 8] }, p, 255, 0, 255);
+          const vr = test({ scale: [0, 8] }, r, 255, 0, 255);
+          let out;
+          let why;
+          if (pick.get() === "latest" && last) {
+            out = last === "l-plt" ? vp : vr;
+            why = `The ${last === "l-plt" ? "pilot's" : "RIO's"} knob moved last, so it drives the lamp, dark or not.`;
+          } else {
+            out = Math.max(vp, vr);
+            why =
+              pick.get() === "latest"
+                ? "Neither knob has moved yet, so the brightest branch lights the lamp. Turn one."
+                : "The brighter knob wins. To dim, both must come down.";
+          }
+          glow($("l-lens"), out, 255);
+          $("l-out").textContent = `${out} of 255`;
+          $("l-say").textContent = why;
+        }
+        draw();
+      })();
+
+      // ---- match another lamp
+      (() => {
+        const fl = seg("m-floor", draw);
+        $("m-knob").addEventListener("input", draw);
+        function draw() {
+          const k = Number($("m-knob").value);
+          $("m-knobtext").textContent = k;
+          const back = floor(test({ scale: [0, 65535] }, k, 255, 0, 255), 0);
+          const flag = back === 0 ? Number(fl.get()) : back;
+          const mfd = back;
+          glow($("m-back"), back, 255);
+          glow($("m-flag"), flag, 255);
+          glow($("m-mfd"), mfd, 255);
+          $("m-backv").textContent = back;
+          $("m-flagv").textContent = flag;
+          $("m-mfdv").textContent = mfd;
+          $("m-say").textContent =
+            back === 0
+              ? Number(fl.get())
+                ? "Knob at zero. FLAG takes its own At zero, 255, so the flag lamps under it stay readable by day. The MFD has no floor and goes dark."
+                : "Knob at zero, and FLAG has no floor: it goes to 0, and every flag lamp it governs goes dark with it. The editor cautions on this."
+              : "Both matching lamps take the backlight's value, clamped to what each accepts.";
+        }
+        draw();
+      })();
+
+      /* ---------------------------------------------------------- glass */
+      const INK = {
+        white: "#e8e8e8",
+        amber: "#ffb000",
+        cyan: "#3fd0e0",
+        green: "#3fe070",
+        magenta: "#e05ad8",
+        red: "#ff4a4a",
+        yellow: "#f5e342",
+        brown: "#b07a3e",
+        grey: "#8a8f96",
+        khaki: "#c3b27a",
+        black: "#000000",
+      };
+      for (const [name, hex] of Object.entries(INK)) {
+        $("g-colours").append(h("span", { style: `color:${hex}` }, name));
+      }
+
+      /** Pad or crop to `width`, the engine's `pad_before` for both. */
+      function fitTo(glyphs, width, align) {
+        const before = (len, w) => {
+          const spare = Math.max(0, w - len);
+          return align === "right" ? spare : align === "centre" ? spare - Math.floor(spare / 2) : 0;
+        };
+        if (glyphs.length > width) {
+          const front = before(width, glyphs.length);
+          return glyphs.slice(front, front + width);
+        }
+        const out = Array.from({ length: before(glyphs.length, width) }, () => ({ ch: " " }));
+        out.push(...glyphs);
+        while (out.length < width) out.push({ ch: " " });
+        return out;
+      }
+      /** The engine's `divider_rule`: dashes, a label centred, the odd dash left. */
+      function rule(width, label, colour, labelColour) {
+        const out = Array.from({ length: width }, () => ({ ch: "-", colour }));
+        if (!label || width < label.length + 4) return out;
+        const spare = width - label.length - 2;
+        const at = spare - Math.floor(spare / 2) + 1;
+        out[at - 1] = { ch: " " };
+        out[at + label.length] = { ch: " " };
+        [...label].forEach((c, i) => (out[at + i] = { ch: c, colour: labelColour || colour }));
+        return out;
+      }
+      function paint(host, glyphs, n) {
+        host.style.setProperty("--n", n);
+        host.textContent = "";
+        for (const g of glyphs) {
+          const cls = [g.small ? "small" : "", g.inv ? "inv" : "", g.over ? "over" : ""].filter(Boolean).join(" ");
+          const s = h("span", { class: cls || false, style: `color:${INK[g.colour || "white"]}` });
+          if (g.inv) s.append(h("i", {}, g.ch));
+          else s.textContent = g.ch;
+          host.append(s);
+        }
+      }
+
+      /* ------------------------------------------------------------ chain */
+      (() => {
+        const W = 24;
+        const presets = {
+          "Label left, value right": [
+            { kind: "text", text: "FUEL", colour: "white", small: true },
+            { kind: "gap" },
+            { kind: "reading", id: "FUEL_TOTAL", max: 11000, colour: "green" },
+          ],
+          "Label, reading, unit": [
+            { kind: "text", text: "RALT", colour: "red", small: true },
+            { kind: "text", text: " " },
+            { kind: "reading", id: "PLT_RV5_ALT", max: 750, colour: "green" },
+            { kind: "text", text: "M", colour: "green", small: true },
+          ],
+          "A box keeps the unit still": [
+            { kind: "text", text: "W " },
+            { kind: "reading", id: "WIND_SPEED", max: 200, width: 8, align: "right", colour: "amber" },
+            { kind: "text", text: "KT" },
+          ],
+          "A labelled rule": [{ kind: "rule", label: "TRIM", colour: "amber", labelColour: "white" }],
+          "Three spread across": [
+            { kind: "text", text: "N1", colour: "cyan" },
+            { kind: "gap" },
+            { kind: "reading", id: "RPM", max: 110, width: 3, align: "right", colour: "amber" },
+            { kind: "gap" },
+            { kind: "text", text: "EGT", colour: "cyan" },
+          ],
+          "A rule between two pieces": [
+            { kind: "text", text: "NAV", colour: "cyan" },
+            { kind: "rule", colour: "green" },
+            { kind: "reading", id: "NAV_RANGE", max: 999, colour: "white" },
+          ],
+        };
+        let pieces = [];
+        const sel = $("c-preset");
+        for (const k of Object.keys(presets)) sel.append(h("option", { value: k }, k));
+        const load = () => {
+          pieces = presets[sel.value].map((p) => ({ ...p }));
+          edit();
+        };
+        sel.addEventListener("change", load);
+        $("c-live").addEventListener("input", draw);
+        for (const b of document.querySelectorAll("[data-add]")) {
+          b.addEventListener("click", () => {
+            const kind = b.dataset.add;
+            pieces.push(
+              kind === "text"
+                ? { kind, text: "TEXT", colour: "white" }
+                : kind === "reading"
+                  ? { kind, id: "A_READING", max: 999, colour: "amber" }
+                  : kind === "rule"
+                    ? { kind, colour: "green" }
+                    : { kind },
+            );
+            edit();
+          });
+        }
+        $("c-scale").style.setProperty("--n", W);
+        $("c-scale").append(...Array.from({ length: W }, (_, i) => h("span", {}, i % 4 === 0 ? String(i) : "")));
+
+        function valueOf(p) {
+          return String(Math.round((Number($("c-live").value) / 1000) * p.max));
+        }
+        function layout() {
+          const groups = [];
+          const gaps = [];
+          pieces.forEach((p, i) => {
+            if ((p.kind === "gap" || p.kind === "rule") && !p.width) {
+              gaps.push(i);
+              groups.push([]);
+              return;
+            }
+            if (p.kind === "gap") return groups.push(Array.from({ length: p.width }, () => ({ ch: " " })));
+            if (p.kind === "rule") return groups.push(rule(p.width, p.label, p.colour, p.labelColour));
+            const text = p.kind === "text" ? p.text || "" : valueOf(p);
+            let g = [...text].map((ch) => ({ ch, colour: p.colour, small: p.small }));
+            if (p.width) g = fitTo(g, p.width, p.align || "left");
+            groups.push(g);
+          });
+          const fixed = groups.reduce((n, g) => n + g.length, 0);
+          const spare = Math.max(0, W - fixed);
+          gaps.forEach((at, n) => {
+            const take = Math.floor(spare / gaps.length) + (n < spare % gaps.length ? 1 : 0);
+            const p = pieces[at];
+            groups[at] = p.kind === "rule" ? rule(take, p.label, p.colour, p.labelColour) : Array.from({ length: take }, () => ({ ch: " " }));
+          });
+          const all = groups.flat();
+          return { all, need: fixed };
+        }
+        function draw() {
+          const { all, need } = layout();
+          let shown = all;
+          if (all.length > W) {
+            shown = all.slice(0, W);
+            shown[W - 1] = { ...shown[W - 1], over: true };
+          }
+          paint($("c-cells"), fitTo(shown, W, "left"), W);
+          const gapsN = pieces.filter((p) => (p.kind === "gap" || p.kind === "rule") && !p.width).length;
+          const ruleBad = pieces.find((p) => p.kind === "rule" && p.label && p.width && p.width < p.label.length + 4);
+          let say =
+            need > W
+              ? `This needs <b>${need}</b> cells and the run has ${W}: the last ${need - W} are cropped. Give a reading a width, or shorten a label.`
+              : gapsN
+                ? `The fixed pieces take ${need} of ${W} cells; the ${gapsN > 1 ? `${gapsN} gaps share` : "gap takes"} the other ${W - need}. Move the slider: the ends stay put.`
+                : `${need} of ${W} cells. Without a gap, a reading that changes width moves everything after it.`;
+          if (ruleBad) say += ` A rule labelled "${ruleBad.label}" needs at least ${ruleBad.label.length + 4} cells.`;
+          $("c-say").innerHTML = say;
+          const content = pieces.map((p) => {
+            const o = {};
+            if (p.kind === "text") o.text = p.text;
+            if (p.kind === "reading") (o.source = p.id), (o.reads = [0, p.max]);
+            if (p.kind === "gap" || p.kind === "rule") o.gap = true;
+            if (p.kind === "rule") o.rule = true;
+            if (p.label) o.label = p.label;
+            if (p.labelColour) o.label_colour = p.labelColour;
+            if (p.width) o.width = p.width;
+            if (p.width && p.align && p.align !== "left") o.align = p.align;
+            if (p.colour && p.colour !== "white" && p.kind !== "gap") o.colour = p.colour;
+            if (p.small) o.small = true;
+            return o;
+          });
+          $("c-json").textContent = json({ cells: "24-47", content });
+        }
+        function colourPick(p, key) {
+          const s = h("select", { "aria-label": "colour" });
+          if (key === "labelColour") s.append(h("option", { value: "" }, "same as the rule"));
+          for (const c of Object.keys(INK)) s.append(h("option", { value: c }, c));
+          s.value = p[key] || (key === "labelColour" ? "" : "white");
+          s.addEventListener("change", () => ((p[key] = s.value || undefined), draw()));
+          return s;
+        }
+        function edit() {
+          const host = $("c-pieces");
+          host.textContent = "";
+          pieces.forEach((p, i) => {
+            const row = h("div", { class: "piece" }, h("span", { class: "kind" }, p.kind === "reading" ? "reading" : p.kind));
+            if (p.kind === "text") {
+              const t = h("input", { type: "text", value: p.text, "aria-label": "text" });
+              t.addEventListener("input", () => ((p.text = t.value.toUpperCase()), draw()));
+              row.append(t);
+            }
+            if (p.kind === "reading") {
+              const m = h("input", { type: "number", value: p.max, min: 1, "aria-label": "reads up to" });
+              m.addEventListener("input", () => ((p.max = Math.max(1, Number(m.value) || 1)), draw()));
+              row.append(h("span", { class: "mono", style: "font-size:.78rem" }, p.id), h("label", {}, "reads 0 to ", m));
+            }
+            if (p.kind === "rule") {
+              const l = h("input", { type: "text", value: p.label || "", placeholder: "label", "aria-label": "label" });
+              l.addEventListener("input", () => ((p.label = l.value.toUpperCase() || undefined), draw()));
+              row.append(l, colourPick(p, "colour"), h("label", {}, "label in ", colourPick(p, "labelColour")));
+            }
+            if (p.kind === "text" || p.kind === "reading") row.append(colourPick(p, "colour"));
+            if (p.kind === "text" || p.kind === "reading") {
+              const sm = h("input", { type: "checkbox" });
+              sm.checked = !!p.small;
+              sm.addEventListener("change", () => ((p.small = sm.checked), draw()));
+              row.append(h("label", {}, sm, "small"));
+            }
+            const w = h("input", { type: "number", min: 0, max: W, value: p.width || "", placeholder: "none", "aria-label": "width" });
+            const al = h("select", { "aria-label": "aligned" });
+            for (const a of ["left", "right", "centre"]) al.append(h("option", { value: a }, a));
+            al.value = p.align || "left";
+            al.disabled = !p.width || p.kind === "gap" || p.kind === "rule";
+            w.addEventListener("input", () => {
+              p.width = Number(w.value) || undefined;
+              al.disabled = !p.width || p.kind === "gap" || p.kind === "rule";
+              draw();
+            });
+            al.addEventListener("change", () => ((p.align = al.value), draw()));
+            row.append(h("label", {}, "width ", w));
+            if (p.kind === "text" || p.kind === "reading") row.append(h("label", {}, "aligned ", al));
+            row.append(h("button", { type: "button", class: "x", title: "Remove this piece", onclick: () => (pieces.splice(i, 1), edit()) }, "×"));
+            host.append(row);
+          });
+          draw();
+        }
+        load();
+      })();
+
+      /* --------------------------------------------------------- readings */
+      (() => {
+        const presets = {
+          "Fuel drum digit (F-16)": { id: "FUELTOTALIZER_1K", max: 65535, raw: 27200, reads: [0, 10], dp: 0, round: "down", wrap: 10, aliases: [] },
+          "Radar altimeter (Mi-24P)": { id: "PLT_RV5_ALT", max: 65535, raw: 8738, reads: [0, 750], dp: 0, round: "nearest", aliases: [] },
+          "Heading, once round": { id: "A_HEADING_NEEDLE", max: 65535, raw: 65400, reads: [0, 360], dp: 0, round: "nearest", wrap: 360, aliases: [] },
+          "Pitch trim direction (F-16)": {
+            id: "PITCHTRIMIND",
+            max: 65535,
+            raw: 22000,
+            reads: [-1.5, 1.5],
+            dp: 1,
+            round: "nearest",
+            aliases: [
+              ["-1.5..-0.1", "ND", ""],
+              ["0", "", ""],
+              ["0.1..1.5", "NU", ""],
+            ],
+          },
+          "Pitch trim magnitude (F-16)": { id: "PITCHTRIMIND", max: 65535, raw: 22000, reads: [-1.5, 1.5], dp: 1, round: "nearest", abs: true, aliases: [] },
+          "CMDS mode knob, as sent (F-16)": {
+            id: "CMDS_MODE_KNB",
+            max: 5,
+            raw: 3,
+            sent: true,
+            aliases: [
+              ["0", "OFF", "red"],
+              ["1", "STBY", "red"],
+              ["2", "MAN", ""],
+              ["3", "SEMI", "green"],
+              ["4", "AUTO", "green"],
+              ["5", "BYP", ""],
+            ],
+          },
+        };
+        let cfg;
+        const sel = $("r-preset");
+        for (const k of Object.keys(presets)) sel.append(h("option", { value: k }, k));
+        const mode = seg("r-mode", () => {
+          if (mode.get() === "converted" && !cfg.reads) cfg.reads = [0, cfg.max];
+          if (mode.get() === "sent") cfg.reads = null;
+          fill();
+        });
+
+        function load() {
+          const p = presets[sel.value];
+          cfg = { ...p, reads: p.sent ? null : [...p.reads], aliases: p.aliases.map((a) => [...a]) };
+          fill();
+        }
+        function fill() {
+          mode.set(cfg.reads ? "converted" : "sent");
+          const raw = $("r-raw");
+          raw.max = cfg.max;
+          raw.value = cfg.raw;
+          for (const r of document.querySelectorAll("[data-conv]")) r.hidden = !cfg.reads;
+          if (cfg.reads) {
+            $("r-lo").value = cfg.reads[0];
+            $("r-hi").value = cfg.reads[1];
+            $("r-dp").value = cfg.dp || 0;
+            $("r-round").value = cfg.round || "nearest";
+            $("r-wrap").value = cfg.wrap || "";
+            $("r-abs").checked = !!cfg.abs;
+          }
+          aliases();
+        }
+        function aliases() {
+          const host = $("r-aliases");
+          host.textContent = "";
+          cfg.aliases.forEach((a, i) => {
+            const band = h("input", { type: "text", value: a[0], placeholder: "reads", "aria-label": "reads" });
+            const text = h("input", { type: "text", value: a[1], placeholder: "blank", "aria-label": "draw" });
+            const col = h("select", { "aria-label": "colour" });
+            col.append(h("option", { value: "" }, "piece's colour"));
+            for (const c of Object.keys(INK)) col.append(h("option", { value: c }, c));
+            col.value = a[2];
+            band.addEventListener("input", () => ((a[0] = band.value), draw()));
+            text.addEventListener("input", () => ((a[1] = text.value.toUpperCase()), draw()));
+            col.addEventListener("change", () => ((a[2] = col.value), draw()));
+            host.append(
+              h("div", { class: "piece" }, band, h("span", {}, "→"), text, col, h("button", { type: "button", class: "x", title: "Remove this alias", onclick: () => (cfg.aliases.splice(i, 1), aliases()) }, "×")),
+            );
+          });
+          draw();
+        }
+        $("r-addalias").addEventListener("click", () => {
+          cfg.aliases.push(["", "", ""]);
+          aliases();
+        });
+        sel.addEventListener("change", load);
+        $("r-raw").addEventListener("input", () => ((cfg.raw = Number($("r-raw").value)), draw()));
+        for (const id of ["r-lo", "r-hi", "r-dp", "r-round", "r-wrap", "r-abs"]) {
+          $(id).addEventListener(id === "r-round" || id === "r-abs" ? "change" : "input", () => {
+            cfg.reads = [Number($("r-lo").value) || 0, Number($("r-hi").value) || 0];
+            cfg.dp = Math.min(3, Math.max(0, Number($("r-dp").value) || 0));
+            cfg.round = $("r-round").value;
+            cfg.wrap = Number($("r-wrap").value) || undefined;
+            cfg.abs = $("r-abs").checked;
+            draw();
+          });
+        }
+
+        /** `"3"`, `"0,1,2"`, `"-1.5..-0.1"` or `"1 to 4"`, as the engine reads them. */
+        function parseBand(s) {
+          s = s.trim();
+          if (!s) return null;
+          const range = s.includes("..") ? s.split("..") : s.includes(" to ") ? s.split(" to ") : null;
+          if (range) {
+            const [lo, hi] = range.map(Number);
+            return Number.isFinite(lo) && Number.isFinite(hi) && hi >= lo ? { lo, hi } : "bad";
+          }
+          const vs = s.split(",").map(Number);
+          return vs.every(Number.isFinite) ? { list: vs } : "bad";
+        }
+        const fmt = (x, dp) => {
+          const s = x.toFixed(dp);
+          return Number(s) === 0 ? (0).toFixed(dp) : s;
+        };
+
+        function draw() {
+          const raw = cfg.raw;
+          $("r-rawtext").textContent = raw;
+          const dp = cfg.reads ? cfg.dp || 0 : 0;
+          const [lo, hi] = cfg.reads || [0, cfg.max];
+          const signed = cfg.reads && (lo < 0 || hi < 0);
+          $("r-absrow").hidden = !signed;
+          const travel = raw / cfg.max;
+          const converted = lo + travel * (hi - lo);
+          const half = Math.abs(hi - lo) / cfg.max / 2;
+          const k = 10 ** dp;
+          const rounded = cfg.round === "down" && cfg.reads ? Math.floor((converted + half) * k) / k : Number(converted.toFixed(dp));
+          const every = cfg.reads ? cfg.wrap : undefined;
+          const wrapped = every > 0 ? ((rounded % every) + every) % every : rounded;
+          const reading = Object.is(wrapped, -0) || wrapped === 0 ? 0 : wrapped;
+          const tol = 10 ** -dp / 2;
+          const bands = cfg.aliases
+            .map((a) => ({ a, b: parseBand(a[0]) }))
+            .filter((x) => x.b && x.b !== "bad")
+            .sort((x, y) => (x.b.lo ?? Math.min(...x.b.list)) - (y.b.lo ?? Math.min(...y.b.list)));
+          const hit = bands.find(({ b }) => (b.list ? b.list.some((v) => Math.abs(v - reading) <= tol) : reading >= b.lo - tol && reading <= b.hi + tol));
+          const signless = signed && cfg.abs && !hit ? Math.abs(reading) : reading;
+          const drawn = hit ? hit.a[1] : fmt(signless, dp);
+          const colour = hit && hit.a[2] ? hit.a[2] : "amber";
+
+          const step = (s, v, skip) => h("div", {}, h("span", { class: "s" }, s), h("span", { class: skip ? "v skip" : "v" }, v));
+          const pipe = $("r-pipe");
+          pipe.textContent = "";
+          pipe.append(step("DCS sends", `${raw} of ${cfg.max}`));
+          if (cfg.reads) {
+            pipe.append(
+              step("Convert", `${(travel * 100).toFixed(1)}% of ${lo} to ${hi} = ${converted.toFixed(4).replace(/\.?0+$/, "")}`),
+              step("Round", `${cfg.round === "down" ? "down" : "to the nearest"}, ${dp} place${dp === 1 ? "" : "s"}: ${fmt(rounded, dp)}`),
+              step("Wrap", every > 0 ? `every ${every}: ${fmt(reading, dp)}` : "never", !(every > 0)),
+            );
+          } else {
+            pipe.append(step("Convert", "as sent, no conversion", true));
+          }
+          const bad = cfg.aliases.filter((a) => parseBand(a[0]) === "bad").length;
+          pipe.append(step("Draw as", hit ? `"${hit.a[0]}" claims it: "${hit.a[1]}"${hit.a[2] ? ` in ${hit.a[2]}` : ""}` : cfg.aliases.length ? `no alias claims ${fmt(reading, dp)}${bad ? `; ${bad} not understood` : ""}` : "no aliases", !hit));
+          if (signed) pipe.append(step("Sign", cfg.abs ? (hit ? "an alias drew it, sign unused" : `dropped: ${fmt(signless, dp)}`) : "kept", !cfg.abs || !!hit));
+          pipe.append(step("Screen draws", `"${drawn}"`));
+
+          const glyphs = fitTo([...drawn].map((ch) => ({ ch, colour })), 8, "right");
+          paint($("r-cells"), glyphs, 8);
+
+          const span = { source: cfg.id };
+          if (cfg.reads) {
+            span.reads = cfg.reads;
+            if (dp) span.decimals = dp;
+            if (cfg.round === "down") span.round = "down";
+            if (every > 0) span.wrap = every;
+            if (signed && cfg.abs) span.abs = true;
+          }
+          const va = {};
+          for (const [b, t, c] of cfg.aliases) if (b.trim()) va[b.trim()] = c ? { text: t, colour: c } : t;
+          if (Object.keys(va).length) span.value_aliases = va;
+          span.colour = "amber";
+          $("r-json").textContent = json(span);
+        }
+        load();
+      })();
+
+      /* ------------------------------------------------------------ pages */
+      (() => {
+        const panels = {
+          mcdu: { device: "MCDU_Captain", keys: ["LSK_1L", "LSK_2L", "LSK_3L", "LSK_4L", "LSK_5L", "LSK_6L"], labels: ["LSK 1L", "LSK 2L", "LSK 3L", "LSK 4L", "LSK 5L", "LSK 6L"], pages: ["CDU", "Radios", "Fuel"] },
+          ufc: { device: "CarrierAce_UFC", keys: ["A_P", "IFF", "TCN", "ILS", "D_N", "BCN"], labels: ["A/P", "IFF", "TCN", "ILS", "D/N", "BCN"], pages: ["UFC", "Radios"] },
+          icp: { device: "ViperAce_ICP", keys: ["COM_1", "COM_2", "IFF", "LIST", "A_A", "A_G"], labels: ["COM 1", "COM 2", "IFF", "LIST", "A-A", "A-G"], pages: ["DED", "CMSC"] },
+        };
+        let slots;
+        let start;
+        let showing;
+        const lines = [];
+        const panel = seg("p-panel", setup);
+        const held = {};
+        for (const b of document.querySelectorAll("[data-hold]")) held[b.dataset.hold] = toggle(b, () => {});
+        const log = (s) => {
+          lines.push(s);
+          $("p-log").textContent = lines.slice(-40).join("\n");
+          $("p-log").scrollTop = 1e6;
+        };
+        function setup() {
+          const p = panels[panel.get()];
+          slots = [p.pages[0], p.pages[1], "blank", p.pages[2] || "blank", null, null];
+          start = 1;
+          showing = start;
+          lines.length = 0;
+          editSlots();
+          load();
+        }
+        function editSlots() {
+          const p = panels[panel.get()];
+          const host = $("p-slots");
+          host.textContent = "";
+          slots.forEach((s, i) => {
+            const menu = h("select", { "aria-label": `Slot ${i + 1}` });
+            menu.append(h("option", { value: "off" }, "Disabled"), h("option", { value: "blank" }, "Blank"));
+            for (const name of p.pages) menu.append(h("option", { value: name }, name));
+            menu.value = s === null ? "off" : s;
+            menu.addEventListener("change", () => {
+              slots[i] = menu.value === "off" ? null : menu.value;
+              if (slots[start - 1] === null) start = (slots.findIndex((x) => x !== null) + 1) || null;
+              editSlots();
+            });
+            const radio = h("input", { type: "radio", name: "p-start", disabled: s === null });
+            radio.checked = start === i + 1;
+            radio.addEventListener("change", () => ((start = i + 1), editSlots()));
+            host.append(h("span", { class: "k" }, `${i + 1}  ${p.labels[i]}`), menu, h("label", {}, radio, "start"));
+          });
+          keys();
+        }
+        function keys() {
+          const p = panels[panel.get()];
+          const host = $("p-keys");
+          host.textContent = "";
+          p.labels.forEach((l, i) => host.append(h("button", { type: "button", onclick: () => press(i) }, l)));
+        }
+        function screen() {
+          const s = showing ? slots[showing - 1] : null;
+          const el = $("p-screen");
+          el.textContent = "";
+          if (!showing || s === "blank" || s === null) el.append(h("div", {}, h("small", {}, showing ? `slot ${showing}, blank` : "every slot disabled")));
+          else el.append(h("div", {}, s.toUpperCase(), h("small", {}, `slot ${showing}`)));
+        }
+        function load() {
+          showing = start;
+          const p = panels[panel.get()];
+          log(`aircraft loaded  ->  ${p.device} starts on slot ${start ?? "none"}`);
+          screen();
+        }
+        function press(i) {
+          const p = panels[panel.get()];
+          const mod = $("p-mod").value;
+          const down = ["Ctrl", "Shift", "Alt"].filter((m) => held[m]());
+          const name = `${p.device} ${p.keys[i]}`;
+          if (down.length !== 1 || down[0] !== mod) {
+            log(`${name}  pressed with ${down.join("+") || "no modifier"}: not ${mod} alone, DCS's to use`);
+            return;
+          }
+          const s = slots[i];
+          if (s === null) return log(`${name}  slot ${i + 1} disabled, ignored`);
+          if (showing === i + 1) return log(`${name}  slot ${i + 1} already showing`);
+          showing = i + 1;
+          log(`page     ${name}  ->  slot ${i + 1}, ${s === "blank" ? "blank" : `"${s}"`}`);
+          screen();
+        }
+        $("p-load").addEventListener("click", load);
+        setup();
+      })();
+
+      /* ------------------------------------------------------- dictionary */
+      (() => {
+        // [editor words, file key, where, meaning, section]
+        const T = [
+          ["Alternative", "any_of", "Lamp", "Another group of conditions that can light the lamp. The brightest alternative wins, unless the row picks the one that moved last.", "combining"],
+          ["Always on", "always", "Lamp", "Lit whenever the aircraft is loaded, reading nothing. With On, a fixed brightness. A decision, unlike a row with no conditions.", "other-ways"],
+          ["At zero", "off", "Lamp", "What the lamp shows when its row resolves to zero. A floor, so a gate or flag lamp stays readable by day. A lamp matching another keeps its own.", "other-ways"],
+          ["Aliases", "aliases", "Field piece", "A whole value swapped for one the glass can draw, such as the Hornet's -- cursor drawn as _.", "glass"],
+          ["Aligned", "align", "Field or piece", "Where content sits: left, right or centre. On a piece, inside its width; on a field, across its cells. Centre puts the odd blank on the left.", "fields"],
+          ["As sent", "(no reads)", "Reading", "Draw the number DCS-BIOS sends, unconverted. For counters, selectors and anything already in the units you want.", "readings"],
+          ["Blank", '{"page": null}', "Slot", "A slot that takes the screen dark on purpose. Its key blanks the screen.", "pages"],
+          ["Brightest one", "pick absent", "Lamp", "How alternatives combine by default: the brightest group wins. For on and off tests this is OR.", "combining"],
+          ["Caution", "", "Editor", "Yellow: the profile loads but probably does not do what was meant, such as a gate that goes dark at night. Never stops a save.", "other-ways"],
+          ["Cells", "cells", "Field", "One cell, \"34\", or a run, \"24-47\". On the MCDU, cell n is row n / 24 and column n % 24, from 0. The editor offers named areas instead.", "fields"],
+          ["Chain", "content", "Field", "The pieces a field draws end to end. A field with one piece is written flat, without content.", "fields"],
+          ["Colour", "colour", "Piece", "One of eleven, on a text grid. White when left out.", "glass"],
+          ["Colours from a signal", "colours", "Piece", "A second signal with one letter per cell, and what each letter means. Letters not listed, and every cell until it arrives, take the piece's colour.", "glass"],
+          ["Condition", "conditions", "Lamp", "One signal and one test. Every condition in a group must hold; the lamp takes the dimmest value any of them asks for.", "tests"],
+          ["Converted", "reads", "Reading", "Spread the signal's travel across what the dial is marked with. Required for a number you convert, refused on text.", "readings"],
+          ["Decimals", "decimals", "Reading", "Places to show, 0 to 3. Also sets how close a reading must be to an alias to match it.", "readings"],
+          ["Disabled", "null", "Slot", "A slot not in use. Its key does nothing and leaves the page shown.", "pages"],
+          ["Divider", "divider", "Field", "A whole field drawn as a rule, reading nothing, the way a rule piece alone on its line draws.", "fields"],
+          ["Draw as", "value_aliases", "Reading", "Words in place of numbers, matched against what the face reads: one value, a list, or a band with both ends included. Each may carry a colour or inverse.", "readings"],
+          ["Drive this panel", "disabled_devices", "Panel", "Unticked, the aircraft never writes to that panel, which keeps whatever was last on it. Its rows are kept for when it is ticked again.", "panels"],
+          ["Font", "font", "Profile", "The text grid font for an aircraft with no CDU of its own. An aircraft with one draws in its own font, which wins.", "glass"],
+          ["Gap", "gap", "Piece", "Blanks that take whatever the line leaves, measured last. Several split it evenly, the remainder to the earlier ones. With a width, a fixed spacer.", "fields"],
+          ["Gate", "governs", "Panel lamp", "A lamp that hides others at 0, such as the PTO2's SL and FLAG. The editor cautions when one goes dark with every signal at 0.", "other-ways"],
+          ["Inverse", "inverse, format", "Piece", "A filled box with the character knocked out, on glass that draws it: the DED. format names a signal marking which cells.", "glass"],
+          ["is at least", "gte", "Test", "The signal is at or above a number. Gauges and knobs.", "tests"],
+          ["is at most", "lte", "Test", "The signal is at or below a number. Gauges and knobs.", "tests"],
+          ["is between", "between", "Test", "The signal is inside a band, both ends included.", "tests"],
+          ["is exactly", "equals", "Test", "The signal reports one value. Offered with the positions named.", "tests"],
+          ["is one of", "in", "Test", "The signal reports any of several values.", "tests"],
+          ["Label", "label, label_colour", "Rule", "Text set in the middle of a rule, with a blank each side, in its own colour or the rule's. Needs its length plus four cells.", "fields"],
+          ["Learn", "", "Editor", "Press it, move a control in the cockpit, and what moved rises to the top of the signal list, ranked by how often it moved. Reads only; safe mid-mission.", "tests"],
+          ["Match another lamp", "same_as, same_as_device", "Lamp", "Follow another dimmer's value, on this panel or another. Dimmers only, and the lamp matched must read signals of its own.", "other-ways"],
+          ["Module", "module", "Profile", "The DCS-BIOS catalogue the profile's signals come from. Pages are shared by every profile on the same module.", "pages"],
+          ["Moved last", "pick: latest", "Lamp", "Alternatives follow the branch whose signals changed most recently, dark or not. For a knob per seat with no seat signal.", "combining"],
+          ["Note", "note", "Lamp or field", "Why a row is set the way it is, in your words. Profiles are shared, and a signal id does not say why.", "other-ways"],
+          ["On", "on", "Lamp", "How bright the lamp goes when its test holds. Defaults to the lamp's top. Ignored by scaled across.", "tests"],
+          ["Page", "pages[]", "Library", "A named screen's worth of fields for one display, kept apart from profiles and shared across a module. Saved with Save page.", "pages"],
+          ["Page key", "page_keys", "Panel", "The panel buttons that pick a slot: LSK 1L to 6L on the MCDU and PFPs, A/P to BCN on the UFC, COM 1 to A-G on the ICP.", "pages"],
+          ["Page modifier", "page_modifier", "Settings", "Ctrl, Shift or Alt, held alone with a page key to swap. App wide, in Settings, since what is free depends on your DCS bindings.", "pages"],
+          ["Piece", "content[]", "Field", "One part of a chain: typed text, a reading, a gap or a rule. Styling belongs to the piece, so one line can mix colours and sizes.", "fields"],
+          ["Problem", "", "Editor", "Red: the converter would refuse the profile. Save waits until there are none.", "tests"],
+          ["Reading", "source", "Piece", "A signal drawn as characters: a string as it comes, or a number as sent or converted.", "readings"],
+          ["Reads", "reads", "Reading", "Both ends of the face, as marked on the dial. May start below zero or run backwards.", "readings"],
+          ["Round", "round", "Reading", "To the nearest, or down, so a drum shows a digit only once it has reached it. Before wrap.", "readings"],
+          ["Rule", "gap + rule", "Piece", "A gap drawn as dashes, corner to corner, with an optional label. Text grids only.", "fields"],
+          ["Scaled across", "scale", "Test", "No threshold: brightness follows the signal, its range spread over the lamp's whole travel. For backlights.", "tests"],
+          ["Seat", "seat", "Field", "Draw only for one crew station. Only on modules exporting SEAT_POSITION; dark until the seat is known.", "glass"],
+          ["Signal", "source", "Everywhere", "Anything DCS-BIOS exports for the aircraft: lamps, switches, selectors, gauges, strings. Not only lamps.", "tests"],
+          ["Slot", "slots[]", "Profile", "One per page key: a page, Blank, or Disabled. Slot n is the panel's nth page key.", "pages"],
+          ["Small", "small", "Piece", "The small font on a text grid, for a CDU's labels. Fewer characters are drawn small.", "glass"],
+          ["Start", "start", "Profile", "The slot a screen shows when a mission loads. The page shown is not remembered between loads.", "pages"],
+          ["Substitutions", "replace", "Piece", "One character for another inside a line, for symbols a module sends as stand-ins.", "glass"],
+          ["Text", "text", "Piece", "Characters you type, drawn as they are. Checked against the font.", "fields"],
+          ["Uses", "follows", "Panel", "Drive this panel with a copy of another of the same hardware under another name, such as the MCDU Co-Pilot using the Captain. One step deep.", "panels"],
+          ["Width", "width", "Piece", "Hold a piece to that many cells whatever it reads, so what follows stays put. Content longer than it is cropped from the end its alignment anchors away from.", "fields"],
+          ["Without its sign", "abs", "Reading", "Draw the magnitude. Only when no alias claimed the reading, and offered only on a face that runs below zero.", "readings"],
+          ["Wrap", "wrap", "Reading", "Start again from 0 every this many: a drum digit at 10, a compass at 360. After rounding.", "readings"],
+        ];
+        const slug = (s) => "d-" + s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        const list = $("d-list");
+        const rows = T.sort((a, b) => a[0].localeCompare(b[0])).map(([term, key, where, def, sec]) => {
+          const e = h(
+            "div",
+            { class: "entry", id: slug(term) },
+            h("dt", {}, h("span", {}, term), key ? h("span", { class: "keyname" }, key) : null, h("span", { class: "where" }, where)),
+            h("dd", {}, def + " ", h("a", { class: "see", href: `#${sec}` }, "See it →")),
+          );
+          list.append(e);
+          return { e, text: `${term} ${key} ${where} ${def}`.toLowerCase() };
+        });
+        const none = h("div", { class: "none", hidden: true }, "Nothing by that name. Try the file key, or a word from the meaning.");
+        list.append(none);
+        const find = $("d-find");
+        function filter() {
+          const words = find.value.toLowerCase().split(/\s+/).filter(Boolean);
+          let n = 0;
+          for (const r of rows) {
+            const show = words.every((w) => r.text.includes(w));
+            r.e.hidden = !show;
+            n += show;
+          }
+          none.hidden = n > 0;
+          $("d-count").textContent = `${n} of ${rows.length}`;
+        }
+        find.addEventListener("input", filter);
+        find.addEventListener("keydown", (e) => {
+          if (e.key === "Escape") (find.value = ""), filter();
+        });
+        filter();
+      })();
+    </script>
+  </body>
+</html>

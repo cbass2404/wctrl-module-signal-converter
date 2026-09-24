@@ -3,7 +3,7 @@
 **Your WinWing panels, lit by the cockpit you are actually sitting in.**
 
 Gear lamps that follow the gear. A Master Caution that comes on when the jet's
-does. Panel backlights that dim with the cockpit's console knob. The Hornet UFC
+does. Panel backlights that can dim with the cockpit's console knob. The Hornet UFC
 showing the Hornet UFC, the Viper's DED on the ICP, the A-10C's CDU on your
 MCDU screen, and more.
 
@@ -93,8 +93,9 @@ screen, and on a PFP's, which is the same screen. On any other aircraft the scre
 [editor](#4-make-it-yours): a label you type, a reading beside it, each in the
 colour and size you choose. Open a profile to see exactly what it drives.
 
-Every profile puts every panel backlight on one cockpit knob, so the whole pit
-dims together until you decide otherwise.
+Every profile ties every panel backlight to one row, held at a steady
+brightness, so the whole pit stays readable whatever the cockpit lighting is
+set to. Point that row at a cockpit knob and every panel dims with it.
 
 ---
 
@@ -158,7 +159,7 @@ sets every lamp to match the cockpit as it stands, then follows it from there.
   clears the panels and exits on its own.
 
 To check it is working, fly one of the [shipped aircraft](#what-it-drives) and put
-the gear down, or turn the console lights knob. If nothing moves, see
+the gear down, or watch the panel backlights come up as the cockpit loads. If nothing moves, see
 [Troubleshooting](#troubleshooting).
 
 ### 4. Make it yours
@@ -202,12 +203,13 @@ A few more things the editor does:
   before the aircraft moves, and asked again before a profile left with no
   aircraft is deleted. Saying no to the delete cancels the import. Or merge it
   into a profile you already have for the same module, taking only the panels'
-  lights and the screen lines you tick. **Merge from...** does the same between
+  lights and the page slots you tick. **Merge from...** does the same between
   two of your own profiles, such as the F-14 and F-14BU.
 - **Delete** removes a profile. If that leaves an aircraft with no profile, you
   choose which profile takes it, so splitting a profile and deleting a half
   gives its aircraft back.
-- **Put your own text on a screen.** Where an aircraft leaves rows free, or has
+- **Put your own text on a screen.** Open a page with **Edit page** or
+  **New page** (see Pages, below). Where an aircraft leaves rows free, or has
   no CDU of its own, a row is yours. Start one with `+ text` for characters you
   type or `+ a reading` for a cockpit signal, then add more pieces to it: a
   field is a chain drawn end to end, and each piece takes its own colour and
@@ -218,8 +220,8 @@ A few more things the editor does:
   how many cells it needs.
 - **`+ a rule`** draws a line across a row, for a page that does not fill the
   glass, and can carry a label in the middle naming what it divides. The rule
-  and the label each take their own colour. The A-10C and AH-64D profiles ship
-  with one.
+  and the label each take their own colour. The A-10C, AH-64D and F-16 pages
+  ship with one.
 - **Pages.** Every screen shows pages: the MCDU, the UFC and the ICP's DED
   each have six slots, each showing a page, a blank screen, or nothing. In
   flight, hold Ctrl and press a page key to swap the screen to that slot's
@@ -240,8 +242,10 @@ A few more things the editor does:
 - **Problems** in red stop a save until they are fixed. **Cautions** in yellow are
   about a profile that works but probably not as meant, and never stop a save.
 
-The full profile model, every condition form and the reasons behind them, is in
-[docs/CONFIG.md](docs/CONFIG.md).
+**What every setting means**, with examples you can try in the browser, is in
+[the profile language guide](https://cbass2404.github.io/wctrl-module-signal-converter/language.html),
+also opened by the **?** in the editor's header. The full profile model and the
+reasons behind each rule are in [docs/CONFIG.md](docs/CONFIG.md).
 
 ---
 
@@ -378,15 +382,16 @@ ships, and nothing you do while developing reaches the profiles you fly.
 
 ## Further reading
 
-| Document                                   | What is in it                                                        |
-| ------------------------------------------ | -------------------------------------------------------------------- |
-| [docs/CLI.md](docs/CLI.md)                 | Running the converter by hand, its flags, and reading its output     |
-| [docs/CONFIG.md](docs/CONFIG.md)           | The profile format, every binding form, and how the editor checks it |
-| [docs/PROTOCOL.md](docs/PROTOCOL.md)       | The reverse-engineered HID protocol and every panel's lamp map       |
-| [docs/PERFORMANCE.md](docs/PERFORMANCE.md) | Memory, CPU and install size, and how they were measured             |
-| [CHANGELOG.md](CHANGELOG.md)               | What changed in each release, and which shipped profiles moved       |
-| [docs/STATUS.md](docs/STATUS.md)           | Development status, verified hardware facts, and what is next        |
-| [docs/TODO.md](docs/TODO.md)               | The outstanding work as a checklist, linked into the docs above      |
+| Document                                                                                    | What is in it                                                        |
+| ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| [Profile language](https://cbass2404.github.io/wctrl-module-signal-converter/language.html) | Every test, reading and page setting, with examples and a dictionary |
+| [docs/CLI.md](docs/CLI.md)                                                                  | Running the converter by hand, its flags, and reading its output     |
+| [docs/CONFIG.md](docs/CONFIG.md)                                                            | The profile format, every binding form, and how the editor checks it |
+| [docs/PROTOCOL.md](docs/PROTOCOL.md)                                                        | The reverse-engineered HID protocol and every panel's lamp map       |
+| [docs/PERFORMANCE.md](docs/PERFORMANCE.md)                                                  | Memory, CPU and install size, and how they were measured             |
+| [CHANGELOG.md](CHANGELOG.md)                                                                | What changed in each release, and which shipped profiles moved       |
+| [docs/STATUS.md](docs/STATUS.md)                                                            | Development status, verified hardware facts, and what is next        |
+| [docs/TODO.md](docs/TODO.md)                                                                | The outstanding work as a checklist, linked into the docs above      |
 
 ---
 

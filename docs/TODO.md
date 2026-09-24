@@ -50,8 +50,9 @@ do not.
       and line merging in `merge.rs` can no longer be reached. Remove, or
       give pages a reset of their own.
 
-- [ ] **Site page for UFC and ICP pages.** `docs/index.html` still says pages
-      are the MCDU's; bring it current once flown.
+- [x] ~~**Site page for UFC and ICP pages.**~~ Done 2026-09-24, with the
+      PFPs and the steady backlights, ahead of flying the UFC and ICP pages.
+      The screenshots are Cory's to retake.
 
 - [ ] **See the pages on the panel.** Fly one aircraft per page file and check
       the MCDU looks as it did before the move: A-10C CDU, AH-64D KU, CH-47F

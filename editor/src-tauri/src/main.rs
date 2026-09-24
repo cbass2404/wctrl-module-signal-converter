@@ -10,6 +10,7 @@
 mod check;
 mod claims;
 mod converter;
+mod guide;
 mod learn;
 mod pages;
 mod settings;
@@ -592,7 +593,8 @@ fn main() {
             learn_again,
             learn_stop,
             update::update_check,
-            update::open_update
+            update::open_update,
+            guide::open_guide
         ])
         .run(tauri::generate_context!())
         .expect("starting the editor window");

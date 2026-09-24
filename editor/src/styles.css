@@ -339,15 +339,17 @@ dialog.settings .actions .primary {
   margin-left: auto;
 }
 
-/* The gear in the Profiles header, as tall as the buttons beside it. */
-header button.icon.gear {
+/* The gear and the guide in the header, as tall as the buttons beside them. */
+header button.icon.gear,
+header button.icon.guide {
   width: auto;
   padding: 5px 10px;
   font-size: 16px;
   line-height: 1.3;
 }
 
-header button.icon.gear:hover {
+header button.icon.gear:hover,
+header button.icon.guide:hover {
   color: var(--text);
 }
 

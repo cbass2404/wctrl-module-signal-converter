@@ -14,6 +14,7 @@ rem       but the tag. Uncommitted changes warn and ask.
 rem    2. tag from VERSION.md must not already exist, locally or on origin
 rem    3. the checks the pipeline would fail on: every version in the repo
 rem       agrees with VERSION.md, in HEAD as well as in the working tree,
+rem       every file in HEAD has the same name on disk (case included),
 rem       data\nightly-only.json is current, and data\defaults-previous and
 rem       data\default-pages-previous still hold what the last release shipped
 rem    4. CHANGELOG.md has a section for this version, or you say go anyway
@@ -308,6 +309,23 @@ if errorlevel 1 (
 echo(
 
 :versions_ok
+
+rem Every check from here reads the working tree, and the pipeline reads a
+rem fresh checkout. Windows ignores case, so a file renamed only by case is
+rem renamed here and not in git, and the checkout gets the old name. A check
+rem that matches a name as a string then passes here and fails there, which is
+rem how a page file named for the wrong case once dropped out of
+rem data\nightly-only.json in the pipeline alone.
+echo   checking file names in HEAD against the disk ...
+python tools\case_check.py
+if errorlevel 1 (
+    echo(
+    echo ERROR: git holds names that differ from the disk by case. Record the
+    echo   renames above, merge them to main through a pull request, then
+    echo   pull and re-run.
+    goto :fail
+)
+echo(
 
 rem nightly_only.py rewrites data\nightly-only.json from the latest stable
 rem DCS-BIOS. The release ships the committed file and fails if this would

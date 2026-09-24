@@ -101,6 +101,23 @@ fn a_file_named_by_its_module_key_is_renamed_before_seeding() {
 }
 
 #[test]
+fn a_renamed_file_takes_the_pages_the_snapshot_already_had() {
+    let dir = scratch("legacy-merge");
+    let radios = page("aaaaaa", "Radios", vec![field("0-1", "A")]);
+    let fuel = page("bbbbbb", "Fuel", vec![field("24-25", "B")]);
+    write(&dir, "default-pages", vec![radios.clone(), fuel.clone()]);
+    write(&dir, "default-pages-previous", vec![radios.clone(), fuel]);
+    PageFile { module: "A-10C".into(), pages: vec![radios] }.save(&dir.join("pages").join("A-10C.json")).unwrap();
+    let pages = Pages::new(dir.join("default-pages"), dir.join("pages")).with_previous(dir.join("default-pages-previous"));
+
+    pages.seed().unwrap();
+    assert!(!pages.merge_new("2").unwrap().is_empty());
+    let ids: Vec<String> = library(&dir).on_module("A-10C").iter().map(|p| p.id.clone()).collect();
+    assert_eq!(ids, vec!["aaaaaa", "bbbbbb"], "Fuel shipped before this file was brought up to date, so it is new to it");
+    assert!(!dir.join("pages").join(".renamed").exists(), "and only once");
+}
+
+#[test]
 fn new_pages_come_in_and_deleted_ones_stay_deleted() {
     let dir = scratch("new-deleted");
     let radios = page("aaaaaa", "Radios", vec![field("0-1", "A")]);

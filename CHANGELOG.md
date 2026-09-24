@@ -24,7 +24,9 @@ unless this says what moved.
   neither loaded nor replaced, and every page slot on those aircraft came up
   empty with a warning that the file "says it holds pages for" its own
   aircraft. The old files are now renamed when the editor or the converter
-  starts, with your pages in them as you left them. Where alpha 008 had
+  starts, with your pages in them as you left them, and the pages alpha 008
+  added for those aircraft, such as the A-10C CDU, the F-16 DED and the
+  Hornet UFC, are added to them. Where alpha 008 had
   already added a lowercase file beside an old one, as it did for the F-16
   and the Hornet, the old file is kept and the added one is set aside as
   `.json.seeded`.

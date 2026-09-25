@@ -98,6 +98,8 @@ pub enum Error {
     NoNativeFont(String, String),
     #[error("{0:?} is not a character the font {1} draws, but cells {2} are told to put it there")]
     NotInFont(char, String, String),
+    #[error("{0:?} is not something {1:?} can draw on cells {2}, so they would stay dark where it goes")]
+    NotInGlyphs(String, String, String),
     #[error("a replacement swaps one character for one character; {0:?} to {1:?} is not that")]
     ReplaceNotOneChar(String, String),
     #[error("a piece of cells {1} on display {0:?} has both characters to draw and the signal {2:?} to read; it can have one")]
@@ -248,6 +250,7 @@ impl Error {
                 | Error::AliasBandUnreachable(..)
                 | Error::AliasBandsOverlap(..)
                 | Error::RuleLabelMayNotFit(..)
+                | Error::NotInGlyphs(..)
         )
     }
 
@@ -264,6 +267,9 @@ impl Error {
             Error::RuleLabelMayNotFit(..) => {
                 "It will load anyway: give the rule a fixed width to hold the label for certain."
             }
+            // Only the table's own entries are known, and a value can still
+            // reach the glass by another spelling, so the user decides.
+            Error::NotInGlyphs(..) => "It will load anyway, and may still draw if the glass has it under another spelling.",
             _ => "It will load anyway, in case DCS-BIOS is wrong about it.",
         }
     }
@@ -2315,6 +2321,7 @@ impl Profile {
             if styled || ruled {
                 out.push(Error::StyleNotDrawn(r.display.clone(), r.cells.to_string()));
             }
+            glyph_problems(r, display, out);
             return;
         };
         let mut fonts = Vec::new();
@@ -2380,6 +2387,60 @@ impl Profile {
                         out.push(Error::NotInFont(c, file.to_string(), r.cells.to_string()));
                     }
                 }
+            }
+        }
+    }
+}
+
+/// What typed characters glass with a glyph table cannot draw.
+///
+/// The same check a text grid has, for the UFC and the DED, but a caution
+/// rather than a refusal: the profile loads and the field is flagged, because
+/// it may still draw and that is the user's call. A character the table lacks
+/// is a dark cell on the panel with nothing to say why. What is
+/// checked is what the user wrote, the characters typed into a piece, an
+/// alias band's text and what a `replace` turns a character into, since what
+/// a signal sends is not known until it sends it.
+///
+/// A character only has to be drawable on one of the field's cells. Where it
+/// lands depends on what the readings beside it send, and the UFC mixes cell
+/// shapes within one field, so anything stricter would refuse a field that
+/// works. On the DED every cell is the same shape, so it is exact there.
+///
+/// A field of one cell draws its whole value as one glyph, the way a comm
+/// channel is `" 2"` rather than a blank and a 2, so there a piece's text is
+/// checked whole. A `replace` there rewrites part of a value only the module
+/// knows, and is left alone.
+fn glyph_problems(r: &Readout, display: &Display, out: &mut Vec<Error>) {
+    if r.divider || display.glyphs.is_empty() {
+        return;
+    }
+    let cells: Vec<&Cell> = r.cells.cells().filter_map(|i| display.cell(i)).collect();
+    if cells.is_empty() {
+        return;
+    }
+    let drawn = |value: &str| cells.iter().any(|c| display.glyph(c, value).is_some());
+    let mut refuse = |value: String| {
+        let e = Error::NotInGlyphs(value, r.display.clone(), r.cells.to_string());
+        if !out.iter().any(|o| o.to_string() == e.to_string()) {
+            out.push(e);
+        }
+    };
+    for span in r.content.iter().filter(|s| !s.gap) {
+        let typed = std::iter::once(span.text.as_str())
+            .chain(span.value_aliases.values().map(|a| a.text.as_str()));
+        if cells.len() == 1 {
+            for value in typed.filter(|v| !v.trim().is_empty()) {
+                if !drawn(value) {
+                    refuse(value.to_string());
+                }
+            }
+            continue;
+        }
+        let replaced = span.replace.values().filter_map(|to| to.chars().next());
+        for c in typed.flat_map(str::chars).chain(replaced) {
+            if !c.is_whitespace() && !drawn(&c.to_string()) {
+                refuse(c.to_string());
             }
         }
     }

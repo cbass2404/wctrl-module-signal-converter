@@ -6,8 +6,12 @@
 //! during the same flight. Replaying the first gives the pixels SimAppPro put
 //! on the glass; drawing the second through our map has to give the same
 //! pixels, byte for byte, or we disagree with the hardware.
+//!
+//! The `_2` pair is a second flight, 2026-09-25, through every DED page and
+//! sub-page. Its frames are trimmed to the commits that drew a cell not seen
+//! earlier in the flight, plus the writes those commits build on.
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeSet, HashMap};
 use std::path::Path;
 
 use dsc_config::{Display, DisplayCatalogue, Screen, Transport};
@@ -34,10 +38,12 @@ fn ded() -> Display {
 }
 
 /// The framebuffer after each commit, with the time it was committed.
-fn committed_frames() -> Vec<(String, Vec<u8>)> {
-    let mut fb = vec![0u8; SCREEN_BYTES];
+fn committed_frames(name: &str) -> Vec<(String, Vec<u8>)> {
+    // SimAppPro sometimes writes all 13 rows of line 5, one more than the
+    // screen has, so the buffer runs past it and `line_of` stops at the edge.
+    let mut fb = vec![0u8; LINES * LINE_BYTES];
     let mut out = Vec::new();
-    for line in fixture("ded_simapppro_frames.txt").lines() {
+    for line in fixture(name).lines() {
         let Some(open) = line.find("[f0 ") else { continue };
         let time = line[12..24].to_string();
         let close = open + line[open..].find(']').unwrap();
@@ -61,9 +67,9 @@ fn committed_frames() -> Vec<(String, Vec<u8>)> {
 }
 
 /// Every text and every format DCS-BIOS sent for each line.
-fn bios_lines() -> Vec<(BTreeSet<String>, BTreeSet<String>)> {
+fn bios_lines(name: &str) -> Vec<(BTreeSet<String>, BTreeSet<String>)> {
     let mut out = vec![(BTreeSet::new(), BTreeSet::new()); LINES];
-    for line in fixture("ded_bios_timeline.txt").lines() {
+    for line in fixture(name).lines() {
         let Some(at) = line.find("DED_L") else { continue };
         let name = line[at..].split_whitespace().next().unwrap();
         let (Some(a), Some(b)) = (line.find('"'), line.rfind('"')) else { continue };
@@ -112,8 +118,8 @@ fn the_map_describes_the_ded() {
 #[test]
 fn every_line_simapppro_drew_is_reproduced_from_the_bios_text() {
     let ded = ded();
-    let bios = bios_lines();
-    let frames = committed_frames();
+    let bios = bios_lines("ded_bios_timeline.txt");
+    let frames = committed_frames("ded_simapppro_frames.txt");
     assert!(frames.len() > 20, "only {} frames", frames.len());
 
     let mut reproduced = BTreeSet::new();
@@ -160,12 +166,48 @@ fn every_line_simapppro_drew_is_reproduced_from_the_bios_text() {
 }
 
 #[test]
+fn the_second_flight_reproduces_a_line_with_each_glyph_it_captured() {
+    // Not every line: past CNI and TCN, SimAppPro lays pages out from its own
+    // spreadsheet rather than from what DCS shows. It draws "LIST     a  1"
+    // where DCS-BIOS sends "LIST        1a", and placeholder X's in fields
+    // DCS-BIOS fills in. Those lines are SimAppPro's, not a fault in our map.
+    let ded = ded();
+    let bios = bios_lines("ded_bios_timeline_2.txt");
+    let frames = committed_frames("ded_simapppro_frames_2.txt");
+    assert!(frames.len() > 20, "only {} frames", frames.len());
+
+    // Each text drawn once; there are far more frames than texts.
+    let drawn: Vec<HashMap<Vec<u8>, &String>> = bios
+        .iter()
+        .enumerate()
+        .map(|(line, (texts, formats))| {
+            texts
+                .iter()
+                .flat_map(|text| formats.iter().map(move |format| (text, format)))
+                .map(|(text, format)| (render_line(&ded, line, text, format), text))
+                .collect()
+        })
+        .collect();
+    let mut reproduced = BTreeSet::new();
+    for (_, fb) in &frames {
+        for (line, texts) in drawn.iter().enumerate() {
+            if let Some(text) = texts.get(line_of(fb, line)) {
+                reproduced.insert((*text).clone());
+            }
+        }
+    }
+    for c in "JKWYZ>-/#'".chars() {
+        assert!(reproduced.iter().any(|t| t.contains(c)), "no line with {c:?} was matched");
+    }
+}
+
+#[test]
 fn an_inverse_star_is_the_box_simapppro_draws() {
     // On the TCN page SimAppPro marks the selected fields with inverse stars,
     // on three different lines. Each one has to be our inverse star exactly,
     // in its own cell, which checks the inverse rows sit right on every line.
     let ded = ded();
-    let (_, fb) = committed_frames()
+    let (_, fb) = committed_frames("ded_simapppro_frames.txt")
         .into_iter()
         .find(|(t, _)| t == "13:05:45.199")
         .expect("the TCN frame");

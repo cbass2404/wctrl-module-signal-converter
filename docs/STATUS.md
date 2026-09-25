@@ -1002,10 +1002,20 @@ Still to do: the release-notes list of changed default rows.
    * A readout takes a `format` signal: `i` in `DED_Ln_FORMAT` draws that cell
      inverse, host side, as SimAppPro does. `exact_case` stops `a` (the arrow)
      being looked up as `A`.
-   * 39 of 66 glyphs are captured from SimAppPro's frames; 27 are drawn in the
-     same style and listed in the file. `tools/gen_ded.py` regenerates the
-     font from the two fixtures plus the drawn glyphs. `tests/ded_render.rs` reproduces every
-     captured frame's lines from the DCS-BIOS text, including an inverse one.
+   * The whole font is SimAppPro's. 49 of 66 glyphs are captured from its
+     frames over two flights, 2026-09-18 and 2026-09-25, the second through
+     every DED page and sub-page. The other 17 never appear on the F-16's DED,
+     so no flight will show them; they are read from SimAppPro's own font file,
+     `config/ICP/ICP_font_0.png`, which every captured glyph matches pixel for
+     pixel. Until then 27 were drawn by hand, and most of those drawings were
+     wrong. `tools/gen_ded.py`
+     regenerates the font, and `--check-font` rereads the PNG and checks all
+     66. `tests/ded_render.rs` reproduces every first-flight frame's lines
+     from the DCS-BIOS text, including an inverse one, and a line with each
+     glyph the second flight added.
+   * Past CNI and TCN, SimAppPro lays the DED out its own way rather than as
+     DCS shows it: `LIST     a  1` where DCS-BIOS sends `LIST        1a`, and
+     placeholder X's in fields DCS-BIOS fills in. We draw what DCS-BIOS sends.
    * `data/defaults/f-16.json` maps `DED_L1..5` to the five lines, and the
      panel backlight follows `PRI_CONSOLES_BRT_KNB`.
    * The DED backlight (`Screen_Backlight`, index 1, capture-verified) is
@@ -1021,8 +1031,8 @@ Still to do: the release-notes list of changed default rows.
    Both ICP lamps are verified on hardware: `Backlight` (0) followed the
    PRIMARY CONSOLES knob in the jet.
 
-   Left to do: replace drawn glyphs as captures turn up. The editor got a
-   `format` picker 2026-09-19, offered only on glass that draws inverse.
+   The editor got a `format` picker 2026-09-19, offered only on glass that
+   draws inverse.
 
 5. **Inventory the remaining devices.** The CarrierAce UFC + HUD (`0xbede`) is
    done, see below. So is the **CarrierAce MFD**, 2026-09-18: one dimmer,

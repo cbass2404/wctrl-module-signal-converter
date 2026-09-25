@@ -160,18 +160,17 @@ numbers move and the words do not.
       `tools/gen_ded.py` pairs the two fixtures itself, so there is no
       glyph cache, and rewrites only the font and its two notes in
       `data/displays/ded.json`. A fresh run leaves the file byte for byte.
+- [x] ~~**Replace the drawn DED glyphs.**~~ Done 2026-09-25. A second flight
+      through every DED page captured 10 of the 27. The other 17 never show on
+      the F-16's DED, so they come from SimAppPro's font file, which every
+      captured glyph matches. [STATUS.md](STATUS.md), "The whole font is
+      SimAppPro's"
 - [x] ~~**Name a display from a device spec**, so a part can carry one.~~
       Already done, and the note was out of date: a part names its display in
       `data/devices.json` (`"display": "DED"`), `DeviceSpec::displays` reads it,
       and `every_declared_display_has_a_map` checks each name has a map.
 
 ## Blocked on hardware
-
-- [ ] **Replace the drawn DED glyphs** as captures turn up. The 27 in
-      `data/displays/ded.json` that were drawn by hand rather than captured.
-      Needs a SimAppPro capture of a flight that shows them; `tools/gen_ded.py`
-      says how to fold it in.
-      [STATUS.md](STATUS.md), "39 of 66 glyphs"
 
 - [ ] **VIRPIL backlights.** Blocked until the gear arrives, expected around
       January 2027. The seam it plugs into is already in: every device names a

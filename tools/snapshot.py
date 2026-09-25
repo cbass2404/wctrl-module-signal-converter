@@ -67,8 +67,12 @@ def last_release_tag():
     defaults were written against and that is not a release of this project.
     At release time the tag being cut does not exist yet, which release.cmd
     has already checked, so the newest here is the previous release.
+
+    `versionsort.suffix=-` puts a pre-release below its own release. Without
+    it git ranks v1.0.0-beta.001 above v1.0.0, and the release after 1.0.0
+    would be checked against a beta. Alpha below beta holds either way.
     """
-    out = git("tag", "--list", "v*", "--sort=-v:refname")
+    out = git("-c", "versionsort.suffix=-", "tag", "--list", "v*", "--sort=-v:refname")
     if out is None:
         return None
     for line in out.decode("utf-8", "replace").splitlines():

@@ -237,9 +237,10 @@ A few more things the editor does:
   Manage Converter.
 - **Manage Converter**, under the gear, is for the rare times the converter
   needs restarting. Saving a profile is not one of them. See below.
-- **Reset** puts a profile back to the shipped one. **Reset this lamp** does
-  the same for a single lamp, and shows you what it will reset to before it
-  does.
+- **Reset** puts a profile back to the shipped one. **Reset this lamp** and
+  **Reset this field** do the same for one lamp or one field of a shipped
+  page. **Undo unsaved changes** puts one lamp or field back the way it was
+  last saved. Each shows you what it will put back before it does.
 - **Drive this panel** per panel. Untick it and the profile leaves that panel
   alone entirely, so another program can have it.
 - **Problems** in red stop a save until they are fixed. **Cautions** in yellow are

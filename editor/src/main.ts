@@ -1456,6 +1456,10 @@ interface Session {
    * difference between "changed" and "changed back".
    */
   baseline: string;
+  /** Each lamp as the profile was last saved, keyed as `shipped` is, for its undo. */
+  saved: Map<string, Binding>;
+  /** Every lamp's redraw, run after a save so its undo follows the new baseline. */
+  afterSave: (() => void)[];
   dirty: boolean;
   refreshDirty: () => void;
   /**
@@ -1484,6 +1488,12 @@ interface Session {
  * two parts can never run together into a colliding key.
  */
 const lampKey = (device: string, led: string): string => `${device}\u0000${led}`;
+
+/** Take the profile as it stands as the saved one: the unsaved marker's baseline, and each lamp's undo. */
+function markSaved(session: Session): void {
+  session.baseline = JSON.stringify(session.profile);
+  session.saved = new Map(session.profile.bindings.map((b) => [lampKey(b.device, b.led), structuredClone(b)]));
+}
 
 async function showProfile(file: string): Promise<void> {
   let profile: Profile;
@@ -1538,7 +1548,7 @@ async function showProfile(file: string): Promise<void> {
     book = pageBook(profile.module, file, await openPages(profile.module));
   } catch (e) {
     const why = e instanceof Error ? e.message : String(e);
-    book = pageBook(profile.module, file, { pages: [], broken: why, used: [] });
+    book = pageBook(profile.module, file, { pages: [], broken: why, used: [], shipped: [] });
   }
 
   // Which panels are here, so the page can put them first. Asked again while
@@ -1634,6 +1644,8 @@ async function showProfile(file: string): Promise<void> {
     signals,
     shipped,
     baseline: "",
+    saved: new Map(),
+    afterSave: [],
     dirty: false,
     followSync: [],
     book,
@@ -1698,7 +1710,8 @@ async function showProfile(file: string): Promise<void> {
     void (async () => {
       try {
         await saveProfile(session.file, session.profile);
-        session.baseline = JSON.stringify(session.profile);
+        markSaved(session);
+        for (const redraw of session.afterSave) redraw();
         session.dirty = false;
         state.textContent = "saved";
         save.setAttribute("disabled", "");
@@ -1822,7 +1835,8 @@ async function showProfile(file: string): Promise<void> {
   // Taken after the rows are built, because building them adds a binding for
   // any lamp the file did not already list. Measuring before that would have
   // every profile arrive already dirty.
-  session.baseline = JSON.stringify(session.profile);
+  markSaved(session);
+  for (const redraw of session.afterSave) redraw();
 
   // Checked on open as well as on edit. A profile can be invalid without
   // anyone touching it here: the catalogue is rebuilt when DCS-BIOS updates
@@ -2225,6 +2239,9 @@ function lampRow(
   if (!led.verified) name.append(el("span", { class: "unverified" }, "unverified"));
 
   const output = el("td", { class: "num" });
+  // The binding editor's redraw, for an edit made out here: its undo and
+  // reset compare the output values too.
+  let redrawBinding = (): void => {};
 
   /** The brightness when lit, or why there is none to set. */
   const litCell = (): HTMLElement => {
@@ -2249,6 +2266,7 @@ function lampRow(
       binding.on = Number.isFinite(n) ? Math.min(Math.max(n, 0), led.max) : led.on_value;
       input.value = String(binding.on);
       session.refreshDirty();
+      redrawBinding();
     });
     return el("label", { class: "field" }, "when lit", input);
   };
@@ -2283,6 +2301,7 @@ function lampRow(
       binding.off = Number.isFinite(n) ? Math.min(Math.max(Math.round(n), 0), led.max) : 0;
       input.value = String(binding.off);
       session.refreshDirty();
+      redrawBinding();
     });
     return el("label", { class: "field" }, "at zero", input);
   };
@@ -2346,6 +2365,11 @@ function lampRow(
       },
       deviceName: (key) => all.find((d) => d.key === key)?.display_name ?? key,
       shipped: session.shipped.get(lampKey(device.key, led.name)),
+      saved: () => session.saved.get(lampKey(device.key, led.name)),
+      onRedraw: (redraw) => {
+        redrawBinding = redraw;
+        session.afterSave.push(redraw);
+      },
       onCommit: refreshCount,
       onChange: () => {
         session.refreshDirty();

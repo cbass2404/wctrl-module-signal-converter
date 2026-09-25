@@ -10,7 +10,7 @@
 import { deletePage, newPageId, savePage } from "./api";
 import { confirmAction } from "./confirm";
 import { fieldTable, fontPicker } from "./readout";
-import type { Device, DisplayInfo, Page, PageSlots, PageUse, PagesView, Profile, SignalView } from "./types";
+import type { Device, DisplayInfo, Page, PageSlots, PageUse, PagesView, Profile, Readout, SignalView } from "./types";
 
 /** How many slots a screen has: one per page key the device lists. */
 export function slotCount(device: Device): number {
@@ -43,6 +43,33 @@ interface Editing {
   baseline: string;
   /** Not in the library yet. */
   fresh: boolean;
+  /**
+   * Each field as Save page last wrote it, keyed by the working field it
+   * became, so a field moved to other cells still knows where it came from.
+   * Empty for a new page.
+   */
+  saved: Map<Readout, Readout>;
+  /**
+   * The fields open for editing, with how each stood when its pencil was
+   * clicked, which is what its cancel puts back. `null` for one added during
+   * the edit, whose cancel removes it. Kept here rather than by the rows so a
+   * redraw of the section does not close them.
+   */
+  open: Map<Readout, Readout | null>;
+}
+
+/** A page just opened or just saved, each field tied to how it was saved. */
+function opened(page: Page, device: string, fresh: boolean): Editing {
+  const baseline = JSON.stringify(page);
+  const saved = new Map<Readout, Readout>();
+  if (!fresh) {
+    const was = (JSON.parse(baseline) as Page).fields;
+    page.fields.forEach((f, i) => {
+      const w = was[i];
+      if (w) saved.set(f, w);
+    });
+  }
+  return { page, device, baseline, fresh, saved, open: new Map() };
 }
 
 /** One module's pages, as the window holds them while a profile is open. */
@@ -56,6 +83,8 @@ export interface PageBook {
   broken: string | null;
   /** Every other saved profile's slots on the module. */
   used: PageUse[];
+  /** The module's pages as they shipped. */
+  shipped: Page[];
   editing: Editing | null;
   /** Why the page being edited could not be saved, from the last check. */
   problems: string[];
@@ -89,6 +118,7 @@ export function pageBook(module: string, file: string, view: PagesView): PageBoo
     saved: view.pages,
     broken: view.broken,
     used: view.used.filter((u) => u.file !== file),
+    shipped: view.shipped,
     editing: null,
     problems: [],
     sections: [],
@@ -118,6 +148,7 @@ function update(book: PageBook, view: PagesView): void {
   book.saved = view.pages;
   book.broken = view.broken;
   book.used = view.used.filter((u) => u.file !== book.file);
+  book.shipped = view.shipped;
 }
 
 function redrawAll(book: PageBook): void {
@@ -335,7 +366,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
     // The field rows compare a field's device with its neighbours', so each
     // is put on this one. The page keeps none; Save page takes it off again.
     for (const f of page.fields) f.device = device.key;
-    book.editing = { page, device: device.key, baseline: JSON.stringify(page), fresh };
+    book.editing = opened(page, device.key, fresh);
     book.problems = [];
     redrawAll(book);
     ctx.pageChanged();
@@ -343,10 +374,11 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
 
   /**
    * Take `page` as saved and keep it open, so the editor stays where it was;
-   * only Close shuts it.
+   * only Close shuts it. A field left open is closed, keeping its edit, since
+   * what its cancel would put back is from before the save.
    */
   const saved = (page: Page): void => {
-    book.editing = { page, device: device.key, baseline: JSON.stringify(page), fresh: false };
+    book.editing = opened(page, device.key, false);
     redrawAll(book);
     ctx.pageChanged();
   };
@@ -471,10 +503,33 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
       })();
     });
 
-    const { table } = fieldTable(device, display, ctx.profile, page.fields, false, ctx.signals, () => {
-      refresh();
-      ctx.pageChanged();
-    }, []);
+    // The page as it shipped, when it did, on this device like the working
+    // copy so a field finds its shipped self by its cells. A page made here,
+    // or saved as a new one, has an id nothing shipped with.
+    const shipped = (book.shipped.find((p) => p.id === page.id)?.fields ?? []).map((f) => ({
+      ...structuredClone(f),
+      device: device.key,
+      display: page.display,
+    }));
+    // Its height is kept where the CSS reads it, so an open field's preview
+    // can stick just above it.
+    const actions = el("div", { class: "chain-add page-actions" }, save, saveAs, remove, shut);
+    new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--page-actions-h", `${actions.offsetHeight}px`);
+    }).observe(actions);
+
+    const { table } = fieldTable(
+      device,
+      display,
+      ctx.profile,
+      page.fields,
+      ctx.signals,
+      () => {
+        refresh();
+        ctx.pageChanged();
+      },
+      { shipped, saved: e.saved, open: e.open },
+    );
 
     wrap.append(
       el(
@@ -487,7 +542,7 @@ export function pageSection(device: Device, display: DisplayInfo, ctx: PageConte
       clash,
       problems,
       table,
-      el("div", { class: "chain-add page-actions" }, save, saveAs, remove, shut),
+      actions,
     );
     refresh();
     return wrap;

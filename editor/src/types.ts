@@ -387,6 +387,8 @@ export interface PagesView {
   /** Why the module's page file would not load, if it would not. */
   broken: string | null;
   used: PageUse[];
+  /** The module's pages as they shipped. A page the user made is not here. */
+  shipped: Page[];
 }
 
 /**

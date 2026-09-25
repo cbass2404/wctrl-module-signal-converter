@@ -71,11 +71,16 @@ numbers move and the words do not.
       LI, LO, RI and RO in `a-10c.json` and `a-10c2.json` name the NMSP lamp
       each shows. A changed default row, so it goes in CHANGELOG.md at ship.
 
-- [ ] **Decide on the dead field-reset code.** With every screen on pages,
-      nothing in a profile's own `readouts` is valid, so Reset this field,
-      "+ the field that shipped here", the `shipped` argument of `fieldTable`
-      and line merging in `merge.rs` can no longer be reached. Remove, or
-      give pages a reset of their own.
+- [x] ~~**Decide on the dead field-reset code.**~~ Decided 2026-09-25:
+      pages got a reset of their own. Reset this field and "+ the field that
+      shipped here" now work from the shipped page files, and every field and
+      lamp gained Undo unsaved changes. Built and type-checked, not yet
+      clicked through.
+
+- [ ] **Remove line merging from `merge.rs`.** Still unreachable: no screen
+      takes fields from a profile's own `readouts`, so a merge never lists a
+      line. Remove it and the line checkboxes in the merge dialog, or make
+      merging copy page content instead.
 
 - [x] ~~**Site page for UFC and ICP pages.**~~ Done 2026-09-24, with the
       PFPs and the steady backlights, ahead of flying the UFC and ICP pages.
@@ -114,18 +119,6 @@ numbers move and the words do not.
       `data/displays/ufc1.json` draws it, which was read out of the glyph
       table rather than captured; a photograph of a few lit cells settles it.
       [STATUS.md](STATUS.md), "the UFC and the DED are previewed too"
-
-- [ ] **Fly `follows` on two MCDUs.** Built 2026-09-21 and tested, not yet on
-      a panel. Point the Co-Pilot unit at the Captain in the Hornet and check
-      that both show the IFEI page and dim together.
-      [STATUS.md](STATUS.md), "one panel under several names shares a setup"
-
-- [ ] **See a PFP on a real panel.** Built 2026-09-24 from WwDevicesDotnet
-      alone; nobody here owns one. When a PFP owner reports back, confirm the
-      part id (a lamp lights at all), the five lamps, the LSK page keys, and
-      whether the 31px rows sit acceptably against the keys or the 32px
-      fonts are worth a per-part glyph height. Then mark `verified` in
-      `devices.json`. [STATUS.md](STATUS.md), "Built 2026-09-24: the PFP-3N"
 
 - [x] ~~**Point the defaults' backlights at one lamp across panels.**~~ Done
       2026-09-21: every backlight in every default matches the MFD C's
@@ -198,6 +191,18 @@ numbers move and the words do not.
       Colour as a bindable signal is a separate, much larger feature and is not
       part of this. See "What VIRPIL will need decided" in STATUS.md for why
       each of those is in that order.
+
+- [ ] **Fly `follows` on two MCDUs.** Built 2026-09-21 and tested, not yet on
+      a panel. Point the Co-Pilot unit at the Captain in the Hornet and check
+      that both show the IFEI page and dim together.
+      [STATUS.md](STATUS.md), "one panel under several names shares a setup"
+
+- [ ] **See a PFP on a real panel.** Built 2026-09-24 from WwDevicesDotnet
+      alone; nobody here owns one. When a PFP owner reports back, confirm the
+      part id (a lamp lights at all), the five lamps, the LSK page keys, and
+      whether the 31px rows sit acceptably against the keys or the 32px
+      fonts are worth a per-part glyph height. Then mark `verified` in
+      `devices.json`. [STATUS.md](STATUS.md), "Built 2026-09-24: the PFP-3N"
 
 ## Deferred, not scheduled
 

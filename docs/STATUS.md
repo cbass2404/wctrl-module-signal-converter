@@ -22,6 +22,25 @@ wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
 
+**Built 2026-09-25: page fields open one at a time, and two ways back.**
+Built and type-checked, not yet clicked through. What users see is in
+[CHANGELOG.md](../CHANGELOG.md).
+
+- **A page field is closed until its pencil is clicked**: the signals it
+  reads and its preview. Tick keeps, cross restores the copy taken when it
+  opened, the lamp condition pattern. Which fields are open lives on the
+  page book's `Editing`, so a section redraw keeps them open; Save page
+  closes them.
+- **Shipped pages reach the editor.** `open_pages` returns `shipped`, the
+  module's pages from `pages.defaults`, and a field finds its shipped self
+  by cells and seat, as profile fields used to.
+- **Saved versions are tied by identity**, not cells: `Editing.saved` maps
+  each working field to its field in the last saved baseline, carried across
+  a reset or a cancel, so a field moved to other cells still undoes to its
+  saved self. A deleted one is offered back in its empty area.
+- **Lamps got the same undo**: `Session.saved` holds each binding as last
+  saved, and a save redraws every lamp's footer through `afterSave`.
+
 **Built 2026-09-24: the editor keeps things in reach, and a shipped profile
 can split.** `80a1123` to `a87bb32`. What users see is in
 [CHANGELOG.md](../CHANGELOG.md); the split's rules are "Splitting a shipped
@@ -84,7 +103,7 @@ and Mi-24P Radios pages show on the glass.
   `A_G` and `A_P`, `IFF`, `TCN`, `ILS`, `D_N`, `BCN`.
 - **Editor**: every display gets a page section; `displaySection` and the
   session's shipped readouts are gone. Reset this field and "+ the field
-  that shipped here" are now unreachable; see TODO.
+  that shipped here" came back on 2026-09-25, fed from the shipped pages.
 - **Test fixtures** in `editor_checks.rs` and `seat_validation.rs` mark their
   fields as a page's, the way the engine tests' `resolved()` does.
 

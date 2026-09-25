@@ -876,6 +876,44 @@ function valueAliasEditor(
  */
 function dividerCell(opts: RowOptions): { node: HTMLElement; refresh: () => void } {
   const { readout, display, profile, onChange } = opts;
+  const rule = rulePreview(readout);
+  const refresh = rule.refresh;
+
+  const node = el(
+    "div",
+    { class: "readout-extras" },
+    el("span", { class: "meta" }, "A rule. It reads nothing and never changes."),
+    rule.node,
+    colourChooser(readout, display, () => {
+      refresh();
+      onChange();
+    }),
+    labelEditor(
+      readout,
+      () => cellCount(readout.cells),
+      display,
+      profile,
+      () => {
+        refresh();
+        onChange();
+      },
+    ).node,
+    el(
+      "span",
+      { class: "meta block" },
+      "A blank cell at each end and an unbroken line between them, so it sits " +
+        "clear of whatever is beside it. It is on the glass from the moment " +
+        "the aircraft loads, which is what makes it an edge for a page that " +
+        "does not fill the screen.",
+    ),
+    noteEditor(readout, "field", onChange),
+  );
+  node.append(...resetButtons(opts));
+  return { node, refresh };
+}
+
+/** A rule as the panel will draw it, at its width and with its label. */
+function rulePreview(readout: Readout): { node: HTMLElement; refresh: () => void } {
   const preview = el("div", { class: "divider-preview" });
   const paint = (cells: RuleCell[]): void => {
     preview.textContent = "";
@@ -908,39 +946,7 @@ function dividerCell(opts: RowOptions): { node: HTMLElement; refresh: () => void
     );
   };
   refresh();
-
-  const node = el(
-    "div",
-    { class: "readout-extras" },
-    el("span", { class: "meta" }, "A rule. It reads nothing and never changes."),
-    preview,
-    colourChooser(readout, display, () => {
-      refresh();
-      onChange();
-    }),
-    labelEditor(
-      readout,
-      () => cellCount(readout.cells),
-      display,
-      profile,
-      () => {
-        refresh();
-        onChange();
-      },
-    ).node,
-    el(
-      "span",
-      { class: "meta block" },
-      "A blank cell at each end and an unbroken line between them, so it sits " +
-        "clear of whatever is beside it. It is on the glass from the moment " +
-        "the aircraft loads, which is what makes it an edge for a page that " +
-        "does not fill the screen.",
-    ),
-    noteEditor(readout, "field", onChange),
-  );
-  const reset = resetButton(opts);
-  if (reset) node.append(reset);
-  return { node, refresh };
+  return { node: preview, refresh };
 }
 
 /**
@@ -1092,8 +1098,18 @@ interface RowOptions {
   profile: Profile;
   all: Readout[];
   signals: SignalView[];
-  /** This field as the shipped default has it, where there is one. */
+  /** This field as the shipped page has it, where there is one. */
   shipped?: Readout | undefined;
+  /** This field as Save page last wrote it, where it was saved at all. */
+  saved?: Readout | undefined;
+  /** Open for editing, rather than a line and a preview. */
+  open: boolean;
+  /** The pencil: open this field. */
+  onOpen: () => void;
+  /** The tick: keep the edit and close the field. */
+  onKeep: () => void;
+  /** The cross: put the field back as it was when opened, and close it. */
+  onCancel: () => void;
   onChange: () => void;
   onRemove: () => void;
   /** Swap this field for another and redraw the screen it is on. */
@@ -1153,6 +1169,8 @@ function fieldShape(r: Readout): string {
       // Only a rule keeps a colour of its own. On anything else that key holds
       // the one part's colour, and `contentOf` has already taken it there.
       colour: r.divider ? r.colour : undefined,
+      label: r.divider ? r.label : undefined,
+      label_colour: r.divider ? r.label_colour : undefined,
       seat: r.seat,
       align: r.align,
       note: r.note,
@@ -1176,13 +1194,49 @@ function shippedFor(readout: Readout, shipped: Readout[]): Readout | undefined {
   return here.find((s) => s.seat === readout.seat) ?? here[0];
 }
 
+/** Whether two fields sit on the same cells and say the same thing. */
+function sameField(a: Readout, b: Readout): boolean {
+  return a.cells === b.cells && fieldShape(a) === fieldShape(b);
+}
+
 /**
- * Put one field back the way it shipped, leaving every other field alone.
+ * The ways back for one field, each leaving every other field alone.
  *
- * In the same place on every field the default has a version of, and disabled
- * while it already matches so that it is never a no-op. A profile the user
- * made has no shipped version and no button.
+ * Undo unsaved changes puts it back the way Save page last wrote it, and is
+ * there only while there is something to undo. Reset this field puts it back
+ * the way it shipped, on every field a shipped page has a version of, and is
+ * disabled while it already matches so that it is never a no-op. A page the
+ * user made has only the first; a shipped page with edits has both.
  */
+function resetButtons(opts: RowOptions): HTMLElement[] {
+  const out: HTMLElement[] = [];
+  const undo = undoButton(opts);
+  if (undo) out.push(undo);
+  const reset = resetButton(opts);
+  if (reset) out.push(reset);
+  return out;
+}
+
+function undoButton(opts: RowOptions): HTMLElement | null {
+  const { readout, display } = opts;
+  const saved = opts.saved;
+  if (!saved || sameField(saved, readout)) return null;
+  const button = el("button", { class: "add revert", type: "button" }, "Undo unsaved changes");
+  button.title = "Put this field back the way the page was last saved. No other field is touched.";
+  button.addEventListener("click", () => {
+    void confirmAction(
+      `Undo the unsaved changes to ${describe(readout.cells, display)}?\n\n` +
+        `Now:\n${describeField(readout, display)}\n\n` +
+        `Saved:\n${describeField(saved, display)}\n\n` +
+        "No other field is touched.",
+      "Undo",
+    ).then((ok) => {
+      if (ok) opts.onReplace(structuredClone(saved));
+    });
+  });
+  return button;
+}
+
 function resetButton(opts: RowOptions): HTMLElement | null {
   const { readout, display } = opts;
   const shipped = opts.shipped;
@@ -2453,9 +2507,7 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
         ...seatCopies(opts, stations),
       );
     }
-    extras.append(noteEditor(readout, "field", onChange));
-    const reset = resetButton(opts);
-    if (reset) extras.append(reset);
+    extras.append(noteEditor(readout, "field", onChange), ...resetButtons(opts));
     wrap.append(extras);
 
     const preview = glyphPreview(readout, display, profile, signals);
@@ -2478,7 +2530,73 @@ function chainEditor(opts: RowOptions, refreshPreview: () => void): HTMLElement 
   return wrap;
 }
 
+/** A line for a closed row's list of what it reads. */
+const readsLine = (text: string): HTMLElement =>
+  el("span", { class: "sub" }, el("span", { class: "test" }, text));
+
+/** What a field reads, a line per signal, for a row that is not open. */
+function fieldReads(readout: Readout, signals: SignalView[]): HTMLElement[] {
+  if (readout.divider) {
+    return [readsLine(readout.label ? `A rule labelled ${readout.label}. It reads nothing.` : "A rule. It reads nothing.")];
+  }
+  const ids = [
+    ...new Set(
+      contentOf(readout)
+        .filter((s) => kindOf(s) === "signal")
+        .map((s) => s.source ?? ""),
+    ),
+  ];
+  if (ids.length === 0) return [readsLine("Typed text only. It reads no signal.")];
+  return ids.map((id) => {
+    if (id === "") return el("span", { class: "bad" }, "A reading with no signal chosen yet");
+    const signal = signals.find((s) => s.id === id);
+    if (!signal) return el("span", { class: "bad" }, `${id} is not a signal in this module`);
+    return el("span", { class: "sub" }, el("code", {}, id), el("span", { class: "test" }, signal.description));
+  });
+}
+
+/**
+ * A field that is not open: where it sits, what it reads, and how it draws.
+ *
+ * The way a lamp's condition reads as a sentence until its pencil is clicked.
+ * A page is read far more often than it is changed, and a screen of open
+ * editors is harder to check at a glance than a list of lines and pictures.
+ */
+function closedRow(opts: RowOptions): HTMLTableRowElement {
+  const { readout, display, profile, signals } = opts;
+  const region = regionOf(readout, display);
+  const where = el(
+    "td",
+    {},
+    el("span", { class: "region-name" }, region?.name ?? "Somewhere else"),
+    el("div", { class: "meta" }, extent(readout.cells)),
+  );
+  const preview = readout.divider ? rulePreview(readout) : glyphPreview(readout, display, profile, signals);
+  preview.refresh();
+  const shows = el(
+    "td",
+    {},
+    flagSlot(readout),
+    cautionSlot(readout),
+    el("div", { class: "condition-view" }, el("div", { class: "grow" }, ...fieldReads(readout, signals), preview.node)),
+  );
+  const edit = iconButton("pencil", "\u270E", "Edit this field", opts.onOpen);
+  return el("tr", { class: "field-closed" }, where, shows, el("td", { class: "num" }, edit));
+}
+
+/** Keep, cancel and delete, beside a field open for editing. */
+function rowActions(opts: RowOptions): HTMLElement {
+  return el(
+    "div",
+    { class: "row-actions" },
+    iconButton("done", "\u2713", "Keep these changes", opts.onKeep),
+    iconButton("cancel", "\u2715", "Discard changes to this field", opts.onCancel),
+    removeButton(opts),
+  );
+}
+
 function row(opts: RowOptions): HTMLTableRowElement {
+  if (!opts.open) return closedRow(opts);
   const { readout, display, all, onChange } = opts;
   const tr = el("tr");
 
@@ -2495,7 +2613,7 @@ function row(opts: RowOptions): HTMLTableRowElement {
 
   if (rule) {
     tr.append(el("td", {}, rule.node));
-    tr.append(el("td", { class: "num" }, removeButton(opts)));
+    tr.append(el("td", { class: "num" }, rowActions(opts)));
     return tr;
   }
 
@@ -2507,7 +2625,7 @@ function row(opts: RowOptions): HTMLTableRowElement {
   rebuild = draw;
   draw();
   tr.append(shows);
-  tr.append(el("td", { class: "num" }, removeButton(opts)));
+  tr.append(el("td", { class: "num" }, rowActions(opts)));
   return tr;
 }
 
@@ -2563,8 +2681,10 @@ function removeButton(opts: RowOptions): HTMLElement {
   const what = readout.divider ? "rule" : "field";
   return iconButton("trash", "\u{1F5D1}", `Delete this ${what}`, () => {
     const consequence = opts.shipped
-      ? "\n\nThis one shipped with the profile, so the area it sits in will offer it back."
-      : "\n\nThose cells go blank, and nothing here will say a field was ever on them.";
+      ? "\n\nThis one shipped with the page, so the area it sits in will offer it back."
+      : opts.saved
+        ? "\n\nUntil the page is saved, the area it sits in will offer it back as it was last saved."
+        : "\n\nThose cells go blank, and nothing here will say a field was ever on them.";
     void confirmAction(
       `Delete this ${what}?\n\n${describeField(readout, display)}${consequence}`,
       "Delete",
@@ -2603,30 +2723,51 @@ function regionOf(readout: Readout, display: DisplayInfo): RegionInfo | undefine
   });
 }
 
+/** What a page's fields are measured against, and which of them are open. */
+export interface FieldState {
+  /** The fields as the page shipped, on the rows' device. Empty when it did not. */
+  shipped: Readout[];
+  /** Each field as Save page last wrote it, keyed by the working field it became. */
+  saved: Map<Readout, Readout>;
+  /** The fields open for editing, with how each stood when opened, or null if added while open. */
+  open: Map<Readout, Readout | null>;
+}
+
 /**
  * One screen's fields, a row per area, and the head that names the screen.
  *
- * `readouts` is the list the rows edit in place: the profile's own fields, or
- * a page's. `owned` says the list holds other devices' fields too, so only
- * this device's are shown; a page's fields belong to no device.
+ * `readouts` is the list the rows edit in place, a page's fields.
  */
 export function fieldTable(
   device: Device,
   display: DisplayInfo,
   profile: Profile,
   readouts: Readout[],
-  owned: boolean,
   signals: SignalView[],
   onChange: () => void,
-  shipped: Readout[],
+  state: FieldState,
 ): { head: HTMLElement; table: HTMLElement } {
   chooseFont(display, profile);
-  const mine = (): Readout[] =>
-    readouts.filter((r) => (!owned || r.device === device.key) && r.display === display.key);
+  const { shipped, saved, open } = state;
+  const mine = (): Readout[] => readouts.filter((r) => r.display === display.key);
 
   const body = el("tbody");
   const count = el("span", { class: "meta" });
   let redraw = (): void => {};
+
+  /** Put `next` where `was` is, still tied to what `was` was saved as and still open if it was. */
+  const swap = (was: Readout, next: Readout): void => {
+    const at = readouts.indexOf(was);
+    if (at < 0) return;
+    readouts[at] = next;
+    const origin = saved.get(was);
+    saved.delete(was);
+    if (origin) saved.set(next, origin);
+    if (open.has(was)) {
+      open.set(next, open.get(was) ?? null);
+      open.delete(was);
+    }
+  };
 
   const fieldRow = (r: Readout): HTMLTableRowElement =>
     row({
@@ -2636,21 +2777,41 @@ export function fieldTable(
       all: readouts,
       signals,
       shipped: shippedFor(r, shipped),
+      saved: saved.get(r),
+      open: open.has(r),
+      onOpen: () => {
+        open.set(r, structuredClone(r));
+        redraw();
+      },
+      onKeep: () => {
+        open.delete(r);
+        redraw();
+      },
+      onCancel: () => {
+        const before = open.get(r);
+        open.delete(r);
+        // Added while open, so undoing that means taking it away again.
+        // Otherwise put back in place, so the list keeps its order.
+        if (before === null || before === undefined) readouts.splice(readouts.indexOf(r), 1);
+        else swap(r, before);
+        redraw();
+        onChange();
+      },
       onChange,
       onRemove: () => {
         readouts.splice(readouts.indexOf(r), 1);
+        open.delete(r);
         redraw();
         onChange();
       },
       onReplace: (next) => {
-        const at = readouts.indexOf(r);
-        if (at < 0) return;
-        readouts[at] = next;
+        swap(r, next);
         redraw();
         onChange();
       },
       onAdd: (next) => {
         readouts.splice(readouts.indexOf(r) + 1, 0, next);
+        open.set(next, null);
         redraw();
         onChange();
       },
@@ -2684,6 +2845,7 @@ export function fieldTable(
         if (kind === "rule") first.colour = agreedColour(mine());
         setContent(fresh, [first]);
         readouts.push(fresh);
+        open.set(fresh, null);
         redraw();
         onChange();
       });
@@ -2699,16 +2861,38 @@ export function fieldTable(
     // Only a text grid draws a rule. A segment display draws from a glyph
     // table with no dash in it, and the daemon refuses one there.
     if (display.text_grid) buttons.append(add("rule", "+ a rule"));
-    // A field the default put here and the user threw away. Without this
-    // there is nothing on the screen to say one was ever here, and the way
-    // back is resetting the whole profile.
+    // A field the page shipped with here and the user threw away. Without
+    // this there is nothing on the screen to say one was ever here.
+    const offered: Readout[] = [];
     for (const was of shipped) {
       if (was.device !== device.key || was.display !== display.key) continue;
       if (regionOf(was, display) !== region) continue;
+      offered.push(was);
       const back = el("button", { class: "add revert" }, "+ the field that shipped here");
       back.title = "Put back the field this area shipped with. Nothing else is touched.";
       back.addEventListener("click", () => {
         readouts.push(structuredClone(was));
+        redraw();
+        onChange();
+      });
+      buttons.append(back);
+    }
+    // And one deleted since the last Save page, which the user may have made
+    // themselves. One moved to other cells is still on the page, so it is not
+    // offered, and one the shipped button above would bring back is not
+    // offered twice.
+    const live = new Set(readouts.map((f) => saved.get(f)));
+    for (const was of new Set(saved.values())) {
+      if (live.has(was) || was.display !== display.key) continue;
+      if (regionOf(was, display) !== region) continue;
+      if (offered.some((o) => sameField(o, was))) continue;
+      offered.push(was);
+      const back = el("button", { class: "add revert" }, "+ the field saved here");
+      back.title = "Put back the field deleted from this area since the page was last saved. Nothing else is touched.";
+      back.addEventListener("click", () => {
+        const copy = structuredClone(was);
+        readouts.push(copy);
+        saved.set(copy, was);
         redraw();
         onChange();
       });

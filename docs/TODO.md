@@ -77,10 +77,10 @@ numbers move and the words do not.
       lamp gained Undo unsaved changes. Built and type-checked, not yet
       clicked through.
 
-- [ ] **Remove line merging from `merge.rs`.** Still unreachable: no screen
-      takes fields from a profile's own `readouts`, so a merge never lists a
-      line. Remove it and the line checkboxes in the merge dialog, or make
-      merging copy page content instead.
+- [x] ~~**Remove line merging from `merge.rs`.**~~ Removed 2026-09-25,
+      with the line checkboxes in the merge dialog: a screen merges a slot
+      at a time. Merging part of one page into another would be a feature
+      of its own.
 
 - [x] ~~**Site page for UFC and ICP pages.**~~ Done 2026-09-24, with the
       PFPs and the steady backlights, ahead of flying the UFC and ICP pages.

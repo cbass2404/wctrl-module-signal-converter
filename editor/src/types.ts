@@ -692,42 +692,28 @@ export interface LightPart {
   lamps: { led: string; label: string }[];
 }
 
-/** One line of a screen whose fields can be merged into another profile. */
-export interface LinePart {
-  device: string;
-  display: string;
-  /** The panel and screen, the heading its lines are grouped under. */
-  screen: string;
-  line: string;
-  fields: number;
-}
-
 export interface MergeParts {
   lights: LightPart[];
-  lines: LinePart[];
   slots: SlotPart[];
 }
 
-/** What the user ticked to merge: lamps and lines by name. */
+/** What the user ticked to merge: lamps by name, slots by number. */
 export interface MergePick {
   lights: { device: string; led: string }[];
-  lines: { device: string; display: string; line: string }[];
   slots: { device: string; slot: number }[];
 }
 
 /** Where a merge takes from: the file picked for import, or a profile here. */
 export type MergeSource = { kind: "file"; path: string } | { kind: "profile"; file: string };
 
-/** What merging did, or would do, to one panel's lamps or one screen line. */
+/** What merging did, or would do, to one panel's lamps or one page slot. */
 export interface MergeChange {
   label: string;
   added: number;
   replaced: number;
   removed: number;
   unchanged: number;
-  /** Counts fields rather than lamps. */
-  fields: boolean;
-  /** A page slot rather than lamps or fields. */
+  /** A page slot rather than lamps. */
   pages: boolean;
 }
 

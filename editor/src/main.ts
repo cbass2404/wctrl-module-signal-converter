@@ -47,7 +47,6 @@ import type {
   ExportPage,
   ImportPreview,
   Led,
-  LinePart,
   MergeParts,
   MergePick,
   MergeReport,
@@ -231,9 +230,9 @@ function plural(n: number, one: string, many = `${one}s`): string {
 }
 
 /**
- * The lights and screen lines a profile could give another, every one ticked
- * to start with. Lights go a lamp at a time under a box per panel, screens a
- * line at a time under a box per screen, and every group has a box over it.
+ * The lights and page slots a profile could give another, every one ticked
+ * to start with. Lights go a lamp at a time under a box per panel, slots under
+ * a box per screen, and every group has a box over it.
  */
 function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLElement; pick: () => MergePick } {
   const list = el("div", { class: "checklist" });
@@ -244,7 +243,6 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
     return b;
   };
   const lights: [HTMLInputElement, { device: string; led: string }][] = [];
-  const lines: [HTMLInputElement, LinePart][] = [];
   const slots: [HTMLInputElement, { device: string; slot: number }][] = [];
 
   if (parts.lights.length > 0) {
@@ -272,39 +270,6 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
       });
     }
     list.append(el("label", { class: "group" }, parentBox(panelBoxes), el("span", {}, "Lights")), ...rows);
-  }
-
-  if (parts.lines.length > 0) {
-    const screens = new Map<string, LinePart[]>();
-    for (const l of parts.lines) {
-      const key = `${l.device}/${l.display}`;
-      screens.set(key, [...(screens.get(key) ?? []), l]);
-    }
-    const screenBoxes: HTMLInputElement[] = [];
-    const rows: HTMLElement[] = [];
-    for (const group of screens.values()) {
-      const boxes = group.map((l) => {
-        const b = tick();
-        lines.push([b, l]);
-        return b;
-      });
-      const box = parentBox(boxes);
-      screenBoxes.push(box);
-      rows.push(el("label", { class: "sub" }, box, el("span", {}, group[0]?.screen ?? "")));
-      group.forEach((l, i) => {
-        const b = boxes[i] as HTMLInputElement;
-        rows.push(
-          el(
-            "label",
-            { class: "sub2" },
-            b,
-            el("span", {}, l.line),
-            el("span", { class: "meta" }, plural(l.fields, "field")),
-          ),
-        );
-      });
-    }
-    list.append(el("label", { class: "group" }, parentBox(screenBoxes), el("span", {}, "Screens")), ...rows);
   }
 
   // A screen merges a slot at a time: slot n of the source replaces slot n
@@ -338,31 +303,27 @@ function mergeChecklist(parts: MergeParts, onChange: () => void): { node: HTMLEl
     list.append(el("label", { class: "group" }, parentBox(screenBoxes), el("span", {}, "Page slots")), ...rows);
   }
 
-  if (lights.length === 0 && lines.length === 0 && slots.length === 0) {
-    list.append(el("p", { class: "meta" }, "Nothing is set up in it to merge: no lamp assigned, no screen field and no page in a slot."));
+  if (lights.length === 0 && slots.length === 0) {
+    list.append(el("p", { class: "meta" }, "Nothing is set up in it to merge: no lamp assigned and no page in a slot."));
   }
 
   const pick = (): MergePick => ({
     lights: lights.filter(([b]) => b.checked).map(([, d]) => d),
-    lines: lines
-      .filter(([b]) => b.checked)
-      .map(([, l]) => ({ device: l.device, display: l.display, line: l.line })),
     slots: slots.filter(([b]) => b.checked).map(([, s]) => s),
   });
   return { node: list, pick };
 }
 
-/** One panel's or line's part of a merge, as a sentence. */
+/** One panel's or slot's part of a merge, as a sentence. */
 function describeChange(c: MergeReport["changes"][number]): string {
   if (c.pages) {
     const what = c.added > 0 ? "gets a page" : c.replaced > 0 ? "shows another page" : c.removed > 0 ? "is emptied" : "already shows that page";
     return `${c.label} ${what}.`;
   }
-  const noun = c.fields ? "field" : "lamp";
   const bits: string[] = [];
-  if (c.added > 0) bits.push(`${plural(c.added, noun)} added`);
-  if (c.replaced > 0) bits.push(`${plural(c.replaced, noun)} replaced`);
-  if (c.removed > 0) bits.push(`${plural(c.removed, noun)} removed`);
+  if (c.added > 0) bits.push(`${plural(c.added, "lamp")} added`);
+  if (c.replaced > 0) bits.push(`${plural(c.replaced, "lamp")} replaced`);
+  if (c.removed > 0) bits.push(`${plural(c.removed, "lamp")} removed`);
   if (c.unchanged > 0) bits.push(`${c.unchanged} already the same`);
   return `${c.label}: ${bits.length > 0 ? bits.join(", ") : "nothing to take"}.`;
 }
@@ -710,7 +671,7 @@ async function exportOne(row: ProfileSummary): Promise<void> {
  * that asks too, and saying no to it cancels the import outright.
  *
  * Or it is merged into a profile already here on the same module, taking only
- * the lights and screen lines ticked, and saying what that changes before it
+ * the lights and page slots ticked, and saying what that changes before it
  * is done. Importing it whole asks nothing more than the moves and deletes
  * above, since it rewrites no profile in place.
  */
@@ -753,7 +714,7 @@ async function showImport(): Promise<void> {
   const mode = el("select", {});
   mode.append(el("option", { value: "" }, "Whole profile, as a profile of its own"));
   for (const t of targets) {
-    mode.append(el("option", { value: t.file }, `Merged into ${t.name}: only the lights, screen lines and page slots ticked`));
+    mode.append(el("option", { value: t.file }, `Merged into ${t.name}: only the lights and page slots ticked`));
   }
   const into = (): ProfileSummary | undefined => targets.find((t) => t.file === mode.value);
 
@@ -813,7 +774,7 @@ async function showImport(): Promise<void> {
     make.textContent = merging ? "Merge..." : "Import";
     const pick = merge.pick();
     const ready = merging
-      ? pick.lights.length + pick.lines.length + pick.slots.length > 0
+      ? pick.lights.length + pick.slots.length > 0
       : chosen().length > 0 && name.value.trim() !== "";
     if (ready) make.removeAttribute("disabled");
     else make.setAttribute("disabled", "");
@@ -940,7 +901,7 @@ async function showImport(): Promise<void> {
   });
 }
 
-/** Profiles `row` could take lights and screen lines from: any other on its module. */
+/** Profiles `row` could take lights and page slots from: any other on its module. */
 function mergeSources(row: ProfileSummary, rows: ProfileSummary[]): ProfileSummary[] {
   return rows.filter((r) => r.file !== row.file && !r.error && r.module === row.module);
 }
@@ -965,7 +926,7 @@ async function showMergeFrom(row: ProfileSummary, rows: ProfileSummary[]): Promi
 
   const sync = (): void => {
     const pick = merge?.pick();
-    if (pick && pick.lights.length + pick.lines.length + pick.slots.length > 0) make.removeAttribute("disabled");
+    if (pick && pick.lights.length + pick.slots.length > 0) make.removeAttribute("disabled");
     else make.setAttribute("disabled", "");
   };
   const load = async (): Promise<void> => {
@@ -990,7 +951,7 @@ async function showMergeFrom(row: ProfileSummary, rows: ProfileSummary[]): Promi
     el(
       "p",
       { class: "meta" },
-      `Take lights and screen lines from another ${row.module} profile. Nothing is changed until you confirm.`,
+      `Take lights and page slots from another ${row.module} profile. Nothing is changed until you confirm.`,
     ),
     el("label", { class: "field" }, "Take from", from),
     holder,

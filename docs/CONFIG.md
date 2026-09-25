@@ -565,16 +565,15 @@ already here on the same module, and Merge from... does the same between two
 profiles here. Lights are taken a lamp at a time, ticked singly or a panel at
 once: each lamp picked that the source assigns replaces the target's row for
 it, and a lamp the source leaves unassigned, or that is not picked, keeps the
-target's row. Only lamps the source assigns are offered. Screens are taken a line at a time,
-a line being a region of the display map and a field belonging to the region
-holding its first cell: the line becomes exactly the source's, so fields the
-target had there go. A panel the source has following another is not offered,
-since its own rows are not what flies. Nothing else moves: name, aircraft,
-font, disabled panels and `follows` stay the target's, and merging onto a
-panel the target follows with, or has turned off, is said in the confirm. The
-merge is worked out first without writing, checked the way a save is, and put
-to the user as what is added, replaced and removed; it is written only on
-confirm. `crates/dsc-config/src/merge.rs` holds it.
+target's row. Only lamps the source assigns are offered. Screens are taken a
+page slot at a time, as under "Sharing pages". A panel the source has
+following another is not offered, since its own rows are not what flies.
+Nothing else moves: name, aircraft, font, disabled panels and `follows` stay
+the target's, and merging onto a panel the target follows with, or has turned
+off, is said in the confirm. The merge is worked out first without writing,
+checked the way a save is, and put to the user as what is added, replaced and
+removed; it is written only on confirm. `crates/dsc-config/src/merge.rs` holds
+it.
 
 ## The source dropdown
 
@@ -1581,7 +1580,7 @@ pairs of folders:
   { "schema_version": 2, "profile": { "name": "...", "screens": {} }, "pages": [] }
   ```
 
-- **Import shows the pages beside the lamps and lines**, each ticked on its
+- **Import shows the pages beside the lamps**, each ticked on its
   own. A slot pointing at a page left unticked comes in disabled. A profile
   file on its own, without pages, imports too.
 - **A page already here by id** is left alone if it draws the same fields,
@@ -1589,7 +1588,7 @@ pairs of folders:
   imported profile's slots following it. So does one whose id a page on
   another module has. **A name already taken** gets a number added, which the
   preview shows and can be changed there.
-- **Merge from... offers slots on every screen** instead of lines: slot n of
+- **Merge from... offers slots on every screen**: slot n of
   the source replaces slot n of the target, and brings its page into the
   library if it is not there.
 - **Version 1 files are refused**, on import and in the active folder, with a

@@ -346,6 +346,13 @@
         color: var(--ink-2);
         font-size: 0.99rem;
       }
+      .after.caution {
+        border-left-color: var(--accent);
+        margin-top: 18px;
+      }
+      .after.caution .t {
+        color: var(--accent);
+      }
 
       .groups {
         display: grid;
@@ -674,9 +681,9 @@
           </h1>
           <p class="lede">
             Gear lamps that follow the gear. A Master Caution that comes on when
-            the jet's does. Backlights that can dim with the console knob. Jump into
-            a Hornet and the panels follow the Hornet; switch to an Apache and
-            they follow the Apache. Quit DCS and they go dark.
+            the jet's does. Backlights that can dim with the console knob. Jump
+            into a Hornet and the panels follow the Hornet; switch to an Apache
+            and they follow the Apache. Quit DCS and they go dark.
           </p>
           <div class="cta-row">
             <a
@@ -826,9 +833,9 @@
           </div>
         </div>
         <p class="foot-note">
-          The tags name the pages each aircraft ships. On the MCDU, its own
-          CDU, CDNU or KU where it has one, and a page built from its readings
-          where it does not; then its UFC or DED page, such as the A-10C's
+          The tags name the pages each aircraft ships. On the MCDU, its own CDU,
+          CDNU or KU where it has one, and a page built from its readings where
+          it does not; then its UFC or DED page, such as the A-10C's
           countermeasures on the DED. Open a profile in the editor to see
           exactly what it drives.
         </p>
@@ -882,6 +889,18 @@
             quit DCS and it quits too.
           </p>
         </div>
+        <div class="after caution">
+          <span class="t">Running SimAppPro alongside</span>
+          <p>
+            The converter can run with SimAppPro open, but SimAppPro must stop
+            driving the same panels. Set the lights on each device in SimAppPro
+            not to sync with DCS. For the F-16, set every ICP page selection to
+            disabled; for the F/A-18, set every UFC page selection to disabled.
+            Leaving them on will not harm your devices, but the two apps will
+            fight over the panels, causing extra writes and potentially strange
+            visuals.
+          </p>
+        </div>
       </div>
     </section>
 
@@ -924,9 +943,9 @@
             </div>
             <figcaption>
               <b>Every lamp on every panel</b>, beside the cockpit signal that
-              drives it, with room for a note on why. Untick <b>drive this
-              panel</b> and the profile leaves that panel alone for another
-              program.
+              drives it, with room for a note on why. Untick
+              <b>drive this panel</b> and the profile leaves that panel alone
+              for another program.
             </figcaption>
           </figure>
           <figure>
@@ -1017,8 +1036,8 @@
             </div>
             <figcaption>
               <b>Light or dark, and your choice of key.</b> Follow Windows or
-              pick a theme, and choose whether Ctrl, Shift or Alt swaps
-              pages, to suit how DCS is bound on your PC.
+              pick a theme, and choose whether Ctrl, Shift or Alt swaps pages,
+              to suit how DCS is bound on your PC.
             </figcaption>
           </figure>
         </div>
@@ -1088,8 +1107,8 @@
             <h3>Swap pages</h3>
             <p>
               Give the MCDU, the UFC and the ICP's DED up to six pages each.
-              Hold Ctrl and press one of the panel's page keys to put that
-              page on the screen, mid-flight.
+              Hold Ctrl and press one of the panel's page keys to put that page
+              on the screen, mid-flight.
             </p>
           </div>
           <div class="feat">

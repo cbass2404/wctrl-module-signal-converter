@@ -113,6 +113,13 @@ set to. Point that row at a cockpit knob and every panel dims with it.
 Five steps, about five minutes. **SimAppPro is not needed for any of them**, and
 can stay closed.
 
+> **Running SimAppPro alongside.** The converter can run with SimAppPro open, but
+> SimAppPro must stop driving the same panels. Set the lights on each device in
+> SimAppPro not to sync with DCS. For the F-16, set every ICP page selection to
+> disabled; for the F/A-18, set every UFC page selection to disabled. Leaving them
+> on will not harm your devices, but the two apps will fight over the panels,
+> causing extra writes and potentially strange visuals.
+
 ### 1. Install DCS-BIOS
 
 DCS Signal Converter reads the cockpit through

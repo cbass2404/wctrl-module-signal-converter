@@ -152,6 +152,17 @@ mod tests {
     }
 
     #[test]
+    fn alpha_to_beta_is_offered_though_the_number_drops() {
+        // The newest is chosen by date, not by comparing versions.
+        let list = [
+            release("v1.0.0-alpha.010", true, Some("2026-09-24T00:00:00Z")),
+            release("v1.0.0-beta.001", true, Some("2026-10-01T00:00:00Z")),
+        ];
+        assert_eq!(check("1.0.0-alpha.010", &list).unwrap().latest, "1.0.0-beta.001");
+        assert_eq!(check("1.0.0-beta.001", &list), None);
+    }
+
+    #[test]
     fn drafts_and_the_dcs_bios_pin_are_not_releases() {
         let list = [
             release("v1.0.0-alpha.001", true, Some("2026-09-20T00:00:00Z")),

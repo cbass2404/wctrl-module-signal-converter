@@ -145,6 +145,17 @@ numbers move and the words do not.
 
 ## Release
 
+- [ ] **Say beta, not alpha, in the docs and the site, at ship only.**
+      The next release is 1.0.0-beta.001. The site and README go live on
+      merge while installed copies are still alpha, so hold this until the
+      beta.001 tag is cut, in the commit that gets tagged or straight after.
+      Known places: the Alpha badge and "Read this bit: it is an alpha" in
+      `docs/index.html`, and the **Alpha.** note in `README.md`. Grep for
+      "alpha" first; the ones in `STATUS.md` and this file are history.
+      The update banner offers alpha.010 users the beta, whatever the
+      version numbers say: `alpha_to_beta_is_offered_though_the_number_drops`
+      in `editor/src-tauri/src/update.rs`.
+
 - [ ] **The release-notes list of changed default rows.** Written by hand
       for alpha.008, per profile and per page module, from a throwaway diff of
       `data/defaults` and `data/default-pages` against their `-previous`

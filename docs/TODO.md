@@ -41,29 +41,35 @@ numbers move and the words do not.
       COM 1 to A-G), with the modifier chosen in Settings, and only with that
       modifier. [STATUS.md](STATUS.md), "pages on the UFC and the ICP"
 
-- [ ] **Finish the UFC and ICP page checks.** Not covered by the flight
+- [x] **Finish the UFC and ICP page checks.** Not covered by the flight
       above: a blank slot taking the screen dark and a disabled slot's key
       doing nothing on these two screens, and the A-10C CMSC and Mi-24P
       Radios pages on the glass.
 
-- [ ] **Fly the A-10C split.** Upgrade an alpha.007 install whose A-10C
+- [x] ~~**Check an update still carries changes to a panel set to not
+      drive.**~~ Checked 2026-09-25: `merge_new` reconciles every row
+      whatever `disabled_devices` says, and keeps the user's own entry in
+      it, so a panel turned back on later has current rows. Pinned by
+      `a_panel_the_user_stopped_driving_still_takes_the_update` in
+      `crates/dsc-config/tests/update_lamps_and_settings.rs`.
+
+- [x] **Fly the A-10C split.** Upgrade an alpha.007 install whose A-10C
       profile is untouched: the A-10C II should land on the new A-10C2 profile
       with the ARC-210 CDU page, and the A-10C keep its profile with the VHF AM
       CDU page. Then fly each and watch the PTO2 NMSP lamps (EGI, STEER PT,
       TCN, ANCHR, ILS). [STATUS.md](STATUS.md), "a shipped profile can split"
 
-- [ ] **Give the A-10C CDU page a readable id before alpha.008 ships.** It is
-      `i63dn3`, made in the editor; every other shipped page has a readable
-      one. Once it ships, the id is in everyone's snapshot and renaming it
-      reads as one page deleted and another added.
+- [x] ~~**Give the A-10C CDU page a readable id before alpha.008 ships.**~~
+      Dropped 2026-09-25: `i63dn3` stays, and new shipped pages keep the id
+      the editor generates. [STATUS.md](STATUS.md), "Shipped ids"
 
-- [ ] **Decide the F-14BU's ICP: disabled, or a Blank slot.** alpha.007
+- [x] **Decide the F-14BU's ICP: disabled, or a Blank slot.** alpha.007
       shipped it disabled; the page move took that out. Then the changelog
       entry under F-14BU stands or goes.
 
-- [ ] **Bring the A-10C PTO2 notes up to date.** CTR, LI, LO, RI and RO in
-      `a-10c.json` and `a-10c2.json` show the NMSP lamps, and their notes
-      still say fire lamps and UNDECIDED.
+- [x] ~~**Bring the A-10C PTO2 notes up to date.**~~ Done 2026-09-25: CTR,
+      LI, LO, RI and RO in `a-10c.json` and `a-10c2.json` name the NMSP lamp
+      each shows. A changed default row, so it goes in CHANGELOG.md at ship.
 
 - [ ] **Decide on the dead field-reset code.** With every screen on pages,
       nothing in a profile's own `readouts` is valid, so Reset this field,
@@ -75,11 +81,11 @@ numbers move and the words do not.
       PFPs and the steady backlights, ahead of flying the UFC and ICP pages.
       The screenshots are Cory's to retake.
 
-- [ ] **See the pages on the panel.** Fly one aircraft per page file and check
+- [x] **See the pages on the panel.** Fly one aircraft per page file and check
       the MCDU looks as it did before the move: A-10C CDU, AH-64D KU, CH-47F
       CDU, F-14BU CDNU, F-16 Flight, F/A-18 IFEI.
 
-- [ ] **Open the page editor in the window.** Built and type-checked, not yet
+- [x] **Open the page editor in the window.** Built and type-checked, not yet
       clicked through: the six slots (Disabled, Blank, pages), Edit page and
       New page, Save page, Save as new page, Delete page, and export, import
       and merge with pages. The shipped defaults are version 2 now, so any
@@ -94,14 +100,14 @@ numbers move and the words do not.
       glass. See [CHANGELOG.md](../CHANGELOG.md) and "Content: what fills a
       field" in [CONFIG.md](CONFIG.md).
 
-- [ ] **Watch the panels stay lit through the options menu.** Built
+- [x] **Watch the panels stay lit through the options menu.** Built
       2026-09-22, not yet seen in DCS. Mid-mission, sit in the options or
       controls menu for more than 20 seconds: every lamp and screen should
       keep the last cockpit and come back without a blank and a rebuild. Then
       quit DCS: the panels should clear and the daemon exit on its own.
       [STATUS.md](STATUS.md), "the panels stay lit through a quiet stream"
 
-- [ ] **Look at the UFC and DED glass for the preview.** Two things only the
+- [x] **Look at the UFC and DED glass for the preview.** Two things only the
       panel can answer. What colour each glass is, since both previews are
       drawn white and a colour per display is a small change in `paintInk`.
       And whether each UFC segment sits where `art` in

@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-24. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-25. Enough context to resume cold.
 
 ## Resume here
 
@@ -42,15 +42,15 @@ profile" in [CONFIG.md](CONFIG.md).
   `a-10c2.json` flies `A-10C_2`, because the two want different radios on the
   CDU rows. `a10c-cdu`, renamed "A-10C2 CDU", stays with the A-10C II; the
   A-10C has "A-10C CDU", reading VHF AM. That page's id, `i63dn3`, was made in
-  the editor, against the readable-id rule for shipped pages; see
-  [TODO.md](TODO.md).
+  the editor, which is how shipped pages get their ids from now on (see
+  "Shipped ids" below).
 - **PTO2 on both A-10C profiles** shows the NMSP EGI, STEER PT, TCN, ANCHR and
   ILS lamps on CTR, LI, LO, RI and RO, in place of the fire lamps. The rows'
-  `note`s still describe the old assignments.
+  `note`s say so (2026-09-25).
 - **The F-14BU's ICP is no longer disabled.** It came out of
   `disabled_devices` with the move of the UFC and DED fields onto pages
-  (`6c05d7a`), so the DED now shows a Blank slot. Whether that was meant is
-  open; see [TODO.md](TODO.md).
+  (`6c05d7a`), so the DED now shows a Blank slot. Kept that way (decided
+  2026-09-25).
 - **alpha.008's changed rows are written up** in CHANGELOG.md, per profile and
   per page module, from a diff of `data/defaults` and `data/default-pages`
   against their `-previous` snapshots.
@@ -60,9 +60,9 @@ profile" in [CONFIG.md](CONFIG.md).
 same app-wide modifier. The design is "Pages" in [CONFIG.md](CONFIG.md), the
 section formerly "MCDU pages". Flown the same day: pages on the UFC and the
 ICP's DED swap from the mapped page keys, with the modifier chosen in
-Settings and only with that one. Blank and disabled slots on these screens,
-and the A-10C CMSC and Mi-24P Radios pages, are still to see; see
-[TODO.md](TODO.md).
+Settings and only with that one. Since seen on the panel: a blank slot takes
+these screens dark, a disabled slot's key does nothing, and the A-10C CMSC
+and Mi-24P Radios pages show on the glass.
 
 - **The gate is any known display.** `Profile::takes_pages` is
   `displays.get(display).is_some()`, so nothing names a panel or a glass
@@ -170,16 +170,20 @@ is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
   F-14's own profile has no slots, since the CDNU needs the nightly),
   F-16C_50 "Flight" and FA-18C_hornet "IFEI". Profiles with no MCDU content
   have no `screens`.
-- **Shipped ids are readable**: `a10c-cdu`, `ah64d-ku`, `ch47f-cdu`,
-  `f14-cdnu`, `f16-flight`, `fa18-ifei`. Ids made in the editor are six
-  letters and digits with no hyphen, so the two can never clash.
+- **Shipped ids**: the first pages were given readable ids by hand
+  (`a10c-cdu`, `ah64d-ku`, `ch47f-cdu`, `f14-cdnu`, `f16-flight`,
+  `fa18-ifei`), and those stay, since renaming a shipped id reads as one page
+  deleted and another added. New shipped pages keep the id the editor gives
+  them, six letters and digits with no hyphen (Cory, 2026-09-25: hand-naming
+  every page does not scale).
 - **The pages came from the Captain's rows.** The followers' own MCDU rows
   were dropped rather than kept as pages: two of them were stale copies (the
   A-10C's without the radio rows, the AH-64D's with the old KEYBOARD UNIT
   rule), and the rest matched the Captain. A page holds both seats' fields
   itself, as the AH-64D and CH-47F do, so no seat needed a page of its own.
-- **Checked with a dry run and the tests**, not yet on the panel: every
-  default loads and validates against the pages with no caution.
+- **Checked with a dry run and the tests**, and since seen on the panel:
+  every default loads and validates against the pages with no caution, and
+  each page file looks on the MCDU as it did before the move.
 - **Where it lives.** `dsc-config`: `pages.rs` (library, slots, resolving the
   start page, seeding and update), `bundle.rs` (export and import), slots in
   `merge.rs`. The editor: `editor/src/pages.ts` for the screen section,
@@ -195,7 +199,9 @@ is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
 - **A page saves on its own** (Cory, 2026-09-23): the section shows only the
   six slots until Edit page or New page opens the field editor, and Save page
   writes the library. The profile's Save writes the slots.
-- **Not yet clicked through in the window**, only type-checked and built.
+- **Clicked through in the window**: the slots, Edit page and New page,
+  Save page, Save as new page, Delete page, and export, import and merge
+  with pages.
 - **Test fixtures** holding MCDU fields are version 2 and marked as a
   resolved start page (`resolved()` in the engine tests), since the fields a
   page puts on the MCDU are ordinary fields once resolved.
@@ -204,8 +210,9 @@ is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
 Opening the options or controls menu pauses DCS-BIOS, and after 20 seconds of
 that the daemon used to clear every lamp and screen and rebuild them on the way
 back. A quiet stream alone now clears nothing; the panels keep the last cockpit
-until a new aircraft loads, and clear only once `DCS.exe` has gone. Not yet
-watched in DCS; see [TODO.md](TODO.md).
+until a new aircraft loads, and clear only once `DCS.exe` has gone. Since
+watched in DCS: the panels stay lit through the options menu and clear when
+DCS quits.
 
 **Flown 2026-09-22, on the panels with DCS feeding them:** the F-16's MCDU
 flight page (fuel from the totalizer drums through round down and wrap, the
@@ -256,9 +263,8 @@ What the drawing needed, and what it costs:
   UFC's are segments, so `art` in `data/displays/ufc1.json` gives each slot a
   stroke. Which slot is which segment was read out of the glyph table itself
   rather than captured, and the derivation is written down in both the file
-  and "Where each segment sits" in [PROTOCOL.md](PROTOCOL.md). So the preview
-  is exactly right about which segments light and only as right about where
-  they sit as that reading. A photograph of the glass would settle it.
+  and "Where each segment sits" in [PROTOCOL.md](PROTOCOL.md). Checked against
+  the glass 2026-09-25: every segment sits where the preview draws it.
 - **One layout, two painters.** The measuring the daemon does was already
   copied in the window for the MCDU; it is now `layoutCells`, and the font and
   the slots are two ways of painting what it produces. It picked up the
@@ -269,9 +275,12 @@ What the drawing needed, and what it costs:
   the way a missing font glyph already was, and the line under the preview
   names the values that would leave a cell dark. That is the check these two
   screens never had: `alphabet` only ever answered for a font.
-- **Both are drawn white**, because no capture says what colour either glass
-  is. One colour per display would be a small change in `paintInk` once
-  someone looks at the panels.
+- **Each glass in its own colours**, from `glass` on the display map, a
+  `ground` and an `ink` (2026-09-25, from looking at the panels). The UFC has
+  none and stays white on black: it lights its segments green, one colour,
+  and white stands in well enough. The DED is black on green, and an inverse
+  block green on black, which `paintInk` gets for nothing: an inverse cell's
+  lit set is the box with the glyph knocked out.
 
 **Built 2026-09-21, not yet on a panel: one panel under several names shares a
 setup.** Rebuilding the IFEI showed the cost of the MCDU being three devices: it

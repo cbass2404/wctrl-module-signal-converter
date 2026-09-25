@@ -29,6 +29,7 @@
         ]
       },
       "exact_case": true,
+      "glass": { "ground": "#6fa84a", "ink": "#0e1a0a" },
       "regions": [
         {
           "name": "Line 1",

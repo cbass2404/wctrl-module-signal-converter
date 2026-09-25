@@ -13,23 +13,10 @@ release shipped it is brought up to the new one for you. A fix to something
 you have touched only reaches you if you reset it, and you cannot decide to
 unless this says what moved.
 
-## 1.0.0-alpha.009
+## 1.0.0-alpha.010
 
-### Fixed
+### Changed
 
-- **Pages load again after updating from an earlier release.** Alpha 008
-  looked for page files under lowercase names, such as `ah-64d.json`, but a
-  library from an earlier release still had them under their old names, such
-  as `AH-64D.json`. Windows took the old file for the new one, so it was
-  neither loaded nor replaced, and every page slot on those aircraft came up
-  empty with a warning that the file "says it holds pages for" its own
-  aircraft. The old files are now renamed when the editor or the converter
-  starts, with your pages in them as you left them, and the pages alpha 008
-  added for those aircraft, such as the A-10C CDU, the F-16 DED and the
-  Hornet UFC, are added to them. Where alpha 008 had
-  already added a lowercase file beside an old one, as it did for the F-16
-  and the Hornet, the old file is kept and the added one is set aside as
-  `.json.seeded`.
-- **Clear app data on uninstall now clears pages and settings too.** It removed your
-  profiles but left your pages and settings behind, so a reinstall picked up
-  the old page files again.
+- **The DED preview is in the DED's own colours.** A field on the ICP's
+  screen was previewed white on black. It is now black on green, as the
+  glass shows it, and an inverse field green on black.

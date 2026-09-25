@@ -531,6 +531,9 @@ export interface DisplayInfo {
    * this glass will draw it. Empty on a text grid, which has a font instead.
    */
   art: Record<string, ShapeArt>;
+  /** The ground and ink this glass shows, for the preview. Null draws white
+   *  on black. */
+  glass: { ground: string; ink: string } | null;
 }
 
 /**

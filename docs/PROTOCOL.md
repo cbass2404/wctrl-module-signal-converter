@@ -518,11 +518,16 @@ rather than captured:
 - `'B'` takes 11 where `'F'` takes 15, which puts 11 on the right of the
   middle bar and 15 on the left.
 
-So the preview is exactly right about which segments light, since the daemon's
-own lookup answers that, and only as right about where they sit as that
-reading of the table. Replace it if a photograph of the glass ever says
-otherwise. The DED needs none of this: its slots are pixels of the cell, and
-the cell is generated from the grid.
+Checked against the glass 2026-09-25: the preview draws each segment where
+the panel lights it, so the reading holds. The DED needs none of this: its
+slots are pixels of the cell, and the cell is generated from the grid.
+
+The colours are `glass` on a display, a `ground` and an `ink`, and only the
+preview reads them. The UFC has none and draws white on black; its segments
+light green, and one colour stands in for another well enough. The DED is
+the other way round from a lit segment: a lit pixel is dark on a green
+ground, so an inverse cell, its box lit and the glyph knocked out, shows
+green on black.
 
 ### Where the UFC's cells come from, for the Hornet
 

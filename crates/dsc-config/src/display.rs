@@ -378,6 +378,18 @@ fn fit(value: &str, width: usize) -> String {
     }
 }
 
+/// What the unlit ground and a lit slot look like on a glass, as CSS colours.
+///
+/// Only the preview reads it; nothing sent to the panel depends on it. The DED
+/// is why it exists: a lit pixel there is dark on a green ground, so an
+/// inverse cell, which lights its box and knocks the glyph out, reads green on
+/// black.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Glass {
+    pub ground: String,
+    pub ink: String,
+}
+
 /// A kind of screen: its cells, glyphs and how it is written.
 ///
 /// Not tied to a part. Which parts carry it is said once, by `display` on the
@@ -422,6 +434,9 @@ pub struct Display {
     /// reads for itself.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub art: HashMap<String, StrokeArt>,
+    /// The colours of the glass, for the preview. Absent draws white on black.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub glass: Option<Glass>,
     /// Look glyphs up only as sent, never uppercased first.
     ///
     /// The DED needs it: DCS-BIOS spells its arrow `a` and its degree sign

@@ -10,7 +10,7 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 use dsc_config::{
-    Colour, DeviceSpec, Display, DisplayCatalogue, Families, Led, Module, Profile, ShapeArt,
+    Colour, DeviceSpec, Display, DisplayCatalogue, Families, Glass, Led, Module, Profile, ShapeArt,
     ValueLabel,
 };
 
@@ -178,6 +178,9 @@ pub struct DisplayView {
     /// Sent with the displays rather than asked for, unlike a font: this is a
     /// dozen numbers a shape, not four fonts of bitmaps.
     pub art: BTreeMap<String, ShapeArt>,
+    /// The ground and ink the preview draws this glass in, where the display
+    /// map says. Absent draws white on black.
+    pub glass: Option<Glass>,
 }
 
 /// What one cell of a display would light, drawing a value.
@@ -328,6 +331,7 @@ impl DeviceView {
                     .map(|t| t.native_fonts.iter().map(|(a, f)| (a.clone(), f.clone())).collect())
                     .unwrap_or_default(),
                 art: d.shape_art(),
+                glass: d.glass.clone(),
             })
             .collect();
         self

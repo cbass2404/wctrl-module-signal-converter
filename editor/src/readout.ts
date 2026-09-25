@@ -1732,7 +1732,7 @@ async function paintInk(
   const ctx = canvas.getContext("2d");
   if (!ctx) return [];
   ctx.scale(over, over);
-  ctx.fillStyle = "#05070a";
+  ctx.fillStyle = display.glass?.ground ?? "#05070a";
   ctx.fillRect(0, 0, across, down);
 
   const dark: string[] = [];
@@ -1754,8 +1754,10 @@ async function paintInk(
       return;
     }
     // One colour, because this glass has one: nothing on it is per cell the
-    // way a text grid's colour is, so a piece has none to pick.
-    const colour = SWATCH.white ?? "#f2f4f7";
+    // way a text grid's colour is, so a piece has none to pick. An inverse
+    // cell needs nothing of its own: its lit set is the box with the glyph
+    // knocked out, so ink on ground draws it the way the glass does.
+    const colour = display.glass?.ink ?? SWATCH.white ?? "#f2f4f7";
     if (art.kind === "pixels") {
       ctx.fillStyle = colour;
       for (const slot of lit.lit) {

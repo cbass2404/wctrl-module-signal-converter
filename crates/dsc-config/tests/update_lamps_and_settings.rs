@@ -183,6 +183,22 @@ fn a_device_disabled_by_the_release_is_disabled_unless_the_user_decided() {
     assert_eq!(mine(&dir).disabled_devices, vec!["MCDU_Observer".to_string()]);
 }
 
+/// Not driving a panel is not a decision about its rows. They still take the
+/// release's corrections, so turning the panel back on later finds them
+/// current rather than frozen at the day it was switched off.
+#[test]
+fn a_panel_the_user_stopped_driving_still_takes_the_update() {
+    let dir = scratch("disabled-rows");
+    let off = r#""disabled_devices": ["CarrierAce_MFD_L"],"#;
+    lay(&dir, ("", OWN), ("", MATCHED), (off, OWN));
+
+    merge(&dir, "alpha.004");
+
+    let after = mine(&dir);
+    assert_eq!(mfd_l(&after).same_as_device.as_deref(), Some("TAKEOFF_PLANEL_2"));
+    assert_eq!(after.disabled_devices, vec!["CarrierAce_MFD_L".to_string()]);
+}
+
 /// With no snapshot there is no telling an untouched row from an edited one,
 /// so nothing that already exists is rewritten.
 #[test]

@@ -49,7 +49,7 @@ pub fn build_label() -> &'static str {
 
 pub use display::{
     divider_rule, divider_text, min_divider_cells, text_cells, AliasDraw, Align, Cell, CellRange,
-    Colour, ColourSource, Display, DisplayCatalogue, Glyph, Grid, Readout, Reading, Region, Round,
+    Colour, ColourSource, Display, DisplayCatalogue, Glass, Glyph, Grid, Readout, Reading, Region, Round,
     RuleCell, Screen, ShapeArt, Span, StrokeArt, TextCell, TextGrid, Transport, ValueBand,
     SEAT_SIGNAL,
 };

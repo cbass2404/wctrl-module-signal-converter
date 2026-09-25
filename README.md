@@ -10,8 +10,8 @@ MCDU screen, and more.
 Jump into a Hornet and the panels follow the Hornet. Switch to an Apache and they
 follow the Apache. Quit DCS and they go dark, so nothing is left lit.
 
-No SimAppPro necessary to be running in the background, and no alt-tabbing to it when you change
-aircraft.
+SimAppPro does not need to be running, and there is no alt-tabbing to it when
+you change aircraft.
 
 - Starts with DCS on its own. Nothing to remember before a flight.
 - Every lamp is yours to reassign in a point-and-click editor, per aircraft.
@@ -75,28 +75,30 @@ Which lamps each one has is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 starter profile the first time you fly it, ready to fill in with the
 [editor](#4-make-it-yours).
 
-| Profile     | Covers                                |
-| ----------- | ------------------------------------- |
-| A-10C       | A-10C                                 |
-| A-10C2      | A-10C II                              |
-| AH-64D      | AH-64D                                |
-| CH-47F      | CH-47F                                |
-| F-14        | F-14A, F-14B                          |
-| F-14BU      | F-14B (Upgrade)                       |
-| F-16        | F-16C, F-16D and variants, F-16I      |
-| FA-18       | F/A-18C, and the EA-18G, E and F mods |
-| Mi-24P      | Mi-24P                                |
-| FC3         | The Flaming Cliffs aircraft           |
-| No aircraft | Spectator and free camera             |
+| Profile     | Covers                                                                             |
+| ----------- | ---------------------------------------------------------------------------------- |
+| A-10C       | A-10C                                                                              |
+| A-10C2      | A-10C II                                                                           |
+| AH-64D      | AH-64D                                                                             |
+| CH-47Fbl1   | CH-47F                                                                             |
+| F-14        | F-14A, F-14B                                                                       |
+| F-14BU      | F-14B (Upgrade)                                                                    |
+| F-16        | F-16C, F-16D and variants, F-16I                                                   |
+| FA-18       | F/A-18C, and the EA-18G, E and F mods                                              |
+| Mi-24P      | Mi-24P                                                                             |
+| FC3         | The Flaming Cliffs aircraft, and the mods and modules with no profile of their own |
+| No aircraft | Spectator and free camera                                                          |
 
 The A-10C, AH-64D, CH-47F and F-14B (Upgrade) also put their own CDU on the MCDU
 screen, and on a PFP's, which is the same screen. On any other aircraft the screen is yours to fill in the
 [editor](#4-make-it-yours): a label you type, a reading beside it, each in the
 colour and size you choose. Open a profile to see exactly what it drives.
 
-Every profile ties every panel backlight to one row, held at a steady
+Every aircraft profile ties every panel backlight to one row, held at a steady
 brightness, so the whole pit stays readable whatever the cockpit lighting is
-set to. Point that row at a cockpit knob and every panel dims with it.
+set to. Point that row at a cockpit knob and every panel dims with it. The No
+aircraft profile leaves the panels dark, since DCS-BIOS sends nothing to
+follow; set its backlights to Always on if you want them lit.
 
 ---
 
@@ -112,6 +114,13 @@ set to. Point that row at a cockpit knob and every panel dims with it.
 
 Five steps, about five minutes. **SimAppPro is not needed for any of them**, and
 can stay closed.
+
+> **Running SimAppPro alongside.** The converter can run with SimAppPro open, but
+> SimAppPro must stop driving the same panels. Set the lights on each device in
+> SimAppPro not to sync with DCS. For the F-16, set every ICP page selection to
+> disabled; for the F/A-18, set every UFC page selection to disabled. Leaving them
+> on will not harm your devices, but the two apps will fight over the panels,
+> causing extra writes and potentially strange visuals.
 
 ### 1. Install DCS-BIOS
 
@@ -237,9 +246,10 @@ A few more things the editor does:
   Manage Converter.
 - **Manage Converter**, under the gear, is for the rare times the converter
   needs restarting. Saving a profile is not one of them. See below.
-- **Reset** puts a profile back to the shipped one. **Reset this lamp** does
-  the same for a single lamp, and shows you what it will reset to before it
-  does.
+- **Reset** puts a profile back to the shipped one. **Reset this lamp** and
+  **Reset this field** do the same for one lamp or one field of a shipped
+  page. **Undo unsaved changes** puts one lamp or field back the way it was
+  last saved. Each shows you what it will put back before it does.
 - **Drive this panel** per panel. Untick it and the profile leaves that panel
   alone entirely, so another program can have it.
 - **Problems** in red stop a save until they are fixed. **Cautions** in yellow are

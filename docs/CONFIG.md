@@ -382,9 +382,12 @@ it.
 
 **Cautions** sit beside problems, for a profile that loads but probably does not
 do what was meant. They come from `Profile::cautions` and never withhold Save.
-The one so far is a gate, a dimmer marked in `devices.json` with `governs`, that
-resolves to 0 with every signal at 0, which hides its lamps in daylight. The
-daemon logs the same cautions on load.
+The profile-wide one is a gate, a dimmer marked in `devices.json` with
+`governs`, that resolves to 0 with every signal at 0, which hides its lamps in
+daylight. The daemon logs the same cautions on load. A display field has its
+own, from `Profile::field_cautions`, shown on the field they are about: content
+that may not fit its cells, settings that lean on what DCS-BIOS says a signal
+is, and characters a glyph table cannot draw (see "Display fields").
 
 ### Rows this DCS-BIOS cannot back
 
@@ -565,16 +568,15 @@ already here on the same module, and Merge from... does the same between two
 profiles here. Lights are taken a lamp at a time, ticked singly or a panel at
 once: each lamp picked that the source assigns replaces the target's row for
 it, and a lamp the source leaves unassigned, or that is not picked, keeps the
-target's row. Only lamps the source assigns are offered. Screens are taken a line at a time,
-a line being a region of the display map and a field belonging to the region
-holding its first cell: the line becomes exactly the source's, so fields the
-target had there go. A panel the source has following another is not offered,
-since its own rows are not what flies. Nothing else moves: name, aircraft,
-font, disabled panels and `follows` stay the target's, and merging onto a
-panel the target follows with, or has turned off, is said in the confirm. The
-merge is worked out first without writing, checked the way a save is, and put
-to the user as what is added, replaced and removed; it is written only on
-confirm. `crates/dsc-config/src/merge.rs` holds it.
+target's row. Only lamps the source assigns are offered. Screens are taken a
+page slot at a time, as under "Sharing pages". A panel the source has
+following another is not offered, since its own rows are not what flies.
+Nothing else moves: name, aircraft, font, disabled panels and `follows` stay
+the target's, and merging onto a panel the target follows with, or has turned
+off, is said in the confirm. The merge is worked out first without writing,
+checked the way a save is, and put to the user as what is added, replaced and
+removed; it is written only on confirm. `crates/dsc-config/src/merge.rs` holds
+it.
 
 ## The source dropdown
 
@@ -990,6 +992,16 @@ scratchpad cursor as `--` where the cockpit shows `_`, and `--` is not a glyph,
 so without the substitution that cell goes dark. Nothing can guess this, which
 is why it is per profile rather than in the display map: the map describes the
 hardware, the alias describes what one module calls something.
+
+**What you type is checked against the glyph table, as a caution.** On the UFC
+and the DED a character the table lacks is a dark cell with nothing to say
+why. So typed `text`, an alias's text and what a `replace` writes are checked
+against the cells the field covers, and one no cell can draw is a caution on
+the field: a letter on the UFC scratchpad's seven-segment digits, or `$` on
+the DED. A text grid refuses the same fault outright, because its font is
+known exactly. A glyph table can still be reached by another spelling, so
+here the profile loads and the user decides. A field of one cell, such as a
+UFC comm window, draws its whole value as one glyph and is checked whole.
 
 **`format` marks characters to draw inverse.** It names a second text signal,
 laid out across the run the same way as `source`, and a cell whose mark is `i`
@@ -1581,7 +1593,7 @@ pairs of folders:
   { "schema_version": 2, "profile": { "name": "...", "screens": {} }, "pages": [] }
   ```
 
-- **Import shows the pages beside the lamps and lines**, each ticked on its
+- **Import shows the pages beside the lamps**, each ticked on its
   own. A slot pointing at a page left unticked comes in disabled. A profile
   file on its own, without pages, imports too.
 - **A page already here by id** is left alone if it draws the same fields,
@@ -1589,7 +1601,7 @@ pairs of folders:
   imported profile's slots following it. So does one whose id a page on
   another module has. **A name already taken** gets a number added, which the
   preview shows and can be changed there.
-- **Merge from... offers slots on every screen** instead of lines: slot n of
+- **Merge from... offers slots on every screen**: slot n of
   the source replaces slot n of the target, and brings its page into the
   library if it is not there.
 - **Version 1 files are refused**, on import and in the active folder, with a

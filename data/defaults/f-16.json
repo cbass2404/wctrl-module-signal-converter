@@ -41,8 +41,8 @@
       "device": "CarrierAce_UFC",
       "led": "INST_PNL_Backlight",
       "conditions": [],
-      "same_as": "INST_PNL_Backlight",
-      "same_as_device": "CarrierAce_MFD_C",
+      "same_as": "Screen_Backlight",
+      "same_as_device": "MCDU_Captain",
       "note": "Test only: bound to the same source as the ICP backlight so a disabled UFC can be seen staying put."
     },
     {

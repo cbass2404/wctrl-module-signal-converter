@@ -34,6 +34,10 @@ pub struct PagesView {
     /// write over what is there.
     pub broken: Option<String>,
     pub used: Vec<PageUse>,
+    /// The module's pages as they shipped, so one field of a shipped page can
+    /// be put back without touching the rest. Empty for a module that ships
+    /// none; a page the user made is simply not in it.
+    pub shipped: Vec<Page>,
 }
 
 /// Pages as the window sends them, put the way a page file loads: every
@@ -119,6 +123,7 @@ pub fn open_pages(module: String) -> Reply<PagesView> {
         pages: lib.on_module(&module).to_vec(),
         broken: lib.broken(&module).map(str::to_string),
         used: usage(&paths, &module),
+        shipped: PageLibrary::load_dir(&paths.pages.defaults).on_module(&module).to_vec(),
     })
 }
 

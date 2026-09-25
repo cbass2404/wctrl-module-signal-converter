@@ -41,45 +41,56 @@ numbers move and the words do not.
       COM 1 to A-G), with the modifier chosen in Settings, and only with that
       modifier. [STATUS.md](STATUS.md), "pages on the UFC and the ICP"
 
-- [ ] **Finish the UFC and ICP page checks.** Not covered by the flight
+- [x] **Finish the UFC and ICP page checks.** Not covered by the flight
       above: a blank slot taking the screen dark and a disabled slot's key
       doing nothing on these two screens, and the A-10C CMSC and Mi-24P
       Radios pages on the glass.
 
-- [ ] **Fly the A-10C split.** Upgrade an alpha.007 install whose A-10C
+- [x] ~~**Check an update still carries changes to a panel set to not
+      drive.**~~ Checked 2026-09-25: `merge_new` reconciles every row
+      whatever `disabled_devices` says, and keeps the user's own entry in
+      it, so a panel turned back on later has current rows. Pinned by
+      `a_panel_the_user_stopped_driving_still_takes_the_update` in
+      `crates/dsc-config/tests/update_lamps_and_settings.rs`.
+
+- [x] **Fly the A-10C split.** Upgrade an alpha.007 install whose A-10C
       profile is untouched: the A-10C II should land on the new A-10C2 profile
       with the ARC-210 CDU page, and the A-10C keep its profile with the VHF AM
       CDU page. Then fly each and watch the PTO2 NMSP lamps (EGI, STEER PT,
       TCN, ANCHR, ILS). [STATUS.md](STATUS.md), "a shipped profile can split"
 
-- [ ] **Give the A-10C CDU page a readable id before alpha.008 ships.** It is
-      `i63dn3`, made in the editor; every other shipped page has a readable
-      one. Once it ships, the id is in everyone's snapshot and renaming it
-      reads as one page deleted and another added.
+- [x] ~~**Give the A-10C CDU page a readable id before alpha.008 ships.**~~
+      Dropped 2026-09-25: `i63dn3` stays, and new shipped pages keep the id
+      the editor generates. [STATUS.md](STATUS.md), "Shipped ids"
 
-- [ ] **Decide the F-14BU's ICP: disabled, or a Blank slot.** alpha.007
+- [x] **Decide the F-14BU's ICP: disabled, or a Blank slot.** alpha.007
       shipped it disabled; the page move took that out. Then the changelog
       entry under F-14BU stands or goes.
 
-- [ ] **Bring the A-10C PTO2 notes up to date.** CTR, LI, LO, RI and RO in
-      `a-10c.json` and `a-10c2.json` show the NMSP lamps, and their notes
-      still say fire lamps and UNDECIDED.
+- [x] ~~**Bring the A-10C PTO2 notes up to date.**~~ Done 2026-09-25: CTR,
+      LI, LO, RI and RO in `a-10c.json` and `a-10c2.json` name the NMSP lamp
+      each shows. A changed default row, so it goes in CHANGELOG.md at ship.
 
-- [ ] **Decide on the dead field-reset code.** With every screen on pages,
-      nothing in a profile's own `readouts` is valid, so Reset this field,
-      "+ the field that shipped here", the `shipped` argument of `fieldTable`
-      and line merging in `merge.rs` can no longer be reached. Remove, or
-      give pages a reset of their own.
+- [x] ~~**Decide on the dead field-reset code.**~~ Decided 2026-09-25:
+      pages got a reset of their own. Reset this field and "+ the field that
+      shipped here" now work from the shipped page files, and every field and
+      lamp gained Undo unsaved changes. Built and type-checked, not yet
+      clicked through.
+
+- [x] ~~**Remove line merging from `merge.rs`.**~~ Removed 2026-09-25,
+      with the line checkboxes in the merge dialog: a screen merges a slot
+      at a time. Merging part of one page into another would be a feature
+      of its own.
 
 - [x] ~~**Site page for UFC and ICP pages.**~~ Done 2026-09-24, with the
       PFPs and the steady backlights, ahead of flying the UFC and ICP pages.
       The screenshots are Cory's to retake.
 
-- [ ] **See the pages on the panel.** Fly one aircraft per page file and check
+- [x] **See the pages on the panel.** Fly one aircraft per page file and check
       the MCDU looks as it did before the move: A-10C CDU, AH-64D KU, CH-47F
       CDU, F-14BU CDNU, F-16 Flight, F/A-18 IFEI.
 
-- [ ] **Open the page editor in the window.** Built and type-checked, not yet
+- [x] **Open the page editor in the window.** Built and type-checked, not yet
       clicked through: the six slots (Disabled, Blank, pages), Edit page and
       New page, Save page, Save as new page, Delete page, and export, import
       and merge with pages. The shipped defaults are version 2 now, so any
@@ -94,32 +105,20 @@ numbers move and the words do not.
       glass. See [CHANGELOG.md](../CHANGELOG.md) and "Content: what fills a
       field" in [CONFIG.md](CONFIG.md).
 
-- [ ] **Watch the panels stay lit through the options menu.** Built
+- [x] **Watch the panels stay lit through the options menu.** Built
       2026-09-22, not yet seen in DCS. Mid-mission, sit in the options or
       controls menu for more than 20 seconds: every lamp and screen should
       keep the last cockpit and come back without a blank and a rebuild. Then
       quit DCS: the panels should clear and the daemon exit on its own.
       [STATUS.md](STATUS.md), "the panels stay lit through a quiet stream"
 
-- [ ] **Look at the UFC and DED glass for the preview.** Two things only the
+- [x] **Look at the UFC and DED glass for the preview.** Two things only the
       panel can answer. What colour each glass is, since both previews are
       drawn white and a colour per display is a small change in `paintInk`.
       And whether each UFC segment sits where `art` in
       `data/displays/ufc1.json` draws it, which was read out of the glyph
       table rather than captured; a photograph of a few lit cells settles it.
       [STATUS.md](STATUS.md), "the UFC and the DED are previewed too"
-
-- [ ] **Fly `follows` on two MCDUs.** Built 2026-09-21 and tested, not yet on
-      a panel. Point the Co-Pilot unit at the Captain in the Hornet and check
-      that both show the IFEI page and dim together.
-      [STATUS.md](STATUS.md), "one panel under several names shares a setup"
-
-- [ ] **See a PFP on a real panel.** Built 2026-09-24 from WwDevicesDotnet
-      alone; nobody here owns one. When a PFP owner reports back, confirm the
-      part id (a lamp lights at all), the five lamps, the LSK page keys, and
-      whether the 31px rows sit acceptably against the keys or the 32px
-      fonts are worth a per-part glyph height. Then mark `verified` in
-      `devices.json`. [STATUS.md](STATUS.md), "Built 2026-09-24: the PFP-3N"
 
 - [x] ~~**Point the defaults' backlights at one lamp across panels.**~~ Done
       2026-09-21: every backlight in every default matches the MFD C's
@@ -157,16 +156,19 @@ numbers move and the words do not.
 
 ## Smaller
 
-- [ ] **Move the DED glyph generator into `tools/`.** `gen_ded.py`, with
-      `extract.py` and `glyphs.json`, regenerates `data/displays/ded.json`
-      from the captures plus the hand-drawn glyphs, and it exists only in an
-      old session's scratchpad under `%TEMP%`, which Windows can clear. The
-      next item needs it.
-- [ ] **Replace the drawn DED glyphs** as captures turn up. The 27 in
-      `data/displays/ded.json` that were drawn by hand rather than captured.
-      [STATUS.md](STATUS.md), "39 of 66 glyphs"
-- [ ] **Name a display from a device spec**, so a part can carry one.
-      [STATUS.md](STATUS.md), "naming a display from a device spec"
+- [x] ~~**Move the DED glyph generator into `tools/`.**~~ Done 2026-09-25:
+      `tools/gen_ded.py` pairs the two fixtures itself, so there is no
+      glyph cache, and rewrites only the font and its two notes in
+      `data/displays/ded.json`. A fresh run leaves the file byte for byte.
+- [x] ~~**Replace the drawn DED glyphs.**~~ Done 2026-09-25. A second flight
+      through every DED page captured 10 of the 27. The other 17 never show on
+      the F-16's DED, so they come from SimAppPro's font file, which every
+      captured glyph matches. [STATUS.md](STATUS.md), "The whole font is
+      SimAppPro's"
+- [x] ~~**Name a display from a device spec**, so a part can carry one.~~
+      Already done, and the note was out of date: a part names its display in
+      `data/devices.json` (`"display": "DED"`), `DeviceSpec::displays` reads it,
+      and `every_declared_display_has_a_map` checks each name has a map.
 
 ## Blocked on hardware
 
@@ -192,6 +194,18 @@ numbers move and the words do not.
       Colour as a bindable signal is a separate, much larger feature and is not
       part of this. See "What VIRPIL will need decided" in STATUS.md for why
       each of those is in that order.
+
+- [ ] **Fly `follows` on two MCDUs.** Built 2026-09-21 and tested, not yet on
+      a panel. Point the Co-Pilot unit at the Captain in the Hornet and check
+      that both show the IFEI page and dim together.
+      [STATUS.md](STATUS.md), "one panel under several names shares a setup"
+
+- [ ] **See a PFP on a real panel.** Built 2026-09-24 from WwDevicesDotnet
+      alone; nobody here owns one. When a PFP owner reports back, confirm the
+      part id (a lamp lights at all), the five lamps, the LSK page keys, and
+      whether the 31px rows sit acceptably against the keys or the 32px
+      fonts are worth a per-part glyph height. Then mark `verified` in
+      `devices.json`. [STATUS.md](STATUS.md), "Built 2026-09-24: the PFP-3N"
 
 ## Deferred, not scheduled
 

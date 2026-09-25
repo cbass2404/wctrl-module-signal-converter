@@ -346,6 +346,13 @@
         color: var(--ink-2);
         font-size: 0.99rem;
       }
+      .after.caution {
+        border-left-color: var(--accent);
+        margin-top: 18px;
+      }
+      .after.caution .t {
+        color: var(--accent);
+      }
 
       .groups {
         display: grid;
@@ -463,6 +470,82 @@
       figcaption b {
         color: var(--ink);
         font-weight: 600;
+      }
+
+      /* One screenshot at a time, its caption under it. Every figure sits in
+         the same grid cell, so the box is as tall as the tallest and nothing
+         below it moves as they change. Without the script they all show,
+         stacked, as before. */
+      .show-bar {
+        display: none;
+      }
+      .showcase.on .show-bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+      .showcase:focus-visible {
+        outline: 3px solid var(--ink);
+        outline-offset: 6px;
+      }
+      .show-bar button {
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.8rem;
+        letter-spacing: 0.04em;
+        padding: 7px 12px;
+        border: 1px solid var(--rule-2);
+        background: var(--panel);
+        color: var(--ink-2);
+        cursor: pointer;
+      }
+      .show-bar button:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .show-bar button:focus-visible {
+        outline: 3px solid var(--ink);
+        outline-offset: 2px;
+      }
+      .show-dots {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+      .show-dots button {
+        width: 14px;
+        height: 14px;
+        padding: 0;
+      }
+      .show-dots button[aria-current="true"] {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .show-count {
+        margin-left: auto;
+        font-family: "IBM Plex Mono", ui-monospace, monospace;
+        font-size: 0.8rem;
+        color: var(--ink-3);
+      }
+      .showcase.on .shots {
+        display: grid;
+      }
+      .showcase.on figure {
+        grid-area: 1 / 1;
+        visibility: hidden;
+        opacity: 0;
+      }
+      .showcase.on figure.now {
+        visibility: visible;
+        opacity: 1;
+      }
+      @media (prefers-reduced-motion: no-preference) {
+        .showcase.on figure {
+          transition:
+            opacity 0.25s ease,
+            visibility 0.25s;
+        }
       }
 
       .feats {
@@ -674,9 +757,9 @@
           </h1>
           <p class="lede">
             Gear lamps that follow the gear. A Master Caution that comes on when
-            the jet's does. Backlights that can dim with the console knob. Jump into
-            a Hornet and the panels follow the Hornet; switch to an Apache and
-            they follow the Apache. Quit DCS and they go dark.
+            the jet's does. Backlights that can dim with the console knob. Jump
+            into a Hornet and the panels follow the Hornet; switch to an Apache
+            and they follow the Apache. Quit DCS and they go dark.
           </p>
           <div class="cta-row">
             <a
@@ -826,9 +909,9 @@
           </div>
         </div>
         <p class="foot-note">
-          The tags name the pages each aircraft ships. On the MCDU, its own
-          CDU, CDNU or KU where it has one, and a page built from its readings
-          where it does not; then its UFC or DED page, such as the A-10C's
+          The tags name the pages each aircraft ships. On the MCDU, its own CDU,
+          CDNU or KU where it has one, and a page built from its readings where
+          it does not; then its UFC or DED page, such as the A-10C's
           countermeasures on the DED. Open a profile in the editor to see
           exactly what it drives.
         </p>
@@ -882,6 +965,18 @@
             quit DCS and it quits too.
           </p>
         </div>
+        <div class="after caution">
+          <span class="t">Running SimAppPro alongside</span>
+          <p>
+            The converter can run with SimAppPro open, but SimAppPro must stop
+            driving the same panels. Set the lights on each device in SimAppPro
+            not to sync with DCS. For the F-16, set every ICP page selection to
+            disabled; for the F/A-18, set every UFC page selection to disabled.
+            Leaving them on will not harm your devices, but the two apps will
+            fight over the panels, causing extra writes and potentially strange
+            visuals.
+          </p>
+        </div>
       </div>
     </section>
 
@@ -891,136 +986,261 @@
           <span class="eyebrow">The editor</span>
           <h2>Every lamp is yours to reassign, per aircraft</h2>
         </div>
-        <div class="shots">
-          <figure>
-            <div class="frame">
-              <div class="crop">
+        <div class="showcase" role="region" aria-roledescription="carousel" aria-label="Editor screenshots" tabindex="0">
+          <div class="show-bar">
+            <button type="button" class="show-prev" aria-label="Previous screenshot">&larr; prev</button>
+            <div class="show-dots"></div>
+            <button type="button" class="show-next" aria-label="Next screenshot">next &rarr;</button>
+            <span class="show-count" aria-live="polite"></span>
+          </div>
+          <div class="shots">
+            <figure>
+              <div class="frame">
                 <img
                   src="img/profile-selection.png"
-                  alt="The profile list: one row per aircraft with Edit and a menu of the rarer actions, and the settings gear beside New profile"
-                  width="1101"
-                  height="787"
+                  alt="The profile list: one row per profile, naming its module and aircraft and how many lamps it lights, with a menu at the end of each row"
+                  width="1083"
+                  height="761"
                   loading="lazy"
                 />
               </div>
-            </div>
-            <figcaption>
-              <b>One profile per aircraft.</b> Filter by name or module, copy a
-              profile to related aircraft, export it, merge from a sibling, or
-              reset it to the shipped one.
-            </figcaption>
-          </figure>
-          <figure>
-            <div class="frame">
-              <div class="crop">
+              <figcaption>
+                <b>One profile per aircraft, picked for you.</b> Jump into a
+                jet and the converter loads its profile. Click a row when you
+                want to change what it does.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <img
+                  src="img/profile-selection-filtering.png"
+                  alt="The profile list filtered by what is typed in the box at the top"
+                  width="1096"
+                  height="762"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption>
+                <b>Find one in a keystroke.</b> Filter by name, module or
+                aircraft, so the list stays easy to use however many aircraft
+                you fly.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <img
+                  src="img/profile-selection-management-menu.png"
+                  alt="A profile row's menu open: Copy to, Export, Merge from and Reset"
+                  width="1083"
+                  height="759"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption>
+                <b>Set up once, reuse it.</b> Copy a profile to related
+                aircraft, export it to share, merge from a sibling, or put it
+                back the way it shipped.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <img
+                  src="img/import-profile-step-1.png"
+                  alt="Importing a profile: as a profile of its own, or merged into one already here"
+                  width="1085"
+                  height="762"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption>
+                <b>Start from someone else's setup.</b> Import a shared profile
+                as one of your own, or merge it into yours. It is checked
+                first, and refused if it would not load.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <img
+                  src="img/merge-profile-step-2.png"
+                  alt="Merging an imported profile: a ticked list of panels, lamps and page slots to take"
+                  width="1084"
+                  height="765"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption>
+                <b>Take only the parts you want.</b> Tick the panels, lamps and
+                page slots to bring in. The rest of your profile stays exactly
+                as it was.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
                 <img
                   src="img/profile-editor-device-expanded.png"
                   alt="The PTO2 panel expanded, each lamp beside what drives it, with a note on why"
-                  width="1096"
-                  height="791"
+                  width="1085"
+                  height="762"
                   loading="lazy"
                 />
               </div>
-            </div>
-            <figcaption>
-              <b>Every lamp on every panel</b>, beside the cockpit signal that
-              drives it, with room for a note on why. Untick <b>drive this
-              panel</b> and the profile leaves that panel alone for another
-              program.
-            </figcaption>
-          </figure>
-          <figure>
-            <div class="frame">
-              <div class="crop">
+              <figcaption>
+                <b>See why every lamp does what it does.</b> Each lamp sits
+                beside the cockpit signal that drives it, with a note on the
+                reasoning. Untick <b>drive this panel</b> to leave a panel to
+                another program.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
                 <img
                   src="img/profile-edit-signal-create-typeahead-filtering.png"
                   alt="Typing into a signal box lists matching cockpit signals"
-                  width="1101"
-                  height="790"
+                  width="1083"
+                  height="763"
                   loading="lazy"
                 />
               </div>
-            </div>
-            <figcaption>
-              <b>Type three letters and pick.</b> The test fills itself in to
-              suit the signal and the lamp. Do not know what a switch is called?
-              Press <b>Learn</b>, flip it in the cockpit, and it is at the top
-              of the list.
-            </figcaption>
-          </figure>
-          <figure>
-            <div class="frame">
-              <div class="crop">
+              <figcaption>
+                <b>Type three letters and pick.</b> The test fills itself in to
+                suit the signal and the lamp, so most lamps take one step.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <img
+                  src="img/profile-edit-signal-learn.png"
+                  alt="Learn listening in flight: the switch just moved in the cockpit at the top of the signal list, ready to bind"
+                  width="1085"
+                  height="761"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption>
+                <b>Do not know what a switch is called?</b> Press
+                <b>Learn</b>, flip it in the cockpit, and what you just moved is
+                at the top of the list. It only listens, and never sends
+                anything to DCS or the panels, so it is safe mid-mission.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
                 <img
                   src="img/profile-edit-multicrew-flow.png"
                   alt="A backlight driven by the pilot's knob or the gunner's, depending on the seat"
-                  width="1100"
-                  height="796"
+                  width="1084"
+                  height="763"
                   loading="lazy"
                 />
               </div>
-            </div>
-            <figcaption>
-              <b>Two seats, one panel.</b> Conditions and alternatives let a
-              lamp follow whichever seat you are in.
-            </figcaption>
-          </figure>
-          <figure>
-            <div class="frame">
-              <div class="crop">
+              <figcaption>
+                <b>Right for whichever seat you are in.</b> Conditions and
+                alternatives let one lamp follow the pilot's knob or the
+                gunner's, depending on where you sit.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
                 <img
                   src="img/profile-edit-mcdu-page-selection.png"
                   alt="The A-10C's MCDU pages: six slots, one per left line select key, each a page, blank or disabled, with the start slot ticked"
-                  width="1100"
-                  height="791"
+                  width="1084"
+                  height="762"
                   loading="lazy"
                 />
               </div>
-            </div>
-            <figcaption>
-              <b>Six pages per screen.</b> Each slot is one of the panel's keys:
-              the MCDU's line select keys, the UFC's A/P to BCN, the ICP's COM 1
-              to A-G. Pick a page, a blank screen, or nothing, and tick the one
-              a mission starts on. In flight, hold Ctrl and press the key to
-              swap.
-            </figcaption>
-          </figure>
-          <figure>
-            <div class="frame">
-              <div class="crop">
+              <figcaption>
+                <b>Six pages per screen, a key press apart.</b> Each slot is
+                one of the panel's keys: the MCDU's line select keys, the UFC's
+                A/P to BCN, the ICP's COM 1 to A-G. Hold Ctrl and press the key
+                in flight to swap.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
                 <img
-                  src="img/profile-edit-something-wrong-with-profile.png"
-                  alt="A banner naming the signals the installed DCS-BIOS lacks"
-                  width="1099"
-                  height="828"
+                  src="img/page-management-readonly.png"
+                  alt="The A-10C CDU page: each row with the signals it reads and a preview of what it draws"
+                  width="1089"
+                  height="764"
                   loading="lazy"
                 />
               </div>
-            </div>
-            <figcaption>
-              <b>It tells you what will not work, and why.</b> Signals your
-              DCS-BIOS does not have yet are named, and everything else still
-              runs.
-            </figcaption>
-          </figure>
-          <figure>
-            <div class="frame">
-              <div class="crop">
+              <figcaption>
+                <b>A page reads like the screen it draws.</b> Each row names
+                its signals and previews what it will show. One page can sit on
+                several screens, and saving it updates every one.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <img
+                  src="img/page-management-edit.png"
+                  alt="One row of a page open for editing: a reading converted to the dial's scale, aliases, substitutions, colour, size and width, with a preview below"
+                  width="1083"
+                  height="762"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption>
+                <b>Every piece of a row is yours to set.</b> Convert a reading
+                to what the dial is marked in, give numbers words, swap
+                characters the glass cannot draw, and pick the colour, size and
+                width. The preview is drawn in the panel's own font.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <div class="crop">
+                  <img
+                    src="img/profile-edit-something-wrong-with-profile.png"
+                    alt="A banner naming the signals the installed DCS-BIOS lacks"
+                    width="1099"
+                    height="828"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+              <figcaption>
+                <b>Know what will not work before you fly.</b> Signals your
+                DCS-BIOS does not have yet are named, and everything else still
+                runs.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
                 <img
                   src="img/dark-light-mode.png"
                   alt="The Settings dialog over the profile list in the light theme: appearance, the MCDU page key, Import profile and Manage Converter"
-                  width="1099"
-                  height="791"
+                  width="1083"
+                  height="761"
                   loading="lazy"
                 />
               </div>
-            </div>
-            <figcaption>
-              <b>Light or dark, and your choice of key.</b> Follow Windows or
-              pick a theme, and choose whether Ctrl, Shift or Alt swaps
-              pages, to suit how DCS is bound on your PC.
-            </figcaption>
-          </figure>
+              <figcaption>
+                <b>Light or dark, and your choice of key.</b> Follow Windows or
+                pick a theme, and choose whether Ctrl, Shift or Alt swaps
+                pages, to suit how DCS is bound on your PC.
+              </figcaption>
+            </figure>
+            <figure>
+              <div class="frame">
+                <img
+                  src="img/manage-converter.png"
+                  alt="The Manage Converter dialog: whether it is running, when a restart is needed, and Kill, Cancel and Restart"
+                  width="1082"
+                  height="762"
+                  loading="lazy"
+                />
+              </div>
+              <figcaption>
+                <b>Recover without restarting DCS.</b> Restart the converter
+                after plugging in a panel or updating DCS-BIOS. Saving a
+                profile never needs it: a running converter picks it up within
+                about a second.
+              </figcaption>
+            </figure>
+          </div>
         </div>
         <p class="foot-note" style="font-size: 1rem">
           Every test, reading and page the editor offers is explained, with
@@ -1063,6 +1283,22 @@
               are marked. It now ships as the Hornet's MCDU page.
             </figcaption>
           </figure>
+          <figure>
+            <div class="frame">
+              <img
+                src="img/mcdu-custom-ifei.jpg"
+                alt="A WinWing MCDU showing the Hornet IFEI page in flight: engine readings in amber either side of white labels, fuel, bingo and the clock, and the page keys in green"
+                width="1400"
+                height="1048"
+                loading="lazy"
+              />
+            </div>
+            <figcaption>
+              <b>The same page on the glass</b>, photographed mid-flight: amber
+              readings, white labels and green keys, each in the colour its
+              piece was given.
+            </figcaption>
+          </figure>
         </div>
       </div>
     </section>
@@ -1088,8 +1324,8 @@
             <h3>Swap pages</h3>
             <p>
               Give the MCDU, the UFC and the ICP's DED up to six pages each.
-              Hold Ctrl and press one of the panel's page keys to put that
-              page on the screen, mid-flight.
+              Hold Ctrl and press one of the panel's page keys to put that page
+              on the screen, mid-flight.
             </p>
           </div>
           <div class="feat">
@@ -1266,5 +1502,53 @@
         </div>
       </div>
     </footer>
+    <script>
+      // The editor showcase: one screenshot at a time, by button, dot, arrow
+      // key or swipe. Without this every screenshot shows, stacked.
+      (() => {
+        const box = document.querySelector(".showcase");
+        if (!box) return;
+        const figs = [...box.querySelectorAll("figure")];
+        const dots = box.querySelector(".show-dots");
+        const count = box.querySelector(".show-count");
+        const pad = (n) => String(n).padStart(2, "0");
+        let at = 0;
+        const show = (i) => {
+          at = (i + figs.length) % figs.length;
+          figs.forEach((f, j) => {
+            f.classList.toggle("now", j === at);
+            f.setAttribute("aria-hidden", String(j !== at));
+          });
+          marks.forEach((m, j) => m.setAttribute("aria-current", String(j === at)));
+          count.textContent = `${pad(at + 1)} / ${pad(figs.length)}`;
+        };
+        const marks = figs.map((f, i) => {
+          const m = document.createElement("button");
+          m.type = "button";
+          m.setAttribute("aria-label", f.querySelector("figcaption b")?.textContent ?? `Screenshot ${i + 1}`);
+          m.addEventListener("click", () => show(i));
+          dots.append(m);
+          return m;
+        });
+        box.querySelector(".show-prev").addEventListener("click", () => show(at - 1));
+        box.querySelector(".show-next").addEventListener("click", () => show(at + 1));
+        box.addEventListener("keydown", (e) => {
+          if (e.key === "ArrowLeft") show(at - 1);
+          else if (e.key === "ArrowRight") show(at + 1);
+          else return;
+          e.preventDefault();
+        });
+        let from = null;
+        box.addEventListener("pointerdown", (e) => (from = e.clientX));
+        box.addEventListener("pointerup", (e) => {
+          if (from === null) return;
+          const dx = e.clientX - from;
+          from = null;
+          if (Math.abs(dx) > 50) show(at + (dx < 0 ? 1 : -1));
+        });
+        box.classList.add("on");
+        show(0);
+      })();
+    </script>
   </body>
 </html>

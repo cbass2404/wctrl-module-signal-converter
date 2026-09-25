@@ -6,7 +6,7 @@ use std::path::Path;
 
 use dsc_config::bundle::{self, Bundle, Fate, PageTake};
 use dsc_config::merge::{self, Pick, SlotPick};
-use dsc_config::{DeviceInventory, DisplayCatalogue, Page, PageFile, PageLibrary, PageSlots, Profile, Readout, Slot};
+use dsc_config::{DeviceInventory, Page, PageFile, PageLibrary, PageSlots, Profile, Readout, Slot};
 
 const CAPTAIN: &str = "MCDU_Captain";
 
@@ -136,7 +136,6 @@ fn a_name_already_taken_is_refused() {
 #[test]
 fn a_merge_takes_slot_n_for_slot_n() {
     let devices = DeviceInventory::load(&r("data/devices.json")).unwrap();
-    let displays = DisplayCatalogue::load_dir(&r("data/displays")).unwrap();
     let source = profile(&[Some("a"), None, Some("c")], 3);
     let target = profile(&[Some("x"), Some("y"), None], 2);
     let pick = Pick {
@@ -147,7 +146,7 @@ fn a_merge_takes_slot_n_for_slot_n() {
         ],
         ..Pick::default()
     };
-    let merged = merge::merge(&target, &source, &pick, &devices, &displays).unwrap();
+    let merged = merge::merge(&target, &source, &pick, &devices).unwrap();
     let slots = shown(&merged.profile);
     assert_eq!(slots[..3], [Some("a".to_string()), None, Some("c".to_string())]);
     let s = &merged.profile.screens[CAPTAIN];

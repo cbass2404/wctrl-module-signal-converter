@@ -1190,6 +1190,17 @@ details.device.follows > summary {
   box-shadow: 0 -1px 0 var(--line);
 }
 
+/* An open field's preview, held just above Save page while the field's
+   controls run on below it, so each change can be seen as it is made. Only
+   within its own field: past the end of it, it scrolls away with the rest. */
+.page-edit .chain > .preview-wrap {
+  position: sticky;
+  bottom: calc(var(--foot, 0px) + var(--page-actions-h, 0px));
+  z-index: 4;
+  padding: 6px 0;
+  background: var(--panel);
+}
+
 body:has(> .update) {
   --foot: 38px;
 }
@@ -1509,9 +1520,16 @@ tr.region-empty td {
   color: var(--muted);
 }
 
-tr.region-empty .region-name {
+tr.region-empty .region-name,
+tr.field-closed .region-name {
   font-weight: 500;
   color: var(--fg);
+}
+
+/* A closed field: what it reads, then the picture of what it draws. */
+tr.field-closed .preview-wrap,
+tr.field-closed .divider-preview {
+  margin-top: 5px;
 }
 
 tr.region-head td {

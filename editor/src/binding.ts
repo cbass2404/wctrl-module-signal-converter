@@ -225,6 +225,14 @@ export interface BindingEditorOptions {
    * edit in the profile the way the profile-level Reset does.
    */
   shipped?: Binding | undefined;
+  /**
+   * This lamp as the profile was last saved. Drives the per-lamp undo, asked
+   * for on each draw because a save moves it. Undefined before the first
+   * baseline is taken.
+   */
+  saved?: () => Binding | undefined;
+  /** Hands over the editor's redraw, for a change made outside it: a save, or the lamp's output. */
+  onRedraw?: (redraw: () => void) => void;
   /** Called whenever the binding changes, so the window can mark itself dirty. */
   onChange: () => void;
   /**
@@ -785,11 +793,22 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
   }
 
   /**
-   * On every lamp that has a shipped version, so the way back is always in
-   * the same place. Disabled while the lamp already matches, so it is never a
-   * no-op. A profile the user made has no shipped version and no button.
+   * The ways back for this lamp, in the same place on every lamp.
+   *
+   * Undo unsaved changes puts it back the way the profile was last saved, and
+   * is there only while there is something to undo. Reset this lamp puts it
+   * back the way it shipped, on every lamp with a shipped version, and is
+   * disabled while the lamp already matches so it is never a no-op. A profile
+   * the user made has only the first; a shipped one with edits has both.
    */
   function appendRevert(into: HTMLElement): void {
+    const saved = opts.saved?.();
+    if (saved && meaningfulPart(saved) !== meaningfulPart(binding)) {
+      const undo = el("button", { class: "add revert", type: "button" }, "Undo unsaved changes");
+      undo.title = "Put this lamp back the way the profile was last saved. No other lamp is touched.";
+      undo.addEventListener("click", () => void confirmPutBack(saved, "saved"));
+      into.append(undo);
+    }
     const shipped = opts.shipped;
     if (!shipped) return;
     const revert = el("button", { class: "add revert", type: "button" }, "Reset this lamp");
@@ -798,34 +817,37 @@ export function bindingEditor(opts: BindingEditorOptions): HTMLElement {
       revert.title = "This lamp matches how it shipped.";
     } else {
       revert.title = "Put this lamp back the way it shipped. No other lamp is touched.";
-      revert.addEventListener("click", () => void confirmRevert(shipped));
+      revert.addEventListener("click", () => void confirmPutBack(shipped, "shipped"));
     }
     into.append(revert);
   }
 
-  /** Asks first, showing both setups, so a revert is never made blind. */
-  async function confirmRevert(shipped: Binding): Promise<void> {
+  /** Asks first, showing both setups, so neither way back is taken blind. */
+  async function confirmPutBack(to: Binding, how: "shipped" | "saved"): Promise<void> {
     const question =
-      `Reset ${led.name} to how it shipped?\n\n` +
+      (how === "shipped"
+        ? `Reset ${led.name} to how it shipped?\n\n`
+        : `Undo the unsaved changes to ${led.name}?\n\n`) +
       `Now:\n${describeBinding(binding, byId, opts.deviceName)}\n\n` +
-      `Shipped:\n${describeBinding(shipped, byId, opts.deviceName)}\n\n` +
+      `${how === "shipped" ? "Shipped" : "Saved"}:\n${describeBinding(to, byId, opts.deviceName)}\n\n` +
       "No other lamp is touched.";
-    if (!(await confirmAction(question, "Reset"))) return;
-    binding.conditions = structuredClone(shipped.conditions);
-    binding.any_of = structuredClone(shipped.any_of ?? []);
-    if (shipped.pick) binding.pick = shipped.pick;
+    if (!(await confirmAction(question, how === "shipped" ? "Reset" : "Undo"))) return;
+    binding.conditions = structuredClone(to.conditions);
+    binding.any_of = structuredClone(to.any_of ?? []);
+    if (to.pick) binding.pick = to.pick;
     else delete binding.pick;
-    binding.always = shipped.always ?? false;
-    binding.same_as = shipped.same_as ?? null;
-    if (shipped.same_as_device) binding.same_as_device = shipped.same_as_device;
+    binding.always = to.always ?? false;
+    binding.same_as = to.same_as ?? null;
+    if (to.same_as_device) binding.same_as_device = to.same_as_device;
     else delete binding.same_as_device;
-    binding.on = shipped.on;
-    binding.off = shipped.off;
-    binding.note = shipped.note;
+    binding.on = to.on;
+    binding.off = to.off;
+    binding.note = to.note;
     editing.clear();
     committed();
   }
 
   render();
+  opts.onRedraw?.(render);
   return host;
 }

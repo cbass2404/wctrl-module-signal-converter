@@ -1,6 +1,6 @@
 # Project status
 
-Written 2026-09-16, last updated 2026-09-24. Enough context to resume cold.
+Written 2026-09-16, last updated 2026-09-25. Enough context to resume cold.
 
 ## Resume here
 
@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 481 passing
+cargo test --workspace            # expect 493 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -21,6 +21,39 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
+
+**Done 2026-09-25: the DED font is SimAppPro's, and glyph tables caution.**
+`c40713a` to `0463a48`. What users see is in [CHANGELOG.md](../CHANGELOG.md).
+
+- **All 66 DED glyphs are SimAppPro's.** A second F-16 capture through every
+  DED page added 10; the 17 the DED never shows come from SimAppPro's
+  `ICP_font_0.png`, which every captured glyph matches. `tools/gen_ded.py
+  --check-font` rechecks against it. See "The whole font is SimAppPro's".
+- **Typed characters on the UFC and DED are cautioned**, not refused:
+  `glyph_problems` in `dsc-config`, an advisory `NotInGlyphs`, tested in
+  `crates/dsc-engine/tests/glyph_cautions.rs`. No shipped profile or page
+  trips it.
+- **Past CNI and TCN, SimAppPro lays the DED out its own way**, so its frames
+  are evidence for glyphs, not for a page's layout. In PROTOCOL.md.
+
+**Built 2026-09-25: page fields open one at a time, and two ways back.**
+Built and type-checked, not yet clicked through. What users see is in
+[CHANGELOG.md](../CHANGELOG.md).
+
+- **A page field is closed until its pencil is clicked**: the signals it
+  reads and its preview. Tick keeps, cross restores the copy taken when it
+  opened, the lamp condition pattern. Which fields are open lives on the
+  page book's `Editing`, so a section redraw keeps them open; Save page
+  closes them.
+- **Shipped pages reach the editor.** `open_pages` returns `shipped`, the
+  module's pages from `pages.defaults`, and a field finds its shipped self
+  by cells and seat, as profile fields used to.
+- **Saved versions are tied by identity**, not cells: `Editing.saved` maps
+  each working field to its field in the last saved baseline, carried across
+  a reset or a cancel, so a field moved to other cells still undoes to its
+  saved self. A deleted one is offered back in its empty area.
+- **Lamps got the same undo**: `Session.saved` holds each binding as last
+  saved, and a save redraws every lamp's footer through `afterSave`.
 
 **Built 2026-09-24: the editor keeps things in reach, and a shipped profile
 can split.** `80a1123` to `a87bb32`. What users see is in
@@ -42,15 +75,15 @@ profile" in [CONFIG.md](CONFIG.md).
   `a-10c2.json` flies `A-10C_2`, because the two want different radios on the
   CDU rows. `a10c-cdu`, renamed "A-10C2 CDU", stays with the A-10C II; the
   A-10C has "A-10C CDU", reading VHF AM. That page's id, `i63dn3`, was made in
-  the editor, against the readable-id rule for shipped pages; see
-  [TODO.md](TODO.md).
+  the editor, which is how shipped pages get their ids from now on (see
+  "Shipped ids" below).
 - **PTO2 on both A-10C profiles** shows the NMSP EGI, STEER PT, TCN, ANCHR and
   ILS lamps on CTR, LI, LO, RI and RO, in place of the fire lamps. The rows'
-  `note`s still describe the old assignments.
+  `note`s say so (2026-09-25).
 - **The F-14BU's ICP is no longer disabled.** It came out of
   `disabled_devices` with the move of the UFC and DED fields onto pages
-  (`6c05d7a`), so the DED now shows a Blank slot. Whether that was meant is
-  open; see [TODO.md](TODO.md).
+  (`6c05d7a`), so the DED now shows a Blank slot. Kept that way (decided
+  2026-09-25).
 - **alpha.008's changed rows are written up** in CHANGELOG.md, per profile and
   per page module, from a diff of `data/defaults` and `data/default-pages`
   against their `-previous` snapshots.
@@ -60,9 +93,9 @@ profile" in [CONFIG.md](CONFIG.md).
 same app-wide modifier. The design is "Pages" in [CONFIG.md](CONFIG.md), the
 section formerly "MCDU pages". Flown the same day: pages on the UFC and the
 ICP's DED swap from the mapped page keys, with the modifier chosen in
-Settings and only with that one. Blank and disabled slots on these screens,
-and the A-10C CMSC and Mi-24P Radios pages, are still to see; see
-[TODO.md](TODO.md).
+Settings and only with that one. Since seen on the panel: a blank slot takes
+these screens dark, a disabled slot's key does nothing, and the A-10C CMSC
+and Mi-24P Radios pages show on the glass.
 
 - **The gate is any known display.** `Profile::takes_pages` is
   `displays.get(display).is_some()`, so nothing names a panel or a glass
@@ -84,7 +117,7 @@ and the A-10C CMSC and Mi-24P Radios pages, are still to see; see
   `A_G` and `A_P`, `IFF`, `TCN`, `ILS`, `D_N`, `BCN`.
 - **Editor**: every display gets a page section; `displaySection` and the
   session's shipped readouts are gone. Reset this field and "+ the field
-  that shipped here" are now unreachable; see TODO.
+  that shipped here" came back on 2026-09-25, fed from the shipped pages.
 - **Test fixtures** in `editor_checks.rs` and `seat_validation.rs` mark their
   fields as a page's, the way the engine tests' `resolved()` does.
 
@@ -170,16 +203,20 @@ is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
   F-14's own profile has no slots, since the CDNU needs the nightly),
   F-16C_50 "Flight" and FA-18C_hornet "IFEI". Profiles with no MCDU content
   have no `screens`.
-- **Shipped ids are readable**: `a10c-cdu`, `ah64d-ku`, `ch47f-cdu`,
-  `f14-cdnu`, `f16-flight`, `fa18-ifei`. Ids made in the editor are six
-  letters and digits with no hyphen, so the two can never clash.
+- **Shipped ids**: the first pages were given readable ids by hand
+  (`a10c-cdu`, `ah64d-ku`, `ch47f-cdu`, `f14-cdnu`, `f16-flight`,
+  `fa18-ifei`), and those stay, since renaming a shipped id reads as one page
+  deleted and another added. New shipped pages keep the id the editor gives
+  them, six letters and digits with no hyphen (Cory, 2026-09-25: hand-naming
+  every page does not scale).
 - **The pages came from the Captain's rows.** The followers' own MCDU rows
   were dropped rather than kept as pages: two of them were stale copies (the
   A-10C's without the radio rows, the AH-64D's with the old KEYBOARD UNIT
   rule), and the rest matched the Captain. A page holds both seats' fields
   itself, as the AH-64D and CH-47F do, so no seat needed a page of its own.
-- **Checked with a dry run and the tests**, not yet on the panel: every
-  default loads and validates against the pages with no caution.
+- **Checked with a dry run and the tests**, and since seen on the panel:
+  every default loads and validates against the pages with no caution, and
+  each page file looks on the MCDU as it did before the move.
 - **Where it lives.** `dsc-config`: `pages.rs` (library, slots, resolving the
   start page, seeding and update), `bundle.rs` (export and import), slots in
   `merge.rs`. The editor: `editor/src/pages.ts` for the screen section,
@@ -195,7 +232,9 @@ is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
 - **A page saves on its own** (Cory, 2026-09-23): the section shows only the
   six slots until Edit page or New page opens the field editor, and Save page
   writes the library. The profile's Save writes the slots.
-- **Not yet clicked through in the window**, only type-checked and built.
+- **Clicked through in the window**: the slots, Edit page and New page,
+  Save page, Save as new page, Delete page, and export, import and merge
+  with pages.
 - **Test fixtures** holding MCDU fields are version 2 and marked as a
   resolved start page (`resolved()` in the engine tests), since the fields a
   page puts on the MCDU are ordinary fields once resolved.
@@ -204,8 +243,9 @@ is "MCDU pages" in [CONFIG.md](CONFIG.md); this is where the build stands.
 Opening the options or controls menu pauses DCS-BIOS, and after 20 seconds of
 that the daemon used to clear every lamp and screen and rebuild them on the way
 back. A quiet stream alone now clears nothing; the panels keep the last cockpit
-until a new aircraft loads, and clear only once `DCS.exe` has gone. Not yet
-watched in DCS; see [TODO.md](TODO.md).
+until a new aircraft loads, and clear only once `DCS.exe` has gone. Since
+watched in DCS: the panels stay lit through the options menu and clear when
+DCS quits.
 
 **Flown 2026-09-22, on the panels with DCS feeding them:** the F-16's MCDU
 flight page (fuel from the totalizer drums through round down and wrap, the
@@ -256,9 +296,8 @@ What the drawing needed, and what it costs:
   UFC's are segments, so `art` in `data/displays/ufc1.json` gives each slot a
   stroke. Which slot is which segment was read out of the glyph table itself
   rather than captured, and the derivation is written down in both the file
-  and "Where each segment sits" in [PROTOCOL.md](PROTOCOL.md). So the preview
-  is exactly right about which segments light and only as right about where
-  they sit as that reading. A photograph of the glass would settle it.
+  and "Where each segment sits" in [PROTOCOL.md](PROTOCOL.md). Checked against
+  the glass 2026-09-25: every segment sits where the preview draws it.
 - **One layout, two painters.** The measuring the daemon does was already
   copied in the window for the MCDU; it is now `layoutCells`, and the font and
   the slots are two ways of painting what it produces. It picked up the
@@ -269,9 +308,12 @@ What the drawing needed, and what it costs:
   the way a missing font glyph already was, and the line under the preview
   names the values that would leave a cell dark. That is the check these two
   screens never had: `alphabet` only ever answered for a font.
-- **Both are drawn white**, because no capture says what colour either glass
-  is. One colour per display would be a small change in `paintInk` once
-  someone looks at the panels.
+- **Each glass in its own colours**, from `glass` on the display map, a
+  `ground` and an `ink` (2026-09-25, from looking at the panels). The UFC has
+  none and stays white on black: it lights its segments green, one colour,
+  and white stands in well enough. The DED is black on green, and an inverse
+  block green on black, which `paintInk` gets for nothing: an inverse cell's
+  lit set is the box with the glyph knocked out.
 
 **Built 2026-09-21, not yet on a panel: one panel under several names shares a
 setup.** Rebuilding the IFEI showed the cost of the MCDU being three devices: it
@@ -974,9 +1016,20 @@ Still to do: the release-notes list of changed default rows.
    * A readout takes a `format` signal: `i` in `DED_Ln_FORMAT` draws that cell
      inverse, host side, as SimAppPro does. `exact_case` stops `a` (the arrow)
      being looked up as `A`.
-   * 39 of 66 glyphs are captured from SimAppPro's frames; 27 are drawn in the
-     same style and listed in the file. `tests/ded_render.rs` reproduces every
-     captured frame's lines from the DCS-BIOS text, including an inverse one.
+   * The whole font is SimAppPro's. 49 of 66 glyphs are captured from its
+     frames over two flights, 2026-09-18 and 2026-09-25, the second through
+     every DED page and sub-page. The other 17 never appear on the F-16's DED,
+     so no flight will show them; they are read from SimAppPro's own font file,
+     `config/ICP/ICP_font_0.png`, which every captured glyph matches pixel for
+     pixel. Until then 27 were drawn by hand, and most of those drawings were
+     wrong. `tools/gen_ded.py`
+     regenerates the font, and `--check-font` rereads the PNG and checks all
+     66. `tests/ded_render.rs` reproduces every first-flight frame's lines
+     from the DCS-BIOS text, including an inverse one, and a line with each
+     glyph the second flight added.
+   * Past CNI and TCN, SimAppPro lays the DED out its own way rather than as
+     DCS shows it: `LIST     a  1` where DCS-BIOS sends `LIST        1a`, and
+     placeholder X's in fields DCS-BIOS fills in. We draw what DCS-BIOS sends.
    * `data/defaults/f-16.json` maps `DED_L1..5` to the five lines, and the
      panel backlight follows `PRI_CONSOLES_BRT_KNB`.
    * The DED backlight (`Screen_Backlight`, index 1, capture-verified) is
@@ -992,8 +1045,8 @@ Still to do: the release-notes list of changed default rows.
    Both ICP lamps are verified on hardware: `Backlight` (0) followed the
    PRIMARY CONSOLES knob in the jet.
 
-   Left to do: replace drawn glyphs as captures turn up. The editor got a
-   `format` picker 2026-09-19, offered only on glass that draws inverse.
+   The editor got a `format` picker 2026-09-19, offered only on glass that
+   draws inverse.
 
 5. **Inventory the remaining devices.** The CarrierAce UFC + HUD (`0xbede`) is
    done, see below. So is the **CarrierAce MFD**, 2026-09-18: one dimmer,
@@ -1503,14 +1556,14 @@ then as blank rows. It never touches an existing row, keeps rows for unplugged
 panels, leaves an unparseable file alone, and is idempotent. Bindings are sorted
 by device display name, then part in declared order, then hardware index.
 
-**How it got here, and what is left.** Everything on this list is done except the last item, and each entry keeps what flying it taught, because that is the part that does not survive in the code.
+**How it got here.** Everything on this list is done, and each entry keeps what flying it taught, because that is the part that does not survive in the code.
 
 1. ~~**A host-side shadow of the buffer.**~~ Done. `dsc-config::display`
    has `Display`, `DisplayCatalogue` and `Screen`, checked against captured
    hardware traffic by `crates/dsc-config/tests/display_render.rs`: rendering
    two real display states reproduces the exact 96 bytes the device was sent.
-   Still to do is naming a display from a device spec so a part can carry
-   one.
+   A part names its display in the device spec (`"display": "UFC1"`), and
+   `every_declared_display_has_a_map` checks every name has a map.
 2. ~~**Fly it.**~~ **Flown 2026-09-17.** A profile with readouts drove the real
    glass from a live Hornet mission. String fields work end to end.
 
@@ -1886,7 +1939,8 @@ data/catalogue        51 modules, generated, version-stamped
 data/devices.json     every connected panel verified; each names its protocol
 tools/                HID probe, WWTHID log parser and tail, release,
                       version and snapshot scripts, the pinned DCS-BIOS
-                      fetch, daemon benchmark (docs/PERFORMANCE.md)
+                      fetch, daemon benchmark (docs/PERFORMANCE.md), DED
+                      font generator
 ```
 
 Rust 1.98 MSVC. `hidapi` uses its `windows-native` backend, so no C toolchain

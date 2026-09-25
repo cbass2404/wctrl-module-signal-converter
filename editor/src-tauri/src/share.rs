@@ -12,7 +12,7 @@
 //! confirmed deleting it. The file it came from is never written.
 //!
 //! An import can instead be merged into a profile already here, taking only
-//! the panels' lamps and screen lines the user ticks. So can another profile
+//! the panels' lamps and page slots the user ticks. So can another profile
 //! on the same module, which is how the F-14 and F-14BU share a change
 //! without it being made twice. See `dsc_config::merge`.
 //!
@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 use dsc_config::bundle::{self, Bundle, PagePlan, PageTake};
 use dsc_config::merge::{self, Change, Parts, Pick};
 use dsc_config::paths::Paths;
-use dsc_config::{DeviceInventory, DisplayCatalogue, Page, PageLibrary, Profile};
+use dsc_config::{DeviceInventory, Page, PageLibrary, Profile};
 use serde::{Deserialize, Serialize};
 use tauri_plugin_dialog::DialogExt;
 
@@ -79,11 +79,8 @@ pub struct MergeReport {
     pub notes: Vec<String>,
 }
 
-pub fn maps(paths: &Paths) -> Result<(DeviceInventory, DisplayCatalogue), String> {
-    let devices = DeviceInventory::load(&paths.devices).map_err(|e| format!("reading {}: {e}", paths.devices.display()))?;
-    let displays =
-        DisplayCatalogue::load_dir(&paths.displays).map_err(|e| format!("loading {}: {e}", paths.displays.display()))?;
-    Ok((devices, displays))
+pub fn inventory(paths: &Paths) -> Result<DeviceInventory, String> {
+    DeviceInventory::load(&paths.devices).map_err(|e| format!("reading {}: {e}", paths.devices.display()))
 }
 
 impl Source {
@@ -262,8 +259,8 @@ pub async fn import_pick(app: tauri::AppHandle, cache: tauri::State<'_, Cache>) 
     let pages = bundle::plan(&saved, &bundle.profile, &bundle.pages);
     let (profile, _, lib) = arriving(&saved, &bundle.profile, &bundle.pages, &take_all(&saved, &bundle))?;
     let (flags, _) = cache.flags(&paths, &profile, &lib);
-    let (devices, displays) = maps(&paths)?;
-    let mut parts = merge::parts(&profile, &devices, &displays);
+    let devices = inventory(&paths)?;
+    let mut parts = merge::parts(&profile, &devices);
     parts.slots = slot_parts(&profile, &devices, &lib);
     Ok(Some(Preview {
         parts,
@@ -322,19 +319,18 @@ pub fn import_profile(
 pub fn merge_parts(file: String) -> Result<Parts, String> {
     let paths = Paths::resolve();
     let profile = Profile::load(&paths.profiles.active.join(&file)).map_err(|e| format!("reading {file}: {e}"))?;
-    let (devices, displays) = maps(&paths)?;
-    let mut parts = merge::parts(&profile, &devices, &displays);
+    let devices = inventory(&paths)?;
+    let mut parts = merge::parts(&profile, &devices);
     parts.slots = slot_parts(&profile, &devices, &paths.pages.library());
     Ok(parts)
 }
 
-/// Take the picked lamps and lines from `from` into the profile `into`, and
+/// Take the picked lamps and slots from `from` into the profile `into`, and
 /// say what that did. With `write` false nothing is saved, which is how the
 /// window asks what a merge would do before asking the user.
 ///
 /// Refused, either way, when the result would not load: a lamp merged in that
-/// matches one on a panel that was not, or a field that now shares cells with
-/// one on a line left alone.
+/// matches one on a panel that was not.
 ///
 /// A page slot merged from a file brings its page into the library, settled
 /// as an import settles it; one merged from a profile here shows a page the
@@ -351,7 +347,7 @@ pub fn merge_profile(
     let source = from.load(&paths, &cache)?;
     let path = paths.profiles.active.join(&into);
     let target = Profile::load(&path).map_err(|e| format!("reading {into}: {e}"))?;
-    let (devices, displays) = maps(&paths)?;
+    let devices = inventory(&paths)?;
     // Only the pages the picked slots show come in, under the names the plan
     // gives them, and the source's slots follow any that take a new id.
     let saved = paths.pages.library();
@@ -363,7 +359,7 @@ pub fn merge_profile(
         .collect();
     let take: Vec<PageTake> = take_all(&saved, &source).into_iter().filter(|t| wanted.contains(&t.id)).collect();
     let (source, added, lib) = arriving(&saved, &source.profile, &source.pages, &take)?;
-    let merged = merge::merge(&target, &source, &pick, &devices, &displays)?;
+    let merged = merge::merge(&target, &source, &pick, &devices)?;
     let problems = cache.problems(&paths, &merged.profile, &lib);
     if !problems.is_empty() {
         return Err(format!(

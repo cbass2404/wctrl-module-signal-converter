@@ -825,7 +825,7 @@
           }
         }
       ],
-      "note": "APU fire (yellow), centre of the fire group."
+      "note": "NMSP EGI lamp. The five NMSP mode lamps sit on CTR, LI, LO, RI and RO, in place of the fire lamps."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -838,7 +838,7 @@
           }
         }
       ],
-      "note": "Left engine fire (yellow). The jettison row reads left to right, so the fire warnings sit on it naturally."
+      "note": "NMSP STEER PT lamp."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -851,7 +851,7 @@
           }
         }
       ],
-      "note": "UNDECIDED. Suggested: CANOPY_UNLOCKED (green)."
+      "note": "NMSP TCN lamp."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -864,7 +864,7 @@
           }
         }
       ],
-      "note": "UNDECIDED. Suggested: NOSEWHEEL_STEERING (green)."
+      "note": "NMSP ILS lamp."
     },
     {
       "device": "TAKEOFF_PLANEL_2",
@@ -877,7 +877,7 @@
           }
         }
       ],
-      "note": "Right engine fire (yellow)."
+      "note": "NMSP ANCHR lamp."
     },
     {
       "device": "TAKEOFF_PLANEL_2",

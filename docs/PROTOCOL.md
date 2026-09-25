@@ -518,11 +518,16 @@ rather than captured:
 - `'B'` takes 11 where `'F'` takes 15, which puts 11 on the right of the
   middle bar and 15 on the left.
 
-So the preview is exactly right about which segments light, since the daemon's
-own lookup answers that, and only as right about where they sit as that
-reading of the table. Replace it if a photograph of the glass ever says
-otherwise. The DED needs none of this: its slots are pixels of the cell, and
-the cell is generated from the grid.
+Checked against the glass 2026-09-25: the preview draws each segment where
+the panel lights it, so the reading holds. The DED needs none of this: its
+slots are pixels of the cell, and the cell is generated from the grid.
+
+The colours are `glass` on a display, a `ground` and an `ink`, and only the
+preview reads them. The UFC has none and draws white on black; its segments
+light green, and one colour stands in for another well enough. The DED is
+the other way round from a lit segment: a lit pixel is dark on a green
+ground, so an inverse cell, its box lit and the glyph knocked out, shows
+green on black.
 
 ### Where the UFC's cells come from, for the Hornet
 
@@ -696,6 +701,10 @@ page that way reproduces SimAppPro's frame byte for byte.
 
 The font is host side. `WWTHID_JSAPI.node` loads `config/ICP/ICP_font_0..2.png`
 and indexes them through `textfont_config_new.json`, 66 characters.
+`ICP_font_0.png` is the plain font: 8 glyphs to a row in 64x52 cells, each
+glyph's 6x9 pixels drawn 4x as small plus shapes centred on (21 + 4x, 9 + 4y)
+in its cell. Every glyph captured from SimAppPro's frames matches it, and
+`tools/gen_ded.py --check-font` checks the whole font against it.
 
 ### SimAppPro does not use DCS-BIOS for this
 
@@ -703,6 +712,11 @@ It calls `list_indication(6)` through its own export script and places each
 named element using `config/ICP/ded_dcs.xlsx`. DCS-BIOS reads the same
 indication and has already laid it out as five 24-character lines plus a format
 string per line, so we need neither the spreadsheet nor the element names.
+
+The two layouts agree on CNI and TCN and differ past them, seen across every
+page 2026-09-25. SimAppPro draws `LIST     a  1` where DCS-BIOS sends
+`LIST        1a`, and placeholder X's (`XXXXX/XXXXX`) in fields DCS-BIOS fills
+in. So a SimAppPro frame is evidence for a glyph, not for a page's layout.
 
 SimAppPro repaints about once a second and sends only the byte ranges that
 changed. The CNI clock ticking over is one 1-byte write and a commit.

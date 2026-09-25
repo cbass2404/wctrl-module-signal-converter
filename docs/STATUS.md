@@ -1532,14 +1532,14 @@ then as blank rows. It never touches an existing row, keeps rows for unplugged
 panels, leaves an unparseable file alone, and is idempotent. Bindings are sorted
 by device display name, then part in declared order, then hardware index.
 
-**How it got here, and what is left.** Everything on this list is done except the last item, and each entry keeps what flying it taught, because that is the part that does not survive in the code.
+**How it got here.** Everything on this list is done, and each entry keeps what flying it taught, because that is the part that does not survive in the code.
 
 1. ~~**A host-side shadow of the buffer.**~~ Done. `dsc-config::display`
    has `Display`, `DisplayCatalogue` and `Screen`, checked against captured
    hardware traffic by `crates/dsc-config/tests/display_render.rs`: rendering
    two real display states reproduces the exact 96 bytes the device was sent.
-   Still to do is naming a display from a device spec so a part can carry
-   one.
+   A part names its display in the device spec (`"display": "UFC1"`), and
+   `every_declared_display_has_a_map` checks every name has a map.
 2. ~~**Fly it.**~~ **Flown 2026-09-17.** A profile with readouts drove the real
    glass from a live Hornet mission. String fields work end to end.
 

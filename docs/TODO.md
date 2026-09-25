@@ -156,13 +156,13 @@ numbers move and the words do not.
 
 ## Smaller
 
-- [ ] **Move the DED glyph generator into `tools/`.** `gen_ded.py`, with
-      `extract.py` and `glyphs.json`, regenerates `data/displays/ded.json`
-      from the captures plus the hand-drawn glyphs, and it exists only in an
-      old session's scratchpad under `%TEMP%`, which Windows can clear. The
-      next item needs it.
+- [x] ~~**Move the DED glyph generator into `tools/`.**~~ Done 2026-09-25:
+      `tools/gen_ded.py` pairs the two fixtures itself, so there is no
+      glyph cache, and rewrites only the font and its two notes in
+      `data/displays/ded.json`. A fresh run leaves the file byte for byte.
 - [ ] **Replace the drawn DED glyphs** as captures turn up. The 27 in
       `data/displays/ded.json` that were drawn by hand rather than captured.
+      `tools/gen_ded.py` says how.
       [STATUS.md](STATUS.md), "39 of 66 glyphs"
 - [ ] **Name a display from a device spec**, so a part can carry one.
       [STATUS.md](STATUS.md), "naming a display from a device spec"

@@ -1003,7 +1003,8 @@ Still to do: the release-notes list of changed default rows.
      inverse, host side, as SimAppPro does. `exact_case` stops `a` (the arrow)
      being looked up as `A`.
    * 39 of 66 glyphs are captured from SimAppPro's frames; 27 are drawn in the
-     same style and listed in the file. `tests/ded_render.rs` reproduces every
+     same style and listed in the file. `tools/gen_ded.py` regenerates the
+     font from the two fixtures plus the drawn glyphs. `tests/ded_render.rs` reproduces every
      captured frame's lines from the DCS-BIOS text, including an inverse one.
    * `data/defaults/f-16.json` maps `DED_L1..5` to the five lines, and the
      panel backlight follows `PRI_CONSOLES_BRT_KNB`.
@@ -1914,7 +1915,8 @@ data/catalogue        51 modules, generated, version-stamped
 data/devices.json     every connected panel verified; each names its protocol
 tools/                HID probe, WWTHID log parser and tail, release,
                       version and snapshot scripts, the pinned DCS-BIOS
-                      fetch, daemon benchmark (docs/PERFORMANCE.md)
+                      fetch, daemon benchmark (docs/PERFORMANCE.md), DED
+                      font generator
 ```
 
 Rust 1.98 MSVC. `hidapi` uses its `windows-native` backend, so no C toolchain

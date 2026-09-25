@@ -11,7 +11,7 @@ checklist, for when that is all that is wanted.
 **Verify nothing has rotted** (30 seconds, no hardware, no DCS):
 
 ```powershell
-cargo test --workspace            # expect 481 passing
+cargo test --workspace            # expect 493 passing
 cargo run --bin dcs-signal -- devices
 cargo run --bin dcs-signal -- catalogue --aircraft F-4E-45MC --find hook
 ```
@@ -21,6 +21,20 @@ on this machine, and a catalogue from a different DCS-BIOS release reads the
 wrong addresses silently, because addresses are allocated sequentially as
 controls are defined. Nothing needs doing after a clone: every command that
 reads the catalogue builds it first if it is missing or out of date (see below).
+
+**Done 2026-09-25: the DED font is SimAppPro's, and glyph tables caution.**
+`c40713a` to `0463a48`. What users see is in [CHANGELOG.md](../CHANGELOG.md).
+
+- **All 66 DED glyphs are SimAppPro's.** A second F-16 capture through every
+  DED page added 10; the 17 the DED never shows come from SimAppPro's
+  `ICP_font_0.png`, which every captured glyph matches. `tools/gen_ded.py
+  --check-font` rechecks against it. See "The whole font is SimAppPro's".
+- **Typed characters on the UFC and DED are cautioned**, not refused:
+  `glyph_problems` in `dsc-config`, an advisory `NotInGlyphs`, tested in
+  `crates/dsc-engine/tests/glyph_cautions.rs`. No shipped profile or page
+  trips it.
+- **Past CNI and TCN, SimAppPro lays the DED out its own way**, so its frames
+  are evidence for glyphs, not for a page's layout. In PROTOCOL.md.
 
 **Built 2026-09-25: page fields open one at a time, and two ways back.**
 Built and type-checked, not yet clicked through. What users see is in

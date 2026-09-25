@@ -43,6 +43,14 @@ unless this says what moved.
 - **The DED preview is in the DED's own colours.** A field on the ICP's
   screen was previewed white on black. It is now black on green, as the
   glass shows it, and an inverse field green on black.
+- **Merging takes whole page slots, not single screen lines.** Merge from...
+  and a merged import no longer list a screen's lines to tick one by one.
+  A screen's content comes across as the page slots you tick, the way pages
+  are shared everywhere else.
+- **Shipped profiles: A-10C and A-10C2.** The notes on the PTO2's CTR, LI,
+  LO, RO and RI lamps now say what those lamps show, the NMSP EGI, STEER PT,
+  TCN, ILS and ANCHR modes, where they still named the fire lamps they
+  replaced. What the lamps do is unchanged.
 
 ### Fixed
 

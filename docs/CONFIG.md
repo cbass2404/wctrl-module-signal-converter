@@ -382,9 +382,12 @@ it.
 
 **Cautions** sit beside problems, for a profile that loads but probably does not
 do what was meant. They come from `Profile::cautions` and never withhold Save.
-The one so far is a gate, a dimmer marked in `devices.json` with `governs`, that
-resolves to 0 with every signal at 0, which hides its lamps in daylight. The
-daemon logs the same cautions on load.
+The profile-wide one is a gate, a dimmer marked in `devices.json` with
+`governs`, that resolves to 0 with every signal at 0, which hides its lamps in
+daylight. The daemon logs the same cautions on load. A display field has its
+own, from `Profile::field_cautions`, shown on the field they are about: content
+that may not fit its cells, settings that lean on what DCS-BIOS says a signal
+is, and characters a glyph table cannot draw (see "Display fields").
 
 ### Rows this DCS-BIOS cannot back
 
@@ -989,6 +992,16 @@ scratchpad cursor as `--` where the cockpit shows `_`, and `--` is not a glyph,
 so without the substitution that cell goes dark. Nothing can guess this, which
 is why it is per profile rather than in the display map: the map describes the
 hardware, the alias describes what one module calls something.
+
+**What you type is checked against the glyph table, as a caution.** On the UFC
+and the DED a character the table lacks is a dark cell with nothing to say
+why. So typed `text`, an alias's text and what a `replace` writes are checked
+against the cells the field covers, and one no cell can draw is a caution on
+the field: a letter on the UFC scratchpad's seven-segment digits, or `$` on
+the DED. A text grid refuses the same fault outright, because its font is
+known exactly. A glyph table can still be reached by another spelling, so
+here the profile loads and the user decides. A field of one cell, such as a
+UFC comm window, draws its whole value as one glyph and is checked whole.
 
 **`format` marks characters to draw inverse.** It names a second text signal,
 laid out across the run the same way as `source`, and a cell whose mark is `i`
